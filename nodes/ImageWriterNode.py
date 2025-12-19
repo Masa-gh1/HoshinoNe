@@ -88,8 +88,11 @@ class ImageWriterNode(FlowNode):
                     base, ext = os.path.splitext(self.outputFilePath)
                     outputPath = f"{base}_{dataIdx}{ext}"
                 
+                type = flowData.getType()
                 mode = flowData.getMode()
-                if mode == 'RGB':
+                if(  type == 'image' and mode == 'RGB'
+                  or type == 'matrix' and mode == '3D'
+                  ):
                     # RGBカラー画像
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
                     
@@ -116,7 +119,9 @@ class ImageWriterNode(FlowNode):
                             self.reportProgress(context, f"処理中", processedAllBlocks, totalAllBlocks)
                     
                     img = Image.fromarray(imgArray, 'RGB')
-                elif mode == 'RGGB':
+                elif(  type == 'image' and mode == 'RGGB'
+                    or type == 'matrix' and mode == '4D'
+                    ):
                     # RGGB 4チャンネル画像をRGBに変換
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
                     
@@ -146,7 +151,9 @@ class ImageWriterNode(FlowNode):
                             self.reportProgress(context, f"処理中", processedAllBlocks, totalAllBlocks)
                     
                     img = Image.fromarray(imgArray, 'RGB')
-                elif mode == 'L':
+                elif(  type == 'image' and mode == 'L'
+                    or type == 'matrix' and mode == '2D'
+                    ):
                     # グレースケール画像
                     imgArray = np.zeros((height, width), dtype=np.uint8)
                     
@@ -169,7 +176,7 @@ class ImageWriterNode(FlowNode):
                     
                     img = Image.fromarray(imgArray, 'L')
                 else:
-                    messagebox.showerror("エラー", f"サポートされていないモード: {mode}")
+                    messagebox.showerror(f"{self.text} エラー", f"サポートされていないタイプ: {type} {mode}")
                     continue
                 
                 img.save(outputPath)

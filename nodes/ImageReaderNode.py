@@ -59,9 +59,16 @@ class ImageReaderNode(FlowNode):
                 img = Image.open(filePath)
                 width, height = img.size
                 
+                # bit深度を検出してdisplay_levelsを設定
+                if   img.mode in ['L', 'RGB', 'P']: display_levels = {'min': 0,   'max':        255}  # 8bit
+                elif img.mode in ['I;16', 'I;16B']: display_levels = {'min': 0,   'max':      65535}  # 16bit
+                elif img.mode == 'F'              : display_levels = {'min': 0.0, 'max':        1.0}  # 浮動小数点
+                elif img.mode == 'I'              : display_levels = {'min': 0,   'max': 2147483647}  # 32bit int
+                else                              : display_levels = {'min': 0,   'max':        255}  # デフォルト
+                
                 if img.mode == 'RGB':
                     # RGBカラー画像の場合
-                    headers = {'type': 'image', 'mode': 'RGB', 'planes': ['R', 'G', 'B']}
+                    headers = {'type': 'image', 'mode': 'RGB', 'planes': ['R', 'G', 'B'], 'display_levels': display_levels}
                     pixels = list(img.getdata())
                     flowData = FlowData(headers)
                     flowData.setDimensions(width, height)
@@ -73,7 +80,7 @@ class ImageReaderNode(FlowNode):
                             futureToDatas[future] = flowData
                 else:
                     # グレースケール画像の場合
-                    headers = {'type': 'image', 'mode': 'L', 'planes': ['L']}
+                    headers = {'type': 'image', 'mode': 'L', 'planes': ['L'], 'display_levels': display_levels}
                     img_gray = img.convert('L')
                     pixels = list(img_gray.getdata())
                     flowData = FlowData(headers)

@@ -78,7 +78,19 @@ class CoefficientsNode(FlowNode):
         width = self.xOrder + 1
         height = self.yOrder + 1
         
-        # プレーン名を使用
+        # モードを判断
+        if width == 1 and height == 1:
+            mode = "0D"
+        elif width == 1 and height > 1:
+            mode = "1D"
+        elif width > 1 and height == 1:
+            mode = "1D"
+        elif width > 1 and height > 1:
+            mode = "2D"
+        else:
+            mode = "2D"
+        
+        # プレーン名
         planeNames = self.planeNames
         
         # 列ラベルと行ラベルを生成
@@ -87,7 +99,7 @@ class CoefficientsNode(FlowNode):
         
         headers = {
             'type': 'tensor',
-            'mode': '2D',
+            'mode': mode,
             'axes': ['x_order', 'y_order'],
             'columns': columns,
             'lines': lines,

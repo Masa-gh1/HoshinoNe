@@ -41,7 +41,7 @@ class RawReaderNode(FlowNode):
                 ("Sigma RAW", "*.x3f"),
                 ("All files", "*.*")
             ]
-        self.demosaicAlgorithm = "None"  # None, 4ch, AHD, VNG, PPG, AAHD
+        self.demosaicAlgorithm = "none"  # none, raw, AHD, VNG, PPG, AAHD
         self.outputColorspace = "raw"  # raw, sRGB, Adobe RGB, Wide Gamut RGB, ProPhoto RGB
         self.whiteBalance = "daylight"  # camera, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
         self.gammaPower = 1.0  # gamma power
@@ -118,10 +118,10 @@ class RawReaderNode(FlowNode):
                     configRawParams(params)
                     
                     # デモザイクアルゴリズム
-                    if self.demosaicAlgorithm == "None":
+                    if self.demosaicAlgorithm == "none":
                         params.half_size          = True
                         params.four_color_rgb     = False
-                    elif self.demosaicAlgorithm == "4ch":
+                    elif self.demosaicAlgorithm == "raw":
                         params.half_size          = True
                         params.four_color_rgb     = True
                     elif self.demosaicAlgorithm == "AHD":
@@ -172,8 +172,13 @@ class RawReaderNode(FlowNode):
                     # RGB画像をFlowDataに変換
                     height, width, channels = rgb.shape
                     
+                    # 元RAWファイルのbit深度を使用してdisplay_levelsを設定
+                    black_level = min(raw.black_level_per_channel) if raw.black_level_per_channel else 0
+                    white_level = raw.white_level
+                    display_levels = {'min': black_level, 'max': white_level}
+                    
                     # plane名を動的に設定
-                    if self.demosaicAlgorithm == "4ch" and channels == 4:
+                    if self.demosaicAlgorithm == "raw" and channels == 4:
                         plane_names = ['R', 'G1', 'B', 'G2']
                         mode = 'RGGB'
                     else:
@@ -187,6 +192,7 @@ class RawReaderNode(FlowNode):
                         'height': height,
                         'channels': channels,
                         'planes': plane_names,
+                        'display_levels': display_levels,
                         'source_file': filePath,
                         'demosaic': self.demosaicAlgorithm,
                         'colorspace': self.outputColorspace,
@@ -268,8 +274,8 @@ class RawSettingsDialog(tk.Toplevel):
         
         tk.Label(demosaicFrame, text="ベイヤー変換アルゴリズム:").pack(anchor="w")
         self.demosaicVar = tk.StringVar()
-        algoOptions = ["None - ベイヤー変換せずに2x2を1ピクセルにする", 
-                       "4ch - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
+        algoOptions = ["none - ベイヤー変換せずに2x2を1ピクセルにする", 
+                       "raw - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
                        "AHD - 適応的同質性指向アルゴリズム。高品質だが処理時間が長い", 
                        "VNG - 可変勾配数アルゴリズム。バランスの取れた品質と速度", 
                        "PPG - パターン化ピクセルグループ化。高速だが品質は劣る", 

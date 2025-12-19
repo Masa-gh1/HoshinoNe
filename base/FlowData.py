@@ -166,11 +166,17 @@ class FlowData:
         """データの次元を設定"""
         self._dimensions = (width, height)
     
+    def getType(self):
+        """データの型を取得"""
+        if 'type' in self.headers:
+            return self.headers['type']
+        return 'matrix'
+    
     def getMode(self):
         """データのモードを取得"""
         if 'mode' in self.headers:
             return self.headers['mode']
-        # フォールバック: 次元数から推定
+        # プレーン数から推定
         planeCount = self.getPlaneCount()
         if planeCount == 3:
             return 'RGB'

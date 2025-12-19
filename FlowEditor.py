@@ -12,28 +12,10 @@ import os
 import threading
 import time
 import traceback
-import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from nodes import NodeFactory
 from config import MAX_WORKERS
-
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-
-try:
-    import matplotlib.pyplot as plt
-    PYPLOT_AVAILABLE = True
-except ImportError:
-    PYPLOT_AVAILABLE = False
-
-try:
-    from PIL import Image, ImageTk
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
+from base.ResultWindow import ResultWindow
 
 class FlowEditor:
     def __init__(self, root):
@@ -158,7 +140,11 @@ class FlowEditor:
         # ノード以外の場所をクリックした場合のみメニューを表示
         isNodeClick = False
 
-        clickedItems = self.canvas.find_overlapping(event.x, event.y,event.x, event.y)
+        # canvas座標に変換
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+
+        clickedItems = self.canvas.find_overlapping(x, y, x, y)
         if clickedItems:
             clickedItem = clickedItems[0]
             for node in self.nodes:
@@ -173,7 +159,9 @@ class FlowEditor:
     
     def addNodeAtPosition(self, nodeType):
         try:
-            node = NodeFactory.createNode(nodeType, self.canvas, self, self.rightClickX, self.rightClickY)
+            x = self.canvas.canvasx(self.rightClickX)
+            y = self.canvas.canvasy(self.rightClickY)
+            node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
             if node:
                 self.nodes.append(node)
         except ValueError:
@@ -646,7 +634,6 @@ class FlowEditor:
         self.reprocessingHighlights = []
         
         # 再実行が必要なノードを特定してハイライト
-        self.reprocessingHighlights = []
         for node in self.nodes:
             if self._needsReprocessingRecursive(node):
                 highlight = self.canvas.create_rectangle(
@@ -712,432 +699,14 @@ class FlowEditor:
     
     def showNodeResult(self, node):
         """ノードの処理結果を表示"""
-        # 既存の結果ウィンドウをチェック
-        if hasattr(node, '_result_window') and node._result_window.winfo_exists():
-            # 既存ウィンドウを更新
-            self._updateResultWindow(node)
-            node._result_window.lift()
-            return
-        
-        # 新しいウィンドウで結果を表示
-        resultWindow = tk.Toplevel(self.root)
-        resultWindow.title(f"{node.text} - 処理結果")
-        resultWindow.geometry("600x400")
-        
-        # ウィンドウ参照を保存
-        node._result_window = resultWindow
-        
-        # スクロールバー付きテキストエリア
-        frame = tk.Frame(resultWindow)
-        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        text_widget = tk.Text(frame, wrap=tk.WORD)
-        scrollbar = tk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-        
-        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # テキストウィジェット参照を保存
-        node._result_text_widget = text_widget
-        
-        # ウィンドウが閉じられたときのクリーンアップ
-        def on_close():
-            if hasattr(node, '_result_window'):
-                delattr(node, '_result_window')
-            if hasattr(node, '_result_text_widget'):
-                delattr(node, '_result_text_widget')
-            resultWindow.destroy()
-        
-        resultWindow.protocol("WM_DELETE_WINDOW", on_close)
-        
-        # 初回表示（別スレッドで実行）
-        thread = threading.Thread(target=self._updateResultWindowAsync, args=(node,))
-        thread.daemon = True
-        thread.start()
+        result_window = ResultWindow(self.root, node)
+        result_window.show()
     
     def _updateResultWindow(self, node):
-        """結果ウィンドウの内容を更新（別スレッドで実行）"""
-        thread = threading.Thread(target=self._updateResultWindowAsync, args=(node,))
-        thread.daemon = True
-        thread.start()
-    
-    def _updateResultWindowAsync(self, node):
-        """結果ウィンドウの内容を非同期で更新"""
-        if not hasattr(node, '_result_text_widget'):
-            return
+        """結果ウィンドウの内容を更新"""
+        result_window = ResultWindow(self.root, node)
+        result_window.update()
         
-        # UIの更新は必ずメインスレッドで実行
-        def update_ui():
-            text_widget = node._result_text_widget
-            text_widget.config(state=tk.NORMAL)
-            text_widget.insert(tk.END, "データ読み込み中...\n")
-            text_widget.config(state=tk.DISABLED)
-        
-        self.root.after(0, update_ui)
-        
-        # データ処理（重い処理）
-        content_parts = []
-        for dataIdx, flowData in enumerate(node.flowDatas):
-            if len(node.flowDatas) > 1:
-                content_parts.append(f"=== データ {dataIdx + 1} ===\n")
-            
-            result = self._generateFlowDataContent(flowData)
-            if isinstance(result, tuple):
-                content_parts.extend(result)
-            else:
-                content_parts.append(result)
-            content_parts.append("\n")
-        
-        # 結果をメインスレッドで表示
-        def display_result():
-            if hasattr(node, '_result_text_widget'):
-                text_widget = node._result_text_widget
-                text_widget.config(state=tk.NORMAL)
-                text_widget.delete(1.0, tk.END)
-                for part in content_parts:
-                    if isinstance(part, str):
-                        text_widget.insert(tk.END, part)
-                    else:
-                        # 画像の場合
-                        text_widget.image_create(tk.END, image=part)
-                        text_widget.insert(tk.END, "\n")
-                        if not hasattr(text_widget, 'images'):
-                            text_widget.images = []
-                        text_widget.images.append(part)
-                text_widget.config(state=tk.DISABLED)
-        
-        self.root.after(0, display_result)
-    
-    def _generateFlowDataContent(self, flowData):
-        """フローデータの内容を文字列として生成（非同期処理用）"""
-        headers = flowData.headers if flowData.headers else {}
-        dataType = headers.get('type', 'unknown')
-        width, height = flowData.getDimensions()
-        planeCount = flowData.getPlaneCount()
-        
-        content = f"Type: {dataType}\n"
-        content += f"PlaneCount: {planeCount}\n"
-        content += f"Dimensions: {width} x {height}\n"
-        
-        if   dataType == 'tensor': 
-            return content + self._generateTensorContent(flowData, headers)
-        elif dataType == 'matrix': 
-            return content + self._generateMatrixContent(flowData, headers)
-        elif dataType == 'image' : 
-            result = self._generateImageContent(flowData, headers)
-            if isinstance(result, list):
-                if len(result) == 3:
-                    return (content + result[0], result[1], result[2])
-                if len(result) == 2:
-                    return (content + result[0], result[1])
-                else:
-                    return (content + result[0])
-            else:
-                return content + result
-        else:                      
-            return content + self._generateGenericContent(flowData)
-    
-    def _generateTensorContent(self, flowData, headers):
-        """テンソルデータの内容を生成"""
-        content = "\n"
-        
-        columns = headers.get('columns', [])
-        lines = headers.get('lines', [])
-        planes = headers.get('planes', [])
-        
-        for planeIdx, planeName in enumerate(planes):
-            content += f"\n[{planeName} プレーン]\n"
-            
-            # ヘッダー行
-            if columns:
-                content += "\t" + "\t".join(columns) + "\n"
-            
-            # データ行
-            width, height = flowData.getDimensions()
-            for y in range(height):
-                lineLabel = lines[y] if y < len(lines) else f"row_{y}"
-                content += f"{lineLabel}\t"
-                
-                row_data = []
-                for x in range(width):
-                    block = flowData.getBlock(planeIdx, x, y)
-                    if block and hasattr(block, 'data') and block.data is not None:
-                        try:
-                            value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                            row_data.append(f"{value:.6f}")
-                        except (IndexError, TypeError):
-                            row_data.append("0.000000")
-                    else:
-                        row_data.append("0.000000")
-                
-                content += "\t".join(row_data) + "\n"
-        
-        return content
-    
-    def _generateMatrixContent(self, flowData, headers):
-        """マトリックスデータの内容を生成"""
-        content = "\n"
-        
-        columns = headers.get('columns', [])
-        lines = headers.get('lines', [])
-        
-        # ヘッダー行
-        if columns:
-            content += "\t" + "\t".join(columns) + "\n"
-        
-        # データ行 (最初の10行のみ表示)
-        width, height = flowData.getDimensions()
-        displayRows = min(height, 10)
-        
-        for y in range(displayRows):
-            lineLabel = lines[y] if y < len(lines) else f"row_{y}"
-            content += f"{lineLabel}\t"
-            
-            row_data = []
-            for x in range(min(width, 10)):  # 最初の10列のみ
-                block = flowData.getBlock(0, x, y)
-                if block and hasattr(block, 'data') and block.data is not None:
-                    try:
-                        value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                        row_data.append(str(value))
-                    except (IndexError, TypeError):
-                        row_data.append("0")
-                else:
-                    row_data.append("0")
-            
-            if width > 10:
-                row_data.append("...")
-            
-            content += "\t".join(row_data) + "\n"
-        
-        if height > 10:
-            content += "...\n"
-        
-        return content
-    
-    def _generateImageContent(self, flowData, headers):
-        """画像データの内容を生成"""
-        mode = flowData.getMode()
-        planes = headers.get('planes', [])
-        width, height = flowData.getDimensions()
-        planeCount = flowData.getPlaneCount()
-        
-        # パーセンタイルベースの適応的スケーリング
-        minValue = flowData.getMinValue()
-        maxValue = flowData.getMaxValue()
-        minRenge = flowData.getPercentile(1)
-        maxRenge = flowData.getPercentile(99)
-        
-        content = "\n"
-        content += f"Mode: {mode}\n"
-        content += f"Planes: {', '.join(planes)}\n"
-        content += f"Range: {minValue:.3f} - {maxValue:.3f}\n"
-        
-        ret = []
-        
-        # ヒストグラムグラフを作成
-        if not PIL_AVAILABLE:
-            content += "\nImage is not available.\n\n"
-        elif not PYPLOT_AVAILABLE:
-            content += "\nmatplotlib is not available.\n\n"
-        elif not NUMPY_AVAILABLE:
-            content += "\nNumpy is not available.\n\n"
-        else:
-            try:
-                # FlowData.getHistogramを使用してプレーン別ヒストグラムを取得
-                fig, ax = plt.subplots(figsize=(6, 3))
-                colors = ['red', 'green', 'blue', 'cyan']
-                plane_names = planes[:min(planeCount, 4)]
-                
-                histogram_data = flowData.getHistogram(log_scale=True)
-                total_samples = 0
-                
-                # 正規化パラメータ
-                if maxRenge > minRenge:
-                    scale = 0.9 / (maxValue - minValue)
-                    offset = -minValue + 0.1 / scale
-                else:
-                    scale = 1.0
-                    offset = 0.1
-                
-                for planeIdx, plane_hist in enumerate(histogram_data['planes'][:4]):
-                    count = plane_hist['counts'][:]
-                    bin_edges = plane_hist['bin_edges'][:]
-                    total_samples += plane_hist['total_samples']
-                    
-                    # オフセット適用
-                    bin_centers = [((bin_edges[i] + bin_edges[i+1]) / 2 + offset) * scale for i in range(len(count))]
-                    
-                    # ステップグラフで表示
-                    plane_name = plane_names[planeIdx] if planeIdx < len(plane_names) else f'Plane{planeIdx}'
-                    ax.step(bin_centers, np.array(count) + 1, where='mid', color=colors[planeIdx], label=plane_name, linewidth=1.5)
-                
-                content += f"Histogram per plane (64 bins, {total_samples} total samples)\n"
-                ax.set_xlabel('Value (log)' if offset == 0 else 'Value (log, normalized adjusted)')
-                ax.set_ylabel('Count (log)')
-                ax.set_yscale('log')
-                ax.set_xscale('log')
-                ax.set_title('Histogram by Plane')
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                
-                # カスタム目盛りで元の値を表示
-                custom_ticks = [0.1, 0.2, 0.3, 0.6, 1.0]
-                ax.set_xticks(custom_ticks)
-                ax.set_xticklabels([f'{tick / scale - offset:.0f}' for tick in custom_ticks])
-                
-                # グラフを画像に変換
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')
-                buf.seek(0)
-    
-                histogram_image = ImageTk.PhotoImage(Image.open(buf))
-                plt.close(fig)
-                
-                ret.append(histogram_image)
-            except Exception as e:
-                content += f"Histogram error: {str(e)}\n"
-            
-        if not PIL_AVAILABLE:
-            content += "\nImage is not available.\n\n"
-        else:
-            try:
-                # 適応的スケーリングパラメータ
-                if maxRenge > minRenge:
-                    scale = 255.0 / (maxRenge - minRenge)
-                    offset = minRenge
-                    content += f"Adaptive range: {minRenge:.3f} - {maxRenge:.3f} (scale={scale:.6f})\n"
-                else:
-                    scale = 1.0
-                    offset = 0.0
-                    content += f"Using default scale=1.0, offset=0.0\n"
-                
-                # 画像データを再構成
-                if mode == 'RGB' and planeCount >= 3:
-                    imgArray = np.zeros((height, width, 3), dtype=np.uint8)
-                    
-                    for planeIdx in range(3):
-                        for blockY in range(0, height, 256):
-                            for blockX in range(0, width, 256):
-                                block = flowData.getBlock(planeIdx, blockX, blockY)
-                                if block and hasattr(block, 'data') and block.data is not None:
-                                    try:
-                                        blockHeight = min(256, height - blockY)
-                                        blockWidth = min(256, width - blockX)
-                                        endY = blockY + blockHeight
-                                        endX = blockX + blockWidth
-                                        
-                                        # 適応的スケーリングで補正
-                                        data = block.data[:blockHeight, :blockWidth]
-                                        normalized = (data - offset) * scale
-                                        imgArray[blockY:endY, blockX:endX, planeIdx] = np.clip(normalized, 0, 255).astype(np.uint8)
-                                    except (IndexError, TypeError, ValueError):
-                                        pass
-                    
-                    img = Image.fromarray(imgArray, 'RGB')
-                elif mode == 'RGGB' and planeCount >= 4:
-                    imgArray = np.zeros((height, width, 3), dtype=np.uint8)
-                    
-                    for blockY in range(0, height, 256):
-                        for blockX in range(0, width, 256):
-                            r_block = flowData.getBlock(0, blockX, blockY)
-                            g1_block = flowData.getBlock(1, blockX, blockY)
-                            b_block = flowData.getBlock(2, blockX, blockY)
-                            g2_block = flowData.getBlock(3, blockX, blockY)
-                            
-                            if r_block and g1_block and b_block and g2_block:
-                                if (hasattr(r_block, 'data') and r_block.data is not None and
-                                    hasattr(g1_block, 'data') and g1_block.data is not None and
-                                    hasattr(b_block, 'data') and b_block.data is not None and
-                                    hasattr(g2_block, 'data') and g2_block.data is not None):
-                                    try:
-                                        blockHeight = min(256, height - blockY)
-                                        blockWidth = min(256, width - blockX)
-                                        endY = blockY + blockHeight
-                                        endX = blockX + blockWidth
-                                        
-                                        g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
-                                        
-                                        # 適応的スケーリングで補正
-                                        r_norm = (r_block.data[:blockHeight, :blockWidth] - offset) * scale
-                                        g_norm = (g_avg - offset) * scale
-                                        b_norm = (b_block.data[:blockHeight, :blockWidth] - offset) * scale
-                                        
-                                        imgArray[blockY:endY, blockX:endX, 0] = np.clip(r_norm, 0, 255).astype(np.uint8)
-                                        imgArray[blockY:endY, blockX:endX, 1] = np.clip(g_norm, 0, 255).astype(np.uint8)
-                                        imgArray[blockY:endY, blockX:endX, 2] = np.clip(b_norm, 0, 255).astype(np.uint8)
-                                    except (IndexError, TypeError, ValueError):
-                                        pass
-                    
-                    img = Image.fromarray(imgArray, 'RGB')
-                elif mode == 'L' and planeCount >= 1:
-                    imgArray = np.zeros((height, width), dtype=np.uint8)
-                    
-                    for blockY in range(0, height, 256):
-                        for blockX in range(0, width, 256):
-                            block = flowData.getBlock(0, blockX, blockY)
-                            if block and hasattr(block, 'data') and block.data is not None:
-                                try:
-                                    blockHeight = min(256, height - blockY)
-                                    blockWidth = min(256, width - blockX)
-                                    endY = blockY + blockHeight
-                                    endX = blockX + blockWidth
-                                    
-                                    # 適応的スケーリングで補正
-                                    normalized = (block.data[:blockHeight, :blockWidth] - offset) * scale
-                                    imgArray[blockY:endY, blockX:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
-                                except (IndexError, TypeError, ValueError):
-                                    pass
-                    
-                    img = Image.fromarray(imgArray, 'L')
-                else:
-                    return content + f"サポートされていないモード: {mode}\n"
-                
-                # 表示サイズを調整 (最大400x300)
-                display_width, display_height = img.size
-                if display_width > 400 or display_height > 300:
-                    ratio = min(400/display_width, 300/display_height)
-                    display_width = int(display_width * ratio)
-                    display_height = int(display_height * ratio)
-                    img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)
-                
-                # Tkinterで表示するためにPhotoImageに変換
-                photo = ImageTk.PhotoImage(img)
-                ret.append(photo)
-            except Exception as e:
-                content + f"\n画像表示エラー: {str(e)}\n\n"
-        
-        ret.insert(0, content)
-        return ret
-        
-    def _generateGenericContent(self, flowData):
-        """一般的なデータの内容を生成"""
-        content = "\n"
-        width, height = flowData.getDimensions()
-        planeCount = flowData.getPlaneCount()
-        
-        for planeIdx in range(min(planeCount, 3)):
-            if planeCount > 1:
-                content += f"\n[プレーン {planeIdx}]\n"
-            
-            for y in range(min(height, 5)):
-                row_data = []
-                for x in range(min(width, 10)):
-                    block = flowData.getBlock(planeIdx, x, y)
-                    if block and hasattr(block, 'data') and block.data is not None:
-                        try:
-                            value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                            row_data.append(f"{value:.3f}")
-                        except (IndexError, TypeError):
-                            row_data.append("0.000")
-                    else:
-                        row_data.append("0.000")
-                
-                content += "\t".join(row_data) + "\n"
-        
-        return content
-    
     def _updateOpenResultWindows(self, node):
         """開いている結果ウィンドウを更新"""
         if hasattr(node, '_result_window'):
