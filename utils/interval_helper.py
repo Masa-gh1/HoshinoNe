@@ -15,8 +15,8 @@ def createHalfOpenEnd(minValue, maxValue):
         半開区間の終端値（排他的上限）
     """
     if maxValue == int(maxValue) and minValue == int(minValue):
-        # 整数値の場合は +1
-        return maxValue + 1
+        # 整数値の場合は +1（オーバーフロー対策）
+        return float(maxValue) + 1.0
     else:
         # 浮動小数点値の場合は微小値を加算
-        return maxValue + (maxValue - minValue) * 0.001 if maxValue > minValue else maxValue + 0.001
+        return float(maxValue) + (maxValue - minValue) * 0.001

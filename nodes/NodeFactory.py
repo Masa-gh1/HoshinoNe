@@ -22,6 +22,7 @@ from .CountNode import CountNode
 from .ToneCurveNode import ToneCurveNode
 from .WaveletDenoiseNode import WaveletDenoiseNode
 from .ChromaDenoiseNode import ChromaDenoiseNode
+from .ImageAlignmentNode import ImageAlignmentNode
 
 class NodeFactory:
     nodeClasses = {
@@ -40,6 +41,7 @@ class NodeFactory:
         #####
         'chroma_denoise': ChromaDenoiseNode,
         'wavelet_denoise': WaveletDenoiseNode,
+        'image_alignment': ImageAlignmentNode,
         #####
         'file_reader': FileReaderNode,
         'file_writer': FileWriterNode,
@@ -65,6 +67,7 @@ class NodeFactory:
         ('separator'     , None),
         ('chroma_denoise' , '色空間分離ノイズ除去(色ノイズ除去)'),
         ('wavelet_denoise', 'ウェーブレットノイズ除去(輝度ノイズ除去)'),
+        ('image_alignment', '画像位置合わせ'),
         ('separator'     , None),
         ('file_reader'   , 'ファイル読み込み'),
         ('file_writer'   , 'ファイル書き出し'),

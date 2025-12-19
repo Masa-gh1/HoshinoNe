@@ -345,7 +345,16 @@ class ResultWindow:
         text += f"Planes: {', '.join(planes)}\n"
         text += f"Display Levels: {displayLevelMin} - {displayLevelEnd}\n"
         text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
-        text += f"All levels: [{minValue:.3f}, {allLevelEnd:.3f})\n"
+        text += f"All levels: {minValue:.3f} - {allLevelEnd:.3f}\n"
+        
+        
+        if 'reference_image_movement' in headers:
+            movement = headers.get('reference_image_movement')
+            movement_dx = movement["dx"]
+            movement_dy = movement["dy"]
+            movement_rot = movement["rotation"]
+            text += f"ref image movement: {movement_dx:.1f} px, {movement_dy:.1f} px, {movement_rot:.3f} degree\n"
+        
         content.append(text)
         
         # ヒストグラムグラフを作成
@@ -429,13 +438,13 @@ class ResultWindow:
                 # 表示レベルを設定
                 if "display" == displayLevels:
                     scale = 255.0 / (displayLevelEnd - displayLevelMin)
-                    offset = displayLevelMin
+                    offset = float(displayLevelMin)
                 elif "adaptive" == displayLevels:
                     scale = 255.0 / (adpLevelEnd - adpLevelMin)
-                    offset = adpLevelMin
+                    offset = float(adpLevelMin)
                 elif "all" == displayLevels:
                     scale = 255.0 / (maxValue - minValue)
-                    offset = minValue
+                    offset = float(minValue)
                 else:
                     scale = 1.0
                     offset = 0.0
