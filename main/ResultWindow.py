@@ -282,35 +282,42 @@ class ResultWindow(tk.Toplevel):
         
         # ヘッダー行
         if columns:
-            content += "\t" + "\t".join(columns) + "\n"
+            length = max([len(label) for label in lines])
+            content += "\t"*(length//8+1) + "\t".join(columns) + "\n"
         
-        # データ行 (最初の10行のみ表示)
+        # データ行 (最初の10行,10列のみ表示)
         width, height = flowData.getDimensions()
-        displayRows = min(height, 10)
+        displayRows = min(height, 10)  # 最初の10行のみ
+        displayCols = min(width , 10)  # 最初の10列のみ
         
-        for y in range(displayRows):
-            lineLabel = lines[y] if y < len(lines) else f"row_{y}"
-            content += f"{lineLabel}\t"
-            
-            row_data = []
-            for x in range(min(width, 10)):  # 最初の10列のみ
-                block = flowData.getBlock(0, x, y)
-                if block and hasattr(block, 'data') and block.data is not None:
-                    try:
-                        value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                        row_data.append(str(value))
-                    except (IndexError, TypeError):
-                        row_data.append("0")
-                else:
-                    row_data.append("0")
-            
-            if width > 10:
-                row_data.append("...")
-            
-            content += "\t".join(row_data) + "\n"
+        if 0 < displayRows and 0 < displayCols:
+            block = flowData.getBlock(0, 0, 0)
+            if block and block.data is not None:
+                h, w = block.data.shape
+                for dy in range(h):
+                    row_data = [lines[dy] if dy < len(lines) else f"row_{dy}"]
+                    for dx in range(w):
+                        try:
+                            value = block.data[dy][dx]
+                            if abs(value) < 0.00001:
+                                s = f"{value:.9f}"
+                            elif abs(value) < 0.01:
+                                s = f"{value:.6f}"
+                            elif abs(value) < 10:
+                                s = f"{value:.3f}"
+                            else:
+                                s = f"{value:.0f}"
+                            row_data.append(s)
+                        except (IndexError, TypeError):
+                            row_data.append("_")
+
+                    if width > displayCols:
+                        row_data.append("...")
+                
+                    content += "\t".join(row_data) + "\n"
         
-        if height > 10:
-            content += "...\n"
+                if height > displayRows:
+                    content += "...\n"
         
         return content
     

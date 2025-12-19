@@ -24,8 +24,10 @@ from .basic.QuadraticFitNode import QuadraticFitNode
 from .preset.AutoLevelsNode import AutoLevelsNode
 from .preset.CoefficientsNode import CoefficientsNode
 from .basic.AbsoluteLowPassFilterNode import AbsoluteLowPassFilterNode
-from .preset.ImageAlignmentNode import ImageAlignmentNode
+from .preset.TransformNode import TransformNode
 from .preset.ToneCurveNode import ToneCurveNode
+from .preset.ImageAlignmentNode import ImageAlignmentNode
+from .preset.ShiftDetectionNode import ShiftDetectionNode
 from .preset.BayerUnpackSparseNode import BayerUnpackSparseNode
 from .preset.BayerUnpackDenseNode import BayerUnpackDenseNode
 
@@ -59,9 +61,12 @@ class NodeFactory:
         'bayer_unpack_sparse': BayerUnpackSparseNode,
         'bayer_unpack_dense': BayerUnpackDenseNode,
         #####
+        'transform': TransformNode,
+        #####
         'chroma_denoise': ChromaDenoiseNode,
         'wavelet_denoise': WaveletDenoiseNode,
         'image_alignment': ImageAlignmentNode,
+        'shift_detection': ShiftDetectionNode,
         #####
         'category_auxiliary': CategoryAuxiliaryNode,
         'pass': PassNode,
@@ -94,9 +99,12 @@ class NodeFactory:
         ('bayer_unpack_sparse'    , 'ベイヤー分離(疎)(N:N)'),
         ('bayer_unpack_dense'     , 'ベイヤー分離(密)(N:N)'),
         ('separator'              , None),
+        ('transform'              , '変形(N:N)'),
+        ('separator'              , None),
         ('chroma_denoise'         , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
         ('wavelet_denoise'        , 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),
         ('image_alignment'        , '画像位置合わせ(N:N)'),
+        ('shift_detection'        , 'ズレ検出(N:1)'),
         ('separator'              , None),
         ('category_auxiliary'     , '補正値として使う'),
         ('pass'                   , '通点'),

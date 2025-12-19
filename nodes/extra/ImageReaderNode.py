@@ -106,7 +106,7 @@ class ImageReaderNode(BaseReaderNode):
             'planes': plane_names,
             'datetime': orgDateTime,
             'display_levels': display_levels,
-            'source_file': filePath,
+            'source_file': self.getRelativePath(filePath),
         }
 
         # EXIF 追加

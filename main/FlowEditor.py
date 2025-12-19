@@ -180,15 +180,12 @@ class FlowEditor:
             self.contextMenu.post(event.x_root, event.y_root)
     
     def addNodeAtPosition(self, nodeType):
-        try:
-            x = self.canvas.canvasx(self.rightClickX)
-            y = self.canvas.canvasy(self.rightClickY)
-            node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
-            if node:
-                self.nodes.append(node)
-                self._placeItemBeforeConnections(node.rect, node.label)
-        except ValueError:
-            pass
+        x = self.canvas.canvasx(self.rightClickX)
+        y = self.canvas.canvasy(self.rightClickY)
+        node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
+        if node:
+            self.nodes.append(node)
+            self._placeItemBeforeConnections(node.rect, node.label)
     
     def addTrayAtPosition(self):
         x = self.canvas.canvasx(self.rightClickX)
@@ -720,13 +717,6 @@ class FlowEditor:
         if self.autoExecute.get() and self.reprocessingHighlights:
             self.executeFlow()
     
-    def _clearAllProgress(self):
-        """全てのプログレスバーをクリア"""
-        for progressInfo in self.progressBars:
-            progressInfo['label'].config(text="待機中")
-            progressInfo['bar'].config(value=0)
-        self.activeProgressBars.clear()
-    
     def showMessage(self,msg):
         status = msg.split('\n')[0]
         self.root.after(0, lambda: self.statusLabel.config(text=status))
@@ -754,16 +744,30 @@ class FlowEditor:
                 if i not in self.activeProgressBars.values():
                     self.activeProgressBars[nodeId] = i
                     break
+            for i, progressInfo in enumerate(self.progressBars):
+                if i not in self.activeProgressBars.values():
+                    progressInfo['label'].config(text="待機中")
+                    progressInfo['bar'].config(value=0)
         
         if nodeId in self.activeProgressBars:
             progressInfo = self.progressBars[self.activeProgressBars[nodeId]]
             progressInfo['label'].config(text=f"{nodeName}: {message}")
             
-            if current is not None and total is not None and total > 0:
+            if current is None or total is None:
+                progressInfo['bar'].config(value=0)
+            elif 0 <= total:
                 progress = (current / total) * 100
                 progressInfo['bar'].config(value=progress)
             else:
-                progressInfo['bar'].config(value=0)
+                progressInfo['bar'].config(value=100)
+                del self.activeProgressBars[nodeId]
+    
+    def _clearAllProgress(self):
+        """全てのプログレスバーをクリア"""
+        for progressInfo in self.progressBars:
+            progressInfo['label'].config(text="待機中")
+            progressInfo['bar'].config(value=0)
+        self.activeProgressBars.clear()
     
     def updateCacheStats(self):
         """キャッシュ統計を更新"""

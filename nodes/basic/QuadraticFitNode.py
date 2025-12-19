@@ -76,7 +76,7 @@ class QuadraticFitNode(FlowNode):
             valid_mask = ~np.isnan(z_flat)
             if not np.any(valid_mask):
                 # 全てNaNの場合はゼロ係数
-                coeffs = np.zeros(6)
+                coeffs = nh.zeros(6)
             else:
                 x_valid = x_flat[valid_mask]
                 y_valid = y_flat[valid_mask]

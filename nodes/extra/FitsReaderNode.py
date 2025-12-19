@@ -179,7 +179,7 @@ class FitsReaderNode(BaseReaderNode):
                     'planes': plane_names,
                     'datetime': date_obs,
                     'display_levels': display_levels,
-                    'source_file': filePath,
+                    'source_file': self.getRelativePath(filePath),
                     'context_index': hduIndex,
                 }
 

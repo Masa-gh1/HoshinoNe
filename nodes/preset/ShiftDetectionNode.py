@@ -1,5 +1,5 @@
 '''
-ImageAlignmentNode class
+ShiftDetectionNode - シフト検出ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -12,11 +12,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from config import BLOCK_SIZE
-from base import FlowData
-from base import LazyFlowData
-from base import DataBlock
-from nodes import NNBlockOperationNode
+from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
 
@@ -36,9 +32,9 @@ class AlignmentResult:
         self.method = method
         self.extra_info = extra_info
 
-class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
+class ShiftDetectionNode(FlowNode, ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "image_alignment", "画像位置合わせ")
+        super().__init__(canvas, editor, x, y, "shift_detection", "ズレ検出")
         
         # 設定パラメータ
         # 基準画像選択（auxiliaryでマークされた画像を使用）
@@ -49,7 +45,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # オフセット計算 優先順位1: 星点検出法
         self.star = SimpleNamespace()
         self.star.threshold = 95  # 星検出閾値（パーセンタイル）
-        self.star.useSaturationMask = False #  飽和マスクを使用する
+        self.star.useSaturationMask = False  # 飽和マスクを使用する
         self.star.minDiameter = 2  # 星最小直径（ピクセル）
         self.star.maxDiameter = 16  # 星最大直径（ピクセル）
         self.star.maxAspectRatio = 2.0  # 星の最大アスペクト比（形状フィルタ）
@@ -67,8 +63,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # オフセット計算 優先順位3: テンプレートマッチング法
         self.template = SimpleNamespace()
         self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
-        # 拡張領域計算
-        # 位置合わせ実行
         
         self.lastConfigHash = None
         
@@ -77,11 +71,17 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             return
     
     def getColor(self):
-        return self._color_op
+        return self._color_func
     
     def updateNodeText(self):
         displayText = f"{self.text}\nG:{self.star.grid.cols}x{self.star.grid.rows} S:{self.star.ransac.sampleRadius}"
         self.editor.updateNodeText(self, displayText)
+        
+        newHash = self.getConfigHash()
+        if newHash != self.lastConfigHash:
+            self.lastConfigHash = newHash
+            if hasattr(self.editor, 'onNodeConfigChanged'):
+                self.editor.onNodeConfigChanged(self)
     
     def store(self, nodeData):
         nodeData["usePreviousOffset"] = self.usePreviousOffset
@@ -168,7 +168,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         return block
     
     def process(self, context=None):
-        """画像位置合わせのメイン処理（LazyFlowData対応）"""
+        """シフト検出のメイン処理"""
         self.reportProgress(context, "開始")
         
         # 入力データを収集
@@ -179,18 +179,18 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # primary/auxiliaryで分類
         primaryDatas = self.preprocessInputs(inputDatas)
         if self._referenceData is None:
-            self.flowDatas = inputDatas
+            self.flowDatas = []
             return
         
-        # 移動/回転計算のみを実行
-        alignment_metadata = self._calculateAlignmentMetadata(primaryDatas, context)
+        # シフト検出を実行
+        results = self._calculateShifts(primaryDatas, context)
         
-        # LazyFlowDataを生成
-        self.flowDatas = self._createLazyOutputs(primaryDatas, alignment_metadata)
+        # matrix形式でFlowDataを生成
+        self.flowDatas = [self._createMatrixOutput(primaryDatas, results)]
         
         self.reportProgress(context, "完了")
     
-    def _calculateAlignmentMetadata(self, inputDatas, context):
+    def _calculateShifts(self, inputDatas, context):
         """移動/回転計算のみを実行"""
         # 基準画像
         referenceData = self._referenceData
@@ -243,86 +243,90 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             globalProcessedBlocks += 1
             if context:
                 self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
-
         
-        # 回転を考慮した拡張領域計算
-        width, height = referenceData.getDimensions()
-        all_corners = []
+        # 結果を返す
+        results = []
+        for i, (result, method_results) in enumerate(zip(all_results, all_method_results_list)):
+            image_id = self._generateImageId(inputDatas[i])
+            results.append({
+                'image_id': image_id,
+                'result': result,
+                'methods': method_results
+            })
         
-        for result in all_results:
-            corners = self._calculateTransformedCorners(width, height, result.dx, result.dy, result.rotation)
-            all_corners.extend(corners)
-        
-        min_x = min(corner[0] for corner in all_corners)
-        min_y = min(corner[1] for corner in all_corners)
-        max_x = max(corner[0] for corner in all_corners)
-        max_y = max(corner[1] for corner in all_corners)
-        
-        expand_left = int(max(0, -min_x))
-        expand_top = int(max(0, -min_y))
-        new_width = int(np.ceil(max_x - min_x))
-        new_height = int(np.ceil(max_y - min_y))
-        
-        return {
-            'results': all_results,
-            'method_results': all_method_results_list,
-            'expand_params': (expand_left, expand_top, new_width, new_height)
-        }
+        return results
     
-    def _calculateTransformedCorners(self, width, height, dx, dy, rotation):
-        """画像の4隅の変換後座標を計算（画像中心回転）"""
-        corners = nh.array([[0, 0], [width, 0], [width, height], [0, height]])
+    def _generateImageId(self, flowData):
+        """画像識別子を生成"""
+        source_file = flowData.headers.get('source_file', '')
+        datetime_str = flowData.headers.get('datetime', '')
         
-        if rotation != 0:
-            center = (width / 2, height / 2)
-            M = cv2.getRotationMatrix2D(center, rotation, 1.0)
-            M[0, 2] += dx
-            M[1, 2] += dy
-            transformed = cv2.transform(corners.reshape(-1, 1, 2), M).reshape(-1, 2)
+        if source_file:
+            return source_file
+        elif datetime_str:
+            return f"datetime_{datetime_str}"
         else:
-            transformed = corners + np.array([dx, dy])
-        
-        return transformed
+            data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
+            return f"hash_{data_hash}"
     
-    def _createLazyOutputs(self, inputDatas, metadata):
-        """LazyFlowDataを生成"""
-        results = metadata['results']
-        method_results = metadata['method_results']
-        expand_left, expand_top, new_width, new_height = metadata['expand_params']
+    def _createMatrixOutput(self, inputDatas, results):
+        """matrix形式のFlowDataを生成"""
+        from config import BLOCK_SIZE
         
-        lazy_outputs = []
+        # method_idマッピング
+        method_definitions = {0: "none", 1: "star", 2: "phase", 3: "template"}
         
-        for i, (inputData, result, method_result) in enumerate(zip(inputDatas, results, method_results)):
-            lazy_data = LazyFlowData(inputData)
+        # データ行を作成
+        matrix_data = []
+        lines = []
+        
+        for result_data in results:
+            image_id = result_data['image_id']
+            result = result_data['result']
             
-            # 画像移動量 = 検出移動量 + 拡張領域
-            actual_dx = result.dx + expand_left
-            actual_dy = result.dy + expand_top
+            # method_idを決定
+            method_id = 0
+            if result.method == "star":
+                method_id = 1
+            elif result.method == "phase":
+                method_id = 2
+            elif result.method == "template":
+                method_id = 3
             
-            lazy_data.addOperation(LazyAlignmentOperations.alignAndExpand,
-                                    actual_dx, actual_dy, result.rotation, new_width, new_height)
-            
-            # 位置合わせ情報をheadersに追加
-            alignment_info = {}
-            alignment_info['method'] = result.method
-            alignment_info['success'] = result.success
-            alignment_info['confidence'] = result.confidence
-            alignment_info['movement_from_reference'] = {'dx': result.dx, 'dy': result.dy, 'rotation': result.rotation}
-            
-            # 各処理法の結果を個別に記録
-            for method, value in method_result.items():
-                if value:
-                    alignment_info[f'{method}_success'] = value.success
-                    alignment_info[f'{method}_confidence'] = value.confidence
-                    alignment_info[f'{method}_movement'] = {'dx': value.dx, 'dy': value.dy, 'rotation': value.rotation}
-                    if value.extra_info:
-                        alignment_info[f'{method}_extra_info'] = value.extra_info
-
-            lazy_data.headers.update(alignment_info)
-            lazy_data.setDimensions(new_width, new_height)
-            lazy_outputs.append(lazy_data)
-            
-        return lazy_outputs
+            # データ行: [dx, dy, rotation, confidence, method_id]
+            row = [result.dx, result.dy, result.rotation, result.confidence, method_id]
+            matrix_data.append(row)
+            lines.append(image_id)
+        
+        # numpy配列に変換
+        if matrix_data:
+            matrix_array = nh.array(matrix_data)
+        else:
+            matrix_array = nh.zeros((0, 5))
+        
+        # FlowDataを作成
+        flowData = FlowData()
+        
+        # 複数ブロックに対応
+        rows, cols = matrix_array.shape
+        for y in range(0, rows, BLOCK_SIZE):
+            block_height = min(BLOCK_SIZE, rows - y)
+            block_data = matrix_array[y:y+block_height, :]
+            flowData.setBlock(DataBlock(block_data, 0, 0, y))
+        
+        # ヘッダー情報を設定
+        flowData.headers.update({
+            'category': 'auxiliary',
+            'type'    : 'matrix',
+            'mode'    : '2D',
+            'columns' : ['dx', 'dy', 'rotation', 'confidence', 'method_id'],
+            'method_definitions': method_definitions,
+            'lines'   : lines,
+            'planes'  : ['shift_detection']
+        })
+        flowData.setDimensions(cols, rows)
+        
+        return flowData
     
     def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
         """FlowDataから画像配列を構築"""
@@ -874,125 +878,15 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         return distributed_stars[:max_total_stars], grid_selected_counts
     
-
-    
     def onEdit(self):
-        return ImageAlignmentSettingsDialog(self.editor.root, self)
+        return ShiftDetectionSettingsDialog(self.editor.root, self)
     
     def getConfigHash(self):
         config = f"{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
         return hashlib.md5(config.encode()).hexdigest()
 
-class LazyAlignmentOperations:
-    """位置合わせ専用の遅延操作"""
-    
-    @staticmethod
-    def alignAndExpand(flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
-        """位置合わせ + 拡張を一度に実行"""
-        
-        orig_width, orig_height = flowData.getDimensions()
-        
-        # 出力ブロックの4隅を逆変換して必要な入力範囲を計算
-        corners = np.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]], dtype=np.float64)
-        
-        if rotation != 0:
-            # 回転ありの場合は逆変換行列で計算
-            center = (orig_width / 2, orig_height / 2)
-            M_inv = cv2.getRotationMatrix2D(center, -rotation, 1.0)
-            M_inv[0, 2] -= dx
-            M_inv[1, 2] -= dy
-            source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
-        else:
-            # 平行移動のみ
-            source_corners = corners - np.array([dx, dy])
-        
-        # 必要な入力範囲を計算
-        min_x = int(np.floor(np.min(source_corners[:, 0])))
-        max_x = int(np.ceil(np.max(source_corners[:, 0])))
-        min_y = int(np.floor(np.min(source_corners[:, 1])))
-        max_y = int(np.ceil(np.max(source_corners[:, 1])))
-        
-        # ブロック境界に拡張
-        min_block_x = (min_x // BLOCK_SIZE) * BLOCK_SIZE
-        max_block_x = (max_x // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
-        min_block_y = (min_y // BLOCK_SIZE) * BLOCK_SIZE
-        max_block_y = (max_y // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
-        
-        min_block_x = max(min_block_x, 0)
-        max_block_x = min(max_block_x, orig_width)
-        min_block_y = max(min_block_y, 0)
-        max_block_y = min(max_block_y, orig_height)
 
-        if max_block_x <= min_block_x or max_block_y <= min_block_y:
-            # 移動元が画像外なので NaN を返す
-            return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
-        else:
-            # 移動に必要な範囲の部分画像を構築
-            region_width  = max(x+BLOCK_SIZE, max_block_x) - min(x, min_block_x)
-            region_height = max(y+BLOCK_SIZE, max_block_y) - min(y, min_block_y)
-            region_image = nh.nans((region_height, region_width))
-            
-            # 必要なブロックを取得して部分画像に配置
-            for by in range(min_block_y, max_block_y, BLOCK_SIZE):
-                for bx in range(min_block_x, max_block_x, BLOCK_SIZE):
-                    block = flowData.getBlock(planeIndex, bx, by)
-                    if block and block.data is not None:
-                        if len(block.data.shape) == 3:
-                            block_data = block.data[:, :, 0]
-                        else:
-                            block_data = block.data
-                        
-                        # 部分画像内の位置に配置
-                        rel_x = bx - min_block_x
-                        rel_y = by - min_block_y
-                        h, w = block_data.shape
-                        region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
-            
-            # 変換行列を作成（部分画像座標系）
-            if rotation != 0:
-                # 元画像の中心を部分画像座標系に変換
-                orig_center_x = orig_width  / 2 - min_block_x
-                orig_center_y = orig_height / 2 - min_block_y
-                M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), rotation, 1.0)
-                M[0, 2] += dx
-                M[1, 2] += dy
-            else:
-                M = np.float64([[1, 0, dx], [0, 1, dy]])
-            
-            # 変換後に必要なサイズを計算
-            transform_output_width = min(region_width, new_width - (x - min_block_x))
-            transform_output_height = min(region_height, new_height - (y - min_block_y))
-            
-            # 部分画像を変換
-            transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
-                                            flags=cv2.INTER_LINEAR,
-                                            borderMode=cv2.BORDER_CONSTANT,
-                                            borderValue=np.nan)
-            
-            # 出力ブロック位置を部分画像座標系に変換
-            output_x_in_region = x - min_block_x
-            output_y_in_region = y - min_block_y
-            
-            # 画面端での適切なブロックサイズを計算
-            actual_block_width = min(BLOCK_SIZE, new_width - x)
-            actual_block_height = min(BLOCK_SIZE, new_height - y)
-            
-            # 出力ブロック部分を切り出し
-            end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
-            end_x = min(output_x_in_region + actual_block_width, transformed_region.shape[1])
-            
-            output_block = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
-            
-            # サイズが足りない場合はNaNでパディング
-            if output_block.shape != (actual_block_height, actual_block_width):
-                padded_block = nh.nans((actual_block_height, actual_block_width))
-                h, w = output_block.shape
-                padded_block[:h, :w] = output_block
-                output_block = padded_block
-            
-            return DataBlock(output_block, planeIndex, x, y)
-
-class ImageAlignmentSettingsDialog(tk.Toplevel):
+class ShiftDetectionSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
@@ -1141,16 +1035,6 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         self.templateSearchEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(templateFrame, text="px (パターンマッチング検索範囲)").pack(side=tk.LEFT)
         
-        # 拡張領域計算
-        tk.Label(mainFrame, text="■ 拡張領域計算", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
-        tk.Label(mainFrame, text="パラメーターなし", fg="gray").pack(anchor=tk.W, pady=2)
-        
-        # 位置合わせ実行
-        tk.Label(mainFrame, text="■ 位置合わせ実行", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
-        tk.Label(mainFrame, text="パラメーターなし", fg="gray").pack(anchor=tk.W, pady=2)
-        
-
-        
         # ボタンフレーム
         buttonFrame = tk.Frame(self)
         buttonFrame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
@@ -1183,7 +1067,9 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
             
             newHash = self.node.getConfigHash()
             if newHash != self.node.lastConfigHash:
-                self.node.editor.onNodeConfigChanged(self.node)
+                self.node.lastConfigHash = newHash
+                if hasattr(self.node.editor, 'onNodeConfigChanged'):
+                    self.node.editor.onNodeConfigChanged(self.node)
                 
         except ValueError:
             messagebox.showerror("エラー", "数値の入力が正しくありません")

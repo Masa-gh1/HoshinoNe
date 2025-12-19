@@ -72,6 +72,7 @@ class FlowControl:
                         for future in as_completed([f for n, f in futures]):
                             node = futureToNode[future]
                             elapsedMs = future.result()
+                            reportProgress(id(node), node.text, "完了", -1, -1)
                             sendMessage(f"完了: {node.text} ({elapsedMs}ms)\n")
         except:
             endTime = time.time()

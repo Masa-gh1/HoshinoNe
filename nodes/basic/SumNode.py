@@ -73,7 +73,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
             if self._combinedTensor is None:
                 self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
             tensorBlock = self._combinedTensor.getBlock(block.planeIndex, block.x, block.y)
-            return tensorBlock if tensorBlock else DataBlock(np.zeros((1, 1)), block.planeIndex, block.x, block.y)
+            return tensorBlock if tensorBlock else DataBlock(nh.zeros((1, 1)), block.planeIndex, block.x, block.y)
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)

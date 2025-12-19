@@ -255,7 +255,7 @@ class RawReaderNode(BaseReaderNode):
                 'planes': plane_names,
                 'datetime': orgDateTime,
                 'display_levels': display_levels,
-                'source_file': filePath,
+                'source_file': self.getRelativePath(filePath),
                 'demosaic': self.demosaicAlgorithm,
                 'colorspace': self.outputColorspace,
                 'white_balance': self.whiteBalance,

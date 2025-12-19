@@ -43,25 +43,46 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         self.editor.updateNodeText(self, displayText)
     
     def store(self, nodeData):
-        """相対パスで保存"""
-        if hasattr(self.editor, 'currentFlowPath') and self.editor.currentFlowPath:
-            flowDir = os.path.dirname(self.editor.currentFlowPath)
-            relativePaths = [os.path.relpath(path, flowDir) for path in self.filePaths]
-            nodeData["filePaths"] = relativePaths
-        else:
-            nodeData["filePaths"] = self.filePaths
+        """ノード固有の設定 nodeData に保存"""
+        filepaths = []
+        for filepath in self.filePaths:
+            relapath = self.getRelativePath(filepath)
+            if relapath:
+                filepaths.append(relapath)
+            else:
+                filepaths.append(filepath)
+        nodeData["filePaths"] = filepaths
     
     def restore(self, nodeData):
-        """絶対パスに復元"""
+        """ノード固有の設定 nodeData から復元"""
         if "filePaths" in nodeData:
-            if hasattr(self.editor, 'currentFlowPath') and self.editor.currentFlowPath:
-                flowDir = os.path.dirname(self.editor.currentFlowPath)
-                self.filePaths = [os.path.abspath(os.path.join(flowDir, path)) 
-                                for path in nodeData["filePaths"]]
-            else:
-                self.filePaths = nodeData["filePaths"]
+            filepaths = []
+            for filepath in nodeData["filePaths"]:
+                abspath = self.getAbsolutePath(filepath)
+                if abspath:
+                    filepaths.append(abspath)
+                else:
+                    filepaths.append(filepath)
+
+            self.filePaths = filepaths
         self.updateNodeText()
     
+    def getRelativePath(self, filePath):
+        """相対パスを取得"""
+        if hasattr(self.editor, 'currentFlowPath') and self.editor.currentFlowPath:
+            flowDir = os.path.dirname(self.editor.currentFlowPath)
+            return os.path.relpath(filePath, flowDir)
+        else:
+            return None
+    
+    def getAbsolutePath(self, filePath):
+        """絶対パスを取得"""
+        if hasattr(self.editor, 'currentFlowPath') and self.editor.currentFlowPath:
+            flowDir = os.path.dirname(self.editor.currentFlowPath)
+            return os.path.abspath(os.path.join(flowDir, filePath))
+        else:
+            return None
+
     def getConfigHash(self):
         """基本的な設定ハッシュ（サブクラスでオーバーライド）"""
         config = f"{self.type}_{'|'.join(self.filePaths)}"

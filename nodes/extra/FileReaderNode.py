@@ -92,7 +92,13 @@ class FileReaderNode(BaseReaderNode):
                 planeData.append(fileData)
             
             # FlowDataを作成してブロック単位で保存
-            flowHeaders = {'type': dataType, 'mode': '2D', 'columns': headers, 'lines': rowHeaders}
+            flowHeaders = {
+                'type': dataType,
+                'mode': '2D',
+                'columns': headers,
+                'lines': rowHeaders,
+                'source_file': self.getRelativePath(filePath),
+            }
             if planeNames:
                 flowHeaders['planes'] = planeNames
             else:
