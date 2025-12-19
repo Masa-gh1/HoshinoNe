@@ -7,8 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import inspect
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
+import datetime
 import json
 import sys
 import os
@@ -20,6 +22,7 @@ import atexit
 import gc
 from nodes import NodeFactory
 from base.FlowNode import FlowNode
+from base.FlowData import FlowData
 from utils.ThreadPool import CoalescingExecutor
 from .CacheManager import CacheManager
 from . import config
@@ -401,10 +404,10 @@ class FlowEditor:
                     for node in nodes:
                         # 再処理が必要かチェック
                         if node.needsReprocessing():
-                            self.root.after(0, lambda: self.showProgress(id(node), node.text, "待機中"))
+                            self.root.after(0, lambda id=id(node), t=node.text: self.showProgress( id, t, "待機中"))
                             context = {
                                 'result_callback': self.showResult,
-                                'progress_callback': lambda msg, current=None, total=None, n=node: self.showProgress(id(n), n.text, msg, current, total)
+                                'progress_callback': lambda msg, current=None, total=None, id=id(node), t=node.text: self.showProgress( id, t, msg, current, total)
                             }
                             future = NodeExecutor.submit(self._executeNode, node, context)
                             futures.append((node, future))
@@ -412,7 +415,7 @@ class FlowEditor:
                             sep=","
                         elif not self.autoExecute.get():
                             # スキップしたノードを表示
-                            self.root.after(0, lambda n=node: self.resultText.insert(tk.END, f"スキップ: {n.text}\n"))
+                            self.root.after(0, lambda t=node.text: self.resultText.insert(tk.END, f"スキップ: {t}\n"))
                             self.root.after(0, lambda: self.resultText.see(tk.END))
                         
                     
@@ -428,9 +431,9 @@ class FlowEditor:
                     for future in as_completed([f for n, f in futures]):
                         node = futureToNode[future]
                         elapsedMs = future.result()
-                        self.root.after(0, lambda n=node, ms=elapsedMs: self.resultText.insert(tk.END, f"完了: {n.text} ({ms}ms)\n"))
+                        self.root.after(0, lambda t=node.text, ms=elapsedMs: self.resultText.insert(tk.END, f"完了: {t} ({ms}ms)\n"))
                         self.root.after(0, lambda: self.resultText.see(tk.END))
-                        self.root.after(0, lambda n=node: self.statusLabel.config(text=f"完了: {n.text}"))
+                        self.root.after(0, lambda t=node.text: self.statusLabel.config(text=f"完了: {t}"))
                         self.root.after(0, lambda: self._clearAllProgress())
                         self.root.after(0, lambda: self.highlightReprocessingNodes())
                         self.root.after(0, lambda n=node: n.updateResult())
@@ -451,7 +454,7 @@ class FlowEditor:
             self.root.after(0, lambda: self.highlightReprocessingNodes())
         endTime = time.time()
         elapsedMs = int((endTime - startTime) * 1000)
-        self.root.after(0, lambda n=node, ms=elapsedMs: self.resultText.insert(tk.END, f"({ms}ms)\n"))
+        self.root.after(0, lambda ms=elapsedMs: self.resultText.insert(tk.END, f"({ms}ms)\n"))
     
     def getProcessLevels(self):
         """ノードを依存レベル別にグループ化"""
@@ -837,25 +840,40 @@ class FlowEditor:
         self.updateCacheStats()
         
         if config.DEBUG:
+            print("========================")
             self._debugNodeReferences()
-    
+            print("========================")
+            if hasattr(self, '_bugReportLog'):
+                for msg in self._bugReportLog:
+                    print(msg)
+                print("========================")
+        y = set()
+        for x in CacheManager._globalBlockCache:
+            y.add(x[0])
+        for x in y:
+            print(x)
+
     def toggleDebugMode(self, event):
         """デバッグモードを切り替える"""
         config.DEBUG = not config.DEBUG
         self.statusLabel.config(text=f"状態: DEBUGモード {'ON' if config.DEBUG else 'OFF'}")
         return "break"
     
+    def bugReport(self, name, message):
+        if not hasattr(self, '_bugReportLog'):
+            self._bugReportLog=[]
+        text = f"{datetime.datetime.now().isoformat()}: {name}: {message}"
+        self._bugReportLog.append(text)
+        if config.DEBUG:
+            print(text)
+
     def _debugNodeReferences(self):
         """ノードの参照状況をデバッグ出力"""
-        print("========================")
-        
         # 全オブジェクトからflowNodeを探す
         objs = []
         for obj in gc.get_objects():
-            if(   hasattr(obj, '__class__')
-              and (  isinstance( obj, FlowNode)
-                  or isinstance( obj, tk.Toplevel)
-                  )
+            if(  isinstance( obj, FlowNode)
+        #      or isinstance( obj, FlowData)
               ):
                 objs.append(obj)
         
@@ -871,40 +889,73 @@ class FlowEditor:
             # gcモジュールで参照元を調査
             referrers = gc.get_referrers(obj)
             print(f"  参照元数: {len(referrers)}")
-            
             for j, ref in enumerate(referrers):
+                refs = self._debugNodeReferencesRecursive(ref)
+                org = [type(x).__name__ for x in refs] if len(refs)<5 else len(refs)
                 refType = type(ref).__name__
                 if refType == 'list':
-                    print(f"    {j}: リスト (長さ: {len(ref)})")
+                    print(f"    {j}: list (length: {len(ref)}) (source: {org})")
                 elif refType == 'tuple':
-                    print(f"    {j}: タプル (長さ: {len(ref)})")
+                    print(f"    {j}: tuple (length: {len(ref)}) (source: {org})")
                 elif refType == 'dict':
-                    print(f"    {j}: 辞書 (キー数: {len(ref)})")
+                    print(f"    {j}: dict (length: {len(ref)}) (source: {org})")
                 elif refType == 'method':
-                    print(f"    {j}: メソッド {ref.__name__} (オブジェクト: {type(ref.__self__).__name__})")
+                    print(f"    {j}: method {ref.__name__} ({type(ref.__self__).__name__} object) (source: {org})")
                 elif hasattr(ref, '__class__'):
-                    print(f"    {j}: {ref.__class__.__name__} オブジェクト")
+                    print(f"    {j}: {ref.__class__.__name__} object (source: {org})")
                 else:
-                    print(f"    {j}: {refType}")
+                    print(f"    {j}: {refType} (source: {org})")
             
-            referrers = gc.get_referents(obj)
-            print(f"  参照先数: {len(referrers)}")
-            for j, ref in enumerate(referrers):
-                refType = type(ref).__name__
-                if refType == 'list':
-                    print(f"    {j}: リスト (長さ: {len(ref)})")
-                elif refType == 'tuple':
-                    print(f"    {j}: タプル (長さ: {len(ref)})")
-                elif refType == 'dict':
-                    print(f"    {j}: 辞書 (キー数: {len(ref)})")
-                elif refType == 'method':
-                    print(f"    {j}: メソッド {ref.__name__} (オブジェクト: {type(ref.__self__).__name__})")
-                elif hasattr(ref, '__class__'):
-                    print(f"    {j}: {ref.__class__.__name__} オブジェクト")
-                else:
-                    print(f"    {j}: {refType}")
-        
-        print("========================")
+            # gcモジュールで参照先を調査
+            #referrers = gc.get_referents(obj)
+            #print(f"  参照先数: {len(referrers)}")
+            #for j, ref in enumerate(referrers):
+            #    refType = type(ref).__name__
+            #    if refType == 'list':
+            #        print(f"    {j}: list (length: {len(ref)})")
+            #    elif refType == 'tuple':
+            #        print(f"    {j}: tuple (length: {len(ref)})")
+            #    elif refType == 'dict':
+            #        print(f"    {j}: dict (length: {len(ref)})")
+            #    elif refType == 'method':
+            #        print(f"    {j}: method {ref.__name__} (object: {type(ref.__self__).__name__})")
+            #    elif hasattr(ref, '__class__'):
+            #        print(f"    {j}: {ref.__class__.__name__} object")
+            #    else:
+            #        print(f"    {j}: {refType}")
+    
+    def _debugNodeReferencesRecursive(self, obj, level = 0, exists=set()):
+        """ノードの参照状況を再帰的に収集"""
+        level += 16
+        objs = set()
+
+        if id(obj) in exists:
+            return(objs)
+        else:
+            exists.add(id(obj))
+
+            if 10 < level:
+                objs.add(None)
+            elif(  isinstance( obj, FlowEditor)
+                or isinstance( obj, FlowData)
+                or isinstance( obj, tk.Toplevel)
+                or inspect.isfunction(obj)
+                or inspect.ismethod(obj) and isinstance( obj.__self__, FlowEditor)
+                or inspect.ismethod(obj) and isinstance( obj.__self__, FlowData)
+                or inspect.ismethod(obj) and isinstance( obj.__self__, tk.Toplevel)
+                ):
+                objs.add(obj)
+            else:
+                referrers = gc.get_referrers(obj)
+                for ref in referrers:
+                    objs.update(self._debugNodeReferencesRecursive(ref, level))
+            return(objs)
+
+    def _debugReport(self):
+        if hasattr(self, '_bugReportLog'):
+            print("バグレポート")
+            for log in self._bugReportLog:
+                print(log)
 
 
 if __name__ == '__main__':

@@ -7,9 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import hashlib
-import datetime
 import numpy as np
-import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 from types import SimpleNamespace
@@ -17,7 +15,6 @@ from base.NNBlockOperationNode import NNBlockOperationNode
 from base.FlowData import FlowData
 from base.LazyFlowData import LazyFlowData, LazyOperations
 from base.DataBlock import DataBlock
-from config import BLOCK_SIZE
 from base.ConfigurableNode import ConfigurableNode
 from main import config
 from utils import numpy_helpers as nh
@@ -539,7 +536,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         extra_info = {}
         
         # 現在の画像サイズを保存（_calculateAffineTransformで使用）
-        self._current_image_shape = refImage.shape
+        currentImageShape = refImage.shape
         
         # RANSAC用固定シードを設定
         rng = np.random.default_rng(self.star.ransac.seed)
@@ -660,32 +657,31 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             extra_info["aspectRatioMedian"] = aspectRatioMedian
             
             if len(inlier_matches) >= 3:
-                transform_result = self._calculateAffineTransform(inlier_matches)
+                transform_result = self._calculateAffineTransform(inlier_matches, currentImageShape)
                 if isinstance(transform_result, tuple):
                     dx, dy = transform_result
                 else:
                     dx, dy = transform_result[0, 2], transform_result[1, 2]
                     rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
             
-            if config.DEBUG:
-                degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
-                degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
-                degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
-                degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
-                degug += " " + f"ransac_iteration:{extra_info['ransac_iteration']}" if 'ransac_iteration' in extra_info else ""
-                print(f"degug: {degug}")
+            degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
+            degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
+            degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
+            degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
+            degug += " " + f"ransac_iteration:{extra_info['ransac_iteration']}" if 'ransac_iteration' in extra_info else ""
+            self.editor.bugReport(type(self).__name__,f"{degug}")
             
             return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
         
         return AlignmentResult(success=False, method="star", extra_info=extra_info)
     
-    def _calculateAffineTransform(self, matches):
+    def _calculateAffineTransform(self, matches, shape):
         """対応点からアフィン変換を計算（画像中心回転）"""
         ref_pts = np.array([match[0] for match in matches])
         target_pts = np.array([match[1] for match in matches])
         
         # 画像中心を回転中心として使用
-        h, w = self._current_image_shape  # 現在処理中の画像サイズ
+        h, w = shape
         image_center = np.array([w/2, h/2])
         
         # 画像中心を原点とした座標系に変換
@@ -777,8 +773,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         except (cv2.error, SystemError):
             # OpenCV 4.5.5以降のバグ対応
-            if config.DEBUG:
-                print("Retry cv2.findContours", file=sys.stderr)
+            self.editor.bugReport(type(self).__name__,"Retry cv2.findContours")
             contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         min_area = np.pi * (self.star.minDiameter / 2) ** 2

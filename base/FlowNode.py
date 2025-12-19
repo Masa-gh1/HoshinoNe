@@ -87,6 +87,11 @@ class FlowNode(AbstractBaseClass):
         # ノード図を削除
         self.canvas.delete(self.rect)
         self.canvas.delete(self.label)
+        self.canvas = None
+        self.rect = None
+        self.label = None
+
+        self.editor = None
     
     @abstractmethod
     def process(self, context=None):
@@ -232,7 +237,7 @@ class FlowNode(AbstractBaseClass):
             
             menu.add_command(label="削除", command=lambda: self.editor.deleteNode(self))
             
-            self._window["menu"] = self._menu = menu
+            self._window["menu"] = menu
         
             menu.post(event.x_root, event.y_root)
     

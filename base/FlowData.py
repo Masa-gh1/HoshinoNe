@@ -9,7 +9,7 @@ All rights reserved.
 
 import uuid
 from tkinter import messagebox
-from config import DEFAULT_BLOCK_TYPE, BLOCK_SIZE
+from config import BLOCK_SIZE
 from .DataBlock import DataBlock
 from main.CacheManager import CacheManager
 from utils import numpy_helpers as nh
@@ -153,7 +153,6 @@ class FlowData:
     
     def setBlock(self, dataBlock):
         """ブロックデータを保存"""
-        dataBlock.flowData = self
         dataBlock.blockId = (self.instanceId, dataBlock.planeIndex, dataBlock.x, dataBlock.y)
         dataBlock.cachePolicy = self.cachePolicy
         
@@ -195,7 +194,7 @@ class FlowData:
             for blockY in range(0, height, self._blockSize):
                 for blockX in range(0, width, self._blockSize):
                     block = self.getBlock(planeIdx, blockX, blockY)
-                    if block and hasattr(block, 'data') and block.data is not None:
+                    if block and block.data is not None:
                         blockArrays.append(block.data.flatten())
             
             if blockArrays:

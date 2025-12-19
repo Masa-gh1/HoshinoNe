@@ -69,7 +69,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
         
         # 全てtensorの場合はtensor加算
         if len(tensorDatas) == len(inputDatas):
-            if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
+            if self._combinedTensor is None:
                 self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
             tensorBlock = self._combinedTensor.getBlock(block.planeIndex, block.x, block.y)
             return tensorBlock if tensorBlock else DataBlock(block.planeIndex, block.x, block.y, np.zeros((1, 1)))
@@ -110,7 +110,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
             
             # tensorデータの加算（NaN対応）
             if tensorDatas:
-                if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
+                if self._combinedTensor is None:
                     self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
                 if self._combinedTensor:
                     tensorValues = self.calculateTensorBlock(self._combinedTensor, planeIdx, x, y, result.shape)
