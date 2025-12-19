@@ -10,13 +10,13 @@ from base import FlowNode, FlowData, DataBlock
 from config import BLOCK_SIZE
 
 class QuadraticFitNode(FlowNode):
-    def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
+    def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "quadratic_fit", "2次関数近似")
     
     def getColor(self):
         return self._color_func
     
-    def process(self, context):
+    def process(self, context=None):
         self.reportProgress(context, "開始")
         
         # 入力データを収集

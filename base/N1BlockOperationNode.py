@@ -4,6 +4,7 @@ N1BlockOperationNode base class
 @author: Masakazu Inoue
 '''
 
+from abc import abstractmethod
 from .FlowNode import FlowNode
 from .FlowData import FlowData
 from concurrent.futures import as_completed
@@ -27,7 +28,7 @@ class N1BlockOperationNode(FlowNode):
         maxHeight = max(data.getDimensions()[1] for data in inputDatas)
         return maxWidth, maxHeight
     
-    def process(self, context):
+    def process(self, context=None):
         self.reportProgress(context, "開始")
         inputDatas = []
         
@@ -65,6 +66,15 @@ class N1BlockOperationNode(FlowNode):
         
         self.reportProgress(context, "完了")
     
+    @abstractmethod
     def processBlock(self, block, inputDatas):
-        """単一ブロックの処理（サブクラスでオーバーライド）"""
-        raise NotImplementedError("サブクラスで実装してください")
+        """単一ブロックの処理（サブクラスで実装）
+        
+        Args:
+            block: 処理対象のブロック
+            inputDatas: 入力データのリスト
+            
+        Returns:
+            処理結果のDataBlock
+        """
+        pass

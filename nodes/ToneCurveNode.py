@@ -24,8 +24,10 @@ except ImportError:
     matplotlibAvailable = False
 
 class ToneCurveNode(NNBlockOperationNode):
-    def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
-        # 設定値
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, "tone_curve", "トーンカーブ")
+
+        # デフォルト設定
         self.inputMin = 0.0
         self.inputMax = 1.0
         self.outputMin = 0.0
@@ -33,22 +35,20 @@ class ToneCurveNode(NNBlockOperationNode):
         self.controlPoints = [(0.0, 0.0), (1.0, 1.0)]  # (入力, 出力)
         self.boundaryCondition = 'natural'  # 境界条件
         
-        super().__init__(canvas, editor, x, y, "tone_curve", "トーンカーブ")
-        
         # ライブラリチェック
         if not scipyAvailable:
-            messagebox.showerror("エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            messagebox.showerror(f"{self.text} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
             return
         
         if not matplotlibAvailable:
-            messagebox.showerror("エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            messagebox.showerror(f"{self.text} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
             return
         
         self.lastConfigHash = None
         self.updateNodeText()
     
     def getColor(self):
-        return 'lightblue'
+        return self._color_func
     
     def updateNodeText(self):
         displayText = f"{self.text}\n{len(self.controlPoints)-2}点\n出力[{self.outputMin:.2f}-{self.outputMax:.2f}]"
@@ -167,18 +167,18 @@ class ToneCurveDialog(tk.Toplevel):
     def __init__(self, node):
         super().__init__(node.editor.root)
         self.node = node
-        self.title("トーンカーブ設定")
+        self.title(f"{node.text}設定")
         self.geometry("600x500")
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
         # ライブラリチェック
         if not scipyAvailable:
-            messagebox.showerror("エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            messagebox.showerror(f"{node.text} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
             self.destroy()
             return
         
         if not matplotlibAvailable:
-            messagebox.showerror("エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            messagebox.showerror(f"{node.text} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
             self.destroy()
             return
         

@@ -51,13 +51,13 @@ class ImageWriterNode(FlowNode):
             self.outputFilePath = os.path.abspath(os.path.join(flowDir, nodeData["outputFilePath"]))
             self.updateNodeText()
     
-    def process(self, context):
+    def process(self, context=None):
         if not PIL_AVAILABLE:
-            messagebox.showerror("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+            messagebox.showerror(f"{self.text} エラー", "PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
         
         self.reportProgress(context, "開始")
         if not self.outputFilePath:
-            messagebox.showerror("エラー", "出力ファイルが設定されていません")
+            messagebox.showerror(f"{self.text} エラー", "出力ファイルが設定されていません")
             return
         
         # 前のノードからデータを収集
@@ -66,7 +66,7 @@ class ImageWriterNode(FlowNode):
             flowDatas.extend(node.flowDatas)
         
         if not flowDatas:
-            messagebox.showerror("エラー", "画像データがありません")
+            messagebox.showerror(f"{self.text} エラー", "画像データがありません")
             return
         
         try:
@@ -82,6 +82,8 @@ class ImageWriterNode(FlowNode):
             
             # 複数データの処理
             self.reportProgress(context, f"処理中 ")
+            
+            fileInfos = []
             
             for dataIdx, flowData in enumerate(flowDatas):
                 width, height = flowData.getDimensions()
@@ -99,7 +101,7 @@ class ImageWriterNode(FlowNode):
                 type = flowData.getType()
                 mode = flowData.getMode()
                 if(  type == 'image' and mode == 'RGB'
-                  or type == 'matrix' and mode == '3D'
+                  or type == 'matrix' and mode == '2D' and planeCount == 3
                   ):
                     # RGBカラー画像
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
@@ -128,7 +130,7 @@ class ImageWriterNode(FlowNode):
                     
                     img = Image.fromarray(imgArray, 'RGB')
                 elif(  type == 'image' and mode == 'RGGB'
-                    or type == 'matrix' and mode == '4D'
+                    or type == 'matrix' and mode == '2D' and planeCount == 4
                     ):
                     # RGGB 4チャンネル画像をRGBに変換
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
@@ -160,7 +162,7 @@ class ImageWriterNode(FlowNode):
                     
                     img = Image.fromarray(imgArray, 'RGB')
                 elif(  type == 'image' and mode == 'L'
-                    or type == 'matrix' and mode == '2D'
+                    or type == 'matrix' and mode == '2D' and planeCount == 1
                     ):
                     # グレースケール画像
                     imgArray = np.zeros((height, width), dtype=np.uint8)
@@ -187,34 +189,36 @@ class ImageWriterNode(FlowNode):
                     messagebox.showerror(f"{self.text} エラー", f"サポートされていないタイプ: {type} {mode}")
                     continue
                 
-                img.save(outputPath)
+                _,ext = os.path.splitext(outputPath)
+                opt = {}
+                if ext.lower() in ['.jpg', '.jpeg']: img.save( outputPath, quality=100, optimize=True)
+                elif ext.lower() in ['.png']       : img.save( outputPath, optimize=True)
+                else                               : img.save( outputPath)
+                fileInfos.append( (outputPath, os.path.getsize(outputPath), planeCount, width, height))
             
             # 処理完了情報をCSV形式のFlowDataとして設定
-            fileName = os.path.basename(outputPath)
-            fileSize = os.path.getsize(outputPath)
+            fileNames = [os.path.basename(path) for path, _, _, _, _ in fileInfos]
             
             headers = {
                 'type': 'matrix',
                 'mode': '2D',
                 'columns': ['size', 'planeCount', 'width', 'height'],
-                'lines': [fileName],
-                'planes': ['fileName']
+                'lines': fileNames,
+                'planes': ['file info']
             }
             
             resultFlowData = FlowData(headers)
-            resultFlowData.setDimensions(4, 1)
-            
-            # データブロックを作成（数値のみ）
+            resultFlowData.setDimensions(4, len(fileInfos))
+            data = [ [size, planeCount, width, height] for _, size, planeCount, width, height in fileInfos ]
             from base import DataBlock
-            data = [[fileSize, planeCount, width, height]]
-            block = DataBlock(0, 0, 0, data)
+            block = DataBlock( 0, 0, 0, data)
             resultFlowData.setBlock(block)
             
             self.flowDatas = [resultFlowData]
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
-            messagebox.showerror("エラー", f"画像出力に失敗しました: {str(e)}\n\nトラックバック:\n{tb}")
+            messagebox.showerror(f"{self.text} エラー", f"画像出力に失敗しました: {str(e)}\n\nトラックバック:\n{tb}")
         
         self.reportProgress(context, "完了")
 

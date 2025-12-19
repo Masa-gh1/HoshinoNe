@@ -18,6 +18,8 @@ from .RawReaderNode import RawReaderNode
 from .FitsReaderNode import FitsReaderNode
 from .CountNode import CountNode
 from .ToneCurveNode import ToneCurveNode
+from .WaveletDenoiseNode import WaveletDenoiseNode
+from .ChromaDenoiseNode import ChromaDenoiseNode
 
 class NodeFactory:
     nodeClasses = {
@@ -26,15 +28,21 @@ class NodeFactory:
         'inverse': InverseNode,
         'negate': NegateNode,
         'count': CountNode,
+        #####
         'coefficients': CoefficientsNode,
         'quadratic_fit': QuadraticFitNode,
+        #####
+        'tone_curve': ToneCurveNode,
+        #####
+        'chroma_denoise': ChromaDenoiseNode,
+        'wavelet_denoise': WaveletDenoiseNode,
+        #####
         'file_reader': FileReaderNode,
+        'file_writer': FileWriterNode,
         'image_reader': ImageReaderNode,
+        'image_writer': ImageWriterNode,
         'raw_reader': RawReaderNode,
         'fits_reader': FitsReaderNode,
-        'tone_curve': ToneCurveNode,
-        'file_writer': FileWriterNode,
-        'image_writer': ImageWriterNode,
     }
     
     nodeLabels = [
@@ -47,14 +55,17 @@ class NodeFactory:
         ('coefficients'  , '係数'),
         ('quadratic_fit' , '2次関数近似'),
         ('separator'     , None),
+        ('tone_curve'    , 'トーンカーブ'),
+        ('separator'     , None),
+        ('chroma_denoise' , '色空間分離ノイズ除去(色ノイズ除去)'),
+        ('wavelet_denoise', 'ウェーブレットノイズ除去(輝度ノイズ除去)'),
+        ('separator'     , None),
         ('file_reader'   , 'ファイル読み込み'),
         ('file_writer'   , 'ファイル書き出し'),
         ('image_reader'  , '画像読み込み'),
         ('image_writer'  , '画像書き出し'),
         ('raw_reader'    , 'RAW読み込み'),
         ('fits_reader'   , 'FITS読み込み'),
-        ('separator'     , None),
-        ('tone_curve'    , 'トーンカーブ'),
     ]
     
     @classmethod

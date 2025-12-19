@@ -54,7 +54,7 @@ class FlowData:
         self._existingBlocks = set()  # 保存済みブロックの記録
         
         if not NUMPY_AVAILABLE:
-            messagebox.showerror("エラー", "numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
+            messagebox.showerror("FlowData エラー", "numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
             return
     
     @staticmethod

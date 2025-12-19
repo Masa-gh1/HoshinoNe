@@ -13,6 +13,10 @@ BLOCK_SIZE = 256
 # ブロックキャッシュサイズ設定
 MAX_BLOCK_CACHE_SIZE = 2000
 
+# Exif デバッグ出力設定
+EXIF_DEBUG_OUTPUT = True
+
+# データヘッダに含める Exif
 HEADERS_EXIF = [
     # name                tag                        converter
     ("Make"             , "Make"                   , str),

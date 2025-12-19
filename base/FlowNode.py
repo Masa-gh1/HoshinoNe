@@ -8,10 +8,11 @@ import hashlib
 import os
 import tkinter as tk
 from tkinter import filedialog
+from abc import ABC as AbstractBaseClass, abstractmethod
 from .FlowData import FlowData
 
-class FlowNode:
-    def __init__(self, canvas, editor, x, y, nodeType, text):
+class FlowNode(AbstractBaseClass):
+    def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
         self.canvas = canvas
         self.editor = editor
         self.x, self.y = x, y
@@ -57,9 +58,14 @@ class FlowNode:
         self.canvas.tag_bind(self.rect, '<Double-Button-1>', self.onDoubleClick)
         self.canvas.tag_bind(self.label, '<Double-Button-1>', self.onDoubleClick)
     
-    def process(self, context):
-        # サブクラスでオーバーライドする
-        raise NotImplementedError("サブクラスで実装してください")
+    @abstractmethod
+    def process(self, context=None):
+        """ノードの処理を実行（サブクラスで実装）
+        
+        Args:
+            context: 処理コンテキスト（progress_callbackなど）
+        """
+        pass
     
     def processPreviewOnly(self):
         """プレビュー専用処理（自ノードのみ）"""
@@ -107,7 +113,7 @@ class FlowNode:
     
     def reportProgress(self, context, message, current=None, total=None):
         """処理経過を報告"""
-        if 'progress_callback' in context:
+        if context and 'progress_callback' in context:
             context['progress_callback'](message, current, total)
     
     def selectFiles(self):

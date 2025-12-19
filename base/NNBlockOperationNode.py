@@ -4,6 +4,7 @@ NNBlockOperationNode base class
 @author: Masakazu Inoue
 '''
 
+from abc import abstractmethod
 from .FlowNode import FlowNode
 from .FlowData import FlowData
 from concurrent.futures import as_completed
@@ -12,7 +13,7 @@ from utils.ThreadPool import ProcessExecutor
 class NNBlockOperationNode(FlowNode):
     """データ入出力 N:N のブロック単位計算ノードの基底クラス"""
 
-    def process(self, context):
+    def process(self, context=None):
         self.reportProgress(context, "開始")
         inputDatas = []
         
@@ -51,6 +52,14 @@ class NNBlockOperationNode(FlowNode):
         
         self.reportProgress(context, "完了")
     
+    @abstractmethod
     def processBlock(self, block):
-        """単一ブロックの処理（サブクラスでオーバーライド）"""
-        raise NotImplementedError("サブクラスで実装してください")
+        """単一ブロックの処理（サブクラスで実装）
+        
+        Args:
+            block: 処理対象のブロック
+            
+        Returns:
+            処理結果のDataBlock
+        """
+        pass

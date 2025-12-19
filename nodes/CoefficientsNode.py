@@ -10,7 +10,7 @@ from tkinter import simpledialog
 from base import FlowNode, FlowData, DataBlock
 
 class CoefficientsNode(FlowNode):
-    def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
+    def __init__(self, canvas, editor, x, y, **kwargs):
         self.planeCount = 3
         self.xOrder = 0
         self.yOrder = 0
@@ -71,7 +71,7 @@ class CoefficientsNode(FlowNode):
         if newHash != self._lastConfigHash:
             self.editor.onNodeConfigChanged(self)
     
-    def process(self, context):
+    def process(self, context=None):
         self.reportProgress(context, "開始")
         
         # 指定されたサイズの係数テンソルを作成
@@ -139,7 +139,7 @@ class TensorSettingsDialog(tk.Toplevel):
         self.coeffEntries = {}
         self.planeNameEntries = []
         
-        self.title("係数設定")
+        self.title(f"{node.text}設定")
         self.geometry("600x450")
         
         # 基本設定フレーム
