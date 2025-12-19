@@ -54,18 +54,18 @@ class PerResourceThreadPoolWrapper:
 
     def _execute_task(self, resourceKey: Any, func: Callable, args: tuple, kwargs: dict, future: Future):
         """タスクを実行"""
-        def wrapper():
-            try:
-                result = func(*args, **kwargs)
-                future.set_result(result)
-            except Exception as e:
-                tb = traceback.format_exc()
-                print(tb,file=sys.stderr)
-                future.set_exception(e)
-            finally:
-                self._execute_next_task(resourceKey, future)
-        
-        future._future = self._executor.submit(wrapper)
+        future._future = self._executor.submit(self._wrapper, resourceKey, func, args, kwargs, future)
+    
+    def _wrapper(self, resourceKey: Any, func: Callable, args: tuple, kwargs: dict, future: Future):
+        try:
+            result = func(*args, **kwargs)
+            future.set_result(result)
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(tb,file=sys.stderr)
+            future.set_exception(e)
+        finally:
+            self._execute_next_task(resourceKey, future)
     
     def _execute_next_task(self, resourceKey: Any, future: Future):
         """次の待機タスクを実行"""

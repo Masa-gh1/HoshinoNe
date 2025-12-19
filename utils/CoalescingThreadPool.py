@@ -37,27 +37,25 @@ class CoalescingThreadPool:
                 self._pending_tasks[resourceKey] = (func, args, kwargs, future)
             else:
                 # 即座に実行
+                self._running_tasks[resourceKey] = future
                 self._execute_task(resourceKey, func, args, kwargs, future)
             return future
     
     def _execute_task(self, resourceKey: Any, func: Callable, args: tuple, kwargs: dict, future: Future):
         """タスクを実行"""
-        def wrapper():
-            try:
-                with self._lock:
-                    self._running_tasks[resourceKey] = future
-                
-                result = func(*args, **kwargs)
-                future.set_result(result)
-            except Exception as e:
-                tb = traceback.format_exc()
-                print(tb,file=sys.stderr)
-                future.set_exception(e)
-            finally:
-                self._execute_next_task(resourceKey)
-        
-        self._executor.submit(wrapper)
+        self._executor.submit(self._wrapper, resourceKey, func, args, kwargs, future)
     
+    def _wrapper(self, resourceKey: Any, func: Callable, args: tuple, kwargs: dict, future: Future):
+        try:
+            result = func(*args, **kwargs)
+            future.set_result(result)
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(tb,file=sys.stderr)
+            future.set_exception(e)
+        finally:
+            self._execute_next_task(resourceKey)
+
     def _execute_next_task(self, resourceKey: Any):
         """次の待機タスクを実行"""
         with self._lock:
@@ -72,6 +70,7 @@ class CoalescingThreadPool:
                 if isinstance(pending_data, tuple) and 4 == len(pending_data):
                     func, args, kwargs, future = pending_data
                     if not future.cancelled():
+                        self._running_tasks[resourceKey] = future
                         self._execute_task(resourceKey, func, args, kwargs, future)
     
     def shutdown(self, wait=True):
