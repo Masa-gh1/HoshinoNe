@@ -7,9 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import datetime
 import os
 import sys
-import datetime
+
 from config import HEADERS_EXIF, HEADERS_EXIF_OPT
 from main import Debug
 

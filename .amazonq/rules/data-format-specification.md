@@ -26,26 +26,29 @@
 - `bayer_pattern`: ベイヤーパターン ('RGGB' | 'GRBG' | 'GBRG' | 'BGGR')
 - `exif`: EXIF情報辞書
 
-#### RAW画像追加ヘッダー
+#### RAW 画像追加ヘッダー
 - `demosaic`: デモザイクアルゴリズム
 - `colorspace`: 出力色空間
 - `white_balance`: ホワイトバランス設定
 - `raw`: RAW固有情報辞書
 
 ### Matrix データ (type: 'matrix')
-#### mode値
+#### mode 値
 - `2D`: 2次元行列データ
 
-#### Matrix固有ヘッダー
-- `columns`: 列名リスト (['dx', 'dy', 'rotation', 'confidence', 'method_id'])
-- `lines`: 行識別子リスト (ファイル名など)
-- `method_definitions`: method_id マッピング辞書
+#### Matrix 固有ヘッダー
+- `columns`: 列名リスト
+- `lines`: 行名リスト
+
+#### ShiftDetectionNode 出力の Matrix 固有ヘッダー 
+- `columns`: 列名リスト (['dx', 'dy', 'rotation', 'confidence', 'time'])
+- `lines`: 行名リスト (ファイル名)
 
 ### Polynomial データ (type: 'polynomial')
-#### mode値
+#### mode 値
 - `0D`, `1D`, `2D`: 多項式次元
 
-#### Polynomial固有ヘッダー
+#### Polynomial 固有ヘッダー
 - `axes`: 軸名リスト (['x_order', 'y_order'])
 - `columns`: 列ラベル (['x^0', 'x^1', ...])
 - `lines`: 行ラベル (['y^0', 'y^1', ...])
@@ -53,10 +56,10 @@
 - `equations`: 方程式説明リスト
 
 ### Tensor データ (type: 'tensor')
-#### mode値
+#### mode 値
 - `0D`, `1D`, `2D`: tensor次元
 
-#### Tensor固有ヘッダー
+#### Tensor 固有ヘッダー
 - `axes`: 軸名リスト (['x_order', 'y_order'])
 - `columns`: 列ラベル (['0', '1', ...])
 - `lines`: 行ラベル (['0', '1', ...])

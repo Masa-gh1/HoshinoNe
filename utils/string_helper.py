@@ -1,0 +1,38 @@
+'''
+string helper functions with default dtype
+
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
+@author: Masakazu Inoue
+'''
+
+def dispS(value):
+    """数値を表示に適した長さで文字列化(短)する"""
+    threshold = [100.0, 10.0,  1.0,  0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001, 0.0000001, 0.00000001]
+    format    = [".0f",".1f",".2f",".3f",".4f", ".5f",  ".6f",   ".7f",    ".8f",     ".9f",      ".9f",      ".10f"]
+    if 0.0 == value:
+        return "0.00"
+    else:
+        abcv = abs(value)
+        f = format[-1]
+        for i in range(len(threshold)):
+            if threshold[i] <= abcv:
+                f = format[i]
+                break
+        return f"{value:{f}}"
+
+def dispL(value):
+    """数値を表示に適した長さで文字列化(長)する"""
+    threshold = [100.0,  0.1, 0.0001, 0.0000001]
+    format    = [".0f",".3f",  ".6f",     ".9f", ".12f"]
+    if 0.0 == value:
+        return "0.000"
+    else:
+        abcv = abs(value)
+        f = format[-1]
+        for i in range(len(threshold)):
+            if threshold[i] <= abcv:
+                f = format[i]
+                break
+        return f"{value:{f}}"

@@ -9,6 +9,7 @@ All rights reserved.
 from types import SimpleNamespace
 import hashlib
 import numpy as np
+import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -23,12 +24,13 @@ except ImportError:
     CV2_AVAILABLE = False
 
 class AlignmentResult:
-    def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, method="", extra_info={}):
+    def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, time=None, method="", extra_info={}):
         self.success = success
         self.dx = dx
         self.dy = dy
         self.rotation = rotation
         self.confidence = confidence
+        self.time = time
         self.method = method
         self.extra_info = extra_info
 
@@ -183,18 +185,15 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             return
         
         # シフト検出を実行
-        results = self._calculateShifts(primaryDatas, context)
+        results = self._calculateShifts(self._referenceData, primaryDatas, context)
         
         # matrix形式でFlowDataを生成
         self.flowDatas = [self._createMatrixOutput(primaryDatas, results)]
         
         self.reportProgress(context, "完了")
     
-    def _calculateShifts(self, inputDatas, context):
+    def _calculateShifts(self, referenceData, inputDatas, context):
         """移動/回転計算のみを実行"""
-        # 基準画像
-        referenceData = self._referenceData
-
         # 経過報告用全画像のズレ計算ステップ数
         totalGlobalBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
         globalProcessedBlocks = 0
@@ -261,12 +260,18 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         # 結果を返す
         results = []
-        for i, (result, method_results) in enumerate(zip(all_results, all_method_results_list)):
-            image_id = self._generateImageId(inputDatas[i])
+        refDatetime = self._referenceData.headers.get('datetime', '')
+        refDatetime = datetime.datetime.fromisoformat(refDatetime)
+        for i, (inputData, result, method_results) in enumerate(zip(inputDatas, all_results, all_method_results_list)):
+            imageId = self._generateImageId(inputData)
+            dt = inputData.headers.get('datetime', '')
+            time = (datetime.datetime.fromisoformat(dt) - refDatetime).total_seconds()
+            result.time = time
             results.append({
-                'image_id': image_id,
-                'result': result,
-                'methods': method_results
+                'image_id': imageId,
+                'datetime': dt,
+                'result'  : result,
+                'methods' : method_results
             })
         
         return results
@@ -288,30 +293,18 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         """matrix形式のFlowDataを生成"""
         from config import BLOCK_SIZE
         
-        # method_idマッピング
-        method_definitions = {0: "none", 1: "star", 2: "phase", 3: "template"}
-        
         # データ行を作成
         matrix_data = []
         lines = []
         
         for result_data in results:
-            image_id = result_data['image_id']
-            result = result_data['result']
-            
-            # method_idを決定
-            method_id = 0
-            if result.method == "star":
-                method_id = 1
-            elif result.method == "phase":
-                method_id = 2
-            elif result.method == "template":
-                method_id = 3
-            
-            # データ行: [dx, dy, rotation, confidence, method_id]
-            row = [result.dx, result.dy, result.rotation, result.confidence, method_id]
+            imageId = result_data['image_id']
+            result  = result_data['result']
+
+            # データ行: [dx, dy, rotation, confidence, time]
+            row = [result.dx, result.dy, result.rotation, result.confidence, result.time]
             matrix_data.append(row)
-            lines.append(image_id)
+            lines.append(imageId)
         
         # numpy配列に変換
         if matrix_data:
@@ -334,8 +327,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             'category': 'auxiliary',
             'type'    : 'matrix',
             'mode'    : '2D',
-            'columns' : ['dx', 'dy', 'rotation', 'confidence', 'method_id'],
-            'method_definitions': method_definitions,
+            'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
             'lines'   : lines,
             'planes'  : ['shift_detection']
         })

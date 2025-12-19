@@ -46,7 +46,7 @@ class FlowData:
             # キャッシュから自身のエントリを削除
             CacheManager.clearByInstanceId(self.instanceId)
         except (ImportError, AttributeError) as e:
-            print(f"Warning cleanup: {e}", file=sys.stderr)
+            print(f"Warning: cleanup: {str(e)}", file=sys.stderr)
 
     def _updateStatistics(self, planeIndex, x, y, blockData):
         """統計情報を更新"""

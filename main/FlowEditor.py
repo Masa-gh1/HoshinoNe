@@ -489,8 +489,7 @@ class FlowEditor:
         except Exception as e:
 #            tb = traceback.format_exc()
 #            print(tb,file=sys.stderr)
-            errorMsg = f"フロー実行エラー: {str(e)}"
-            self.root.after(0, lambda: messagebox.showerror("エラー", errorMsg))
+            self.root.after(0, lambda: messagebox.showerror("エラー", f"フロー実行エラー: {str(e)}"))
             raise
         finally:
             self.root.after(0, lambda: self._clearAllProgress())

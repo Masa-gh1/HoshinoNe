@@ -40,20 +40,17 @@ class NegateNode(LazyNNOperationNode):
     def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
-            try:
-                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                    return None
-                    
-                inputMin = inputLevels['min']
-                inputMax = inputLevels['exclusive_upper']
-                
-                return {
-                    'display_levels': {
-                        'min': -inputMax,
-                        'exclusive_upper': -inputMin
-                    }
-                }
-            except (KeyError, AttributeError):
+            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
                 return None
+                
+            inputMin = inputLevels['min']
+            inputMax = inputLevels['exclusive_upper']
+            
+            return {
+                'display_levels': {
+                    'min': -inputMax,
+                    'exclusive_upper': -inputMin
+                }
+            }
         return compute

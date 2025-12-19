@@ -266,36 +266,33 @@ class PolynomialSettingsDialog(tk.Toplevel):
                 
                 row += 1
         except ValueError:
-            pass
+            print("Waring: Invalid input for plane count, x order, or y order.")
     
     def onApply(self):
-        try:
-            planes = int(self.planeEntry.get())
-            xOrd = int(self.xOrderEntry.get())
-            yOrd = int(self.yOrderEntry.get())
+        planes = int(self.planeEntry.get())
+        xOrd = int(self.xOrderEntry.get())
+        yOrd = int(self.yOrderEntry.get())
+        
+        if planes > 0 and xOrd >= 0 and yOrd >= 0:
+            # 係数を収集
+            coefficients = {}
+            for key, entry in self.coeffEntries.items():
+                try:
+                    val = float(entry.get())
+                    if val != 0:
+                        coefficients[key] = val
+                except ValueError:
+                    print(f"Warning: Invalid coefficient value for {key}")
             
-            if planes > 0 and xOrd >= 0 and yOrd >= 0:
-                # 係数を収集
-                coefficients = {}
-                for key, entry in self.coeffEntries.items():
-                    try:
-                        val = float(entry.get())
-                        if val != 0:
-                            coefficients[key] = val
-                    except ValueError:
-                        pass
-                
-                # プレーン名を収集
-                planeNames = []
-                for entry in self.planeNameEntries:
-                    name = entry.get().strip()
-                    if not name:
-                        name = f"Plane {len(planeNames)}"
-                    planeNames.append(name)
-                
-                self.node.applySettings(planes, xOrd, yOrd, coefficients, planeNames)
-        except ValueError:
-            pass
+            # プレーン名を収集
+            planeNames = []
+            for entry in self.planeNameEntries:
+                name = entry.get().strip()
+                if not name:
+                    name = f"Plane {len(planeNames)}"
+                planeNames.append(name)
+            
+            self.node.applySettings(planes, xOrd, yOrd, coefficients, planeNames)
     
     def onClose(self):
         self.destroy()

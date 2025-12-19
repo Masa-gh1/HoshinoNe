@@ -181,21 +181,18 @@ class TransformNode(LazyNNOperationNode):
         columns = matrix_data['columns']
         data = matrix_data['data']
         
-        try:
-            row_index = lines.index(image_id)
-            row_data = data[row_index]
-            
-            dx_idx = columns.index('dx') if 'dx' in columns else 0
-            dy_idx = columns.index('dy') if 'dy' in columns else 1
-            rotation_idx = columns.index('rotation') if 'rotation' in columns else 2
-            
-            return {
-                'dx': float(row_data[dx_idx]),
-                'dy': float(row_data[dy_idx]),
-                'rotation': float(row_data[rotation_idx])
-            }
-        except (ValueError, IndexError):
-            return None
+        row_index = lines.index(image_id)
+        row_data = data[row_index]
+        
+        dx_idx = columns.index('dx') if 'dx' in columns else 0
+        dy_idx = columns.index('dy') if 'dy' in columns else 1
+        rotation_idx = columns.index('rotation') if 'rotation' in columns else 2
+        
+        return {
+            'dx': float(row_data[dx_idx]),
+            'dy': float(row_data[dy_idx]),
+            'rotation': float(row_data[rotation_idx])
+        }
         
 class LazyTransformOperations:
     """位置合わせ専用の遅延操作"""

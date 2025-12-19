@@ -43,26 +43,23 @@ class InverseNode(LazyNNOperationNode):
     def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
-            try:
-                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                    return None
-                    
-                inputMin = inputLevels['min']
-                inputMax = inputLevels['exclusive_upper']
-                
-                # 逆数変換: [a, b) → [1/b, 1/a) (ゼロを除く)
-                if inputMin > 0 or inputMax < 0:
-                    # ゼロを含まない場合
-                    return {
-                        'display_levels': {
-                            'min': 1.0 / inputMax,
-                            'exclusive_upper': 1.0 / inputMin
-                        }
-                    }
-                else:
-                    # ゼロを含む場合は元の値を保持
-                    return {'display_levels': inputLevels}
-            except (KeyError, AttributeError):
+            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
                 return None
+                
+            inputMin = inputLevels['min']
+            inputMax = inputLevels['exclusive_upper']
+            
+            # 逆数変換: [a, b) → [1/b, 1/a) (ゼロを除く)
+            if inputMin > 0 or inputMax < 0:
+                # ゼロを含まない場合
+                return {
+                    'display_levels': {
+                        'min': 1.0 / inputMax,
+                        'exclusive_upper': 1.0 / inputMin
+                    }
+                }
+            else:
+                # ゼロを含む場合は元の値を保持
+                return {'display_levels': inputLevels}
         return compute

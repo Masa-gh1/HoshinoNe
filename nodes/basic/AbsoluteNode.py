@@ -41,24 +41,21 @@ class AbsoluteNode(LazyNNOperationNode):
     def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
-            try:
-                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                    return None
-                    
-                inputMin = inputLevels['min']
-                inputMax = inputLevels['exclusive_upper']
-                
-                # 絶対値変換: [a, b) → [0, max(|a|, |b|))
-                absMin = abs(inputMin)
-                absMax = abs(inputMax)
-                
-                return {
-                    'display_levels': {
-                        'min': 0.0,
-                        'exclusive_upper': max(absMin, absMax)
-                    }
-                }
-            except (KeyError, AttributeError):
+            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
                 return None
+                
+            inputMin = inputLevels['min']
+            inputMax = inputLevels['exclusive_upper']
+            
+            # 絶対値変換: [a, b) → [0, max(|a|, |b|))
+            absMin = abs(inputMin)
+            absMax = abs(inputMax)
+            
+            return {
+                'display_levels': {
+                    'min': 0.0,
+                    'exclusive_upper': max(absMin, absMax)
+                }
+            }
         return compute

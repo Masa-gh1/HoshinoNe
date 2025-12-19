@@ -81,22 +81,17 @@ class LazyHeadersDict(UserDict):
             else:
                 self.data[key] = result
                 return result
-        
-        # sourceFlowDataのheadersから取得を試行
-        if hasattr(self._lazyFlowData, 'sourceFlowData') and self._lazyFlowData.sourceFlowData.headers:
-            try:
-                return self._lazyFlowData.sourceFlowData.headers[key]
-            except KeyError:
-                pass
-        
-        raise KeyError(key)
+        else:
+            # sourceFlowDataのheadersから取得を試行
+            return self._lazyFlowData.sourceFlowData.headers[key]
     
     def __contains__(self, key):
-        return (key in self.data or 
-                key in self._lazyFlowData._headerComputeFuncs or
-                (hasattr(self._lazyFlowData, 'sourceFlowData') and 
-                 self._lazyFlowData.sourceFlowData.headers and 
-                 key in self._lazyFlowData.sourceFlowData.headers))
+        return(  key in self.data
+              or key in self._lazyFlowData._headerComputeFuncs
+              or(   self._lazyFlowData.sourceFlowData.headers
+                and key in self._lazyFlowData.sourceFlowData.headers
+                )
+              )
     
     def __delitem__(self, key):
         if key in self.data:

@@ -79,29 +79,26 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
     def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
         """display_levelsを計算"""
         def compute(lazyFlowData):
-            try:
-                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                    return None
-                    
-                inputMin = inputLevels['min']
-                inputMax = inputLevels['exclusive_upper']
-                
-                if combinedAuxiliaryPolynomial:
-                    polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
-                    if polynomial:
-                        width, height = lazyFlowData.sourceFlowData.getDimensions()
-                        offsetMin, offsetMax = cls.calculatePolynomialRange(polynomial.data, width, height)
-                        return {
-                            'display_levels': {
-                                'min': inputMin + offsetMin,
-                                'exclusive_upper': inputMax + offsetMax
-                            }
-                        }
-                # auxiliary matrixの場合は範囲計算が複雑なので省略
-                # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
-                return {'display_levels': inputLevels}
-            except (KeyError, AttributeError):
+            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
                 return None
+                
+            inputMin = inputLevels['min']
+            inputMax = inputLevels['exclusive_upper']
+            
+            if combinedAuxiliaryPolynomial:
+                polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
+                if polynomial:
+                    width, height = lazyFlowData.sourceFlowData.getDimensions()
+                    offsetMin, offsetMax = cls.calculatePolynomialRange(polynomial.data, width, height)
+                    return {
+                        'display_levels': {
+                            'min': inputMin + offsetMin,
+                            'exclusive_upper': inputMax + offsetMax
+                        }
+                    }
+            # auxiliary matrixの場合は範囲計算が複雑なので省略
+            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
+            return {'display_levels': inputLevels}
         return compute
     

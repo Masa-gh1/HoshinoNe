@@ -80,7 +80,7 @@ class CacheManager:
                     shutil.rmtree(itemPath, ignore_errors=True)
                             
         except (OSError, IOError):
-            pass
+            print("Warning: Failed to clean up temporary directories.", file=sys.stderr)
     
     @classmethod
     def get(cls, cacheKey, cachePolicy):

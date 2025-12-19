@@ -166,7 +166,12 @@ class FitsReaderNode(BaseReaderNode):
                 for date_key in ['DATE-OBS', 'DATE', 'DATEOBS']:
                     if date_key in hduHeader:
                         try:
-                            date_obs = str(hduHeader[date_key])
+                            obs_date_str = str(hduHeader[date_key])[:19]
+                            if 13<=len(obs_date_str):
+                                dt = datetime.datetime.fromisoformat(obs_date_str)
+                            else:
+                                dt = datetime.datetime.strptime(obs_date_str, '%Y-%m-%d')
+                            date_obs = dt.strftime('%Y-%m-%d %H:%M:%S')
                             break
                         except:
                             continue
@@ -246,8 +251,8 @@ class FitsReaderNode(BaseReaderNode):
                             if date_key in header:
                                 try:
                                     obs_date_str = str(header[date_key])[:19]
-                                    if 'T' in obs_date_str:
-                                        dt = datetime.datetime.fromisoformat(obs_date_str.replace('T', ' '))
+                                    if 13<=len(obs_date_str):
+                                        dt = datetime.datetime.fromisoformat(obs_date_str)
                                     else:
                                         dt = datetime.datetime.strptime(obs_date_str, '%Y-%m-%d')
                                     obs_timestamp = dt.timestamp()

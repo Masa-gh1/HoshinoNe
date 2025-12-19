@@ -416,108 +416,99 @@ class ToneCurveDialog(tk.Toplevel):
             self.histAxes.tick_params(axis='y', labelleft=False)  # Y軸ラベルを非表示
     
     def plotToneCurve(self):
-        if len(self.tempControlPoints) >= 2:
-            try:
-                # UI入力値を取得
-                displayMin = float(self.displayMinEntry.get())
-                displayEnd = float(self.displayEndEntry.get())
-                outputMin = float(self.outputMinEntry.get())
-                outputEnd = float(self.outputEndEntry.get())
-                boundaryCondition = self.boundaryCombobox.get()
-                
-                # 制御点をX座標でソート
-                sortedPoints = sorted(self.tempControlPoints, key=lambda p: p[0])
-                xValues = [p[0] for p in sortedPoints]
-                yValues = [p[1] for p in sortedPoints]
-                
-                # 正規化された制御点で補間
-                xNormalized = [(x - displayMin) / (displayEnd - displayMin) for x in xValues]
-                
-                if len(xNormalized) >= 2:
-                    # 制御点数に応じて補間方法を選択
-                    if len(xNormalized) < 3:
-                        curveFunction = interp1d(xNormalized, yValues, kind='linear', bounds_error=False, fill_value='extrapolate')
-                    else:
-                        # 選択された境界条件でスプライン
-                        curveFunction = CubicSpline(xNormalized, yValues, bc_type=boundaryCondition, extrapolate=True)
-                    
-                    # 実際の値でカーブを描画
-                    xSmooth = np.linspace(displayMin, displayEnd, 256)
-                    xSmoothNormalized = (xSmooth - displayMin) / (displayEnd - displayMin)
-                    
-                    # 始点・終点の外側をクランプ
-                    startPoint = sortedPoints[0]
-                    endPoint = sortedPoints[-1]
-                    
-                    # 範囲外の処理
-                    mask_below = xSmooth < startPoint[0]
-                    mask_above = xSmooth > endPoint[0]
-                    mask_inside = ~(mask_below | mask_above)
-                    
-                    # 結果データを初期化
-                    ySmooth = np.zeros_like(xSmooth)
-                    
-                    # 範囲内のデータにトーンカーブを適用
-                    if np.any(mask_inside):
-                        ySmooth[mask_inside] = curveFunction(xSmoothNormalized[mask_inside])
-                    
-                    # 範囲外のデータを始点・終点の値に設定
-                    if np.any(mask_below):
-                        ySmooth[mask_below] = startPoint[1]
-                    if np.any(mask_above):
-                        ySmooth[mask_above] = endPoint[1]
-                    
-                    # 出力を実際の値に変換
-                    ySmooth = ySmooth * (outputEnd - outputMin) + outputMin
-                    
-                    self.axes.plot(xSmooth, ySmooth, '-', linewidth=2, color='dimgray')
-            except ValueError:
-                pass
-    
-    def plotControlPoints(self):
-        try:
+        if 2 <= len(self.tempControlPoints):
+            # UI入力値を取得
+            displayMin = float(self.displayMinEntry.get())
+            displayEnd = float(self.displayEndEntry.get())
             outputMin = float(self.outputMinEntry.get())
             outputEnd = float(self.outputEndEntry.get())
+            boundaryCondition = self.boundaryCombobox.get()
             
-            for i, (x, y) in enumerate(self.tempControlPoints):
-                # 実際の値で制御点を表示
-                yActual = y * (outputEnd - outputMin) + outputMin
+            # 制御点をX座標でソート
+            sortedPoints = sorted(self.tempControlPoints, key=lambda p: p[0])
+            xValues = [p[0] for p in sortedPoints]
+            yValues = [p[1] for p in sortedPoints]
+            
+            # 正規化された制御点で補間
+            xNormalized = [(x - displayMin) / (displayEnd - displayMin) for x in xValues]
+            
+            if len(xNormalized) >= 2:
+                # 制御点数に応じて補間方法を選択
+                if len(xNormalized) < 3:
+                    curveFunction = interp1d(xNormalized, yValues, kind='linear', bounds_error=False, fill_value='extrapolate')
+                else:
+                    # 選択された境界条件でスプライン
+                    curveFunction = CubicSpline(xNormalized, yValues, bc_type=boundaryCondition, extrapolate=True)
                 
-                color = 'red' if i in [0, len(self.tempControlPoints)-1] else 'dimgray'
-                self.axes.plot(x, yActual, 'o', color=color, markersize=8)
-        except ValueError:
-            pass
+                # 実際の値でカーブを描画
+                xSmooth = np.linspace(displayMin, displayEnd, 256)
+                xSmoothNormalized = (xSmooth - displayMin) / (displayEnd - displayMin)
+                
+                # 始点・終点の外側をクランプ
+                startPoint = sortedPoints[0]
+                endPoint = sortedPoints[-1]
+                
+                # 範囲外の処理
+                mask_below = xSmooth < startPoint[0]
+                mask_above = xSmooth > endPoint[0]
+                mask_inside = ~(mask_below | mask_above)
+                
+                # 結果データを初期化
+                ySmooth = np.zeros_like(xSmooth)
+                
+                # 範囲内のデータにトーンカーブを適用
+                if np.any(mask_inside):
+                    ySmooth[mask_inside] = curveFunction(xSmoothNormalized[mask_inside])
+                
+                # 範囲外のデータを始点・終点の値に設定
+                if np.any(mask_below):
+                    ySmooth[mask_below] = startPoint[1]
+                if np.any(mask_above):
+                    ySmooth[mask_above] = endPoint[1]
+                
+                # 出力を実際の値に変換
+                ySmooth = ySmooth * (outputEnd - outputMin) + outputMin
+                
+                self.axes.plot(xSmooth, ySmooth, '-', linewidth=2, color='dimgray')
+    
+    def plotControlPoints(self):
+        outputMin = float(self.outputMinEntry.get())
+        outputEnd = float(self.outputEndEntry.get())
+        
+        for i, (x, y) in enumerate(self.tempControlPoints):
+            # 実際の値で制御点を表示
+            yActual = y * (outputEnd - outputMin) + outputMin
+            
+            color = 'red' if i in [0, len(self.tempControlPoints)-1] else 'dimgray'
+            self.axes.plot(x, yActual, 'o', color=color, markersize=8)
     
     def findNearestPoint(self, x, y):
         """最も近い制御点を検索"""
         minimumDistance = float('inf')
         nearestPoint = None
         
-        try:
-            displayMin = float(self.displayMinEntry.get())
-            displayEnd = float(self.displayEndEntry.get())
-            outputMin = float(self.outputMinEntry.get())
-            outputEnd = float(self.outputEndEntry.get())
+        displayMin = float(self.displayMinEntry.get())
+        displayEnd = float(self.displayEndEntry.get())
+        outputMin = float(self.outputMinEntry.get())
+        outputEnd = float(self.outputEndEntry.get())
+        
+        # 判定範囲を実際の値に合わせて調整
+        thresholdX = (displayEnd - displayMin) * 0.03
+        thresholdY = (outputEnd - outputMin) * 0.03
+        
+        for i, (pointX, pointY) in enumerate(self.tempControlPoints):
+            pointYActual = pointY * (outputEnd - outputMin) + outputMin
             
-            # 判定範囲を実際の値に合わせて調整
-            thresholdX = (displayEnd - displayMin) * 0.03
-            thresholdY = (outputEnd - outputMin) * 0.03
+            # X軸とY軸の距離を個別にチェック
+            distanceX = abs(x - pointX)
+            distanceY = abs(y - pointYActual)
             
-            for i, (pointX, pointY) in enumerate(self.tempControlPoints):
-                pointYActual = pointY * (outputEnd - outputMin) + outputMin
-                
-                # X軸とY軸の距離を個別にチェック
-                distanceX = abs(x - pointX)
-                distanceY = abs(y - pointYActual)
-                
-                # 両方の軸で闾値以内の場合のみ候補とする
-                if distanceX < thresholdX and distanceY < thresholdY:
-                    distance = (distanceX**2 + distanceY**2)**0.5
-                    if distance < minimumDistance:
-                        minimumDistance = distance
-                        nearestPoint = i
-        except ValueError:
-            pass
+            # 両方の軸で闾値以内の場合のみ候補とする
+            if distanceX < thresholdX and distanceY < thresholdY:
+                distance = (distanceX**2 + distanceY**2)**0.5
+                if distance < minimumDistance:
+                    minimumDistance = distance
+                    nearestPoint = i
         
         return nearestPoint
     
@@ -608,33 +599,29 @@ class ToneCurveDialog(tk.Toplevel):
         if event.inaxes != self.axes or event.xdata is None or event.ydata is None:
             return
         
-        try:
-            currentMin = float(self.displayMinEntry.get())
-            currentEnd = float(self.displayEndEntry.get())
-            currentRange = currentEnd - currentMin
+        currentMin = float(self.displayMinEntry.get())
+        currentEnd = float(self.displayEndEntry.get())
+        currentRange = currentEnd - currentMin
+        
+        # ズーム倍率
+        zoomFactor = 0.9 if event.step > 0 else 1.1
+        newRange = currentRange * zoomFactor
+        
+        # マウス位置を中心にズーム
+        mouseX = event.xdata
+        centerRatio = (mouseX - currentMin) / currentRange
+        
+        newMin = mouseX - newRange * centerRatio
+        newEnd = newMin + newRange
+        
+        # 最小範囲制限
+        if newRange > 1e-10:
+            self.displayMinEntry.delete(0, tk.END)
+            self.displayMinEntry.insert(0, f"{newMin:.3f}")
+            self.displayEndEntry.delete(0, tk.END)
+            self.displayEndEntry.insert(0, f"{newEnd:.3f}")
             
-            # ズーム倍率
-            zoomFactor = 0.9 if event.step > 0 else 1.1
-            newRange = currentRange * zoomFactor
-            
-            # マウス位置を中心にズーム
-            mouseX = event.xdata
-            centerRatio = (mouseX - currentMin) / currentRange
-            
-            newMin = mouseX - newRange * centerRatio
-            newEnd = newMin + newRange
-            
-            # 最小範囲制限
-            if newRange > 1e-10:
-                self.displayMinEntry.delete(0, tk.END)
-                self.displayMinEntry.insert(0, f"{newMin:.3f}")
-                self.displayEndEntry.delete(0, tk.END)
-                self.displayEndEntry.insert(0, f"{newEnd:.3f}")
-                
-                self.updatePlot()
-        except ValueError:
-            pass
-    
+            self.updatePlot()
 
     def onRangeChange(self, event=None):
         # 範囲の変更時
@@ -659,15 +646,12 @@ class ToneCurveDialog(tk.Toplevel):
     
     def restoreTemporarySettings(self):
         # 一時保存値をノードに適用
-        try:
-            self.node.displayMin = float(self.displayMinEntry.get())
-            self.node.displayEnd = float(self.displayEndEntry.get())
-            self.node.outputMin = float(self.outputMinEntry.get())
-            self.node.outputEnd = float(self.outputEndEntry.get())
-            self.node.controlPoints = self.tempControlPoints
-            self.node.boundaryCondition = self.boundaryCombobox.get()
-        except ValueError:
-            pass
+        self.node.displayMin = float(self.displayMinEntry.get())
+        self.node.displayEnd = float(self.displayEndEntry.get())
+        self.node.outputMin = float(self.outputMinEntry.get())
+        self.node.outputEnd = float(self.outputEndEntry.get())
+        self.node.controlPoints = self.tempControlPoints
+        self.node.boundaryCondition = self.boundaryCombobox.get()
     
     def restoreConfirmedSettings(self):
         # 確定値をノードに適用
@@ -765,49 +749,43 @@ class ToneCurveDialog(tk.Toplevel):
             self.updatePlot()
 
     def fitControlPointToDisplay(self):
-        try:
-            displayMin = float(self.displayMinEntry.get())
-            displayEnd = float(self.displayEndEntry.get())
+        displayMin = float(self.displayMinEntry.get())
+        displayEnd = float(self.displayEndEntry.get())
+        
+        if displayMin < displayEnd:
+            # 始点・終点を更新
+            self.tempControlPoints[0] = (displayMin, 0.0)
+            self.tempControlPoints[-1] = (displayEnd, 1.0)
             
-            if displayMin < displayEnd:
-                # 始点・終点を更新
-                self.tempControlPoints[0] = (displayMin, 0.0)
-                self.tempControlPoints[-1] = (displayEnd, 1.0)
-                
-                # 中間の制御点を範囲内に調整
-                for i in range(1, len(self.tempControlPoints) - 1):
-                    x, y = self.tempControlPoints[i]
-                    x = max(displayMin, min(displayEnd, x))
-                    self.tempControlPoints[i] = (x, y)
-                
-                self.updatePlot()
-                self.triggerPreview()
-        except ValueError:
-            pass
+            # 中間の制御点を範囲内に調整
+            for i in range(1, len(self.tempControlPoints) - 1):
+                x, y = self.tempControlPoints[i]
+                x = max(displayMin, min(displayEnd, x))
+                self.tempControlPoints[i] = (x, y)
+            
+            self.updatePlot()
+            self.triggerPreview()
     
     def onApply(self):
         # 一時保存値を確定値とする
-        try:
-            displayMin = float(self.displayMinEntry.get())
-            displayEnd = float(self.displayEndEntry.get())
-            outputMin = float(self.outputMinEntry.get())
-            outputEnd = float(self.outputEndEntry.get())
-            boundaryCondition = self.boundaryCombobox.get()
-            
-            if displayMin < displayEnd and outputMin < outputEnd:
-                # 確定値を更新
-                self.node.applySettings(displayMin, displayEnd, outputMin, outputEnd, self.tempControlPoints, boundaryCondition)
-                # 確定値を更新
-                self.originalSettings = {
-                    'displayMin': displayMin,
-                    'displayEnd': displayEnd,
-                    'outputMin': outputMin,
-                    'outputEnd': outputEnd,
-                    'controlPoints': self.tempControlPoints.copy(),
-                    'boundaryCondition': boundaryCondition,
-                }
-        except ValueError:
-            pass
+        displayMin = float(self.displayMinEntry.get())
+        displayEnd = float(self.displayEndEntry.get())
+        outputMin = float(self.outputMinEntry.get())
+        outputEnd = float(self.outputEndEntry.get())
+        boundaryCondition = self.boundaryCombobox.get()
+        
+        if displayMin < displayEnd and outputMin < outputEnd:
+            # 確定値を更新
+            self.node.applySettings(displayMin, displayEnd, outputMin, outputEnd, self.tempControlPoints, boundaryCondition)
+            # 確定値を更新
+            self.originalSettings = {
+                'displayMin': displayMin,
+                'displayEnd': displayEnd,
+                'outputMin': outputMin,
+                'outputEnd': outputEnd,
+                'controlPoints': self.tempControlPoints.copy(),
+                'boundaryCondition': boundaryCondition,
+            }
     
     def onClose(self):
         # プレビュー表示を解除して閉じる

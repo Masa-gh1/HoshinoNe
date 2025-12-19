@@ -301,23 +301,17 @@ class FlowNode(AbstractBaseClass):
     
     def onSelectFiles(self):
         """編集メニューから呼び出される編集処理"""
-        try:
-            self.selectFiles()
-            newHash = self.getConfigHash()
-            if newHash != self._lastConfigHash:
-                self.editor.onNodeConfigChanged(self)
-        except ValueError:
-            pass
+        self.selectFiles()
+        newHash = self.getConfigHash()
+        if newHash != self._lastConfigHash:
+            self.editor.onNodeConfigChanged(self)
         
     def onSelectOutputFile(self):
         """編集メニューから呼び出される編集処理"""
-        try:
-            self.selectOutputFile()
-            newHash = self.getConfigHash()
-            if newHash != self._lastConfigHash:
-                self.editor.onNodeConfigChanged(self)
-        except ValueError:
-            pass
+        self.selectOutputFile()
+        newHash = self.getConfigHash()
+        if newHash != self._lastConfigHash:
+            self.editor.onNodeConfigChanged(self)
 
     def _onEdit(self):
         """編集メニューから呼び出される編集処理"""

@@ -14,6 +14,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from config import BLOCK_SIZE
+from utils import string_helper as sh
 from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
 from . import Debug
@@ -237,6 +238,48 @@ class ResultWindow(tk.Toplevel):
             
         return content
     
+    def _generateGenericContent(self, flowData):
+        """一般的なデータの内容を生成"""
+        headers = flowData.headers
+        content = "\n"
+
+        width, height = flowData.getDimensions()
+        planes = headers.get('planes', [])
+
+        # データ行 (最初の10行,10列のみ表示)
+        displayRows = min(height, 10)  # 最初の10行のみ
+        displayCols = min(width , 10)  # 最初の10列のみ
+        
+        for planeIdx, planeName in enumerate(planes):
+            content += f"\n[plane: {planeName}]\n"
+        
+            # ヘッダー行
+            if width:
+                content += "\t" + "\t".join([f"{x}" for x in range(width)]) + "\n"
+            
+            if 0 < displayRows and 0 < displayCols:
+                block = flowData.getBlock(0, 0, 0)
+                if block and block.data is not None:
+                    h, w = block.data.shape
+                    for dy in range(h):
+                        row_data = [f"{dy}"]
+                        for dx in range(w):
+                            try:
+                                value = block.data[dy][dx]
+                                row_data.append(sh.dispL(value))
+                            except (IndexError, TypeError):
+                                row_data.append("_")
+
+                        if width > displayCols:
+                            row_data.append("...")
+                    
+                        content += "\t".join(row_data) + "\n"
+            
+                    if height > displayRows:
+                        content += "...\n"
+        
+        return content
+        
     def _generatePolynomialContent(self, flowData):
         """Polynomialデータの内容を生成"""
         headers = flowData.headers
@@ -263,18 +306,10 @@ class ResultWindow(tk.Toplevel):
                 row_data = []
                 for x in range(width):
                     try:
-                        value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                        if   -0.0001 < value < 0.0001:
-                            s = f"{value:.9f}"
-                        elif    -0.1 < value < 0.1:
-                            s = f"{value:.6f}"
-                        elif    -100 < value < 100:
-                            s = f"{value:.3f}"
-                        else:
-                            s = f"{value:.0f}"
-                        row_data.append(s)
+                        value = block.data[y][x]
+                        row_data.append(sh.dispL(value))
                     except (IndexError, TypeError):
-                        row_data.append("0.000000")
+                        row_data.append("_")
                 
                 content += "\t".join(row_data) + "\n"
         
@@ -307,15 +342,7 @@ class ResultWindow(tk.Toplevel):
                     for dx in range(w):
                         try:
                             value = block.data[dy][dx]
-                            if   -0.0001 < value < 0.0001:
-                                s = f"{value:.9f}"
-                            elif    -0.1 < value < 0.1:
-                                s = f"{value:.6f}"
-                            elif    -100 < value < 100:
-                                s = f"{value:.3f}"
-                            else:
-                                s = f"{value:.0f}"
-                            row_data.append(s)
+                            row_data.append(sh.dispL(value))
                         except (IndexError, TypeError):
                             row_data.append("_")
 
@@ -500,8 +527,8 @@ class ResultWindow(tk.Toplevel):
                                         data = block.data[:blockHeight, :blockWidth]
                                         normalized = np.nan_to_num((data - offset) * scale, nan=0.0)
                                         imgArray[y:endY, x:endX, planeIdx] = np.clip(normalized, 0, 255).astype(np.uint8)
-                                    except (IndexError, TypeError, ValueError):
-                                        pass
+                                    except (IndexError, TypeError, ValueError) as e:
+                                        content.append(f"\n{str(e)}\n\n")
                     
                     img = Image.fromarray(imgArray, 'RGB')
                 elif 'RGBG' == mode and 4 <= planeCount:
@@ -536,8 +563,8 @@ class ResultWindow(tk.Toplevel):
                                         imgArray[y:endY, x:endX, 0] = np.clip(r_norm, 0, 255).astype(np.uint8)
                                         imgArray[y:endY, x:endX, 1] = np.clip(g_norm, 0, 255).astype(np.uint8)
                                         imgArray[y:endY, x:endX, 2] = np.clip(b_norm, 0, 255).astype(np.uint8)
-                                    except (IndexError, TypeError, ValueError):
-                                        pass
+                                    except (IndexError, TypeError, ValueError) as e:
+                                        content.append(f"\n{str(e)}\n\n")
                     
                     img = Image.fromarray(imgArray, 'RGB')
                 elif(  'L'     == mode and 1 <= planeCount
@@ -558,8 +585,8 @@ class ResultWindow(tk.Toplevel):
                                     # レベル調整を適用（NaNは0に変換）
                                     normalized = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                                     imgArray[y:endY, x:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
-                                except (IndexError, TypeError, ValueError):
-                                    pass
+                                except (IndexError, TypeError, ValueError) as e:
+                                    content.append(f"\n{str(e)}\n\n")
                     
                     img = Image.fromarray(imgArray, 'L')
                 else:
@@ -593,56 +620,6 @@ class ResultWindow(tk.Toplevel):
         
         return content
     
-    def _generateGenericContent(self, flowData):
-        """一般的なデータの内容を生成"""
-        headers = flowData.headers
-        content = "\n"
-
-        width, height = flowData.getDimensions()
-        planes = headers.get('planes', [])
-
-        # データ行 (最初の10行,10列のみ表示)
-        displayRows = min(height, 10)  # 最初の10行のみ
-        displayCols = min(width , 10)  # 最初の10列のみ
-        
-        for planeIdx, planeName in enumerate(planes):
-            content += f"\n[plane: {planeName}]\n"
-        
-            # ヘッダー行
-            if width:
-                content += "\t" + "\t".join([f"{x}" for x in range(width)]) + "\n"
-            
-            if 0 < displayRows and 0 < displayCols:
-                block = flowData.getBlock(0, 0, 0)
-                if block and block.data is not None:
-                    h, w = block.data.shape
-                    for dy in range(h):
-                        row_data = [f"{dy}"]
-                        for dx in range(w):
-                            try:
-                                value = block.data[dy][dx]
-                                if   -0.0001 < value < 0.0001:
-                                    s = f"{value:.9f}"
-                                elif    -0.1 < value < 0.1:
-                                    s = f"{value:.6f}"
-                                elif    -100 < value < 100:
-                                    s = f"{value:.3f}"
-                                else:
-                                    s = f"{value:.0f}"
-                                row_data.append(s)
-                            except (IndexError, TypeError):
-                                row_data.append("_")
-
-                        if width > displayCols:
-                            row_data.append("...")
-                    
-                        content += "\t".join(row_data) + "\n"
-            
-                    if height > displayRows:
-                        content += "...\n"
-        
-        return content
-        
     def _updateControlVisibility(self):
         """コントロールフレームの表示/非表示を制御"""
         # 画像制御部分のみ画像データがある場合に表示
@@ -686,12 +663,9 @@ class ResultWindow(tk.Toplevel):
             return self.node.flowDatas[0] if self.node.flowDatas else None
         
         # 選択されたインデックスを取得
-        try:
-            index = int(selected.split('データ ')[1].split(' ')[0]) - 1
-            if 0 <= index < len(self.node.flowDatas):
-                return self.node.flowDatas[index]
-        except (ValueError, IndexError):
-            pass
+        index = int(selected.split('データ ')[1].split(' ')[0]) - 1
+        if 0 <= index < len(self.node.flowDatas):
+            return self.node.flowDatas[index]
         
         return self.node.flowDatas[0] if self.node.flowDatas else None
     
@@ -703,10 +677,7 @@ class ResultWindow(tk.Toplevel):
                 return 'break'
             
             current_selection = self._selected_data_var.get()
-            try:
-                current_index = list(current_values).index(current_selection)
-            except ValueError:
-                current_index = 0
+            current_index = list(current_values).index(current_selection)
             
             if event.keysym == 'Up':
                 new_index = (current_index - 1) % len(current_values)

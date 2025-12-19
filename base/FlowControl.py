@@ -123,4 +123,4 @@ class FlowControl:
             elapsedMs = int((endTime - startTime) * 1000)
             return elapsedMs
         except Exception as e:
-            raise Exception(f"ノード '{node.text}' でエラー") from e
+            raise Exception(f"ノード '{node.text}' でエラー: {str(e)}") from e

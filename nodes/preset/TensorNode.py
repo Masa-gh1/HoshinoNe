@@ -217,82 +217,76 @@ class TensorSettingsDialog(tk.Toplevel):
         self.coeffEntries.clear()
         self.planeNameEntries.clear()
         
-        try:
-            planes = int(self.planeEntry.get())
-            xOrd = int(self.xOrderEntry.get())
-            yOrd = int(self.yOrderEntry.get())
+        planes = int(self.planeEntry.get())
+        xOrd = int(self.xOrderEntry.get())
+        yOrd = int(self.yOrderEntry.get())
+        
+        if planes <= 0 or xOrd <= 0 or yOrd <= 0:
+            return
+        
+        row = 0
+        for planeIdx in range(planes):
+            # プレーン名をテキストボックスで表示
+            planeNameEntry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
+            if planeIdx < len(self.node.planeNames):
+                planeNameEntry.insert(0, self.node.planeNames[planeIdx])
+            else:
+                planeNameEntry.insert(0, f"Plane {planeIdx}")
+            planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
             
-            if planes <= 0 or xOrd <= 0 or yOrd <= 0:
-                return
+            self.planeNameEntries.append(planeNameEntry)
             
-            row = 0
-            for planeIdx in range(planes):
-                # プレーン名をテキストボックスで表示
-                planeNameEntry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
-                if planeIdx < len(self.node.planeNames):
-                    planeNameEntry.insert(0, self.node.planeNames[planeIdx])
-                else:
-                    planeNameEntry.insert(0, f"Plane {planeIdx}")
-                planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
+            row += 1
+            
+            # X軸ラベル（上部）
+            for i in range(xOrd):
+                tk.Label(self.scrollableFrame, text=f"x:{i}").grid(row=row, column=i + 1, padx=5, pady=2)
+            row += 1
+            
+            # 係数エントリー
+            for j in range(yOrd):
+                # Y軸ラベル（左側）
+                tk.Label(self.scrollableFrame, text=f"y:{j}").grid(row=row, column=0, sticky="w", padx=5, pady=2)
                 
-                self.planeNameEntries.append(planeNameEntry)
-                
-                row += 1
-                
-                # X軸ラベル（上部）
                 for i in range(xOrd):
-                    tk.Label(self.scrollableFrame, text=f"x:{i}").grid(row=row, column=i + 1, padx=5, pady=2)
-                row += 1
-                
-                # 係数エントリー
-                for j in range(yOrd):
-                    # Y軸ラベル（左側）
-                    tk.Label(self.scrollableFrame, text=f"y:{j}").grid(row=row, column=0, sticky="w", padx=5, pady=2)
-                    
-                    for i in range(xOrd):
-                        entry = tk.Entry(self.scrollableFrame, width=8)
-                        key = f"{planeIdx},{i},{j}"
-                        if key in self.node.tensor:
-                            entry.insert(0, str(self.node.tensor[key]))
-                        else:
-                            entry.insert(0, "0")
-                        entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                        self.coeffEntries[key] = entry
-                    
-                    row += 1
+                    entry = tk.Entry(self.scrollableFrame, width=8)
+                    key = f"{planeIdx},{i},{j}"
+                    if key in self.node.tensor:
+                        entry.insert(0, str(self.node.tensor[key]))
+                    else:
+                        entry.insert(0, "0")
+                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
+                    self.coeffEntries[key] = entry
                 
                 row += 1
-        except ValueError:
-            pass
+            
+            row += 1
     
     def onApply(self):
-        try:
-            planes = int(self.planeEntry.get())
-            xOrd = int(self.xOrderEntry.get())
-            yOrd = int(self.yOrderEntry.get())
+        planes = int(self.planeEntry.get())
+        xOrd = int(self.xOrderEntry.get())
+        yOrd = int(self.yOrderEntry.get())
+        
+        if planes > 0 and xOrd >= 0 and yOrd >= 0:
+            # 係数を収集
+            tensor = {}
+            for key, entry in self.coeffEntries.items():
+                try:
+                    val = float(entry.get())
+                    if val != 0:
+                        tensor[key] = val
+                except ValueError:
+                    print(f"Warning: Invalid coefficient value for {key}")
             
-            if planes > 0 and xOrd >= 0 and yOrd >= 0:
-                # 係数を収集
-                tensor = {}
-                for key, entry in self.coeffEntries.items():
-                    try:
-                        val = float(entry.get())
-                        if val != 0:
-                            tensor[key] = val
-                    except ValueError:
-                        pass
-                
-                # プレーン名を収集
-                planeNames = []
-                for entry in self.planeNameEntries:
-                    name = entry.get().strip()
-                    if not name:
-                        name = f"Plane {len(planeNames)}"
-                    planeNames.append(name)
-                
-                self.node.applySettings(planes, xOrd, yOrd, tensor, planeNames)
-        except ValueError:
-            pass
+            # プレーン名を収集
+            planeNames = []
+            for entry in self.planeNameEntries:
+                name = entry.get().strip()
+                if not name:
+                    name = f"Plane {len(planeNames)}"
+                planeNames.append(name)
+            
+            self.node.applySettings(planes, xOrd, yOrd, tensor, planeNames)
     
     def onClose(self):
         self.destroy()
