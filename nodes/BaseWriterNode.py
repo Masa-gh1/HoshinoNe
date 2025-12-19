@@ -7,14 +7,16 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from abc import abstractmethod
 import hashlib
 import os
 import threading
 import tkinter as tk
-from abc import abstractmethod
 from tkinter import filedialog
-from .FlowNode import FlowNode
-from base.ConfigurableNode import ConfigurableNode
+from base import DataBlock
+from base import FlowData
+from base import FlowNode
+from nodes import ConfigurableNode
 
 class BaseWriterNode(FlowNode,ConfigurableNode):
     """ファイル出力ノードの基底クラス"""
@@ -115,8 +117,6 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
             'planes': ['file info']
         }
         
-        from .FlowData import FlowData
-        from .DataBlock import DataBlock
         resultFlowData = FlowData(headers)
         resultFlowData.setDimensions(4, len(fileInfos))
         data = [[size, planeCount, width, height] for _, size, planeCount, width, height in fileInfos]

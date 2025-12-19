@@ -13,6 +13,11 @@ except ImportError:
     print("numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
     exit()
 
+from version import VERSION_DATE
+
+# varsion
+VERSION = f"0.1.{VERSION_DATE}"
+
 # ノードの並列処理ワーカー数設定
 MAX_WORKERS = 4
 

@@ -7,7 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
-from config import BLOCK_SIZE
+from base import FlowData
+from base import DataBlock
 import utils.numpy_helpers as nh
 
 class TensorOperationMixin:
@@ -21,13 +22,11 @@ class TensorOperationMixin:
             return tensorDatas[0]
         
         # 最初のtensorをベースとしてコピー
-        from .FlowData import FlowData
         result = FlowData(tensorDatas[0].headers.copy())
         result.setDimensions(*tensorDatas[0].getDimensions())
         
         # 最初のtensorのデータをコピー
         for block in tensorDatas[0].iterateBlocks():
-            from .DataBlock import DataBlock
             newBlock = DataBlock(block.planeIndex, block.x, block.y, block.data.copy())
             result.setBlock(newBlock)
         

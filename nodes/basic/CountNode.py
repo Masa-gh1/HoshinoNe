@@ -8,8 +8,9 @@ All rights reserved.
 '''
 
 import numpy as np
-from base import N1BlockOperationNode, DataBlock
 from config import BLOCK_SIZE
+from base import DataBlock
+from nodes import N1BlockOperationNode
 from utils import numpy_helpers as nh
 
 class CountNode(N1BlockOperationNode):

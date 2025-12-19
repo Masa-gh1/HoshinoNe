@@ -9,7 +9,7 @@ All rights reserved.
 
 import csv
 import os
-from base import BaseWriterNode
+from nodes import BaseWriterNode
 from config import BLOCK_SIZE
 
 class FileWriterNode(BaseWriterNode):

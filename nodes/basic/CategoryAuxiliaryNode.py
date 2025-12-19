@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 from base import FlowNode
-from base.FlowDataWrapper import FlowDataWrapper
+from base import FlowDataWrapper
 
 class CategoryAuxiliaryNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):

@@ -8,8 +8,8 @@ All rights reserved.
 '''
 
 from abc import abstractmethod
-from .FlowNode import FlowNode
-from .LazyFlowData import LazyFlowData
+from base import FlowNode
+from base import LazyFlowData
 
 class LazyNNOperationNode(FlowNode):
     """LazyFlowDataを用いるN:N処理ノードの基底クラス"""

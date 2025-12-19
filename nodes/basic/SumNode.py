@@ -8,8 +8,9 @@ All rights reserved.
 '''
 
 import numpy as np
-from base import N1BlockOperationNode, TensorOperationMixin, DataBlock
 from config import BLOCK_SIZE
+from base import DataBlock
+from nodes import N1BlockOperationNode, TensorOperationMixin 
 from utils import numpy_helpers as nh
 
 class SumNode(N1BlockOperationNode, TensorOperationMixin):

@@ -7,13 +7,14 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import hashlib
-import tkinter as tk
-from tkinter import filedialog
 from abc import ABC as AbstractBaseClass, abstractmethod
-from main.ResultWindow import ResultWindow
+import hashlib
 import traceback
 import sys
+import tkinter as tk
+from tkinter import filedialog
+
+from main import ResultWindow
 
 class FlowNode(AbstractBaseClass):
     def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
@@ -112,8 +113,13 @@ class FlowNode(AbstractBaseClass):
             self.process(context)
             
             # 開いているResultWindowがあれば直接更新
-            if "result_window"  in self._window and self._window["result_window"].winfo_exists():
-                self._window["result_window"]._updateResultWindow()
+            if "result_window" in self._window:
+                try:
+                    if self._window["result_window"].winfo_exists():
+                        self._window["result_window"]._updateResultWindow()
+                except tk.TclError:
+                    # ウィンドウが破棄されている場合は参照を削除
+                    del self._window["result_window"]
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)

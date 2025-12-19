@@ -10,9 +10,10 @@ All rights reserved.
 import hashlib
 import tkinter as tk
 from tkinter import simpledialog
+
 from base import FlowNode, FlowData, DataBlock
+from nodes import ConfigurableNode
 from utils.interval_helper import createHalfOpenEnd
-from base.ConfigurableNode import ConfigurableNode
 
 class CoefficientsNode(FlowNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -28,8 +29,18 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         return self._color_coff
     
     def updateNodeText(self):
-        constVal = self.coefficients.get("0,0,0", 0)
-        displayText = f"{self.text}\n{self.planeCount},{self.xOrder}x{self.yOrder} {constVal}"
+        constVal = ""
+        for planeIndex in range(self.planeCount):
+            value = self.coefficients.get(f"{planeIndex},0,0", 0)
+            if -1 < value < 1:
+                constVal += f" {value:.3f}"
+            elif -10 < value < 10:
+                constVal += f" {value:.2f}"
+            elif -100 < value < 100:
+                constVal += f" {value:.1f}"
+            else:
+                constVal += f" {value:.0f}"
+        displayText = f"{self.text}\nP:{self.planeCount} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
         self.editor.updateNodeText(self, displayText)
     
     def store(self, nodeData):

@@ -9,9 +9,10 @@ All rights reserved.
 
 import uuid
 from tkinter import messagebox
+
 from config import BLOCK_SIZE
-from .DataBlock import DataBlock
-from main.CacheManager import CacheManager
+from . import DataBlock
+from main import CacheManager
 from utils import numpy_helpers as nh
 
 try:

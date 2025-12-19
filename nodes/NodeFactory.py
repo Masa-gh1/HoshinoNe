@@ -7,27 +7,29 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-from .AutoLevelsNode import AutoLevelsNode
-from .CategoryAuxiliaryNode import CategoryAuxiliaryNode
-from .ChromaDenoiseNode import ChromaDenoiseNode
-from .CoefficientsNode import CoefficientsNode
-from .CountNode import CountNode
-from .FileReaderNode import FileReaderNode
-from .FileWriterNode import FileWriterNode
-from .FitsReaderNode import FitsReaderNode
-from .ImageAlignmentNode import ImageAlignmentNode
-from .ImageReaderNode import ImageReaderNode
-from .ImageWriterNode import ImageWriterNode
-from .InverseNode import InverseNode
-from .NegateNode import NegateNode
-from .OffsetNode import OffsetNode
-from .ProductNode import ProductNode
-from .QuadraticFitNode import QuadraticFitNode
-from .RawReaderNode import RawReaderNode
-from .ScaleNode import ScaleNode
-from .SumNode import SumNode
-from .ToneCurveNode import ToneCurveNode
-from .WaveletDenoiseNode import WaveletDenoiseNode
+from .basic.CategoryAuxiliaryNode import CategoryAuxiliaryNode
+from .basic.OffsetNode import OffsetNode
+from .basic.ScaleNode import ScaleNode
+from .basic.NegateNode import NegateNode
+from .basic.InverseNode import InverseNode
+from .basic.SumNode import SumNode
+from .basic.ProductNode import ProductNode
+from .basic.CountNode import CountNode
+from .basic.QuadraticFitNode import QuadraticFitNode
+
+from .preset.AutoLevelsNode import AutoLevelsNode
+from .preset.CoefficientsNode import CoefficientsNode
+from .preset.ImageAlignmentNode import ImageAlignmentNode
+from .preset.ToneCurveNode import ToneCurveNode
+
+from .extra.FileReaderNode import FileReaderNode
+from .extra.FileWriterNode import FileWriterNode
+from .extra.FitsReaderNode import FitsReaderNode
+from .extra.ImageReaderNode import ImageReaderNode
+from .extra.ImageWriterNode import ImageWriterNode
+from .extra.RawReaderNode import RawReaderNode
+from .extra.ChromaDenoiseNode import ChromaDenoiseNode
+from .extra.WaveletDenoiseNode import WaveletDenoiseNode
 
 class NodeFactory:
     nodeClasses = {

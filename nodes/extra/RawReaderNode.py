@@ -12,20 +12,21 @@ https://letmaik.github.io/rawpy/api/index.html
 https://www.libraw.org/docs/API-datastruct.html
 '''
 
-import hashlib
-import sys
-import os
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 import numpy as np
+import hashlib
 import datetime
+import os
 from concurrent.futures import as_completed
-from base import BaseReaderNode, FlowData, DataBlock
-from base.BaseReaderNode import BaseReaderSettingsDialog
+import tkinter as tk
+from tkinter import messagebox, ttk
+
 from config import BLOCK_SIZE
-from utils.ThreadPool import ProcessExecutor
 from config import configRawParams
+from base import FlowData, DataBlock
+from nodes import BaseReaderSettingsDialog
+from nodes import BaseReaderNode
 from utils.exif_helper import getExif
+from utils.ThreadPool import ProcessExecutor
 
 try:
     import rawpy

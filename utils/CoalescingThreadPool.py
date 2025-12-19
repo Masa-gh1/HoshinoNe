@@ -10,7 +10,6 @@ All rights reserved.
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import Dict, Any, Callable, Tuple
-import atexit
 
 class CoalescingThreadPool:
     def __init__(self, max_workers=None):

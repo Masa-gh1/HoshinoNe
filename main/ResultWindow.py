@@ -12,10 +12,10 @@ import traceback
 import io
 import tkinter as tk
 from tkinter import ttk
+
 from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
-
-from . import config 
+from . import Debug
 
 try:
     import numpy as np
@@ -200,8 +200,15 @@ class ResultWindow(tk.Toplevel):
         self.node.editor.root.after(0, display_result)
         
         # コントロールフレームの表示状態を更新
-        self.node.editor.root.after(0, self._updateControlVisibility)
-        self.node.editor.root.after(0, self._updateDataCombo)
+        def safe_update():
+            try:
+                if self.winfo_exists():
+                    self._updateControlVisibility()
+                    self._updateDataCombo()
+            except tk.TclError:
+                pass
+        
+        self.node.editor.root.after(0, safe_update)
     
     def _generateFlowDataContent(self, flowData):
         """フローデータの内容を文字列として生成（非同期処理用）"""
@@ -227,7 +234,7 @@ class ResultWindow(tk.Toplevel):
         else:
             content.append(result)
 
-        if config.DEBUG:
+        if Debug.LEVEL_NONE < Debug.LEVEL:
             content.append("\n\n")
             content.append("headers:\n" + str(headers).replace(", '", ",\n'") + "\n")
             

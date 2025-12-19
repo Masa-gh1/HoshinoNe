@@ -7,12 +7,12 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import hashlib
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
-import hashlib
-from base import NNBlockOperationNode, DataBlock
-from base.ConfigurableNode import ConfigurableNode
+from base import DataBlock
+from nodes import NNBlockOperationNode, ConfigurableNode
 from utils import numpy_helpers as nh
 
 try:
@@ -60,9 +60,11 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         return self._color_func
     
     def updateNodeText(self):
-        displayText = f"{self.text}\n{self.wavelet} L{self.levels}"
+        displayText = f"{self.text}\n{self.wavelet}\nL:{self.levels} S:{self.sigma}"
         if self.star_protection:
-            displayText += f"\n星保護ON"
+            displayText += f" 星保護ON"
+        else:
+            displayText += f" 星保護OFF"
         self.editor.updateNodeText(self, displayText)
         
         newHash = self.getConfigHash()
@@ -253,7 +255,7 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         self.levelInfoLabel = tk.Label(frame, text=f"推奨最大: {max_level} (実際の画像サイズに依存)", font=("Arial", 8), fg="gray")
         self.levelInfoLabel.pack(anchor="w")
         
-        # ノイズ強度
+        # ノイズ除去強度
         tk.Label(frame, text="ノイズ除去強度:").pack(anchor="w", pady=(10,0))
         self.sigmaVar = tk.DoubleVar(value=self.node.sigma)
         tk.Scale(frame, from_=0.01, to=5.0, resolution=0.01, orient=tk.HORIZONTAL, variable=self.sigmaVar).pack(fill=tk.X)

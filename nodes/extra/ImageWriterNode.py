@@ -9,7 +9,7 @@ All rights reserved.
 
 import os
 import numpy as np
-from base import BaseWriterNode
+from nodes import BaseWriterNode
 from config import BLOCK_SIZE
 
 try:

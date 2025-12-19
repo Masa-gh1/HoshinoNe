@@ -8,16 +8,17 @@ All rights reserved.
 '''
 
 import hashlib
-import sys
+import datetime
 import os
+from concurrent.futures import as_completed
 import numpy as np
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-import datetime
-from concurrent.futures import as_completed
-from base import BaseReaderNode, FlowData, DataBlock
-from base.BaseReaderNode import BaseReaderSettingsDialog
+from tkinter import messagebox, ttk
+
 from config import BLOCK_SIZE
+from base import FlowData, DataBlock
+from nodes import BaseReaderSettingsDialog
+from nodes import BaseReaderNode
 from utils.ThreadPool import ProcessExecutor
 
 try:

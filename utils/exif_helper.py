@@ -11,7 +11,7 @@ import os
 import sys
 import datetime
 from config import HEADERS_EXIF
-from main.config import DEBUG
+from main.Debug import LEVEL
 
 # グローバルキャッシュ
 _exif_cache = {}
@@ -57,7 +57,7 @@ def getExif(filepath):
     
     missing_tags = [tag for tag in expected_tags if tag not in attr]
     
-    if DEBUG and missing_tags:
+    if LEVEL and missing_tags:
         # デバッグ出力
         _debug_missing_tags(filepath, missing_tags, pil_exif, exifread_tags)
     

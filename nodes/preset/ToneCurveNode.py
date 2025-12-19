@@ -7,15 +7,17 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import hashlib
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
-import hashlib
-from base.NNBlockOperationNode import NNBlockOperationNode
-from base.FlowData import FlowData
-from utils.interval_helper import createHalfOpenEnd
-from base.ConfigurableNode import ConfigurableNode
+
+from base import DataBlock
+from base import FlowData
+from nodes import ConfigurableNode
+from nodes import NNBlockOperationNode
 from utils import numpy_helpers as nh
+from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
 
 # scipyのインポートチェック
@@ -102,7 +104,6 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         nan_mask = np.isnan(data)
         if np.all(nan_mask):
             # 全てNaNの場合はそのまま返す
-            from base.DataBlock import DataBlock
             return DataBlock(block.planeIndex, block.x, block.y, data.tolist())
         
         # トーンカーブ関数を作成
@@ -157,7 +158,6 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         resultData[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
-        from base.DataBlock import DataBlock
         return DataBlock(block.planeIndex, block.x, block.y, resultData.tolist())
     
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):

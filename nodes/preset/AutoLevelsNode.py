@@ -8,9 +8,10 @@ All rights reserved.
 '''
 
 import numpy as np
-from base import FlowNode
-from base.FlowDataWrapper import FlowDataWrapper
+
 from config import BLOCK_SIZE
+from base import FlowNode
+from base import FlowDataWrapper
 from utils import numpy_helpers as nh
 
 class AutoLevelsNode(FlowNode):

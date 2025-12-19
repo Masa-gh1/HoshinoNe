@@ -7,20 +7,21 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import hashlib
-import sys
-import os
 import numpy as np
+import hashlib
+import datetime
+import os
+from concurrent.futures import as_completed
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import datetime
-from concurrent.futures import as_completed
-from base import BaseReaderNode, FlowData, DataBlock
-from base.BaseReaderNode import BaseReaderSettingsDialog
+
 from config import BLOCK_SIZE
+from base import FlowData, DataBlock
+from nodes import BaseReaderSettingsDialog
+from nodes import BaseReaderNode
+from utils import numpy_helpers as nh
 from utils.ThreadPool import ProcessExecutor
 from utils.exif_helper import getExif
-from utils import numpy_helpers as nh
 
 try:
     from PIL import Image

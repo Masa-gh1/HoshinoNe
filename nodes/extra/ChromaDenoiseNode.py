@@ -8,11 +8,12 @@ All rights reserved.
 '''
 
 import numpy as np
+import hashlib
 import tkinter as tk
 from tkinter import ttk, messagebox
-import hashlib
+
 from base import FlowNode, DataBlock, FlowData
-from base.ConfigurableNode import ConfigurableNode
+from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
 
 try:

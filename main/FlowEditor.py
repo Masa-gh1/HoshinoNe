@@ -20,12 +20,14 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import atexit
 import gc
+
+from config import VERSION
+from base import FlowNode
+from base import FlowData
 from nodes import NodeFactory
-from base.FlowNode import FlowNode
-from base.FlowData import FlowData
+from . import CacheManager
+from . import Debug
 from utils.ThreadPool import CoalescingExecutor
-from .CacheManager import CacheManager
-from . import config
 
 # グローバルスレッドプール
 MAX_NODE_WORKERS = 4
@@ -35,7 +37,7 @@ atexit.register(NodeExecutor.shutdown)
 class FlowEditor:
     def __init__(self, root):
         self.root = root
-        self.root.title("Flow Editor")
+        self.root.title("Flow Editor - " + VERSION)
         self.nodes = []
         self.reprocessingHighlights = []
         self.selectedNode = None
@@ -89,7 +91,7 @@ class FlowEditor:
                 self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt))
         
         # 使い方説明
-        infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード追加 2.ドラッグで移動 3.クリックで接続 4.実行", bg='lightyellow')
+        infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード追加 2.ドラッグで移動 3.クリックで接続 4.実行 5.ダブルクリックで結果表示", bg='lightyellow')
         infoLabel.pack(fill=tk.X, padx=5, pady=2)
         
         # 結果表示
@@ -790,7 +792,7 @@ class FlowEditor:
             diskStr = f"{int(diskSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
-        if config.DEBUG:
+        if Debug.LEVEL_NONE < Debug.LEVEL:
             self.usageLabel.config(text=f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveDiskCount:{saveDiskCount} LoadDiskCount: {loadDiskCount} Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} Disk: {diskStr}")
         else:
             self.usageLabel.config(text=f"Node: {flowNodeCount} Cache: {cacheNodeCount} {cacheStr} Disk: {diskStr}")
@@ -839,7 +841,7 @@ class FlowEditor:
         # キャッシュ統計を即座に更新
         self.updateCacheStats()
         
-        if config.DEBUG:
+        if Debug.LEVEL_NONE < Debug.LEVEL:
             print("========================")
             self._debugNodeReferences()
             print("========================")
@@ -855,8 +857,8 @@ class FlowEditor:
 
     def toggleDebugMode(self, event):
         """デバッグモードを切り替える"""
-        config.DEBUG = not config.DEBUG
-        self.statusLabel.config(text=f"状態: DEBUGモード {'ON' if config.DEBUG else 'OFF'}")
+        Debug.LEVEL = Debug.LEVEL_NONE if Debug.LEVEL_NONE != Debug.LEVEL else Debug.LEVEL_ALL
+        self.statusLabel.config(text=f"状態: DEBUGモード {'OFF' if Debug.LEVEL == Debug.LEVEL_NONE else 'ON'}")
         return "break"
     
     def bugReport(self, name, message):
@@ -864,7 +866,7 @@ class FlowEditor:
             self._bugReportLog=[]
         text = f"{datetime.datetime.now().isoformat()}: {name}: {message}"
         self._bugReportLog.append(text)
-        if config.DEBUG:
+        if Debug.LEVEL_NONE < Debug.LEVEL:
             print(text)
 
     def _debugNodeReferences(self):

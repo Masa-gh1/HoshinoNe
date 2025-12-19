@@ -8,9 +8,10 @@ All rights reserved.
 '''
 
 from abc import abstractmethod
-from .FlowNode import FlowNode
-from .FlowData import FlowData
 from concurrent.futures import as_completed
+
+from base import FlowNode
+from base import FlowData
 from utils.ThreadPool import ProcessExecutor
 
 class N1BlockOperationNode(FlowNode):

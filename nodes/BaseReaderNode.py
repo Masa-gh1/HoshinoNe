@@ -7,15 +7,15 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from abc import abstractmethod
 import datetime
 import hashlib
 import os
 import threading
 import tkinter as tk
-from abc import abstractmethod
 from tkinter import messagebox, ttk, filedialog
-from .FlowNode import FlowNode
-from base.ConfigurableNode import ConfigurableNode
+from base import FlowNode
+from nodes import ConfigurableNode
 
 class BaseReaderNode(FlowNode,ConfigurableNode):
     """ファイル読み込みノードの基底クラス"""

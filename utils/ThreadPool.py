@@ -9,6 +9,7 @@ All rights reserved.
 
 import atexit
 from concurrent.futures import ThreadPoolExecutor
+
 from config import MAX_WORKERS
 from utils.CoalescingThreadPool import CoalescingThreadPool
 

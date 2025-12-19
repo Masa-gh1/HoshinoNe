@@ -7,9 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import uuid
 import numpy as np
-from main.CacheManager import CacheManager
+
+from main import CacheManager
 
 class DataBlock:
     def __init__(self, planeIndex, x, y, data):

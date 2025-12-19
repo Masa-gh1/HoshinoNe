@@ -9,10 +9,11 @@ All rights reserved.
 
 import numpy as np
 import uuid
-from .FlowData import FlowData
-from .DataBlock import DataBlock
-from main.CacheManager import CacheManager
 from collections import UserDict
+
+from . import FlowData
+from . import DataBlock
+from main import CacheManager
 from utils import numpy_helpers as nh
 
 class LazyFlowData(FlowData):

@@ -6,17 +6,17 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+from types import SimpleNamespace
 import hashlib
 import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
-from types import SimpleNamespace
-from base.NNBlockOperationNode import NNBlockOperationNode
-from base.FlowData import FlowData
-from base.LazyFlowData import LazyFlowData, LazyOperations
-from base.DataBlock import DataBlock
-from base.ConfigurableNode import ConfigurableNode
-from main import config
+
+from base import FlowData
+from base import LazyFlowData
+from base import DataBlock
+from nodes import NNBlockOperationNode
+from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
 
 try:

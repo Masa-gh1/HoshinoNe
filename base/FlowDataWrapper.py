@@ -7,7 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-from .FlowData import FlowData
+from . import FlowData
 
 class FlowDataWrapper(FlowData):
     def __init__(self, orgFlowData, updateHeaders={}):

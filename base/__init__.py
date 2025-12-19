@@ -10,17 +10,13 @@ All rights reserved.
 from .DataBlock import DataBlock
 from .FlowData import FlowData
 from .FlowNode import FlowNode
-from .BaseReaderNode import BaseReaderNode
-from .BaseWriterNode import BaseWriterNode
-from .N1BlockOperationNode import N1BlockOperationNode
-from .NNBlockOperationNode import NNBlockOperationNode
-from .ConfigurableNode import ConfigurableNode
-from .TensorOperationMixin import TensorOperationMixin
-
+from .FlowDataWrapper import FlowDataWrapper
 from .LazyFlowData import LazyFlowData
-from .LazyNNOperationNode import LazyNNOperationNode
 
-__all__ = ['DataBlock', 'FlowData', 'FlowNode', 'BaseReaderNode', 'BaseWriterNode', 
-           'N1BlockOperationNode', 'NNBlockOperationNode',
-           'ConfigurableNode', 'TensorOperationMixin',
-           'LazyFlowData', 'LazyNNOperationNode']
+__all__ = [
+    'DataBlock',
+    'FlowData',
+    'FlowNode',
+    'FlowDataWrapper',
+    'LazyFlowData'
+]

@@ -8,14 +8,14 @@ All rights reserved.
 '''
 
 import csv
-import hashlib
 import os
-import datetime
 from tkinter import filedialog, messagebox
 import tkinter
-from base import BaseReaderNode, FlowData, DataBlock
-from base.BaseReaderNode import BaseReaderSettingsDialog
-from config import MAX_WORKERS, BLOCK_SIZE
+
+from config import BLOCK_SIZE
+from base import FlowData, DataBlock
+from nodes import BaseReaderSettingsDialog
+from nodes import BaseReaderNode
 
 class FileReaderNode(BaseReaderNode):
     def __init__(self, canvas, editor, x, y, **kwargs):

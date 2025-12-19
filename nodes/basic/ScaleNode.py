@@ -7,8 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
-from base import LazyNNOperationNode, TensorOperationMixin, DataBlock
-from base.LazyFlowData import LazyFlowData
+from base import DataBlock
+from base import LazyFlowData
+from nodes import LazyNNOperationNode, TensorOperationMixin 
 
 class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
