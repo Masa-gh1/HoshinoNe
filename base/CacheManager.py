@@ -83,11 +83,11 @@ class CacheManager:
             print("Warning: Failed to clean up temporary directories.", file=sys.stderr)
     
     @classmethod
-    def get(cls, cacheKey, cachePolicy):
-        return cls.elapsed( cls._get, cacheKey, cachePolicy)
+    def get(cls, cacheKey):
+        return cls.elapsed( cls._get, cacheKey)
 
     @classmethod
-    def _get(cls, cacheKey, cachePolicy):
+    def _get(cls, cacheKey):
         """キャッシュから取得"""
         with cls._cacheLock:
             cache = cls._globalBlockCache.pop(cacheKey,None)
@@ -99,12 +99,18 @@ class CacheManager:
         
         if not data is None:
             return data
-        elif CachePolicy.PERSISTENT == cachePolicy:
-            # ポリシー persistent なのでストレージから復元
+        elif cls.isStoraged(cacheKey):
+            # ストレージに在るので復元
             cls._loadCount += 1
-            return cls._loadFromStorage(cacheKey)
+            data = cls._loadFromStorage(cacheKey)
+            if not data is None:
+                cls.set(cacheKey, data, CachePolicy.PERSISTENT)
+            else:
+                #ここには来ないはず
+                pass
+            return data
         else:
-            # ポリシー persistent ではないので、残念なら要再計算
+            # ストレージに無いので、残念なら要再計算
             cls._cacheMissCount += 1
             return None
     
@@ -125,7 +131,7 @@ class CacheManager:
                     # ポリシー persistent ではないのでキャッシュから削除
                     cls._purgeCount += 1
                     del cls._globalBlockCache[oldestKey]
-                elif cls.isStoraged( oldestKey, oldPolicy):
+                elif cls.isStoraged(oldestKey):
                     # ポリシー persistent であり、
                     # 既にストレージに保存ずみなのでキャッシュから削除
                     del cls._globalBlockCache[oldestKey]
@@ -133,17 +139,22 @@ class CacheManager:
                     # ポリシー persistent であり、
                     # ストレージへ保存したのでキャッシュから削除
                     cls._saveCount += 1
+                    cls._globalBlockSerial[oldestKey] = True
                     del cls._globalBlockCache[oldestKey]
+                else:
+                    # ストレージへの保存に失敗した。
+                    # log は _saveToStorage に委譲
+                    pass
             cls._globalBlockCache[cacheKey] = (cachePolicy, data)
     
     @classmethod
-    def isCached(cls, cacheKey, cachePolicy):
+    def isCached(cls, cacheKey):
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock:
             return cacheKey in cls._globalBlockCache
 
     @classmethod
-    def isStoraged(cls, cacheKey, cachePolicy):
+    def isStoraged(cls, cacheKey):
         """ストレージ保存されているかどうかを判定"""
         with cls._cacheLock:
             return cacheKey in cls._globalBlockSerial
@@ -154,13 +165,13 @@ class CacheManager:
         try:
             tempDir = cls._getGlobelTempDir()
 
-            pre = f"{cacheKey}"[2:4]
+            filename = f"{cacheKey}".replace("/", "_").replace("\\", "_").replace(":", "_")
+            pre = filename[:2]
             subDir = os.path.join( cls._globalTempDir, pre)
             os.makedirs(subDir, exist_ok=True)
 
-            fileName = os.path.join(subDir, f"{cacheKey}.npy")
-            cls.elapsed(np.save, fileName, data.pop("data"), allow_pickle=False)
-            cls._globalBlockSerial[f"{cacheKey}"] = data
+            fileName = os.path.join(subDir, f"{filename}.npy")
+            cls.elapsed(np.save, fileName, data, allow_pickle=False)
             
             return True
         except (OSError, IOError, ValueError):
@@ -174,45 +185,49 @@ class CacheManager:
             if cls._globalTempDir is None:
                 return None
             
-            pre = f"{cacheKey}"[2:4]
+            filename = f"{cacheKey}".replace("/", "_").replace("\\", "_").replace(":", "_")
+            pre = filename[:2]
             subDir = os.path.join( cls._globalTempDir, pre)
 
-            fileName = os.path.join(subDir, f"{cacheKey}.npy")
-            data = cls._globalBlockSerial[f"{cacheKey}"].copy()
-            data["data"] = cls.elapsed(np.load, fileName, allow_pickle=False)
+            fileName = os.path.join(subDir, f"{filename}.npy")
+            data = cls.elapsed(np.load, fileName, allow_pickle=False)
             
-            # 読み込み成功時はキャッシュに復帰
-            cls.set(cacheKey, data, CachePolicy.PERSISTENT)
             return data
         except (OSError, IOError, ValueError):
             print(f"Warning: Unable to load block data from storage : key: {cacheKey}", file=sys.stderr)
             return None
     
     @classmethod
-    def clearByInstanceId(cls, instanceId):
-        """指定instanceIdの全データを削除"""
-        # ファイルも削除対象に含める
+    def clearByPartialKey(cls, cacheKey):
+        """key の部分一致でデータを削除"""
+        # ストレージを削除
         if cls._globalTempDir and os.path.exists(cls._globalTempDir):
-            pre = f"{instanceId}"[:2]
+            pre = cacheKey[:2]
             subDir = os.path.join( cls._globalTempDir, pre)
             if os.path.exists(subDir):
                 for fileName in os.listdir(subDir):
-                    cacheKey, ext = os.path.splitext(fileName)
-                    if instanceId in cacheKey and ext in [".pkl", ".npy"]:
+                    basename, ext = os.path.splitext(fileName)
+                    if cacheKey in basename and ext in [".pkl", ".npy"]:
                         # ファイルを削除
                         os.remove(os.path.join(subDir, fileName))
-                        del cls._globalBlockSerial[f"{cacheKey}"]
         
         with cls._cacheLock:
-            keysToRemove = []
-            # メモリキャッシュから対象キーを収集
-            for key in cls._globalBlockCache.keys():
-                if len(key) > 0 and key[0] == instanceId:
-                    keysToRemove.append(key)
-            
-            # メモリキャッシュから削除
-            for key in keysToRemove:
-                del cls._globalBlockCache[key]
+            # キャッシュを削除
+            cls._clearByPartialKey(cls._globalBlockSerial, cacheKey)
+            cls._clearByPartialKey(cls._globalBlockCache, cacheKey)
+    
+    @classmethod
+    def _clearByPartialKey(cls, cache, cacheKey):
+        """key の部分一致でデータを削除"""
+        keysToRemove = []
+        # メモリキャッシュから対象キーを収集
+        for key in cache.keys():
+            if cacheKey in key:
+                keysToRemove.append(key)
+
+        # メモリキャッシュから削除
+        for key in keysToRemove:
+            del cache[key]
     
     @classmethod
     def elapsed(cls, func, *args, **kwargs):
@@ -229,7 +244,6 @@ class CacheManager:
                 break
             x = x*2
         return result
-
     
     @classmethod
     def getCacheStats(cls):

@@ -28,25 +28,19 @@ class DataBlock:
     def data(self):
         """遅延ロードでデータを取得"""
         if self._data is None:
-            cache = CacheManager.get(self.blockId, self.cachePolicy)
-            self._data = cache["data"]
+            data = CacheManager.get(self.blockId)
+            self._data = data
         return self._data
     
     @data.setter
-    def data(self, value):
+    def data(self, data):
         """データを設定してキャッシュに保存"""
-        self._data = value
-        cache = {
-            'data': value,
-            'planeIndex': self.planeIndex,
-            'x': self.x,
-            'y': self.y,
-        }
-        CacheManager.set(self.blockId, cache, self.cachePolicy)
+        self._data = data
+        CacheManager.set(self.blockId, data, self.cachePolicy)
     
     def isValid(self):
         """データが有効かどうかを確認"""
-        return CacheManager.isCached(self.blockId, self.cachePolicy)
+        return CacheManager.isCached(self.blockId)
     
     def getWidth(self):
         """ブロックの幅を取得"""

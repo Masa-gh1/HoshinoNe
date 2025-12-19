@@ -56,7 +56,7 @@ class FlowData:
     def __del__(self):
         try:
             # キャッシュから自身のエントリを削除
-            CacheManager.clearByInstanceId(self.instanceId)
+            CacheManager.clearByPartialKey(self.instanceId)
         except (ImportError, AttributeError) as e:
             print(f"Warning: cleanup: {str(e)}", file=sys.stderr)
 
@@ -136,7 +136,7 @@ class FlowData:
         # 遅延ロード用のDataBlockを作成
         block = DataBlock(None, planeIndex, x, y)
         block.cachePolicy = self.cachePolicy
-        block.blockId = (self.instanceId, planeIndex, x, y)
+        block.blockId = f"{self.instanceId}:{planeIndex}:{x}:{y}"
         return block
     
     def getBlockCount(self):
@@ -174,7 +174,7 @@ class FlowData:
     
     def setBlock(self, dataBlock):
         """ブロックデータを保存"""
-        dataBlock.blockId = (self.instanceId, dataBlock.planeIndex, dataBlock.x, dataBlock.y)
+        dataBlock.blockId = f"{self.instanceId}:{dataBlock.planeIndex}:{dataBlock.x}:{dataBlock.y}"
         dataBlock.cachePolicy = self.cachePolicy
         
         # numpy配列として正規化
