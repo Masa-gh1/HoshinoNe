@@ -13,6 +13,7 @@ import hashlib
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import numpy as np
+import datetime
 from base import FlowNode, FlowData, DataBlock
 from config import BLOCK_SIZE
 from config import configRawParams
@@ -23,10 +24,18 @@ try:
 except ImportError:
     RAWPY_AVAILABLE = False
 
+try:
+    from PIL import Image
+    from PIL.ExifTags import TAGS
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 class RawReaderNode(FlowNode):
     def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
         super().__init__(canvas, editor, x, y, "raw_reader", "RAW読み込み")
         self.filePaths = []
+        self.fileAttributes = {}
         self.fileTypes=[
                 ("RAW files", "*.cr2 *.cr3 *.nef *.arw *.dng *.raf *.orf *.rw2 *.pef *.srw *.x3f"),
                 ("Canon RAW", "*.cr2 *.cr3"),
@@ -46,7 +55,7 @@ class RawReaderNode(FlowNode):
         self.whiteBalance = "daylight"  # camera, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
         self.gammaPower = 1.0  # gamma power
         self.gammaSlope = 1.0  # gamma slope
-        
+                
         if not RAWPY_AVAILABLE:
             messagebox.showerror("エラー", "rawpyライブラリがインストールされていません。\npip install rawpy でインストールしてください。")
             return
@@ -99,7 +108,7 @@ class RawReaderNode(FlowNode):
     
     def process(self, context):
         if not RAWPY_AVAILABLE:
-            raise Exception("rawpyライブラリがインストールされていません")
+            raise Exception("rawpyライブラリがインストールされていません\npip install rawpy でインストールしてください。")
         
         if not self.filePaths:
             raise Exception("RAWファイルが選択されていません")
@@ -236,7 +245,7 @@ class RawSettingsDialog(tk.Toplevel):
         self.node = node
         
         self.title("RAW読み込み設定")
-        self.geometry("600x600")
+        self.geometry("700x600")
         
         # メインフレーム（左右分割）
         mainFrame = tk.Frame(self)
@@ -262,7 +271,13 @@ class RawSettingsDialog(tk.Toplevel):
         # ファイルリストを更新
         self.updateFileList()
         
-        tk.Button(leftFrame, text="ファイル選択", command=self.selectFiles).pack(anchor="w", pady=5)
+        # ファイル操作ボタン
+        buttonFrame = tk.Frame(leftFrame)
+        buttonFrame.pack(anchor="w", pady=5)
+        
+        tk.Button(buttonFrame, text="追加", command=self.addFiles).pack(side=tk.LEFT, padx=(0, 5))
+        tk.Button(buttonFrame, text="削除", command=self.removeFiles).pack(side=tk.LEFT, padx=(0, 5))
+        tk.Button(buttonFrame, text="撮影時刻ソート", command=self.sortByTimestamp).pack(side=tk.LEFT)
         
         # 右側：設定項目
         rightFrame = tk.Frame(mainFrame)
@@ -351,6 +366,8 @@ class RawSettingsDialog(tk.Toplevel):
         tk.Button(buttonFrame, text="閉じる", command=self.destroy).pack(side=tk.LEFT, padx=5)
         
         self.protocol("WM_DELETE_WINDOW", self.onClose)
+        
+
     
     def updateFileList(self):
         self.fileListbox.delete(0, tk.END)
@@ -358,16 +375,80 @@ class RawSettingsDialog(tk.Toplevel):
         if filePaths:
             for filePath in filePaths:
                 fileName = filePath.split('/')[-1].split('\\')[-1]
-                self.fileListbox.insert(tk.END, fileName)
+                timestamp = self._getExifTimestamp(filePath)
+                if timestamp > 0:
+                    dt = datetime.datetime.fromtimestamp(timestamp)
+                    timeStr = dt.strftime("%Y-%m-%d %H:%M:%S")
+                    displayText = f"{fileName} ({timeStr})"
+                else:
+                    displayText = f"{fileName} (時刻不明)"
+                self.fileListbox.insert(tk.END, displayText)
         else:
             self.fileListbox.insert(tk.END, "未選択")
     
-    def selectFiles(self):
-        filePaths = filedialog.askopenfilenames( parent=self, title="RAWファイルを選択", filetypes=self.node.fileTypes)
+    def addFiles(self):
+        filePaths = filedialog.askopenfilenames(parent=self, title="RAWファイルを追加", filetypes=self.node.fileTypes)
         
         if filePaths:
-            self.selectedFilePaths = list(filePaths)
+            if not hasattr(self, 'selectedFilePaths'):
+                self.selectedFilePaths = list(self.node.filePaths) if self.node.filePaths else []
+            
+            # 重複を除いて追加
+            for filePath in filePaths:
+                if filePath not in self.selectedFilePaths:
+                    self.selectedFilePaths.append(filePath)
+            
             self.updateFileList()
+    
+    def removeFiles(self):
+        selected_indices = self.fileListbox.curselection()
+        if not selected_indices:
+            return
+        
+        if not hasattr(self, 'selectedFilePaths'):
+            self.selectedFilePaths = list(self.node.filePaths) if self.node.filePaths else []
+        
+        # 選択されたインデックスを逆順で削除
+        for index in reversed(selected_indices):
+            if 0 <= index < len(self.selectedFilePaths):
+                del self.selectedFilePaths[index]
+        
+        self.updateFileList()
+    
+    def sortByTimestamp(self):
+        if not PIL_AVAILABLE:
+            raise Exception("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+        
+        if not hasattr(self, 'selectedFilePaths'):
+            self.selectedFilePaths = list(self.node.filePaths) if self.node.filePaths else []
+        
+        if len(self.selectedFilePaths) <= 1:
+            return
+        
+        try:
+            self.selectedFilePaths.sort(key=self._getExifTimestamp)
+            self.updateFileList()
+        except Exception as e:
+            messagebox.showerror("エラー", f"ソートに失敗しました: {str(e)}")
+    
+    def _getExifTimestamp(self, filepath):
+        """EXIFデータから撮影時刻を取得"""
+        if filepath not in self.node.fileAttributes:
+            try:
+                with Image.open(filepath) as img:
+                    exifdata = img.getexif()
+                    for tag_id in exifdata:
+                        tag = TAGS.get(tag_id, tag_id)
+                        if tag == "DateTime":
+                            date_str = exifdata.get(tag_id)
+                            dt = datetime.datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
+                            self.node.fileAttributes[filepath] = dt.timestamp()
+                            return self.node.fileAttributes[filepath]
+                self.node.fileAttributes[filepath] = 0
+            except Exception as e:
+                print(f"EXIF timestamp error for {filepath}: {e}")
+                self.node.fileAttributes[filepath] = 0
+        return self.node.fileAttributes[filepath]
     
     def onApply(self):
         # ファイルパスの更新
