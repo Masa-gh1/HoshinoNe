@@ -1,11 +1,11 @@
 {
-  "version": "0.1.20251208",
+  "version": "0.1.20251211",
   "nodes": [
     {
       "index": 0,
       "zOrder": 3,
-      "x": 31.0,
-      "y": 62.0,
+      "x": -281.0,
+      "y": -50.0,
       "type": "Lab_converter",
       "text": "Lab変換",
       "connections": [
@@ -15,8 +15,8 @@
     {
       "index": 1,
       "zOrder": 13,
-      "x": 315.0,
-      "y": 88.0,
+      "x": 3.0,
+      "y": -24.0,
       "type": "Lab_to_rgb_converter",
       "text": "RGB変換",
       "connections": []
@@ -24,8 +24,8 @@
     {
       "index": 2,
       "zOrder": 7,
-      "x": 121.0,
-      "y": 57.0,
+      "x": -191.0,
+      "y": -55.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -35,8 +35,8 @@
     {
       "index": 3,
       "zOrder": 17,
-      "x": 204.0,
-      "y": 35.0,
+      "x": -108.0,
+      "y": -77.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 3,
@@ -57,8 +57,8 @@
     {
       "index": 4,
       "zOrder": 9,
-      "x": 123.0,
-      "y": 112.0,
+      "x": -189.0,
+      "y": 0.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -68,8 +68,8 @@
     {
       "index": 5,
       "zOrder": 15,
-      "x": 203.0,
-      "y": 142.0,
+      "x": -109.0,
+      "y": 30.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 3,
@@ -91,8 +91,8 @@
     {
       "index": 6,
       "zOrder": 11,
-      "x": 205.0,
-      "y": 89.0,
+      "x": -107.0,
+      "y": -23.0,
       "type": "sum",
       "text": "総和",
       "connections": [
@@ -102,8 +102,8 @@
     {
       "index": 7,
       "zOrder": 5,
-      "x": 30.0,
-      "y": 115.0,
+      "x": -282.0,
+      "y": 3.0,
       "type": "Lab_converter",
       "text": "Lab変換",
       "connections": [
@@ -114,8 +114,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": 176,
-      "y": 88,
+      "x": -136,
+      "y": -24,
       "width": 350,
       "height": 172,
       "title": "L+ab合成"

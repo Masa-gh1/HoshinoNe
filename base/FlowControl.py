@@ -12,16 +12,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import MAX_WORKERS
 from utils.ThreadPool import ProcessExecutorInNode
+from utils.ThreadPool import PerResourceThreadPoolWrapper
 
 # 同時ノード実行数
-MAX_NODE_WORKERS = 4
+MAX_NODE_EXEC = min(4,MAX_WORKERS)
 
 class FlowControl:
     def __init__(self):
         pass
     
     def getMaxNodeWorkers(self):
-        return MAX_NODE_WORKERS
+        return MAX_NODE_EXEC
     
     def execute(self, nodes, sendMessage=None, reportProgress=None):
         if not sendMessage:
@@ -34,10 +35,13 @@ class FlowControl:
 
         startTime = time.time()
         try:
-            with(ThreadPoolExecutor(max_workers=MAX_NODE_WORKERS) as nodeExecutor,
-                 ThreadPoolExecutor(max_workers=MAX_WORKERS)      as processExecutor):
+            maxWorkers = MAX_NODE_EXEC+MAX_WORKERS
+            processInNodeWorkers = maxWorkers/min(2,MAX_NODE_EXEC)
+            with ThreadPoolExecutor(max_workers=maxWorkers) as processExecutor:
                 
-                ProcessExecutorInNode .setExecutor(processExecutor, max(1,MAX_WORKERS//(MAX_NODE_WORKERS/2))) # グローバルにスレッドプールを提供
+                nodeExecutor = PerResourceThreadPoolWrapper()
+                nodeExecutor.setExecutor(processExecutor, MAX_NODE_EXEC)
+                ProcessExecutorInNode.setExecutor(processExecutor, processInNodeWorkers) # グローバルにスレッドプールを提供
                 
                 sendMessage("フロー実行中...\n") # ステータス表示
                 
@@ -68,7 +72,7 @@ class FlowControl:
                         context = {
                             'progress_callback': lambda msg, current=None, total=None, id=id(node), t=node.name: reportProgress( id, t, msg, current, total)
                         }
-                        future = nodeExecutor.submit(self._executeNode, node, context)
+                        future = nodeExecutor.submit(self, self._executeNode, node, context)
                         futures[future] = node
                         text +=f"{sep}{node.name}"
                         sep=","

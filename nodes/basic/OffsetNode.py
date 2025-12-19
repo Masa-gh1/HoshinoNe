@@ -87,10 +87,10 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
     def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """display_levelsを計算"""
         def compute(lazyFlowData):
-            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+            if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
                 return None
                 
+            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
             inputMin = inputLevels['min']
             inputMax = inputLevels['exclusive_upper']
             
@@ -105,8 +105,12 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
                 inputMax = max(mixs)
 
             if combinedAuxiliaryTable:
-                minValue = combinedAuxiliaryTable.getMinValue()
-                maxValue = combinedAuxiliaryTable.getMaxValue()
+                if 'display_levels' in combinedAuxiliaryTable.headers:
+                    minValue = combinedAuxiliaryTable.headers['display_levels']['min']
+                    maxValue = combinedAuxiliaryTable.headers['display_levels']['exclusive_upper']
+                else:
+                    minValue = combinedAuxiliaryTable.getMinValue()
+                    maxValue = combinedAuxiliaryTable.getMaxValue()
                 inputMin += minValue
                 inputMax += maxValue
             
