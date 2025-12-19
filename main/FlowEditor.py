@@ -34,13 +34,318 @@ MAX_NODE_WORKERS = 4
 NodeExecutor = ThreadPoolExecutor(max_workers=MAX_NODE_WORKERS)
 atexit.register(NodeExecutor.shutdown)
 
+class Tray:
+    def __init__(self, canvas, editor, x, y, width=200, height=150, title="トレイ"):
+        self.canvas = canvas
+        self.editor = editor
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.title = title
+
+        self.isDragging = False
+        self.isResizing = False
+        self.dragStartX = 0
+        self.dragStartY = 0
+        self.dragNodes = []  # ドラッグ時に一緒に移動するノードリスト
+        self.dragTrays = []  # ドラッグ時に一緒に移動するトレイリスト
+        
+        # 描画要素を作成
+        self.rect = canvas.create_rectangle(
+            x - width//2, y - height//2, x + width//2, y + height//2,
+            outline='gray', width=2, fill='lightgray', stipple='gray25'
+        )
+        self.label = canvas.create_text(
+            x - width//2 + 10, y - height//2 + 10, text=title, anchor=tk.NW, font=('Arial', 10, 'bold')
+        )
+        self.updateDepthAppearance()
+        
+        # イベントバインディング
+        canvas.tag_bind(self.rect, '<Button-1>', self.onMouseDown)
+        canvas.tag_bind(self.rect, '<B1-Motion>', self.onMouseDrag)
+        canvas.tag_bind(self.rect, '<ButtonRelease-1>', self.onMouseUp)
+        canvas.tag_bind(self.rect, '<Button-3>', self.onRightClick)
+        canvas.tag_bind(self.label, '<Button-1>', self.onMouseDown)
+        canvas.tag_bind(self.label, '<B1-Motion>', self.onMouseDrag)
+        canvas.tag_bind(self.label, '<ButtonRelease-1>', self.onMouseUp)
+        canvas.tag_bind(self.label, '<Button-3>', self.onRightClick)
+    
+    def onMouseDown(self, event):
+        self.dragStartX = event.x
+        self.dragStartY = event.y
+        canvasX = self.canvas.canvasx(event.x)
+        canvasY = self.canvas.canvasy(event.y)
+        
+        # 境界近くかチェック（リサイズ判定）
+        margin = 10
+        left = self.x - self.width//2
+        right = self.x + self.width//2
+        top = self.y - self.height//2
+        bottom = self.y + self.height//2
+        
+        # リサイズハンドルの判定
+        self.resizeHandle = None
+        if abs(canvasX - right) < margin and abs(canvasY - bottom) < margin:
+            self.resizeHandle = 'se'  # 右下
+        elif abs(canvasX - left) < margin and abs(canvasY - bottom) < margin:
+            self.resizeHandle = 'sw'  # 左下
+        elif abs(canvasX - right) < margin and abs(canvasY - top) < margin:
+            self.resizeHandle = 'ne'  # 右上
+        elif abs(canvasX - left) < margin and abs(canvasY - top) < margin:
+            self.resizeHandle = 'nw'  # 左上
+        elif abs(canvasX - right) < margin:
+            self.resizeHandle = 'e'   # 右
+        elif abs(canvasX - left) < margin:
+            self.resizeHandle = 'w'   # 左
+        elif abs(canvasY - bottom) < margin:
+            self.resizeHandle = 's'   # 下
+        elif abs(canvasY - top) < margin:
+            self.resizeHandle = 'n'   # 上
+        
+        if self.resizeHandle:
+            self.isResizing = True
+            # リサイズ開始時の座標を保存
+            self.resizeStartX = self.x
+            self.resizeStartY = self.y
+            self.resizeStartWidth = self.width
+            self.resizeStartHeight = self.height
+        else:
+            self.isDragging = True
+            self.dragNodes = self.getVisuallyContainedNodes()  # 視覚的に上にあるノードのみを固定
+            self.dragTrays = self.getVisuallyContainedTrays()  # 視覚的に上にあるトレイを固定
+            # ドラッグ開始時にハイライトを消す
+            self.editor.clearSelectedHighlight()
+            self.editor.clearReprocessingHighlights()
+            # ドラッグ開始時にトレイと含まれるアイテムを前面に
+            groupItems = [self.rect, self.label]
+            for node in self.dragNodes:
+                groupItems.extend([node.rect, node.label])
+            for tray in self.dragTrays:
+                groupItems.extend([tray.rect, tray.label])
+            self.editor._placeItemBeforeConnections(*groupItems)
+            # ドラッグ開始時に外観を更新
+            self.editor.updateAllTrayAppearance()
+    
+    def onMouseDrag(self, event):
+        dx = event.x - self.dragStartX
+        dy = event.y - self.dragStartY
+        
+        if self.isDragging:
+            # トレイを移動
+            self.x += dx
+            self.y += dy
+            self.canvas.move(self.rect, dx, dy)
+            self.canvas.move(self.label, dx, dy)
+            
+            # ドラッグ開始時に固定したノードを一緒に移動
+            for node in self.dragNodes:
+                node.x += dx
+                node.y += dy
+                self.canvas.move(node.rect, dx, dy)
+                self.canvas.move(node.label, dx, dy)
+            
+            # ドラッグ開始時に固定したトレイを一緒に移動
+            for tray in self.dragTrays:
+                tray.x += dx
+                tray.y += dy
+                self.canvas.move(tray.rect, dx, dy)
+                self.canvas.move(tray.label, dx, dy)
+            
+            # ドラッグ中はグループ全体を順序を維持して前面に保持
+            groupItems = [self.rect, self.label]
+            for node in self.dragNodes:
+                groupItems.extend([node.rect, node.label])
+            for tray in self.dragTrays:
+                groupItems.extend([tray.rect, tray.label])
+            self.editor._placeItemBeforeConnections(*groupItems)
+            # ドラッグ中に外観を更新
+            self.editor.updateAllTrayAppearance()
+            
+            # 接続線を更新
+            self.editor.updateConnections()
+        elif self.isResizing:
+            canvasX = self.canvas.canvasx(event.x)
+            canvasY = self.canvas.canvasy(event.y)
+            
+            # ハンドルに応じてリサイズ処理
+            # 固定点を計算
+            fixedLeft = self.resizeStartX - self.resizeStartWidth//2
+            fixedRight = self.resizeStartX + self.resizeStartWidth//2
+            fixedTop = self.resizeStartY - self.resizeStartHeight//2
+            fixedBottom = self.resizeStartY + self.resizeStartHeight//2
+            
+            # 新しい境界を計算
+            newLeft = fixedLeft
+            newRight = fixedRight
+            newTop = fixedTop
+            newBottom = fixedBottom
+            
+            if 'e' in self.resizeHandle:  # 右辺移動
+                newRight = max(fixedLeft + 100, canvasX)
+            elif 'w' in self.resizeHandle:  # 左辺移動
+                newLeft = min(fixedRight - 100, canvasX)
+            
+            if 's' in self.resizeHandle:  # 下辺移動
+                newBottom = max(fixedTop + 80, canvasY)
+            elif 'n' in self.resizeHandle:  # 上辺移動
+                newTop = min(fixedBottom - 80, canvasY)
+            
+            # 新しい中心とサイズを計算
+            newWidth = newRight - newLeft
+            newHeight = newBottom - newTop
+            newX = (newLeft + newRight) // 2
+            newY = (newTop + newBottom) // 2
+            
+            self.x = int(newX)
+            self.y = int(newY)
+            self.width = int(newWidth)
+            self.height = int(newHeight)
+            
+            # 矩形を再描画
+            self.canvas.coords(self.rect,
+                self.x - self.width//2, self.y - self.height//2,
+                self.x + self.width//2, self.y + self.height//2)
+            self.canvas.coords(self.label,
+                self.x - self.width//2 + 10, self.y - self.height//2 + 10)
+        
+        self.dragStartX = event.x
+        self.dragStartY = event.y
+    
+    def onMouseUp(self, event):
+        self.isDragging = False
+        self.isResizing = False
+        self.dragNodes = []  # ドラッグノードリストをクリア
+        self.dragTrays = []  # ドラッグトレイリストをクリア
+        # 全トレイの外観を更新
+        self.editor.updateAllTrayAppearance()
+    
+    def onRightClick(self, event):
+        menu = tk.Menu(self.canvas, tearoff=0)
+        menu.add_command(label="編集", command=self.editTray)
+        menu.add_command(label="削除", command=self.deleteTray)
+        menu.post(event.x_root, event.y_root)
+    
+    def editTray(self):
+        dialog = tk.Toplevel(self.editor.root)
+        dialog.title("トレイ編集")
+        dialog.geometry("300x150")
+        dialog.grab_set()
+        
+        tk.Label(dialog, text="タイトル:").pack(pady=5)
+        titleEntry = tk.Entry(dialog, width=30)
+        titleEntry.insert(0, self.title)
+        titleEntry.pack(pady=5)
+        
+        def applyChanges():
+            self.title = titleEntry.get()
+            self.canvas.itemconfig(self.label, text=self.title)
+            dialog.destroy()
+        
+        tk.Button(dialog, text="適用", command=applyChanges).pack(pady=10)
+    
+    def deleteTray(self):
+        self.editor.deleteTray(self)
+    
+    def updateDepthAppearance(self):
+        """Z-orderに基づいて外観を更新"""
+        if not hasattr(self, 'rect') or len(self.editor.trays) <= 1:
+            return
+        
+        allItems = self.canvas.find_all()
+        if self.rect not in allItems:
+            return
+            
+        zIndex = allItems.index(self.rect)
+        relativeDepth = min(1.0, zIndex / (len(allItems) - 1))
+        
+        # 深度に応じて外観を調整
+        width = max(2, int(2 + relativeDepth * 3))
+        grayLevel = max(64, int(128 - relativeDepth * 64))
+        bgGray = max(200, int(240 - relativeDepth * 40))
+        stipplePattern = ['gray12', 'gray25', 'gray50'][min(2, int(relativeDepth * 3))]
+        
+        self.canvas.itemconfig(self.rect, 
+            outline=f"#{grayLevel:02x}{grayLevel:02x}{grayLevel:02x}",
+            width=width, 
+            fill=f"#{bgGray:02x}{bgGray:02x}{bgGray:02x}", 
+            stipple=stipplePattern)
+    
+    def getVisuallyContainedNodes(self):
+        """視覚的にトレイの上にあるノードを取得"""
+        contained = []
+        for node in self.editor.nodes:
+            if (self.x - self.width//2 <= node.x <= self.x + self.width//2 and
+                self.y - self.height//2 <= node.y <= self.y + self.height//2):
+                # ノードがトレイより前面にあるかチェック
+                nodeItems = [node.rect, node.label]
+                trayItems = [self.rect, self.label]
+                
+                # キャンバスのアイテム順序で比較
+                allItems = self.canvas.find_all()
+                nodeMaxIndex = max(allItems.index(item) for item in nodeItems if item in allItems)
+                trayMaxIndex = max(allItems.index(item) for item in trayItems if item in allItems)
+                
+                if nodeMaxIndex > trayMaxIndex:
+                    contained.append(node)
+        return contained
+    
+    def getVisuallyContainedTrays(self):
+        """視覚的にトレイの上にある他のトレイを取得"""
+        contained = []
+        for tray in self.editor.trays:
+            if tray == self:  # 自分自身は除外
+                continue
+            if (self.x - self.width//2 <= tray.x <= self.x + self.width//2 and
+                self.y - self.height//2 <= tray.y <= self.y + self.height//2):
+                # トレイがこのトレイより前面にあるかチェック
+                trayItems = [tray.rect, tray.label]
+                selfItems = [self.rect, self.label]
+                
+                # キャンバスのアイテム順序で比較
+                allItems = self.canvas.find_all()
+                trayMaxIndex = max(allItems.index(item) for item in trayItems if item in allItems)
+                selfMaxIndex = max(allItems.index(item) for item in selfItems if item in allItems)
+                
+                if trayMaxIndex > selfMaxIndex:
+                    contained.append(tray)
+        return contained
+    
+    def toDict(self):
+        return {
+            'x': self.x,
+            'y': self.y,
+            'width': self.width,
+            'height': self.height,
+            'title': self.title,
+            'zOrder': 0  # 保存時に動的に設定
+        }
+    
+    def fromDict(self, data):
+        self.x = data['x']
+        self.y = data['y']
+        self.width = data['width']
+        self.height = data['height']
+        self.title = data['title']
+        # zOrderは読み込み時に動的に設定される
+        
+        # 描画要素を更新
+        self.canvas.coords(self.rect,
+            self.x - self.width//2, self.y - self.height//2,
+            self.x + self.width//2, self.y + self.height//2)
+        self.canvas.coords(self.label,
+            self.x - self.width//2 + 10, self.y - self.height//2 + 10)
+        self.canvas.itemconfig(self.label, text=self.title)
+
 class FlowEditor:
     def __init__(self, root, text):
         self.root = root
         self.text = text
         self.root.title(f"{self.text} - {VERSION}")
         self.nodes = []
+        self.trays = []
         self.reprocessingHighlights = []
+        self.selectedHighlight = None
         self.selectedNode = None
         self.connectionLines = []
         self.autoExecute = tk.BooleanVar(value=False)
@@ -91,8 +396,11 @@ class FlowEditor:
             else:
                 self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt))
         
+        self.contextMenu.add_separator()
+        self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
+        
         # 使い方説明
-        infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード追加 2.ドラッグで移動 3.クリックで接続 4.実行 5.ダブルクリックで結果表示", bg='lightyellow')
+        infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード/トレイ追加 2.ドラッグで移動 3.クリックで接続 4.実行 5.ダブルクリックで結果表示", bg='lightyellow')
         infoLabel.pack(fill=tk.X, padx=5, pady=2)
         
         # 結果表示
@@ -147,8 +455,8 @@ class FlowEditor:
         self.statusLabel.config(text=f"状態: 子画面を最前面に移動")
     
     def onCanvasRightRelease(self, event):
-        # ノード以外の場所をクリックした場合のみメニューを表示
-        isNodeClick = False
+        # ノードやトレイ以外の場所をクリックした場合のみメニューを表示
+        isItemClick = False
 
         # canvas座標に変換
         x = self.canvas.canvasx(event.x)
@@ -159,10 +467,15 @@ class FlowEditor:
             clickedItem = clickedItems[0]
             for node in self.nodes:
                 if clickedItem == node.rect or clickedItem == node.label:
-                    isNodeClick = True
+                    isItemClick = True
                     break
+            if not isItemClick:
+                for tray in self.trays:
+                    if clickedItem == tray.rect or clickedItem == tray.label:
+                        isItemClick = True
+                        break
         
-        if not isNodeClick:
+        if not isItemClick:
             self.rightClickX = event.x
             self.rightClickY = event.y
             self.contextMenu.post(event.x_root, event.y_root)
@@ -174,8 +487,69 @@ class FlowEditor:
             node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
             if node:
                 self.nodes.append(node)
+                self._placeItemBeforeConnections(node.rect, node.label)
         except ValueError:
             pass
+    
+    def addTrayAtPosition(self):
+        x = self.canvas.canvasx(self.rightClickX)
+        y = self.canvas.canvasy(self.rightClickY)
+        tray = Tray(self.canvas, self, x, y)
+        self.trays.append(tray)
+        self._placeItemBeforeConnections(tray.rect, tray.label)
+        self.updateAllTrayAppearance()
+    
+    def updateAllTrayAppearance(self):
+        """全トレイの外観を更新"""
+        for tray in self.trays:
+            tray.updateDepthAppearance()
+    
+    def _placeItemBeforeConnections(self, *items):
+        """アイテムを接続線より後ろに配置"""
+        # Z-orderでソートして順序を保持
+        allItems = self.canvas.find_all()
+        items = sorted(items, key=lambda item: allItems.index(item))
+        
+        if self.connectionLines:
+            target = self.connectionLines[0][2]
+            for item in items:
+                self.canvas.tag_lower(item, target)
+        else:
+            for item in items:
+                self.canvas.tag_raise(item)
+    
+    def clearSelectedHighlight(self):
+        """選択ハイライトを消す"""
+        if self.selectedHighlight:
+            self.canvas.delete(self.selectedHighlight)
+            self.selectedHighlight = None
+    
+    def clearReprocessingHighlights(self):
+        """再処理ハイライトを消す"""
+        for highlight in self.reprocessingHighlights:
+            self.canvas.delete(highlight)
+        self.reprocessingHighlights = []
+    
+    def deleteTray(self, tray):
+        # トレイ上のアイテムを取得
+        containedNodes = tray.getVisuallyContainedNodes()
+        containedTrays = tray.getVisuallyContainedTrays()
+        
+        # トレイ上のノードを削除
+        for node in containedNodes:
+            self.deleteNode(node)
+        
+        # トレイ上の他のトレイを再帰的に削除
+        for containedTray in containedTrays:
+            self.deleteTray(containedTray)
+        
+        # トレイ自身を削除
+        self.canvas.delete(tray.rect)
+        self.canvas.delete(tray.label)
+        if tray in self.trays:
+            self.trays.remove(tray)
+        # 残りのトレイの外観を更新
+        self.updateAllTrayAppearance()
     
     def updateNodeText(self, node, text):
         if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadFlowId'):
@@ -183,15 +557,25 @@ class FlowEditor:
         self.canvas.itemconfig(node.label, text=text)
     
     def adjustCanvasSize(self):
-        """ノードの位置に合わせてcanvasサイズを調整"""
-        if not self.nodes:
+        """ノードとトレイの位置に合わせてcanvasサイズを調整"""
+        if not self.nodes and not self.trays:
             return
         
-        # 全ノードの範囲を計算
-        minX = min(node.x - 60 for node in self.nodes)
-        maxX = max(node.x + 60 for node in self.nodes)
-        minY = min(node.y - 30 for node in self.nodes)
-        maxY = max(node.y + 30 for node in self.nodes)
+        # 全ノードとトレイの範囲を計算
+        items = []
+        for node in self.nodes:
+            items.extend([node.x - 60, node.x + 60, node.y - 30, node.y + 30])
+        for tray in self.trays:
+            items.extend([tray.x - tray.width//2, tray.x + tray.width//2, 
+                         tray.y - tray.height//2, tray.y + tray.height//2])
+        
+        if not items:
+            return
+            
+        minX = min(items[::4] + items[1::4])
+        maxX = max(items[::4] + items[1::4])
+        minY = min(items[2::4] + items[3::4])
+        maxY = max(items[2::4] + items[3::4])
         
         # マージンを追加
         margin = 50
@@ -249,8 +633,7 @@ class FlowEditor:
         self.statusLabel.config(text=f"ノードクリック: {node.text}")
         
         # 前の選択をクリア
-        if hasattr(self, 'selectedHighlight'):
-            self.canvas.delete(self.selectedHighlight)
+        self.clearSelectedHighlight()
         
         if self.selectedNode and self.selectedNode != node:
             # 既存の接続をチェック（順方向と逆方向）
@@ -296,6 +679,7 @@ class FlowEditor:
                 self.resultText.insert(tk.END, f"接続: {self.selectedNode.text} → {node.text}\n")
                 self.resultText.see(tk.END)
                 self.statusLabel.config(text=f"接続完了: {self.selectedNode.text} → {node.text}")
+                # 新しい接続線は自動的に最上位に配置される
             
             self.selectedNode = None
             
@@ -320,8 +704,7 @@ class FlowEditor:
     
     def unselectNode(self):
         if self.selectedNode:
-            if hasattr(self, 'selectedHighlight'):
-                self.canvas.delete(self.selectedHighlight)
+            self.clearSelectedHighlight()
             self.selectedNode = None
             self.resultText.delete(1.0, tk.END)
             self.resultText.insert(tk.END, "選択をクリアしました")
@@ -329,8 +712,8 @@ class FlowEditor:
             self.statusLabel.config(text="状態: 選択クリア")
     
     def onCanvasRelease(self, event):
-        # ノード以外の場所をクリックした場合のみ選択をクリア
-        isNodeClick = False
+        # ノードやトレイ以外の場所をクリックした場合のみ選択をクリア
+        isItemClick = False
 
         # canvas座標に変換
         canvasX = self.canvas.canvasx(event.x)
@@ -341,10 +724,15 @@ class FlowEditor:
             clickedItem = clickedItems[0]
             for node in self.nodes:
                 if clickedItem == node.rect or clickedItem == node.label:
-                    isNodeClick = True
+                    isItemClick = True
                     break
+            if not isItemClick:
+                for tray in self.trays:
+                    if clickedItem == tray.rect or clickedItem == tray.label:
+                        isItemClick = True
+                        break
         
-        if not isNodeClick:
+        if not isItemClick:
             self.unselectNode()
     
     def onMouseWheel(self, event):
@@ -363,10 +751,11 @@ class FlowEditor:
     
     def goHome(self):
         """キャンバスをホームポジションに戻す"""
-        if self.nodes:
-            # ノードがある場合は重心に移動
-            centerX = sum(node.x for node in self.nodes) / len(self.nodes)
-            centerY = sum(node.y for node in self.nodes) / len(self.nodes)
+        if self.nodes or self.trays:
+            # ノードやトレイがある場合は重心に移動
+            items = [(node.x, node.y) for node in self.nodes] + [(tray.x, tray.y) for tray in self.trays]
+            centerX = sum(x for x, y in items) / len(items)
+            centerY = sum(y for x, y in items) / len(items)
             
             scrollRegion = self.canvas.cget('scrollregion')
             if scrollRegion:
@@ -376,7 +765,7 @@ class FlowEditor:
                 self.canvas.xview_moveto(relativeX - 0.25)
                 self.canvas.yview_moveto(relativeY - 0.25)
         else:
-            # ノードがない場合は原点に戻す
+            # ノードやトレイがない場合は原点に戻す
             self.canvas.xview_moveto(0)
             self.canvas.yview_moveto(0)
     
@@ -505,7 +894,7 @@ class FlowEditor:
     
 
     def saveFlow(self):
-        if not self.nodes:
+        if not self.nodes and not self.trays:
             messagebox.showwarning("警告", "保存するフローがありません")
             return
         
@@ -525,17 +914,23 @@ class FlowEditor:
         
         flowData = {
             "nodes": [],
-            "connections": []
+            "connections": [],
+            "trays": []
         }
         
         # ノード情報を保存
         for node in self.nodes:
+            # ノードのZ-orderを取得
+            allItems = self.canvas.find_all()
+            nodeZOrder = max(allItems.index(node.rect), allItems.index(node.label))
+            
             nodeData = {
                 "id": nodeIds[node],
                 "type": node.type,
                 "x": node.x,
                 "y": node.y,
-                "text": node.text
+                "text": node.text,
+                "zOrder": nodeZOrder
             }
             
             # ノード固有のデータを保存
@@ -543,6 +938,15 @@ class FlowEditor:
                 node.store(nodeData)
             
             flowData["nodes"].append(nodeData)
+        
+        # トレイ情報を保存
+        for tray in self.trays:
+            # トレイのZ-orderを取得
+            allItems = self.canvas.find_all()
+            trayZOrder = max(allItems.index(tray.rect), allItems.index(tray.label))
+            trayData = tray.toDict()
+            trayData['zOrder'] = trayZOrder
+            flowData["trays"].append(trayData)
         
         # 接続情報を保存
         for node in self.nodes:
@@ -585,18 +989,40 @@ class FlowEditor:
             # 現在のフローをクリア
             self.clearFlow()
             
-            # ノードを作成
-            nodeMap = {}
+            # ノードとトレイをZ-order順で作成
+            allItems = []
+            
+            # ノード情報を収集
             for nodeData in flowData["nodes"]:
-                node = self.createNodeFromData(nodeData)
-                if node:
-                    # ノード固有のデータ復元
-                    if hasattr(node, 'restore'):
-                        node.restore(nodeData)
-                    node._loadFlowId = nodeData["id"]
-                    
-                    nodeMap[nodeData["id"]] = node
-                    self.nodes.append(node)
+                allItems.append(('node', nodeData))
+            
+            # トレイ情報を収集
+            if "trays" in flowData:
+                for trayData in flowData["trays"]:
+                    allItems.append(('tray', trayData))
+            
+            # Z-orderでソート
+            allItems.sort(key=lambda x: x[1].get('zOrder', 0))
+            
+            # 順序を維持して作成
+            nodeMap = {}
+            for itemType, itemData in allItems:
+                if itemType == 'node':
+                    node = self.createNodeFromData(itemData)
+                    if node:
+                        # ノード固有のデータ復元
+                        if hasattr(node, 'restore'):
+                            node.restore(itemData)
+                        node._loadFlowId = itemData["id"]
+                        
+                        nodeMap[itemData["id"]] = node
+                        self.nodes.append(node)
+                elif itemType == 'tray':
+                    tray = Tray(self.canvas, self, 0, 0)
+                    tray.fromDict(itemData)
+                    self.trays.append(tray)
+            
+            # 接続線を最上位に配置
             
             # 接続を作成（双方向）
             for connection in flowData["connections"]:
@@ -609,6 +1035,13 @@ class FlowEditor:
                 x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
                 line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
                 self.connectionLines.append((fromNode, toNode, line))
+            
+            # 接続線を最上位に配置
+            for _, _, line in self.connectionLines:
+                self.canvas.tag_raise(line)
+            
+            # トレイの外観を更新
+            self.updateAllTrayAppearance()
             
             # canvasサイズを調整
             self.adjustCanvasSize()
@@ -632,13 +1065,13 @@ class FlowEditor:
             
         # キャンバスをクリア
         self.canvas.delete("all")
-        # ノードと接続をクリア
+        # ノード、トレイ、接続をクリア
         self.nodes = []
+        self.trays = []
         self.connectionLines = []
         self.selectedNode = None
         # 選択ハイライトをクリア
-        if hasattr(self, 'selectedHighlight'):
-            delattr(self, 'selectedHighlight')
+        self.selectedHighlight = None
         
     def deleteNode(self, node):
         node.cleanUp()
@@ -679,8 +1112,7 @@ class FlowEditor:
         
         # 選択状態をクリア
         if self.selectedNode == node:
-            if hasattr(self, 'selectedHighlight'):
-                self.canvas.delete(self.selectedHighlight)
+            self.clearSelectedHighlight()
             self.selectedNode = None
         
         # 強調表示更新
@@ -700,9 +1132,7 @@ class FlowEditor:
     def highlightReprocessingNodes(self):
         """再実行されるノードを強調表示"""
         # 既存のハイライトをクリア
-        for highlight in self.reprocessingHighlights:
-            self.canvas.delete(highlight)
-        self.reprocessingHighlights = []
+        self.clearReprocessingHighlights()
         
         # 再実行が必要なノードを特定してハイライト
         for node in self.nodes:
@@ -770,6 +1200,7 @@ class FlowEditor:
         """キャッシュ統計を更新"""
         
         flowNodeCount = f"{len(self.nodes)}個"
+        trayCount = f"{len(self.trays)}個" if self.trays else ""
         
         cacheNodeCount = f"{self.getNodeCount()}個"
         
@@ -796,10 +1227,14 @@ class FlowEditor:
             storageStr = f"{int(storageSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
+        nodeInfo = f"Node: {flowNodeCount}"
+        if trayCount:
+            nodeInfo += f" Tray: {trayCount}"
+        
         if Debug.LEVEL_NONE < Debug.LEVEL:
-            self.usageLabel.config(text=f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount} Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} storage: {storageStr}")
+            self.usageLabel.config(text=f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount} {nodeInfo} Cache:{cacheNodeCount} {cacheStr} storage: {storageStr}")
         else:
-            self.usageLabel.config(text=f"Node: {flowNodeCount} Cache: {cacheNodeCount} {cacheStr} storage: {storageStr}")
+            self.usageLabel.config(text=f"{nodeInfo} Cache: {cacheNodeCount} {cacheStr} storage: {storageStr}")
         
         # 5秒後に再度更新
         self.root.after(5000, self.updateCacheStats)

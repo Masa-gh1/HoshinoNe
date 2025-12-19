@@ -189,10 +189,14 @@ class FlowNode(AbstractBaseClass):
             dy = abs(event.y - self.startY)
             if dx > 5 or dy > 5:
                 self.dragging = True
+                # ドラッグ開始時にハイライトを消す
+                self.editor.clearSelectedHighlight()
+                self.editor.clearReprocessingHighlights()
+                # ドラッグ開始時にノードをノード/トレイ群の最前に移動
+                self.editor._placeItemBeforeConnections(self.rect, self.label)
         
         if self.dragging:
             # ノードを移動
-            self.editor.unselectNode()
             dx = event.x - self.startX
             dy = event.y - self.startY
             self.canvas.move(self.rect, dx, dy)
@@ -206,7 +210,7 @@ class FlowNode(AbstractBaseClass):
             self.editor.adjustCanvasSize()
             
             self.editor.updateConnections()
-            self.editor.highlightReprocessingNodes()
+            # ドラッグ中はハイライトを再表示しない
     
     def onRelease(self, event):
         if hasattr(self, 'isDoubleClick') and self.isDoubleClick:
