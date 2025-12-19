@@ -82,11 +82,9 @@ class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeDisplayLevels(cls):
-        """display_levelsを計算"""
-        def compute(lazyFlowData):
-            # クリップ処理では元の範囲を保持
-            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            return {'display_levels': inputLevels} if inputLevels else None
-        return compute
+    @staticmethod
+    def _computeDisplayLevels(lazyFlowData):
+        # クリップ処理では元の範囲を保持
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+        return {'display_levels': inputLevels} if inputLevels else None
+ 

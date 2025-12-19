@@ -59,7 +59,7 @@ class NNBlockOperationNode(FlowNode):
             
             # ブロック単位で並列処理
             for block in inputData.iterateBlocks():
-                future = ProcessExecutorInNode .submit(self, self.processBlock, block)
+                future = ProcessExecutorInNode.submit(self, self.processBlock, block)
                 futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待つ

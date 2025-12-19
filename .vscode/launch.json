@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "env": {
                 "DEBUG_TEST_MODE": "1"
-                //                "PYTHONMALLOC":"malloc"
+//                "PYTHONMALLOC":"malloc"
             }
         }
     ]

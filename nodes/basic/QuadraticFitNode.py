@@ -21,8 +21,8 @@ class QuadraticFitNode(FlowNode):
     # ノード名
     name      = '2次関数近似'
     # 入出力タイプ
-    #ioType    = スーパークラスを継承
-    #outputCat = スーパークラスを継承
+    ioType    = _IO_TYPE_0N
+    outputCat = _OUT_CAT_AUX
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)

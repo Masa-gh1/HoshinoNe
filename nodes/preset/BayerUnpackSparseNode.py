@@ -39,8 +39,8 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
         lazyFlowData.addHeaderOperation('planes', self._computeHeaders)
         return lazyFlowData
     
-    @classmethod
-    def _bayerUnpackOperation(cls, flowData, planeIndex, x, y):
+    @staticmethod
+    def _bayerUnpackOperation(flowData, planeIndex, x, y):
         """ベイヤー分離操作（3プレーン、元サイズ、NaN埋め）"""
         block = flowData.getBlock(0, x, y)
         if not block or block.data is None:
@@ -79,12 +79,10 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeHeaders(cls):
+    @staticmethod
+    def _computeHeaders(lazyFlowData):
         """ヘッダー情報を計算"""
-        def compute(lazyFlowData):
-            return {
-                'mode': 'RGB',
-                'planes': ['R', 'G', 'B']
-            }
-        return compute
+        return {
+            'mode': 'RGB',
+            'planes': ['R', 'G', 'B']
+        }

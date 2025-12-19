@@ -83,42 +83,40 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
         return DataBlock(result, planeIndex, x, y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+    def _computeDisplayLevels(cls, lazyFlowData, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """display_levelsを計算"""
-        def compute(lazyFlowData):
-            if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
-                return None
-                
-            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            inputMin = inputLevels['min']
-            inputMax = inputLevels['exclusive_upper']
+        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
+            return None
             
-            if combinedAuxiliaryPolynomial:
-                mixs = []
-                for planeIndex in range(combinedAuxiliaryPolynomial.getPlaneCount()):
-                    polynomial = combinedAuxiliaryPolynomial.getBlock(planeIndex, 0, 0)
-                    width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    minValue, maxValue = cls.calculatePolynomialRange(polynomial.data, width, height)
-                    mixs.extend([inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue])
-                inputMin = min(mixs)
-                inputMax = max(mixs)
-            
-            if combinedAuxiliaryTable:
-                mixs = []
-                if 'display_levels' in combinedAuxiliaryTable.headers:
-                    minValue = combinedAuxiliaryTable.headers['display_levels']['min']
-                    maxValue = combinedAuxiliaryTable.headers['display_levels']['exclusive_upper']
-                else:
-                    minValue = combinedAuxiliaryTable.getMinValue()
-                    maxValue = combinedAuxiliaryTable.getMaxValue()
-                mixs = [inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue]
-                inputMin = min(mixs)
-                inputMax = max(mixs)
-            
-            return {
-                'display_levels': {
-                    'min'            : inputMin,
-                    'exclusive_upper': inputMax,
-                }
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+        inputMin = inputLevels['min']
+        inputMax = inputLevels['exclusive_upper']
+        
+        if combinedAuxiliaryPolynomial:
+            mixs = []
+            for planeIndex in range(combinedAuxiliaryPolynomial.getPlaneCount()):
+                polynomial = combinedAuxiliaryPolynomial.getBlock(planeIndex, 0, 0)
+                width, height = lazyFlowData.sourceFlowData.getDimensions()
+                minValue, maxValue = cls.calculatePolynomialRange(polynomial.data, width, height)
+                mixs.extend([inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue])
+            inputMin = min(mixs)
+            inputMax = max(mixs)
+        
+        if combinedAuxiliaryTable:
+            mixs = []
+            if 'display_levels' in combinedAuxiliaryTable.headers:
+                minValue = combinedAuxiliaryTable.headers['display_levels']['min']
+                maxValue = combinedAuxiliaryTable.headers['display_levels']['exclusive_upper']
+            else:
+                minValue = combinedAuxiliaryTable.getMinValue()
+                maxValue = combinedAuxiliaryTable.getMaxValue()
+            mixs = [inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue]
+            inputMin = min(mixs)
+            inputMax = max(mixs)
+        
+        return {
+            'display_levels': {
+                'min'            : inputMin,
+                'exclusive_upper': inputMax,
             }
-        return compute
+        }

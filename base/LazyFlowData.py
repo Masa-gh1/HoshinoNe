@@ -96,7 +96,7 @@ class LazyHeaderOperation:
         self.kwargs = kwargs
     
     def __call__(self, lazyFlowData):
-        return self.func(*self.args, **self.kwargs)(lazyFlowData)
+        return self.func(lazyFlowData, *self.args, **self.kwargs)
 
 ##### 以下サンプル実装
 class LazyOperations:

@@ -55,7 +55,7 @@ class CoalescingThreadPool:
             future.set_exception(e)
         finally:
             self._execute_next_task(resourceKey)
-
+    
     def _execute_next_task(self, resourceKey: Any):
         """次の待機タスクを実行"""
         with self._lock:

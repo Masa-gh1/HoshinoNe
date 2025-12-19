@@ -46,8 +46,8 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
 
         return lazyFlowData
     
-    @classmethod
-    def _bayerUnpackOperation(cls, flowData, planeIndex, x, y):
+    @staticmethod
+    def _bayerUnpackOperation(flowData, planeIndex, x, y):
         """ベイヤー分離操作（4プレーン、縦横半分）"""
         # 出力座標から入力座標を計算
         inputX = x * 2
@@ -98,15 +98,13 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeHeaders(cls):
+    @staticmethod
+    def _computeHeaders(lazyFlowData):
         """ヘッダー情報を計算"""
-        def compute(lazyFlowData):
-            sourceHeaders = lazyFlowData.sourceFlowData.headers
-            return {
-                'mode'  : 'RGBG',
-                'planes': ['R', 'G1', 'B', 'G2'],
-                'width' : sourceHeaders['width'] // 2,
-                'height': sourceHeaders['height'] // 2
-            }
-        return compute
+        sourceHeaders = lazyFlowData.sourceFlowData.headers
+        return {
+            'mode'  : 'RGBG',
+            'planes': ['R', 'G1', 'B', 'G2'],
+            'width' : sourceHeaders['width'] // 2,
+            'height': sourceHeaders['height'] // 2
+        }

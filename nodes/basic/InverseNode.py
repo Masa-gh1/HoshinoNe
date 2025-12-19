@@ -34,8 +34,8 @@ class InverseNode(LazyNNOperationNode):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    @classmethod
-    def _inverseOperation(cls, flowData, planeIndex, x, y):
+    @staticmethod
+    def _inverseOperation(flowData, planeIndex, x, y):
         """逆数操作"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -47,27 +47,25 @@ class InverseNode(LazyNNOperationNode):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeDisplayLevels(cls):
+    @staticmethod
+    def _computeDisplayLevels(lazyFlowData):
         """display_levelsを計算"""
-        def compute(lazyFlowData):
-            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                return None
-                
-            inputMin = inputLevels['min']
-            inputMax = inputLevels['exclusive_upper']
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+        if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+            return None
             
-            # 逆数変換: [a, b) → [1/b, 1/a) (ゼロを除く)
-            if inputMin > 0 or inputMax < 0:
-                # ゼロを含まない場合
-                return {
-                    'display_levels': {
-                        'min': 1.0 / inputMax,
-                        'exclusive_upper': 1.0 / inputMin
-                    }
+        inputMin = inputLevels['min']
+        inputMax = inputLevels['exclusive_upper']
+        
+        # 逆数変換: [a, b) → [1/b, 1/a) (ゼロを除く)
+        if inputMin > 0 or inputMax < 0:
+            # ゼロを含まない場合
+            return {
+                'display_levels': {
+                    'min': 1.0 / inputMax,
+                    'exclusive_upper': 1.0 / inputMin
                 }
-            else:
-                # ゼロを含む場合は元の値を保持
-                return {'display_levels': inputLevels}
-        return compute
+            }
+        else:
+            # ゼロを含む場合は元の値を保持
+            return {'display_levels': inputLevels}

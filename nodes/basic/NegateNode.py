@@ -34,8 +34,8 @@ class NegateNode(LazyNNOperationNode):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    @classmethod
-    def _negateOperation(cls, flowData, planeIndex, x, y):
+    @staticmethod
+    def _negateOperation(flowData, planeIndex, x, y):
         """符号反転操作"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -44,21 +44,19 @@ class NegateNode(LazyNNOperationNode):
         result = -block.data
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeDisplayLevels(cls):
+    @staticmethod
+    def _computeDisplayLevels(lazyFlowData):
         """display_levelsを計算"""
-        def compute(lazyFlowData):
-            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                return None
-                
-            inputMin = inputLevels['min']
-            inputMax = inputLevels['exclusive_upper']
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+        if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+            return None
             
-            return {
-                'display_levels': {
-                    'min': -inputMax,
-                    'exclusive_upper': -inputMin
-                }
+        inputMin = inputLevels['min']
+        inputMax = inputLevels['exclusive_upper']
+        
+        return {
+            'display_levels': {
+                'min': -inputMax,
+                'exclusive_upper': -inputMin
             }
-        return compute
+        }

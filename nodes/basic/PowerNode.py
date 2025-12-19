@@ -87,32 +87,30 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
         return DataBlock( result, planeIndex, x, y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial):
+    def _computeDisplayLevels(cls, lazyFlowData, combinedAuxiliaryPolynomial):
         """display_levelsを計算"""
-        def compute(lazyFlowData):
-            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                return None
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+        if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+            return None
+            
+        inputMin = inputLevels['min']
+        inputMax = inputLevels['exclusive_upper']
+        
+        if combinedAuxiliaryPolynomial:
+            polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
+            if polynomial:
+                width, height = lazyFlowData.sourceFlowData.getDimensions()
+                expMin, expMax = cls.calculatePolynomialRange(polynomial.data, width, height)
                 
-            inputMin = inputLevels['min']
-            inputMax = inputLevels['exclusive_upper']
-            
-            if combinedAuxiliaryPolynomial:
-                polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
-                if polynomial:
-                    width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    expMin, expMax = cls.calculatePolynomialRange(polynomial.data, width, height)
-                    
-                    # 冪乗の範囲計算（実数部のみ）
-                    powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax),
-                             np.real(inputMax ** expMin), np.real(inputMax ** expMax)]
-                    return {
-                        'display_levels': {
-                            'min': min(powers),
-                            'exclusive_upper': max(powers)
-                        }
+                # 冪乗の範囲計算（実数部のみ）
+                powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax),
+                            np.real(inputMax ** expMin), np.real(inputMax ** expMax)]
+                return {
+                    'display_levels': {
+                        'min': min(powers),
+                        'exclusive_upper': max(powers)
                     }
-            
-            # 複雑な場合は元のdisplay_levelsをそのまま返す
-            return {'display_levels': inputLevels}
-        return compute
+                }
+        
+        # 複雑な場合は元のdisplay_levelsをそのまま返す
+        return {'display_levels': inputLevels}

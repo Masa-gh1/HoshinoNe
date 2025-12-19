@@ -155,5 +155,5 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                 minW = min(result.shape[1], coeffBlock.data.shape[1])
                 result[:minH, :minW] += coeffBlock.data[:minH, :minW]
         
-        return DataBlock(result, planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, 0, 0)
     

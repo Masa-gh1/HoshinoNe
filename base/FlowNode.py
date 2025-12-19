@@ -53,8 +53,8 @@ class FlowNode(AbstractBaseClass):
         self.view = FlowNodeView( self.majorType, self.ioType, self.outputCat, self.name, canvas, editor, x, y, **kwargs)
 
         self.outputNodes = [] # 接続先ノードの一覧
-        self.inputNodes  = []  # 入力元ノードの一覧
-        self.flowDatas   = []   # 処理結果データ
+        self.inputNodes  = [] # 入力元ノードの一覧
+        self.flowDatas   = [] # 処理結果データ
 
         self._lastInputHash  = None
         self._lastConfigHash = None
