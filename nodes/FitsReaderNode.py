@@ -109,19 +109,19 @@ class FitsReaderNode(BaseReaderNode):
                 else:
                     raise Exception(f"2D/3D画像データのみ対応しています (現在: {len(data.shape)}D)")
                 
-                # データ型に応じてdisplay_levelsを設定
+                # データ型に応じてdisplay_levelsを設定 - 半開区間 [min, exclusive_upper)
                 if data.dtype == np.uint8:
-                    display_levels = {'min': 0, 'max': 255}
+                    display_levels = {'min': 0, 'exclusive_upper': 256}
                 elif data.dtype == np.uint16:
-                    display_levels = {'min': 0, 'max': 65535}
+                    display_levels = {'min': 0, 'exclusive_upper': 65536}
                 elif data.dtype == np.int16:
-                    display_levels = {'min': -32768, 'max': 32767}
+                    display_levels = {'min': -32768, 'exclusive_upper': 32768}
                 elif data.dtype == np.int32:
-                    display_levels = {'min': int(data.min()), 'max': int(data.max())}
+                    display_levels = {'min': int(data.min()), 'exclusive_upper': int(data.max()) + 1}
                 elif data.dtype in [np.float32, np.float64]:
-                    display_levels = {'min': float(data.min()), 'max': float(data.max())}
+                    display_levels = {'min': float(data.min()), 'exclusive_upper': float(data.max())}
                 else:
-                    display_levels = {'min': float(data.min()), 'max': float(data.max())}
+                    display_levels = {'min': float(data.min()), 'exclusive_upper': float(data.max())}
                 
                 # FITSヘッダー情報を抽出
                 fits_header = {}

@@ -143,14 +143,90 @@ class BaseWriterNode(FlowNode):
             tuple: (filePath, fileSize, planeCount, width, height) or None
         """
         pass
+
+class BaseWriterSettingsDialog(tk.Toplevel):
+    def __init__(self, parent, node):
+        super().__init__(parent)
+        self.node = node
+        
+        self.title(f"{node.text}設定")
+        self.geometry("500x300")
+        
+        # メインフレーム
+        mainFrame = tk.Frame(self)
+        mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # 出力ファイルパス
+        pathFrame = tk.Frame(mainFrame)
+        pathFrame.pack(fill=tk.X, pady=5)
+        
+        tk.Label(pathFrame, text="出力ファイル:", font=("Arial", 10, "bold")).pack(anchor="w")
+        
+        fileFrame = tk.Frame(pathFrame)
+        fileFrame.pack(fill=tk.X, pady=2)
+        
+        self.pathVar = tk.StringVar(value=self.node.outputFilePath)
+        pathEntry = tk.Entry(fileFrame, textvariable=self.pathVar, state="readonly")
+        pathEntry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        tk.Button(fileFrame, text="参照", command=self.browseFile).pack(side=tk.RIGHT, padx=(5, 0))
+        
+        # カスタム設定項目
+        customFrame = self.createCustomSettings(mainFrame)
+        if customFrame:
+            customFrame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        
+        # ボタン
+        buttonFrame = tk.Frame(self)
+        buttonFrame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
+        
+        tk.Button(buttonFrame, text="適用", command=self.onApply).pack(side=tk.LEFT, padx=5)
+        tk.Button(buttonFrame, text="閉じる", command=self.destroy).pack(side=tk.LEFT, padx=5)
+        
+        self.protocol("WM_DELETE_WINDOW", self.onClose)
+    
+    def browseFile(self):
+        dialog = filedialog.asksaveasfilename(
+            title=f"{self.node.text} - 出力ファイルを選択",
+            filetypes=self.node.outputFileTypes,
+            defaultextension=self.node.defaultOutputExtension
+        )
+        if dialog:
+            self.pathVar.set(dialog)
+    
+    def createCustomSettings(self, parent):
+        """カスタム設定項目を作成（サブクラスでオーバーライド）
+        
+        Returns:
+            作成したフレーム、またはNone
+        """
+        return None
+    
+    def customOnApply(self):
+        """カスタム設定の適用（サブクラスでオーバーライド）"""
+        pass
+    
+    def onApply(self):
+        # 出力ファイルパスの更新
+        self.node.setOutputFilePath(self.pathVar.get())
+        
+        # カスタム設定の適用
+        self.customOnApply()
+        
+        self.node.updateNodeText()
+        
+        newHash = self.node.getConfigHash()
+        if newHash != self.node._lastConfigHash:
+            self.node.editor.onNodeConfigChanged(self.node)
+    
+    def onClose(self):
+        if hasattr(self.node, '_settings_dialog'):
+            delattr(self.node, '_settings_dialog')
+        self.destroy()
     
     def onEdit(self):
         """Settings dialogを開く"""
-        dialog = filedialog.asksaveasfilename(
-            title=f"{self.text} - 出力ファイルを選択",
-            filetypes=self.outputFileTypes,
-            defaultextension=self.defaultOutputExtension
-        )
-        if dialog:
-            self.setOutputFilePath(dialog)
-            self.updateNodeText()
+        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
+            self._settings_dialog.lift()
+        else:
+            self._settings_dialog = BaseWriterSettingsDialog(self.editor.root, self)

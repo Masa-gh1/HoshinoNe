@@ -8,6 +8,7 @@ import hashlib
 import tkinter as tk
 from tkinter import simpledialog
 from base import FlowNode, FlowData, DataBlock
+from utils.interval_helper import createHalfOpenEnd
 
 class CoefficientsNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -125,6 +126,10 @@ class CoefficientsNode(FlowNode):
         
         self.flowDatas = [outputFlowData]
         self.reportProgress(context, "完了")
+        
+        minValue = outputFlowData.getMinValue()
+        maxValue = outputFlowData.getMaxValue()
+        outputFlowData.headers['display_levels'] = {'min': minValue, 'exclusive_upper': createHalfOpenEnd( minValue, maxValue)}
     
     def getConfigHash(self):
         coeffStr = str(sorted(self.coefficients.items()))

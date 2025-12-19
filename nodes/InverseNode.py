@@ -5,6 +5,7 @@ DedupNode class
 '''
 
 from base import NNBlockOperationNode, DataBlock
+from utils.interval_helper import createHalfOpenEnd
 import numpy as np
 
 class InverseNode(NNBlockOperationNode):
@@ -13,6 +14,24 @@ class InverseNode(NNBlockOperationNode):
     
     def getColor(self):
         return self._color_func
+    
+    def getDisplayLevels(self, inputFlowData):
+        """入力データの逆数変換されたdisplay_levelsを返す"""
+        inputLevels = inputFlowData.headers['display_levels']
+        inputMin = inputLevels['min']
+        inputMax = inputLevels['exclusive_upper']
+        
+        # 逆数変換: [a, b) → [1/b, 1/a) (ゼロを除く)
+        if inputMin > 0 or inputMax < 0:
+            # ゼロを含まない場合
+            outputMin = 1.0 / inputMax
+            outputMax = 1.0 / inputMin
+            
+            return {
+                'min': outputMin,
+                'exclusive_upper': createHalfOpenEnd(outputMin, outputMax)
+            }
+        return None
     
     def processBlock(self, block):
         """単一ブロックの逆数処理"""

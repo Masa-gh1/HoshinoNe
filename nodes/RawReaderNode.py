@@ -204,7 +204,8 @@ class RawReaderNode(BaseReaderNode):
                 # 元RAWファイルのbit深度を使用してdisplay_levelsを設定
                 black_level = min(raw.black_level_per_channel) if raw.black_level_per_channel else 0
                 white_level = raw.white_level
-                display_levels = {'min': black_level, 'max': white_level}
+                # 半開区間 [black_level, white_level) で量子化範囲を設定
+                display_levels = {'min': black_level, 'exclusive_upper': white_level}
                 
                 headers = {
                     'type': 'image',

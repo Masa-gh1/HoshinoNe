@@ -11,9 +11,9 @@ from .BaseReaderNode import BaseReaderNode
 from .BaseWriterNode import BaseWriterNode
 from .N1BlockOperationNode import N1BlockOperationNode
 from .NNBlockOperationNode import NNBlockOperationNode
-from .ArithmeticOperationNode import ArithmeticOperationNode
 from .ConfigurableNode import ConfigurableNode
+from .TensorOperationMixin import TensorOperationMixin
 
 __all__ = ['DataBlock', 'FlowData', 'FlowNode', 'BaseReaderNode', 'BaseWriterNode', 
-           'N1BlockOperationNode', 'NNBlockOperationNode', 'ArithmeticOperationNode',
-           'ConfigurableNode']
+           'N1BlockOperationNode', 'NNBlockOperationNode',
+           'ConfigurableNode', 'TensorOperationMixin']

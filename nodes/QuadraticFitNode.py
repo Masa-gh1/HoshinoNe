@@ -34,6 +34,7 @@ class QuadraticFitNode(FlowNode):
         
         # planesヘッダーからプレーン情報を取得
         planeNames = flowData.headers.get('planes', ['L']) if flowData.headers else ['L']
+        displayLevels = flowData.headers['display_levels']
         actualPlaneCount = len(planeNames)
         
         # データを読み込み
@@ -88,6 +89,7 @@ class QuadraticFitNode(FlowNode):
             'columns': ['x^0', 'x^1', 'x^2'],
             'lines': ['y^0', 'y^1', 'y^2'],
             'planes': planeNames,
+            'display_levels': displayLevels,
             'max_orders': [2, 2],
             'equations': equations
         }

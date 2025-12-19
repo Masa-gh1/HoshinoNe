@@ -1,16 +1,17 @@
 '''
-MergeNode class
+SumNode - 統合加算ノード（N→1）
 
 @author: Masakazu Inoue
 '''
 
-from base import N1BlockOperationNode, DataBlock
+from base import N1BlockOperationNode, TensorOperationMixin, DataBlock
 from config import BLOCK_SIZE
 import numpy as np
 
-class AdditionNode(N1BlockOperationNode):
+class SumNode(N1BlockOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "addition", "加算")
+        super().__init__(canvas, editor, x, y, "sum", "総和")
+        self._combinedTensor = None
     
     def getColor(self):
         return self._color_op
@@ -26,6 +27,27 @@ class AdditionNode(N1BlockOperationNode):
     def getResultDimensions(self, inputDatas):
         """加算では全入力データを包含するサイズを使用"""
         return self.getUnionDimensions(inputDatas)
+    
+    def getDisplayLevels(self, inputDatas):
+        """入力データの加算されたdisplay_levelsを返す"""
+        # 全入力データのdisplay_levelsを収集
+        allLevels = []
+        for data in inputDatas:
+            if data.headers and 'display_levels' in data.headers:
+                levels = data.headers['display_levels']
+                allLevels.append((levels['min'], levels['exclusive_upper']))
+        
+        if not allLevels:
+            return None
+        
+        # 加算の場合：全ての範囲の合計
+        minSum = sum(level[0] for level in allLevels)
+        maxSum = sum(level[1] for level in allLevels)
+        
+        return {
+            'min': minSum,
+            'exclusive_upper': maxSum
+        }
     
     def processBlock(self, block, inputDatas):
         """単一ブロックの加算処理"""
@@ -45,7 +67,10 @@ class AdditionNode(N1BlockOperationNode):
         
         # 全てtensorの場合はtensor加算
         if len(tensorDatas) == len(inputDatas):
-            return self._processTensorAddition(block, tensorDatas)
+            if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
+                self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
+            tensorBlock = self._combinedTensor.getBlock(block.planeIndex, block.x, block.y)
+            return tensorBlock if tensorBlock else DataBlock(block.planeIndex, block.x, block.y, np.zeros((1, 1)))
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -63,9 +88,12 @@ class AdditionNode(N1BlockOperationNode):
                     result[:minH, :minW] += inputBlock.data[:minH, :minW]
             
             # tensorデータの加算
-            for tensorData in tensorDatas:
-                tensorValues = self._calculateTensorBlock(tensorData, planeIdx, x, y, result.shape)
-                result += tensorValues
+            if tensorDatas:
+                if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
+                    self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
+                if self._combinedTensor:
+                    tensorValues = self.calculateTensorBlock(self._combinedTensor, planeIdx, x, y, result.shape)
+                    result += tensorValues
             
             return DataBlock(planeIdx, x, y, result)
     
@@ -92,37 +120,3 @@ class AdditionNode(N1BlockOperationNode):
         
         return DataBlock(planeIdx, block.x, block.y, result)
     
-    def _calculateTensorBlock(self, tensorData, planeIdx, blockX, blockY, blockShape):
-        """テンソルデータからブロック内の各座標に対応する値を計算"""
-        width, height = tensorData.getDimensions()
-        planeCount = tensorData.getPlaneCount()
-        if width < 1 or height < 1 or planeIdx >= planeCount:
-            return np.zeros(blockShape)
-        
-        # 指定プレーンの係数行列を取得
-        coeffBlock = tensorData.getBlock(planeIdx, 0, 0)
-        if not coeffBlock:
-            return np.zeros(blockShape)
-        
-        coeffMatrix = coeffBlock.data
-        maxOrderY, maxOrderX = coeffMatrix.shape
-        
-        # ブロック内の座標配列を作成
-        blockHeight, blockWidth = blockShape
-        by_coords, bx_coords = np.meshgrid(range(blockHeight), range(blockWidth), indexing='ij')
-        x_coords = blockX + bx_coords
-        y_coords = blockY + by_coords
-        
-        # numpy配列演算で多項式計算
-        result = np.zeros(blockShape)
-        y_power = np.ones_like(x_coords, dtype=np.float64)
-        for j in range(maxOrderY):
-            x_power = np.ones_like(x_coords, dtype=np.float64)
-            for i in range(maxOrderX):
-                coeff = coeffMatrix[j, i]
-                if coeff != 0:
-                    result += coeff * x_power * y_power
-                x_power *= x_coords
-            y_power *= y_coords
-        
-        return result

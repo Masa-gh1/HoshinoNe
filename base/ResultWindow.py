@@ -10,6 +10,7 @@ import traceback
 import io
 import tkinter as tk
 from tkinter import ttk
+from utils.interval_helper import createHalfOpenEnd
 
 try:
     import numpy as np
@@ -327,22 +328,24 @@ class ResultWindow:
         planeCount = flowData.getPlaneCount()
         displayLevels = headers.get('display_levels')
         displayLevelMin = displayLevels["min"]
-        displayLevelMax = displayLevels["max"]
+        displayLevelEnd = displayLevels["exclusive_upper"]
         
         # パーセンタイルベースの適応的スケーリング
         minValue = flowData.getMinValue()
         maxValue = flowData.getMaxValue()
+        # 半開区間用の終端値を作成
+        allLevelEnd = createHalfOpenEnd(minValue, maxValue)
         adpLevelMin = flowData.getPercentile(1)
-        adpLevelMax = flowData.getPercentile(99)
+        adpLevelEnd = flowData.getPercentile(99)
         
         content = []
         
         text = "\n"
         text += f"Mode: {mode}\n"
         text += f"Planes: {', '.join(planes)}\n"
-        text += f"Display Levels: {displayLevelMin} - {displayLevelMax}\n"
-        text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelMax:.3f}\n"
-        text += f"All levels: {minValue:.3f} - {maxValue:.3f}\n"
+        text += f"Display Levels: {displayLevelMin} - {displayLevelEnd}\n"
+        text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
+        text += f"All levels: [{minValue:.3f}, {allLevelEnd:.3f})\n"
         content.append(text)
         
         # ヒストグラムグラフを作成
@@ -366,7 +369,7 @@ class ResultWindow:
                 histogram_data = flowData.getHistogram(log_scale=("log"==ax_xScale))
                 total_samples = 0
                 
-                if "log" == ax_xScale and adpLevelMax > adpLevelMin:
+                if "log" == ax_xScale and adpLevelEnd > adpLevelMin:
                     # 正規化パラメータ
                     xScale = 0.9 / (maxValue - minValue)
                     xOffset = -minValue + 0.1 / xScale
@@ -425,10 +428,10 @@ class ResultWindow:
 
                 # 表示レベルを設定
                 if "display" == displayLevels:
-                    scale = 255.0 / (displayLevelMax - displayLevelMin)
+                    scale = 255.0 / (displayLevelEnd - displayLevelMin)
                     offset = displayLevelMin
                 elif "adaptive" == displayLevels:
-                    scale = 255.0 / (adpLevelMax - adpLevelMin)
+                    scale = 255.0 / (adpLevelEnd - adpLevelMin)
                     offset = adpLevelMin
                 elif "all" == displayLevels:
                     scale = 255.0 / (maxValue - minValue)

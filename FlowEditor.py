@@ -246,9 +246,9 @@ class FlowEditor:
             self.canvas.delete(self.selectedHighlight)
         
         if self.selectedNode and self.selectedNode != node:
-            # 既存の接続をチェック
+            # 既存の接続をチェック（順方向と逆方向）
             if node in self.selectedNode.outputNodes:
-                # 接続を削除
+                # 順方向接続を削除
                 self.selectedNode.outputNodes.remove(node)
                 node.inputNodes.remove(self.selectedNode)
                 # 接続線を削除
@@ -262,8 +262,23 @@ class FlowEditor:
                 self.resultText.insert(tk.END, f"接続削除: {self.selectedNode.text} → {node.text}\n")
                 self.resultText.see(tk.END)
                 self.statusLabel.config(text=f"接続削除: {self.selectedNode.text} → {node.text}")
+            elif self.selectedNode in node.outputNodes:
+                # 逆方向接続を削除
+                node.outputNodes.remove(self.selectedNode)
+                self.selectedNode.inputNodes.remove(node)
+                # 接続線を削除
+                for i, (f, t, l) in enumerate(self.connectionLines):
+                    if f == node and t == self.selectedNode:
+                        self.canvas.delete(l)
+                        del self.connectionLines[i]
+                        break
+                # 削除情報を表示
+                self.resultText.delete(1.0, tk.END)
+                self.resultText.insert(tk.END, f"逆向き接続削除: {node.text} → {self.selectedNode.text}\n")
+                self.resultText.see(tk.END)
+                self.statusLabel.config(text=f"逆向き接続削除: {node.text} → {self.selectedNode.text}")
             else:
-                # 接続を作成
+                # 新規接続を作成
                 self.selectedNode.outputNodes.append(node)
                 node.inputNodes.append(self.selectedNode)
                 x1, y1, x2, y2 = self._getConnectionPoints(self.selectedNode, node)

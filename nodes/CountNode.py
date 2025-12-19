@@ -27,6 +27,16 @@ class CountNode(N1BlockOperationNode):
         """カウントでは全入力データを包含するサイズを使用"""
         return self.getUnionDimensions(inputDatas)
     
+    def getDisplayLevels(self, inputDatas):
+        """入力データ数に基づくdisplay_levelsを返す"""
+        # 入力データ数をカウント
+        dataCount = len(inputDatas)
+        
+        return {
+            'min': 0.0,
+            'exclusive_upper': float(dataCount)
+        }
+    
     def processBlock(self, block, inputDatas):
         """単一ブロックのカウント処理"""
         planeIdx = block.planeIndex

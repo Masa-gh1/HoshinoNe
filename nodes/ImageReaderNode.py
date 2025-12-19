@@ -75,13 +75,13 @@ class ImageReaderNode(BaseReaderNode):
         elif 'F'     == img.mode: plane_names = ['L']
         else                    : plane_names = [f'{img.mode}_{i}' for i in range(len(img.getbands()))]
         
-        # bit深度を検出してdisplay_levelsを設定
+        # bit深度を検出してdisplay_levelsを設定 - 半開区間 [min, exclusive_upper)
         if   img.mode in ['L', 'LA', 'RGB', 'RGBA', 'P', 'CMYK', 'YCbCr', 'HSV', 'LAB']: 
-                                            display_levels = {'min': 0,   'max':        255}  # 8bit
-        elif img.mode in ['I;16', 'I;16B']: display_levels = {'min': 0,   'max':      65535}  # 16bit
-        elif 'F' == img.mode              : display_levels = {'min': 0.0, 'max':        1.0}  # 浮動小数点
-        elif 'I' == img.mode              : display_levels = {'min': 0,   'max': 2147483647}  # 32bit int
-        else                              : display_levels = {'min': 0,   'max':        255}  # デフォルト
+                                            display_levels = {'min': 0,   'exclusive_upper':        256}  # 8bit
+        elif img.mode in ['I;16', 'I;16B']: display_levels = {'min': 0,   'exclusive_upper':      65536}  # 16bit
+        elif 'F' == img.mode              : display_levels = {'min': 0.0, 'exclusive_upper':        1.0}  # 浮動小数点
+        elif 'I' == img.mode              : display_levels = {'min': 0,   'exclusive_upper': 2147483648}  # 32bit int
+        else                              : display_levels = {'min': 0,   'exclusive_upper':        256}  # デフォルト
         
         # EXIF情報を取得
         exif_info = getExif(filePath)

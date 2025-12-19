@@ -12,6 +12,10 @@ from utils.ThreadPool import ProcessExecutor
 
 class N1BlockOperationNode(FlowNode):
     """データ入出力 N:1 のブロック単位計算ノードの基底クラス"""
+    
+    def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
+        super().__init__( canvas, editor, x, y, nodeType, text, **kwargs)
+        self._baseDataIndex = None
 
     def getBaseDataIndex(self, inputDatas):
         """基準データのインデックスを返す（サブクラスでオーバーライド可能）"""
@@ -19,8 +23,9 @@ class N1BlockOperationNode(FlowNode):
     
     def getResultDimensions(self, inputDatas):
         """結果画像のサイズを決定（サブクラスでオーバーライド可能）"""
-        baseIndex = self.getBaseDataIndex(inputDatas)
-        return inputDatas[baseIndex].getDimensions()
+        if self._baseDataIndex is None:
+            self._baseDataIndex = self.getBaseDataIndex(inputDatas)
+        return inputDatas[self._baseDataIndex].getDimensions()
     
     def getUnionDimensions(self, inputDatas):
         """全入力データを包含する最大サイズを計算"""
@@ -37,14 +42,21 @@ class N1BlockOperationNode(FlowNode):
             inputDatas.extend(node.flowDatas)
         
         if inputDatas:
-            # 基準データとサイズを決定
-            baseIndex = self.getBaseDataIndex(inputDatas)
-            baseData = inputDatas[baseIndex]
+            # 基準データとサイズを決定（キャッシュを使用）
+            if self._baseDataIndex is None:
+                self._baseDataIndex = self.getBaseDataIndex(inputDatas)
+            baseData = inputDatas[self._baseDataIndex]
             width, height = self.getResultDimensions(inputDatas)
             
-            # 結果用のFlowDataを初期化
-            flowData = FlowData(baseData.headers)
+            # 結果用のFlowDataを初期化（headersをコピー）
+            headers = baseData.headers.copy() if baseData.headers else {}
+            flowData = FlowData(headers)
             flowData.setDimensions(width, height)
+            
+            # 入力データからdisplay_levelsを計算して設定
+            displayLevels = self.getDisplayLevels(inputDatas)
+            if displayLevels and flowData.headers:
+                flowData.headers['display_levels'] = displayLevels
             
             # ブロック単位で並列処理
             futures = []
@@ -65,6 +77,17 @@ class N1BlockOperationNode(FlowNode):
             self.flowDatas = []
         
         self.reportProgress(context, "完了")
+    
+    def getDisplayLevels(self, inputDatas):
+        """入力データから出力のdisplay_levelsを計算（サブクラスでオーバーライド）
+        
+        Args:
+            inputDatas: 入力FlowDataのリスト
+            
+        Returns:
+            display_levelsの辞書、またはNone
+        """
+        return None
     
     @abstractmethod
     def processBlock(self, block, inputDatas):

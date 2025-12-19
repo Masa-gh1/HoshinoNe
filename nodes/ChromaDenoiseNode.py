@@ -127,15 +127,24 @@ class ChromaDenoiseNode(FlowNode):
     
     def _denoise_color_image(self, rgb_image):
         """色ノイズ除去処理"""
+        # 入力範囲を検出して0.0-1.0に正規化
+        input_min = rgb_image.min()
+        input_max = rgb_image.max()
+        
+        if input_max > input_min:
+            rgb_normalized = (rgb_image - input_min) / (input_max - input_min)
+        else:
+            rgb_normalized = rgb_image.copy()
+        
         # 色空間変換
         if self.colorspace == "Lab":
-            converted = self._rgb_to_lab(rgb_image)
+            converted = self._rgb_to_lab(rgb_normalized)
         elif self.colorspace == "YUV":
-            converted = self._rgb_to_yuv(rgb_image)
+            converted = self._rgb_to_yuv(rgb_normalized)
         elif self.colorspace == "HSV":
-            converted = self._rgb_to_hsv(rgb_image)
+            converted = self._rgb_to_hsv(rgb_normalized)
         else:
-            converted = rgb_image.copy()
+            converted = rgb_normalized.copy()
         
         # エッジマスク作成（エッジ保護が有効な場合）
         edge_mask = None
@@ -174,7 +183,11 @@ class ChromaDenoiseNode(FlowNode):
         else:
             result = denoised
         
-        return np.clip(result, 0, 255)
+        # 元の入力範囲に戻す
+        if input_max > input_min:
+            result = result * (input_max - input_min) + input_min
+        
+        return result
     
     def _create_edge_mask(self, luma):
         """エッジマスクを作成"""
@@ -206,8 +219,8 @@ class ChromaDenoiseNode(FlowNode):
     
     def _rgb_to_lab(self, rgb):
         """RGB to Lab変換（簡易版）"""
-        # 正規化
-        rgb_norm = rgb / 255.0
+        # 入力は既に0.0-1.0に正規化済み
+        rgb_norm = rgb
         
         # sRGB to XYZ
         xyz = np.zeros_like(rgb_norm)
@@ -241,7 +254,7 @@ class ChromaDenoiseNode(FlowNode):
         rgb[:,:,1] = -0.969256 * xyz[:,:,0] + 1.875992 * xyz[:,:,1] + 0.041556 * xyz[:,:,2]
         rgb[:,:,2] = 0.055648 * xyz[:,:,0] - 0.204043 * xyz[:,:,1] + 1.057311 * xyz[:,:,2]
         
-        return np.clip(rgb * 255.0, 0, 255)
+        return np.clip(rgb, 0, 1)
     
     def _rgb_to_yuv(self, rgb):
         """RGB to YUV変換"""
@@ -257,11 +270,12 @@ class ChromaDenoiseNode(FlowNode):
         rgb[:,:,0] = yuv[:,:,0] + 1.140 * yuv[:,:,2]  # R
         rgb[:,:,1] = yuv[:,:,0] - 0.394 * yuv[:,:,1] - 0.581 * yuv[:,:,2]  # G
         rgb[:,:,2] = yuv[:,:,0] + 2.032 * yuv[:,:,1]  # B
-        return np.clip(rgb, 0, 255)
+        return np.clip(rgb, 0, 1)
     
     def _rgb_to_hsv(self, rgb):
         """RGB to HSV変換"""
-        rgb_norm = rgb / 255.0
+        # 入力は既に半開区間 [0.0, 1.0) に正規化済み
+        rgb_norm = rgb
         hsv = np.zeros_like(rgb_norm)
         
         max_val = np.max(rgb_norm, axis=2)
@@ -294,11 +308,12 @@ class ChromaDenoiseNode(FlowNode):
         h[h < 0] += 1.0
         hsv[:,:,0] = h
         
-        return hsv * 255.0
+        return hsv
     
     def _hsv_to_rgb(self, hsv):
         """HSV to RGB変換"""
-        hsv_norm = hsv / 255.0
+        # 入力は既に0.0-1.0に正規化済み
+        hsv_norm = hsv
         h, s, v = hsv_norm[:,:,0], hsv_norm[:,:,1], hsv_norm[:,:,2]
         
         h = h * 6.0
@@ -328,7 +343,7 @@ class ChromaDenoiseNode(FlowNode):
         idx = (i % 6) == 5
         rgb[idx] = np.stack([v[idx], p[idx], q[idx]], axis=-1)
         
-        return np.clip(rgb * 255.0, 0, 255)
+        return np.clip(rgb, 0, 1)
     
     def _create_result_flowdata(self, original_flowdata, denoised_rgb):
         """結果FlowDataを作成"""

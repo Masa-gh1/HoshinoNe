@@ -6,7 +6,9 @@ matplotlib==3.10.7  # グラフ描画（ResultWindow, ToneCurveNode設定画面�
 pillow==12.0.0  # 画像読み込み・書き出し（ResultWindow, ImageReaderNode, ImageWriterNode）
 rawpy==0.25.1  # RAW画像読み込み（RawReaderNode）
 astropy==7.1.1  # FITS天体画像読み込み（FitsReaderNode）
-scipy==1.16.3  # 科学計算・補間・スプライン（ToneCurveNode）
+scipy==1.16.3  # 科学計算・補間・スプライン（ToneCurveNode, ChromaDenoiseNode, WaveletDenoiseNode）
+PyWavelets==1.9.0  # ウェーブレット変換（WaveletDenoiseNode）
+scikit-image==0.25.2  # 画像処理・モルフォロジー（WaveletDenoiseNode）
 ExifRead==3.5.1  # EXIF情報読み込み補完（utils/exif_helper.py）
 
 # 依存によるインストール

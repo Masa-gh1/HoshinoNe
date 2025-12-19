@@ -6,9 +6,11 @@ NodeFactory class
 
 from .FileReaderNode import FileReaderNode
 from .FileWriterNode import FileWriterNode
-from .AdditionNode import AdditionNode
+from .SumNode import SumNode
 from .NegateNode import NegateNode
-from .MultiplicationNode import MultiplicationNode
+from .ProductNode import ProductNode
+from .OffsetNode import OffsetNode
+from .ScaleNode import ScaleNode
 from .InverseNode import InverseNode
 from .ImageReaderNode import ImageReaderNode
 from .ImageWriterNode import ImageWriterNode
@@ -23,10 +25,12 @@ from .ChromaDenoiseNode import ChromaDenoiseNode
 
 class NodeFactory:
     nodeClasses = {
-        'addition': AdditionNode,
-        'multiplication': MultiplicationNode,
+        'offset': OffsetNode,
+        'scale': ScaleNode,
         'inverse': InverseNode,
         'negate': NegateNode,
+        'sum': SumNode,
+        'product': ProductNode,
         'count': CountNode,
         #####
         'coefficients': CoefficientsNode,
@@ -46,11 +50,13 @@ class NodeFactory:
     }
     
     nodeLabels = [
-        ('addition'      , '加算'),
-        ('multiplication', '乗算'),
-        ('negate'        , '符号反転'),
-        ('inverse'       , '逆数'),
-        ('count'         , 'カウント'),
+        ('offset'        , 'オフセット(N:N)'),
+        ('scale'         , 'スケール(N:N)'),
+        ('negate'        , '符号反転(N:N)'),
+        ('inverse'       , '逆数(N:N)'),
+        ('sum'           , '総和(N:1)'),
+        ('product'       , '総積(N:1)'),
+        ('count'         , 'カウント(N:1)'),
         ('separator'     , None),
         ('coefficients'  , '係数'),
         ('quadratic_fit' , '2次関数近似'),

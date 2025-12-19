@@ -1,16 +1,17 @@
 '''
-MergeNode class
+ProductNode - 統合乗算ノード（N→1）
 
 @author: Masakazu Inoue
 '''
 
-from base import N1BlockOperationNode, DataBlock
+from base import N1BlockOperationNode, TensorOperationMixin, DataBlock
 from config import BLOCK_SIZE
 import numpy as np
 
-class MultiplicationNode(N1BlockOperationNode):
+class ProductNode(N1BlockOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "multiplication", "乗算")    
+        super().__init__(canvas, editor, x, y, "product", "総積")
+        self._combinedTensor = None    
 
     def getColor(self):
         return self._color_op
@@ -26,6 +27,33 @@ class MultiplicationNode(N1BlockOperationNode):
     def getResultDimensions(self, inputDatas):
         """乗算では全入力データを包含するサイズを使用"""
         return self.getUnionDimensions(inputDatas)
+    
+    def getDisplayLevels(self, inputDatas):
+        """入力データの乗算されたdisplay_levelsを返す"""
+        # 全入力データのdisplay_levelsを収集
+        allLevels = []
+        for data in inputDatas:
+            if data.headers and 'display_levels' in data.headers:
+                levels = data.headers['display_levels']
+                allLevels.append((levels['min'], levels['exclusive_upper']))
+        
+        if not allLevels:
+            return None
+        
+        # 乗算の場合：範囲の積を計算
+        minProduct = 1.0
+        maxProduct = 1.0
+        
+        for minVal, maxVal in allLevels:
+            # 範囲の積を計算（符号を考慮）
+            products = [minProduct * minVal, minProduct * maxVal, maxProduct * minVal, maxProduct * maxVal]
+            minProduct = min(products)
+            maxProduct = max(products)
+        
+        return {
+            'min': minProduct,
+            'exclusive_upper': maxProduct
+        }
 
     def processBlock(self, block, inputDatas):
         """単一ブロックの乗算処理"""
@@ -45,7 +73,10 @@ class MultiplicationNode(N1BlockOperationNode):
         
         # 全てtensorの場合はtensor乗算
         if len(tensorDatas) == len(inputDatas):
-            return self._processTensorMultiplication(block, tensorDatas)
+            if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
+                self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.multiply)
+            tensorBlock = self._combinedTensor.getBlock(block.planeIndex, block.x, block.y)
+            return tensorBlock if tensorBlock else DataBlock(block.planeIndex, block.x, block.y, np.ones((1, 1)))
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -63,9 +94,12 @@ class MultiplicationNode(N1BlockOperationNode):
                     result[:minH, :minW] *= inputBlock.data[:minH, :minW]
             
             # tensorデータの乗算
-            for tensorData in tensorDatas:
-                tensorValues = self._calculateTensorBlock(tensorData, planeIdx, x, y, result.shape)
-                result *= tensorValues
+            if tensorDatas:
+                if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
+                    self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.multiply)
+                if self._combinedTensor:
+                    tensorValues = self.calculateTensorBlock(self._combinedTensor, planeIdx, x, y, result.shape, defaultValue=1.0)
+                    result *= tensorValues
             
             return DataBlock(planeIdx, x, y, result)
     
@@ -107,37 +141,3 @@ class MultiplicationNode(N1BlockOperationNode):
         
         return result
     
-    def _calculateTensorBlock(self, tensorData, planeIdx, blockX, blockY, blockShape):
-        """テンソルデータからブロック内の各座標に対応する値を計算"""
-        width, height = tensorData.getDimensions()
-        planeCount = tensorData.getPlaneCount()
-        if width < 1 or height < 1 or planeIdx >= planeCount:
-            return np.ones(blockShape)
-        
-        # 指定プレーンの係数行列を取得
-        coeffBlock = tensorData.getBlock(planeIdx, 0, 0)
-        if not coeffBlock:
-            return np.ones(blockShape)
-        
-        coeffMatrix = coeffBlock.data
-        maxOrderY, maxOrderX = coeffMatrix.shape
-        
-        # ブロック内の座標配列を作成
-        blockHeight, blockWidth = blockShape
-        by_coords, bx_coords = np.meshgrid(range(blockHeight), range(blockWidth), indexing='ij')
-        x_coords = blockX + bx_coords
-        y_coords = blockY + by_coords
-        
-        # numpy配列演算で多項式計算
-        result = np.zeros(blockShape)
-        y_power = np.ones_like(x_coords, dtype=np.float64)
-        for j in range(maxOrderY):
-            x_power = np.ones_like(x_coords, dtype=np.float64)
-            for i in range(maxOrderX):
-                coeff = coeffMatrix[j, i]
-                if coeff != 0:
-                    result += coeff * x_power * y_power
-                x_power *= x_coords
-            y_power *= y_coords
-        
-        return result
