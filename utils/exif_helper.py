@@ -10,7 +10,8 @@ All rights reserved.
 import os
 import sys
 import datetime
-from config import HEADERS_EXIF, EXIF_DEBUG_OUTPUT
+from config import HEADERS_EXIF
+from main.config import DEBUG
 
 # グローバルキャッシュ
 _exif_cache = {}
@@ -56,7 +57,7 @@ def getExif(filepath):
     
     missing_tags = [tag for tag in expected_tags if tag not in attr]
     
-    if missing_tags:
+    if DEBUG and missing_tags:
         # デバッグ出力
         _debug_missing_tags(filepath, missing_tags, pil_exif, exifread_tags)
     
@@ -156,9 +157,6 @@ def _get_exifread_exif(filepath, attr):
 
 def _debug_missing_tags(filepath, missing_tags, pil_exif, exifread_tags):
     """不足しているEXIFタグをデバッグ出力"""
-    if not EXIF_DEBUG_OUTPUT:
-        return
-    
     if missing_tags:
         print(f"Debug: Missing EXIF tags for {os.path.basename(filepath)}: {missing_tags}", file=sys.stderr)
         if pil_exif:

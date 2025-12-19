@@ -16,6 +16,7 @@ import hashlib
 from base.NNBlockOperationNode import NNBlockOperationNode
 from base.FlowData import FlowData
 from utils.interval_helper import createHalfOpenEnd
+from base.ConfigurableNode import ConfigurableNode
 
 # scipyのインポートチェック
 try:
@@ -33,7 +34,7 @@ try:
 except ImportError:
     matplotlibAvailable = False
 
-class ToneCurveNode(NNBlockOperationNode):
+class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "tone_curve", "トーンカーブ")
 
@@ -281,11 +282,11 @@ class ToneCurveDialog(tk.Toplevel):
         histYFrame.pack(fill=tk.X, pady=2)
         tk.Label(histYFrame, text="ヒストグラムY軸:").pack(side=tk.LEFT, padx=(0,5))
         self.yScaleMode = "log"  # デフォルトはlog
-        self.yScaleLog = tk.Radiobutton(histYFrame, text="Log", command=lambda: self.setYScale("log"))
-        self.yScaleLinear = tk.Radiobutton(histYFrame, text="Linear", command=lambda: self.setYScale("linear"))
+        self.yScaleVar = tk.StringVar(value="log")
+        self.yScaleLog = tk.Radiobutton(histYFrame, text="Log", variable=self.yScaleVar, value="log", command=lambda: self.setYScale("log"))
+        self.yScaleLinear = tk.Radiobutton(histYFrame, text="Linear", variable=self.yScaleVar, value="linear", command=lambda: self.setYScale("linear"))
         self.yScaleLog.pack(side=tk.LEFT, padx=2)
         self.yScaleLinear.pack(side=tk.LEFT, padx=2)
-        self.yScaleLog.select()  # デフォルトでLogを選択
         
         # グラフフレーム
         graphFrame = tk.Frame(self, height=250)
@@ -400,11 +401,19 @@ class ToneCurveDialog(tk.Toplevel):
                 # ビン中心を計算
                 binCenters = [(binEdges[i] + binEdges[i+1]) / 2 for i in range(len(binCounts))]
                 
+                # UI入力値を取得
+                try:
+                    inputMin = float(self.minEntry.get())
+                    inputEnd = float(self.endEntry.get())
+                except ValueError:
+                    inputMin = self.node.inputMin
+                    inputEnd = self.node.inputEnd
+                
                 # 入力範囲内のビンのみをフィルタリング
                 filteredCenters = []
                 filteredCounts = []
                 for i, center in enumerate(binCenters):
-                    if self.node.inputMin <= center <= self.node.inputEnd:
+                    if inputMin <= center <= inputEnd:
                         filteredCenters.append(center)
                         filteredCounts.append(binCounts[i])
                 
@@ -418,7 +427,13 @@ class ToneCurveDialog(tk.Toplevel):
                     self.histAxes.step(filteredCenters, filteredCounts, where='mid', 
                                      alpha=0.4, color=color, linewidth=1)
             
-            self.histAxes.set_xlim(self.node.inputMin, self.node.inputEnd)
+            self.histAxes.set_xlim(inputMin, inputEnd)
+            
+            # ログスケール時は下限のみ1に固定
+            if yScale == "log":
+                current_ylim = self.histAxes.get_ylim()
+                self.histAxes.set_ylim(1, current_ylim[1])
+            
             self.histAxes.tick_params(axis='y', labelleft=False)  # Y軸ラベルを非表示
     
     def plotToneCurve(self):

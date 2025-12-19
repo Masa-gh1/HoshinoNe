@@ -7,37 +7,50 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-from base import NNBlockOperationNode, DataBlock
-from utils.interval_helper import createHalfOpenEnd
 import numpy as np
+from base import LazyNNOperationNode, DataBlock
+from base.LazyFlowData import LazyFlowData
 
-class NegateNode(NNBlockOperationNode):
+class NegateNode(LazyNNOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "negate", "符号反転")
     
     def getColor(self):
         return self._color_func
     
-    def setupDisplayLevels(self, outputFlowData, inputFlowData):
-        """符号反転されたdisplay_levelsを設定"""
-        if not inputFlowData.headers or 'display_levels' not in inputFlowData.headers:
-            return
-            
-        inputLevels = inputFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        outputMin = -inputMax
-        outputMax = -inputMin
-        
-        outputFlowData.headers['display_levels'] = {
-            'min': outputMin,
-            'exclusive_upper': createHalfOpenEnd(outputMin, outputMax)
-        }
+    def createLazyFlowData(self, inputData):
+        """LazyFlowDataを作成"""
+        lazyFlowData = LazyFlowData(inputData)
+        lazyFlowData.addOperation(self._negateOperation)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
+        return lazyFlowData
     
-    def processBlock(self, block):
-        """単一ブロックの符号反転処理"""
-        # 符号反転
-        result = -block.data
+    def _negateOperation(self, flowData, planeIndex, blockX, blockY):
+        """符号反転操作"""
+        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        if not block:
+            return block
         
+        result = -block.data
         return DataBlock(block.planeIndex, block.x, block.y, result)
+    
+    def _computeDisplayLevels(self):
+        """display_levelsを計算"""
+        def compute(lazyFlowData):
+            try:
+                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+                    return None
+                    
+                inputMin = inputLevels['min']
+                inputMax = inputLevels['exclusive_upper']
+                
+                return {
+                    'display_levels': {
+                        'min': -inputMax,
+                        'exclusive_upper': -inputMin
+                    }
+                }
+            except (KeyError, AttributeError):
+                return None
+        return compute

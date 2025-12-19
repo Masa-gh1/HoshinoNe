@@ -7,13 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import hashlib
-import sys
 import os
-import traceback
 import numpy as np
-from tkinter import filedialog, messagebox
-from base import BaseWriterNode, FlowData
+from base import BaseWriterNode
 from config import BLOCK_SIZE
 
 try:

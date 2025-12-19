@@ -11,7 +11,7 @@ import numpy as np
 import uuid
 from .FlowData import FlowData
 from .DataBlock import DataBlock
-from .CacheManager import CacheManager
+from main.CacheManager import CacheManager
 from collections import UserDict
 
 class LazyFlowData(FlowData):

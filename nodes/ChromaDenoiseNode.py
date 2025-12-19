@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import hashlib
 from base import FlowNode, DataBlock, FlowData
-
+from base.ConfigurableNode import ConfigurableNode
 
 try:
     from scipy.ndimage import gaussian_filter, sobel
@@ -20,7 +20,7 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
 
-class ChromaDenoiseNode(FlowNode):
+class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "chroma_denoise", "色空間分離ノイズ除去")
         

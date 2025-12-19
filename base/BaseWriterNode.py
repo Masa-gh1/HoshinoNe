@@ -14,8 +14,9 @@ import tkinter as tk
 from abc import abstractmethod
 from tkinter import filedialog
 from .FlowNode import FlowNode
+from base.ConfigurableNode import ConfigurableNode
 
-class BaseWriterNode(FlowNode):
+class BaseWriterNode(FlowNode,ConfigurableNode):
     """ファイル出力ノードの基底クラス"""
     
     def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):

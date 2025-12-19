@@ -76,32 +76,29 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def _computeDisplayLevels(self):
         """display_levelsを計算"""
         def compute(lazyFlowData):
-            try:
-                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                    return None
-                    
-                inputMin = inputLevels['min']
-                inputMax = inputLevels['exclusive_upper']
-                
-                if self._combinedAuxiliaryTensor:
-                    coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                    if coeffBlock:
-                        width, height = lazyFlowData.sourceFlowData.getDimensions()
-                        scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
-                        
-                        # 乗算の場合は範囲が複雑になる
-                        products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
-                        
-                        return {
-                            'display_levels': {
-                                'min': min(products),
-                                'exclusive_upper': max(products)
-                            }
-                        }
-                # auxiliary matrixの場合は範囲計算が複雑なので省略
-                # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
-                return {'display_levels': inputLevels}
-            except (KeyError, AttributeError):
+            inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
                 return None
+                
+            inputMin = inputLevels['min']
+            inputMax = inputLevels['exclusive_upper']
+            
+            if self._combinedAuxiliaryTensor:
+                coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
+                if coeffBlock:
+                    width, height = lazyFlowData.sourceFlowData.getDimensions()
+                    scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
+                    
+                    # 乗算の場合は範囲が複雑になる
+                    products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
+                    
+                    return {
+                        'display_levels': {
+                            'min': min(products),
+                            'exclusive_upper': max(products)
+                        }
+                    }
+            # auxiliary matrixの場合は範囲計算が複雑なので省略
+            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
+            return {'display_levels': inputLevels}
         return compute

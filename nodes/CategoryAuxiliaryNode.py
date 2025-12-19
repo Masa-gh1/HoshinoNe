@@ -8,6 +8,7 @@ All rights reserved.
 '''
 
 from base import FlowNode
+from base.FlowDataWrapper import FlowDataWrapper
 
 class CategoryAuxiliaryNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -24,12 +25,13 @@ class CategoryAuxiliaryNode(FlowNode):
         for node in self.inputNodes:
             inputDatas.extend(node.flowDatas)
         
-        # 各入力データのheadersにcategory: auxiliaryを設定
+        # FlowDataWrapperを使用して category: auxiliary を後方のみに伝える
+        wrappedDatas = []
         for inputData in inputDatas:
-            if inputData.headers:
-                inputData.headers = inputData.headers.copy()
-                inputData.headers['category'] = 'auxiliary'
+            updatedHeaders = {'category': 'auxiliary'}
+            wrappedData = FlowDataWrapper(inputData, updatedHeaders)
+            wrappedDatas.append(wrappedData)
         
-        # 入力データをそのまま出力
-        self.flowDatas = inputDatas
+        # ラップされたデータを出力
+        self.flowDatas = wrappedDatas
         self.reportProgress(context, "完了")

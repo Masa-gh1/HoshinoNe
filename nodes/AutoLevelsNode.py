@@ -1,0 +1,63 @@
+'''
+AutoLevelsNode - 1%と99%のパーセンタイルでdisplay_levelsを自動調整するノード
+
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
+@author: Masakazu Inoue
+'''
+
+import numpy as np
+from base import FlowNode
+from base.FlowDataWrapper import FlowDataWrapper
+
+class AutoLevelsNode(FlowNode):
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, "auto_levels", "自動レベル")
+    
+    def getColor(self):
+        return self._color_util
+    
+    def process(self, context=None):
+        self.reportProgress(context, "開始")
+        
+        # 入力データを収集
+        inputDatas = []
+        for node in self.inputNodes:
+            inputDatas.extend(node.flowDatas)
+        
+        # 各入力データのdisplay_levelsを1%と99%のパーセンタイルで設定
+        for inputData in inputDatas:
+            if inputData.headers and inputData.headers.get('type') == 'image':
+                width, height = inputData.getDimensions()
+                planeCount = inputData.getPlaneCount()
+                
+                # 全画像データを読み込み
+                imageData = np.zeros((height, width), dtype=np.float64)
+                
+                from config import BLOCK_SIZE
+                for blockY in range(0, height, BLOCK_SIZE):
+                    for blockX in range(0, width, BLOCK_SIZE):
+                        block = inputData.getBlock(0, blockX, blockY)  # 最初のプレーンを使用
+                        if block:
+                            endY = min(blockY + block.getHeight(), height)
+                            endX = min(blockX + block.getWidth(), width)
+                            imageData[blockY:endY, blockX:endX] = block.data[:endY-blockY, :endX-blockX]
+                
+                # NaN値を除外して1%と99%のパーセンタイルを計算
+                validData = imageData[~np.isnan(imageData)]
+                if len(validData) > 0:
+                    p1 = np.percentile(validData, 1)
+                    p99 = np.percentile(validData, 99)
+                else:
+                    # 全てNaNの場合はデフォルト値
+                    p1, p99 = 0.0, 1.0
+                
+                # FlowDataWrapperを使用してheadersを後方のみに伝える
+                updatedHeaders = {'display_levels': {'min':float(p1), 'exclusive_upper':float(p99)}}
+                wrappedData = FlowDataWrapper(inputData, updatedHeaders)
+                inputDatas[inputDatas.index(inputData)] = wrappedData
+        
+        # ラップされたデータを出力
+        self.flowDatas = inputDatas
+        self.reportProgress(context, "完了")

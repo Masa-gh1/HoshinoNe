@@ -11,7 +11,7 @@ import uuid
 from tkinter import messagebox
 from config import BLOCK_SIZE
 from .DataBlock import DataBlock
-from .CacheManager import CacheManager
+from main.CacheManager import CacheManager
 
 try:
     import numpy as np

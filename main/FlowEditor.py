@@ -4,7 +4,6 @@ Flow Editor - Visual Flow-based Image Processing Tool
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
 
-Created on 2025/10/21
 @author: Masakazu Inoue
 '''
 
@@ -21,7 +20,9 @@ import atexit
 import gc
 from nodes import NodeFactory
 from base.FlowNode import FlowNode
-from base.CacheManager import CacheManager
+from .CacheManager import CacheManager
+
+from . import config
 
 # グローバルスレッドプール
 MAX_NODE_WORKERS = 4
@@ -118,6 +119,11 @@ class FlowEditor:
         
         self.statusLabel = tk.Label(statusFrame, text="状態: 待機中", bg='lightgray', anchor=tk.W)
         self.statusLabel.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        self.gcButton = tk.Button(statusFrame, text="ゴミ掃除", command=self.forceGarbageCollection, 
+                                 bg='lightgray', relief=tk.FLAT, padx=5)
+        self.gcButton.bind('<Double-Button-3>', self.toggleDebugMode)
+        self.gcButton.pack(side=tk.RIGHT, padx=(5, 0))
         
         self.usageLabel = tk.Label(statusFrame, text="Cache: 0B Disk: 0B", bg='lightgray', anchor=tk.E)
         self.usageLabel.pack(side=tk.RIGHT)
@@ -390,7 +396,7 @@ class FlowEditor:
                 if nodes:
                     # 同レベルのノードを並列実行
                     text=""
-                    sep="実行: "
+                    sep="開始: "
                     futures = []
                     for node in nodes:
                         # 再処理が必要かチェック
@@ -438,7 +444,7 @@ class FlowEditor:
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
-            errorMsg = f"フロー実行エラー: {str(e)}\n\nトラックバック:\n{tb}"
+            errorMsg = f"フロー実行エラー: {str(e)}"
             self.root.after(0, lambda: messagebox.showerror("エラー", errorMsg))
             self.root.after(0, lambda: self.statusLabel.config(text="状態: エラー"))
             self.root.after(0, lambda: self._clearAllProgress())
@@ -483,10 +489,7 @@ class FlowEditor:
             elapsedMs = int((endTime - startTime) * 1000)
             return elapsedMs
         except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
-            errorMsg = f"ノード '{node.text}' でエラー: {str(e)}\n\nトラックバック:\n{tb}"
-            raise Exception(errorMsg)
+            raise Exception(f"ノード '{node.text}' でエラー") from e
     
 
     def saveFlow(self):
@@ -547,8 +550,7 @@ class FlowEditor:
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
-            errorMsg = f"保存に失敗しました: {str(e)}\n\nトラックバック:\n{tb}"
-            messagebox.showerror("エラー", errorMsg)
+            messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
     def loadFlow(self):
         filePath = filedialog.askopenfilename(
@@ -564,6 +566,9 @@ class FlowEditor:
         try:
             with open(filePath, 'r', encoding='utf-8') as f:
                 flowData = json.load(f)
+            
+            # 自動実行をオフにする
+            self.autoExecute.set(False)
             
             # 現在のフローをクリア
             self.clearFlow()
@@ -601,8 +606,7 @@ class FlowEditor:
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
-            errorMsg = f"読み込みに失敗しました: {str(e)}\n\nトラックバック:\n{tb}"
-            messagebox.showerror("エラー", errorMsg)
+            messagebox.showerror("エラー", f"読み込みに失敗しました: {str(e)}")
     
     def createNodeFromData(self, nodeData):
         # ファイル選択をスキップしてノードを作成
@@ -623,11 +627,6 @@ class FlowEditor:
         if hasattr(self, 'selectedHighlight'):
             delattr(self, 'selectedHighlight')
         
-        # debug ガベージコレクションを強制実行
-        gc.collect()
-        self._debugNodeReferences()
-        ########################
-    
     def deleteNode(self, node):
         node.cleanUp()
         
@@ -759,30 +758,29 @@ class FlowEditor:
         
         flowNodeCount = f"{len(self.nodes)}個"
         
-        flowNodes = []
-        for obj in gc.get_objects():
-            if hasattr(obj, '__class__') and isinstance( obj, FlowNode):
-                flowNodes.append(obj)
-        
-        cacheNodeCount = f"{len(flowNodes)}個"
+        cacheNodeCount = f"{self.getNodeCount()}個"
         
         cacheSize, diskSize = CacheManager.getCacheStats()
         
         # キャッシュサイズを適切な単位で表示
-        if cacheSize < 1024:
-            cacheStr = f"{cacheSize}B"
-        elif cacheSize < 1024*1024:
-            cacheStr = f"{cacheSize/1024:.1f}KB"
+        if cacheSize < 10*1024:
+            cacheStr = f"{int(cacheSize)}B"
+        elif cacheSize < 10*1024*1024:
+            cacheStr = f"{int(cacheSize/1024)}KB"
+        elif cacheSize < 10*1024*1024*1024:
+            cacheStr = f"{int(cacheSize/1024/1024)}MB"
         else:
-            cacheStr = f"{cacheSize/(1024*1024):.1f}MB"
+            cacheStr = f"{int(cacheSize/1024/1024/1024)}GB"
         
         # ディスクサイズを適切な単位で表示
         if diskSize < 1024:
-            diskStr = f"{diskSize}B"
+            diskStr = f"{int(diskSize)}B"
         elif diskSize < 1024*1024:
-            diskStr = f"{diskSize/1024:.1f}KB"
+            diskStr = f"{int(diskSize/1024)}KB"
+        elif diskSize < 1024*1024*1024:
+            diskStr = f"{int(diskSize/1024/1024)}MB"
         else:
-            diskStr = f"{diskSize/(1024*1024):.1f}MB"
+            diskStr = f"{int(diskSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
         self.usageLabel.config(text=f"Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} Disk: {diskStr}")
@@ -790,6 +788,56 @@ class FlowEditor:
         # 5秒後に再度更新
         self.root.after(5000, self.updateCacheStats)
 
+    def getNodeCount(self):
+        nodes = []
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and isinstance( obj, FlowNode):
+                nodes.append(obj)
+        return(len(nodes))
+
+    def forceGarbageCollection(self):
+        """ガベージコレクションを強制実行"""
+        # 実行前のメモリ使用量を取得
+        beforeNodeCount = self.getNodeCount()
+        beforeCache, beforeDisk = CacheManager.getCacheStats()
+        
+        # ガベージコレクションを実行
+        collected = gc.collect()
+        
+        # 実行後のメモリ使用量を取得
+        afterNodeCount = self.getNodeCount()
+        afterCache, afterDisk = CacheManager.getCacheStats()
+        
+        # 結果を表示
+        freedNodeCount = beforeNodeCount - afterNodeCount
+        freedMemory = beforeCache - afterCache
+        if freedMemory > 0:
+            if freedMemory < 10*1024:
+                freedStr = f"{int(freedMemory)}B"
+            elif freedMemory < 10*1024*1024:
+                freedStr = f"{int(freedMemory/1024)}KB"
+            elif freedMemory < 10*1024*1024*1024:
+                freedStr = f"{int(freedMemory/1024/1024)}MB"
+            else:
+                freedStr = f"{int(freedMemory/1024/1024/1024)}GB"
+            message = f"GC実行: {freedNodeCount}個解放, {freedStr}解放 ({collected}obj)"
+        else:
+            message = f"GC実行: {freedNodeCount}個解放 ({collected}obj)"
+        
+        self.statusLabel.config(text=message)
+        
+        # キャッシュ統計を即座に更新
+        self.updateCacheStats()
+        
+        if config.DEBUG:
+            self._debugNodeReferences()
+    
+    def toggleDebugMode(self, event):
+        """デバッグモードを切り替える"""
+        config.DEBUG = not config.DEBUG
+        self.statusLabel.config(text=f"状態: DEBUGモード {'ON' if config.DEBUG else 'OFF'}")
+        return "break"
+    
     def _debugNodeReferences(self):
         """ノードの参照状況をデバッグ出力"""
         print("========================")

@@ -61,8 +61,11 @@ class QuadraticFitNode(FlowNode):
         for planeIdx, planeName in enumerate(planeNames):
             self.reportProgress(context, f"{planeName}プレーン計算中", planeIdx + 1, actualPlaneCount)
             
-            # 座標データを準備
-            y_coords, x_coords = np.meshgrid(range(height), range(width), indexing='ij')
+            # 座標データを準備（スレッドセーフ: np.meshgrid を置き換え）
+            y_indices = np.arange(height, dtype=np.float64).reshape(-1, 1)
+            x_indices = np.arange(width, dtype=np.float64)
+            y_coords = np.broadcast_to(y_indices, (height, width))
+            x_coords = np.broadcast_to(x_indices, (height, width))
             x_flat = x_coords.flatten()
             y_flat = y_coords.flatten()
             z_flat = planeData[planeIdx].flatten()

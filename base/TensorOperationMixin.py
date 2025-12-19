@@ -86,11 +86,12 @@ class TensorOperationMixin:
         coeffMatrix = coeffBlock.data
         maxOrderY, maxOrderX = coeffMatrix.shape
         
-        # ブロック内の座標配列を作成
+        # ブロック内の座標配列を作成（スレッドセーフ: np.meshgrid 置き換え）
         blockHeight, blockWidth = blockShape
-        by_coords, bx_coords = np.meshgrid(range(blockHeight), range(blockWidth), indexing='ij')
-        x_coords = blockX + bx_coords
-        y_coords = blockY + by_coords
+        y_indices = np.arange(blockHeight, dtype=np.float64).reshape(-1, 1)
+        x_indices = np.arange(blockWidth, dtype=np.float64)
+        y_coords = blockY + np.broadcast_to(y_indices, (blockHeight, blockWidth))
+        x_coords = blockX + np.broadcast_to(x_indices, (blockHeight, blockWidth))
         
         # numpy配列演算で多項式計算
         result = np.zeros(blockShape, dtype=np.float64)

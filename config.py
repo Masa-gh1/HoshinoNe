@@ -14,10 +14,7 @@ MAX_WORKERS = 4
 BLOCK_SIZE = 256
 
 # ブロックキャッシュサイズ設定
-MAX_BLOCK_CACHE_SIZE = 4000
-
-# Exif デバッグ出力設定
-EXIF_DEBUG_OUTPUT = True
+MAX_BLOCK_CACHE_SIZE = 8000
 
 # データヘッダに含める Exif
 HEADERS_EXIF = [

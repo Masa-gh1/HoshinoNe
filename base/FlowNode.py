@@ -11,7 +11,7 @@ import hashlib
 import tkinter as tk
 from tkinter import filedialog
 from abc import ABC as AbstractBaseClass, abstractmethod
-from base.ResultWindow import ResultWindow
+from main.ResultWindow import ResultWindow
 import traceback
 import sys
 
@@ -76,7 +76,6 @@ class FlowNode(AbstractBaseClass):
         
         # UIウィンドウを閉じる
         for window in self._window.values():
-            print(type(window))
             window.destroy()
         self._window = {}
         
@@ -150,15 +149,15 @@ class FlowNode(AbstractBaseClass):
     
     def selectFiles(self):
         filePaths = filedialog.askopenfilenames(filetypes=self.fileTypes)
-        
-        self.setFilePaths(filePaths)
-        self.updateNodeText()
+        if filePaths:
+            self.setFilePaths(filePaths)
+            self.updateNodeText()
         
     def selectOutputFile(self):
         outputPath = filedialog.asksaveasfilename( defaultextension=self.defaultOutputExtension, filetypes=self.outputFileTypes)
-        
-        self.outputFilePath = outputPath
-        self.updateNodeText()
+        if outputPath:
+            self.outputFilePath = outputPath
+            self.updateNodeText()
     
     def updateNodeText(self):
         """ノードのテキストを更新（サブクラスでオーバーライド）"""
@@ -227,7 +226,10 @@ class FlowNode(AbstractBaseClass):
                 menu.add_command(label="出力ファイル選択", command=self.onSelectOutputFile)
             if hasattr(self, 'onEdit'):
                 menu.add_command(label="設定", command=self._onEdit)
-            menu.add_separator()
+                
+            if None != menu.index(tk.END):
+                menu.add_separator()
+            
             menu.add_command(label="削除", command=lambda: self.editor.deleteNode(self))
             
             self._window["menu"] = self._menu = menu

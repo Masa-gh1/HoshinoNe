@@ -7,27 +7,27 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from .AutoLevelsNode import AutoLevelsNode
+from .CategoryAuxiliaryNode import CategoryAuxiliaryNode
+from .ChromaDenoiseNode import ChromaDenoiseNode
+from .CoefficientsNode import CoefficientsNode
+from .CountNode import CountNode
 from .FileReaderNode import FileReaderNode
 from .FileWriterNode import FileWriterNode
-from .SumNode import SumNode
-from .NegateNode import NegateNode
-from .ProductNode import ProductNode
-from .InverseNode import InverseNode
+from .FitsReaderNode import FitsReaderNode
+from .ImageAlignmentNode import ImageAlignmentNode
 from .ImageReaderNode import ImageReaderNode
 from .ImageWriterNode import ImageWriterNode
+from .InverseNode import InverseNode
+from .NegateNode import NegateNode
+from .OffsetNode import OffsetNode
+from .ProductNode import ProductNode
 from .QuadraticFitNode import QuadraticFitNode
-from .CoefficientsNode import CoefficientsNode
 from .RawReaderNode import RawReaderNode
-from .FitsReaderNode import FitsReaderNode
-from .CountNode import CountNode
+from .ScaleNode import ScaleNode
+from .SumNode import SumNode
 from .ToneCurveNode import ToneCurveNode
 from .WaveletDenoiseNode import WaveletDenoiseNode
-from .ChromaDenoiseNode import ChromaDenoiseNode
-from .ImageAlignmentNode import ImageAlignmentNode
-
-from .OffsetNode import OffsetNode
-from .ScaleNode import ScaleNode
-from .CategoryAuxiliaryNode import CategoryAuxiliaryNode
 
 class NodeFactory:
     nodeClasses = {
@@ -44,6 +44,7 @@ class NodeFactory:
         #####
         'category_auxiliary': CategoryAuxiliaryNode,
         #####
+        'auto_levels': AutoLevelsNode,
         'tone_curve': ToneCurveNode,
         #####
         'chroma_denoise': ChromaDenoiseNode,
@@ -72,6 +73,7 @@ class NodeFactory:
         ('separator'         , None),
         ('category_auxiliary', '補正に変更'),
         ('separator'         , None),
+        ('auto_levels'       , '自動レベル'),
         ('tone_curve'        , 'トーンカーブ'),
         ('separator'         , None),
         ('chroma_denoise'    , '色空間分離ノイズ除去(色ノイズ除去)'),

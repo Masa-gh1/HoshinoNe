@@ -7,13 +7,18 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import hashlib
+import datetime
 import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
+from types import SimpleNamespace
 from base.NNBlockOperationNode import NNBlockOperationNode
 from base.FlowData import FlowData
 from base.DataBlock import DataBlock
 from config import BLOCK_SIZE
+from base.ConfigurableNode import ConfigurableNode
+
+from main import config
 
 try:
     import cv2
@@ -22,15 +27,16 @@ except ImportError:
     CV2_AVAILABLE = False
 
 class AlignmentResult:
-    def __init__(self, dx=0, dy=0, rotation=0, confidence=0, method="", extra_info=None):
+    def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, method="", extra_info={}):
+        self.success = success
         self.dx = dx
         self.dy = dy
         self.rotation = rotation
         self.confidence = confidence
         self.method = method
-        self.extra_info = extra_info or {}
+        self.extra_info = extra_info
 
-class ImageAlignmentNode(NNBlockOperationNode):
+class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "image_alignment", "画像位置合わせ")
         
@@ -40,19 +46,28 @@ class ImageAlignmentNode(NNBlockOperationNode):
         self.usePreviousOffset = True  # 前回画像のズレを考慮する
         # オフセット計算
         self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B）
+        self.saturationThreshold = 95  # 飽和閾値（%）
         # オフセット計算 優先順位1: 星点検出法
-        self.starThreshold = 95  # 星検出閾値（%）
-        self.starMinDiameter = 2  # 星最小直径（ピクセル）
-        self.starMaxDiameter = 16  # 星最大直径（ピクセル）
-        self.gridRows = 3  # グリッド行数
-        self.gridCols = 3  # グリッド列数
-        self.starsPerGrid = 8  # グリッド当たりの選択星数
-        self.starSampleRadius = 100  # 星サンプル半径（ピクセル）
-        self.ransacIterations = 100  # RANSAC試行回数
+        self.star = SimpleNamespace()
+        self.star.threshold = 95  # 星検出閾値（パーセンタイル）
+        self.star.useSaturationMask = False #  飽和マスクを使用する
+        self.star.minDiameter = 2  # 星最小直径（ピクセル）
+        self.star.maxDiameter = 16  # 星最大直径（ピクセル）
+        self.star.maxAspectRatio = 2.0  # 星の最大アスペクト比（形状フィルタ）
+        self.star.grid = SimpleNamespace()
+        self.star.grid.rows = 3  # グリッド行数
+        self.star.grid.cols = 3  # グリッド列数
+        self.star.grid.starsPerGrid = 8  # グリッド当たりの選択星数
+        self.star.ransac = SimpleNamespace()
+        self.star.ransac.sampleRadius = 100  # RANSAC対応点探索半径（ピクセル）
+        self.star.ransac.iterations = 100  # RANSAC試行回数
+        self.star.ransac.seed = 2725  # RANSAC乱数シード（１以上）
         # オフセット計算 優先順位2: 位相相関法
-        self.phaseCorrelationMaxOffset = 100  # 位相相関最大オフセット（ピクセル）
+        self.phase = SimpleNamespace()
+        self.phase.maxOffset = 100  # 位相相関最大オフセット（ピクセル）
         # オフセット計算 優先順位3: テンプレートマッチング法
-        self.templateSearchRange = 150  # テンプレート検索範囲（ピクセル）
+        self.template = SimpleNamespace()
+        self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
         # 拡張領域計算
         # 位置合わせ実行
         # 余白処理
@@ -68,7 +83,8 @@ class ImageAlignmentNode(NNBlockOperationNode):
         return self._color_op
     
     def updateNodeText(self):
-        displayText = f"{self.text}\n基準: {self.referenceIndex + 1}"
+        exclude_info = ""
+        displayText = f"{self.text}\n基準: {self.referenceIndex + 1}{exclude_info}"
         self.editor.updateNodeText(self, displayText)
         
         newHash = self.getConfigHash()
@@ -79,46 +95,61 @@ class ImageAlignmentNode(NNBlockOperationNode):
     
     def store(self, nodeData):
         nodeData["referenceIndex"] = self.referenceIndex
-        nodeData["gridRows"] = self.gridRows
-        nodeData["gridCols"] = self.gridCols
-        nodeData["starsPerGrid"] = self.starsPerGrid
-        nodeData["alignmentPlane"] = self.alignmentPlane
-        nodeData["starThreshold"] = self.starThreshold
-        nodeData["phaseCorrelationMaxOffset"] = self.phaseCorrelationMaxOffset
-        nodeData["starSampleRadius"] = self.starSampleRadius
-        nodeData["starMinDiameter"] = self.starMinDiameter
-        nodeData["starMaxDiameter"] = self.starMaxDiameter
-        nodeData["templateSearchRange"] = self.templateSearchRange
-        nodeData["ransacIterations"] = self.ransacIterations
         nodeData["usePreviousOffset"] = self.usePreviousOffset
+        nodeData["alignmentPlane"] = self.alignmentPlane
+        nodeData["starThreshold"] = self.star.threshold
+        nodeData["starMinDiameter"] = self.star.minDiameter
+        nodeData["starMaxDiameter"] = self.star.maxDiameter
+        nodeData["starSampleRadius"] = self.star.ransac.sampleRadius
+        nodeData["saturationThreshold"] = self.saturationThreshold
+        nodeData["useSaturationMask"] = self.star.useSaturationMask
+        nodeData["maxAspectRatio"] = self.star.maxAspectRatio
+        nodeData["gridRows"] = self.star.grid.rows
+        nodeData["gridCols"] = self.star.grid.cols
+        nodeData["starsPerGrid"] = self.star.grid.starsPerGrid
+        nodeData["ransacIterations"] = self.star.ransac.iterations
+        nodeData["ransacSeed"] = self.star.ransac.seed
+        nodeData["phaseMaxOffset"] = self.phase.maxOffset
+        nodeData["templateSearchRange"] = self.template.searchRange
+        nodeData["cropMode"] = self.cropMode
     
     def restore(self, nodeData):
         if "referenceIndex" in nodeData:
             self.referenceIndex = nodeData["referenceIndex"]
-        if "gridRows" in nodeData:
-            self.gridRows = nodeData["gridRows"]
-        if "gridCols" in nodeData:
-            self.gridCols = nodeData["gridCols"]
-        if "starsPerGrid" in nodeData:
-            self.starsPerGrid = nodeData["starsPerGrid"]
+        if "usePreviousOffset" in nodeData:
+            self.usePreviousOffset = nodeData["usePreviousOffset"]
         if "alignmentPlane" in nodeData:
             self.alignmentPlane = nodeData["alignmentPlane"]
         if "starThreshold" in nodeData:
-            self.starThreshold = nodeData["starThreshold"]
-        if "phaseCorrelationMaxOffset" in nodeData:
-            self.phaseCorrelationMaxOffset = nodeData["phaseCorrelationMaxOffset"]
-        if "starSampleRadius" in nodeData:
-            self.starSampleRadius = nodeData["starSampleRadius"]
+            self.star.threshold = nodeData["starThreshold"]
         if "starMinDiameter" in nodeData:
-            self.starMinDiameter = nodeData["starMinDiameter"]
+            self.star.minDiameter = nodeData["starMinDiameter"]
         if "starMaxDiameter" in nodeData:
-            self.starMaxDiameter = nodeData["starMaxDiameter"]
-        if "templateSearchRange" in nodeData:
-            self.templateSearchRange = nodeData["templateSearchRange"]
+            self.star.maxDiameter = nodeData["starMaxDiameter"]
+        if "starSampleRadius" in nodeData:
+            self.star.ransac.sampleRadius = nodeData["starSampleRadius"]
+        if "saturationThreshold" in nodeData:
+            self.saturationThreshold = nodeData["saturationThreshold"]
+        if "useSaturationMask" in nodeData:
+            self.star.useSaturationMask = nodeData["useSaturationMask"]
+        if "maxAspectRatio" in nodeData:
+            self.star.maxAspectRatio = nodeData["maxAspectRatio"]
+        if "gridRows" in nodeData:
+            self.star.grid.rows = nodeData["gridRows"]
+        if "gridCols" in nodeData:
+            self.star.grid.cols = nodeData["gridCols"]
+        if "starsPerGrid" in nodeData:
+            self.star.grid.starsPerGrid = nodeData["starsPerGrid"]
         if "ransacIterations" in nodeData:
-            self.ransacIterations = nodeData["ransacIterations"]
-        if "usePreviousOffset" in nodeData:
-            self.usePreviousOffset = nodeData["usePreviousOffset"]
+            self.star.ransac.iterations = nodeData["ransacIterations"]
+        if "ransacSeed" in nodeData:
+            self.star.ransac.seed = nodeData["ransacSeed"]
+        if "phaseMaxOffset" in nodeData:
+            self.phase.maxOffset = nodeData["phaseMaxOffset"]
+        if "templateSearchRange" in nodeData:
+            self.template.searchRange = nodeData["templateSearchRange"]
+        if "cropMode" in nodeData:
+            self.cropMode = nodeData["cropMode"]
         self.updateNodeText()
     
     def preprocessInputs(self, inputDatas):
@@ -169,7 +200,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         planeCount = inputDatas[0].getPlaneCount() if hasattr(inputDatas[0], 'getPlaneCount') else 1
         # 拡張サイズは仮で計算（後で更新）
         blocksPerImage = planeCount * ((width + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((height + BLOCK_SIZE - 1) // BLOCK_SIZE)
-        offsetCalculationBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
+        offsetCalculationBlocks = blocksPerImage*(1 + 2*(len(inputDatas) - 1))  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
         totalGlobalBlocks = len(inputDatas) * blocksPerImage + offsetCalculationBlocks
         globalProcessedBlocks = 0
         
@@ -178,38 +209,49 @@ class ImageAlignmentNode(NNBlockOperationNode):
             self.reportProgress(context, "基準画像処理中", globalProcessedBlocks, totalGlobalBlocks)
         refGray = self._flowDataToImage(referenceData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
         
-        # 全オフセットと位置合わせ情報を収集
-        all_results = []
-        previous_result = AlignmentResult()  # 前画像の結果
+        # 基準画像の星を一度だけ検出して保存
+        self._cached_ref_stars = self._detectStars(refGray)
         
-        globalProcessedBlocks += 1
+        globalProcessedBlocks += blocksPerImage
         if context:
             self.reportProgress(context, f"画像1のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
         
+        # 全オフセットと位置合わせ情報を収集
+        all_results = []
+        all_method_results_list = []  # 各画像の処理法結果を保存
+        previous_result = AlignmentResult()  # 前画像の結果
+        
         for i, inputData in enumerate(inputDatas):
             if i != self.referenceIndex:
+                # 対象画像を処理
                 targetGray = self._flowDataToImage(inputData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
-                globalProcessedBlocks += 1
+                globalProcessedBlocks += blocksPerImage
                 if context:
                     self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
 
-                result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
-                if result is None:
-                    result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result)
-                    if result is None:
-                        result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result)
+                # 位置合わせ
+                star_result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
+                phase_result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result) if not star_result.success else None
+                template_result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result) if not star_result.success and (phase_result is None or not phase_result.success) else None
                 
+                # 成功した結果を選択
+                result = star_result if star_result.success else (phase_result if phase_result and phase_result.success else template_result)
                 if result is None:
                     result = AlignmentResult()
                 
+                # この画像の全ての結果を保存
+                method_results = {'star': star_result, 'phase': phase_result, 'template': template_result}
+                
                 all_results.append(result)
+                all_method_results_list.append(method_results)
                 previous_result = result
                 
-                globalProcessedBlocks += 1
+                globalProcessedBlocks += blocksPerImage
                 if context:
                     self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
             else:
                 all_results.append(AlignmentResult())
+                all_method_results_list.append({})
         
         # 拡張領域を計算
         min_dx = min(result.dx for result in all_results)
@@ -240,27 +282,38 @@ class ImageAlignmentNode(NNBlockOperationNode):
                 expandedData = self._expandFlowData(inputData, expand_left, expand_top, new_width, new_height, context, [globalProcessedBlocks, totalGlobalBlocks])
                 globalProcessedBlocks += blocksPerImage
                 # 基準画像の情報を追加
-                expandedData.headers['grid'] = {'columns': self.gridCols, 'rows': self.gridRows}
-                expandedData.headers['grid_selection_counts'] = [0] * (self.gridCols * self.gridRows)
-                expandedData.headers['grid_match_counts'] = [0] * (self.gridCols * self.gridRows)
+                expandedData.headers['grid'] = {'columns': self.star.grid.cols, 'rows': self.star.grid.rows}
+                expandedData.headers['grid_selection_counts'] = [0] * (self.star.grid.cols * self.star.grid.rows)
+                expandedData.headers['grid_match_counts'] = [0] * (self.star.grid.cols * self.star.grid.rows)
                 expandedData.headers['reference_image_movement'] = {'dx': 0, 'dy': 0, 'rotation': 0}
+                expandedData.headers['method'] = 'reference'
+                expandedData.headers['success'] = True
+                expandedData.headers['confidence'] = 1.0
                 resultFlowDatas.append(expandedData)
             else:
                 # 位置合わせを実行
                 result = all_results[i]
+                method_results = all_method_results_list[i]
                 alignedData = self._alignImageWithExpansion(inputData, int(result.dx + expand_left), int(result.dy + expand_top), new_width, new_height, context, [globalProcessedBlocks, totalGlobalBlocks])
                 globalProcessedBlocks += blocksPerImage
                 
                 # 位置合わせ情報をheadersに追加
-                alignedData.headers['grid'] = {'columns': self.gridCols, 'rows': self.gridRows}
-                if result.extra_info:
-                    alignedData.headers['grid_selection_counts'] = result.extra_info.get('grid_selected', [0] * (self.gridCols * self.gridRows))
-                    alignedData.headers['grid_match_counts'] = result.extra_info.get('grid_matched', [0] * (self.gridCols * self.gridRows))
-                else:
-                    alignedData.headers['grid_selection_counts'] = [0] * (self.gridCols * self.gridRows)
-                    alignedData.headers['grid_match_counts'] = [0] * (self.gridCols * self.gridRows)
-                
+                alignedData.headers['grid'] = {'columns': self.star.grid.cols, 'rows': self.star.grid.rows}
+                alignedData.headers['method'] = result.method
+                alignedData.headers['success'] = result.success
+                alignedData.headers['confidence'] = result.confidence
                 alignedData.headers['reference_image_movement'] = {'dx': result.dx, 'dy': result.dy, 'rotation': result.rotation}
+                
+                # 各処理法の結果を個別に記録
+                for method_name, method_result in method_results.items():
+                    if method_result:
+                        alignedData.headers[f'{method_name}_success'] = method_result.success
+                        alignedData.headers[f'{method_name}_confidence'] = method_result.confidence
+                        alignedData.headers[f'{method_name}_dx'] = method_result.dx
+                        alignedData.headers[f'{method_name}_dy'] = method_result.dy
+                        alignedData.headers[f'{method_name}_rotation'] = method_result.rotation
+                        if method_result.extra_info:
+                            alignedData.headers[f'{method_name}_extra_info'] = method_result.extra_info
                 
                 resultFlowDatas.append(alignedData)
         
@@ -289,7 +342,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         template = refImage[y1:y2, x1:x2]
         
         # 前画像のオフセットを中心とした検索範囲
-        search_range = self.templateSearchRange  # 前画像位置からの検索範囲
+        search_range = self.template.searchRange  # 前画像位置からの検索範囲
         
         if self.usePreviousOffset:
             # 検索中心を前画像位置に設定
@@ -312,7 +365,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         _, max_val, _, max_loc = cv2.minMaxLoc(result)
         
         if max_val < 0.3:
-            return None
+            return AlignmentResult(success=False, method="template", extra_info={"max_correlation": max_val, "threshold": 0.3})
         
         # オフセットを計算
         match_x, match_y = max_loc
@@ -322,14 +375,14 @@ class ImageAlignmentNode(NNBlockOperationNode):
         dx = actual_x - x1
         dy = actual_y - y1
         
-        return AlignmentResult(dx=dx, dy=dy, confidence=max_val, method="template")
+        return AlignmentResult( success=True, dx=dx, dy=dy, confidence=max_val, method="template")
     
     def _findOffsetByPhaseCorrelation(self, refImage, targetImage, previous_result=None):
         """位相相関法でオフセットを検出"""
         if previous_result is None:
             previous_result = AlignmentResult()
         
-        max_offset = self.phaseCorrelationMaxOffset
+        max_offset = self.phase.maxOffset
         # エッジ強化で特徴を明確化
         ref_edges = cv2.Laplacian(refImage, cv2.CV_64F)
         target_edges = cv2.Laplacian(targetImage, cv2.CV_64F)
@@ -407,76 +460,92 @@ class ImageAlignmentNode(NNBlockOperationNode):
             # ピークの鋭さと前画像位置からの距離をチェック
             distance_from_prev = np.sqrt((dx - previous_result.dx)**2 + (dy - previous_result.dy)**2)
             if peak_sharpness < 1.5 or distance_from_prev > max_offset:
-                return None
+                return AlignmentResult(success=False, method="phase", extra_info={"peak_sharpness": peak_sharpness, "distance_from_prev": distance_from_prev, "max_offset": max_offset})
         else:
             # ピークの鋭さのみで判定
             if peak_sharpness < 1.5:
-                return None
+                return AlignmentResult(success=False, method="phase", extra_info={"peak_sharpness": peak_sharpness, "threshold": 1.5})
         
         confidence = min(1.0, peak_sharpness / 10.0)  # 正規化した信頼度
-        return AlignmentResult(dx=dx, dy=dy, confidence=confidence, method="phase")
+        return AlignmentResult( success=True, dx=dx, dy=dy, confidence=confidence, method="phase")
     
     def _findOffsetByStarDetection(self, refImage, targetImage, previous_result=None):
         """星点検出による天体写真用位置合わせ"""
         if previous_result is None:
             previous_result = AlignmentResult()
-        # 星点を検出
-        ref_stars = self._detectStars(refImage)
+        
+        extra_info = {}
+        
+        # RANSAC用固定シードを設定
+        rng = np.random.default_rng(self.star.ransac.seed)
+        extra_info["star_ransac_seed"] = self.star.ransac.seed
+        
+        # 星点を検出（基準画像の星はキャッシュから取得）
+        if hasattr(self, '_cached_ref_stars') and self._cached_ref_stars:
+            ref_stars = self._cached_ref_stars
+        else:
+            ref_stars = self._detectStars(refImage)
         target_stars = self._detectStars(targetImage)
         
+        extra_info["ref_stars_count"] = len(ref_stars)
+        extra_info["target_stars_count"] = len(target_stars)
+        extra_info["target_stars_min_required"] = 3
+        
         if len(ref_stars) < 3 or len(target_stars) < 3:
-            return None
+            return AlignmentResult(success=False, method="star", extra_info=extra_info)
         
         # 画像全体に分散した星を選択
         ref_bright, ref_grid_counts = self._selectDistributedStars(ref_stars, refImage.shape)
         target_bright, target_grid_counts = self._selectDistributedStars(target_stars, targetImage.shape)
         
+        aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in target_bright])
+        extra_info["ref_grid_counts"] = ref_grid_counts
+        extra_info["target_grid_counts"] = target_grid_counts
+        extra_info["aspectRatioMedian"] = aspectRatioMedian
+        
         # 前画像のオフセット・回転を考慮した対応点探索
         matches = []
-        for i, (rx, ry, _) in enumerate(ref_bright):
-            for j, (tx, ty, _) in enumerate(target_bright):
-                if self.usePreviousOffset:
-                    # 前画像位置からの予測位置を計算
-                    expected_tx = tx + previous_result.dx
-                    expected_ty = ty + previous_result.dy
-                else:
-                    # 前回ズレを考慮しない
-                    expected_tx = tx
-                    expected_ty = ty
-                
-                # 前画像の回転も考慮（簡易回転補正）
-                if abs(previous_result.rotation) > 0.1:  # 0.1度以上の回転がある場合
-                    angle_rad = np.radians(previous_result.rotation)
-                    cos_a, sin_a = np.cos(angle_rad), np.sin(angle_rad)
-                    cx, cy = refImage.shape[1] // 2, refImage.shape[0] // 2
-                    # 回転中心からの相対位置
-                    rel_x, rel_y = tx - cx, ty - cy
-                    # 回転適用
-                    rot_x = rel_x * cos_a - rel_y * sin_a
-                    rot_y = rel_x * sin_a + rel_y * cos_a
-                    expected_tx = rot_x + cx + previous_result.dx
-                    expected_ty = rot_y + cy + previous_result.dy
-                
-                # 予測位置との距離をチェック
-                dist = np.sqrt((rx - expected_tx)**2 + (ry - expected_ty)**2)
-                if dist < self.starSampleRadius:  # 設定値ピクセル以内
-                    matches.append(((rx, ry), (tx, ty)))
+        radius_sq = self.star.ransac.sampleRadius ** 2  # 二乗距離で比較
         
+        # NumPy配列化で高速化
+        ref_array = np.array([(rx, ry) for rx, ry, _, _ in ref_bright])
+        target_array = np.array([(tx, ty) for tx, ty, _, _ in target_bright])
+        
+        for i, (rx, ry, _, _) in enumerate(ref_bright):
+            # 予測位置計算
+            if self.usePreviousOffset:
+                expected_pos = target_array + np.array([previous_result.dx, previous_result.dy])
+            else:
+                expected_pos = target_array
+            
+            # 距離計算（二乗距離）
+            dist_sq = np.sum((expected_pos - np.array([rx, ry]))**2, axis=1)
+            valid_indices = np.where(dist_sq < radius_sq)[0]
+            
+            # マッチを追加
+            for j in valid_indices:
+                tx, ty, brightness, aspectRatio = target_bright[j]
+                matches.append(((rx, ry), (tx, ty), brightness, aspectRatio))
+        
+        aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in matches])
+        extra_info["matches_count"] = len(matches)
+        extra_info["matches_count_min_required"] = 5
+        extra_info["aspectRatioMedian"] = aspectRatioMedian
+
         if len(matches) < 5:
-            return None
+            return AlignmentResult(success=False, method="star", extra_info=extra_info)
         
         # RANSACでロバストなオフセットを計算
-        best_offset = None
-        best_inliers = 0
-        
-        for _ in range(self.ransacIterations):  # RANSAC試行回数
+        offset = None
+        inliers = 0
+        for ransac_iteration in range(self.star.ransac.iterations): # RANSAC試行回数
             # ランダムに3点選択
-            sample = np.random.choice(len(matches), min(3, len(matches)), replace=False)
+            sample = rng.choice(len(matches), min(3, len(matches)), replace=False)
             
             # オフセットを計算（基準画像に向かって対象画像を動かす方向）
             dx_sum, dy_sum = 0, 0
             for idx in sample:
-                ref_pt, target_pt = matches[idx]
+                ref_pt, target_pt, _, _ = matches[idx]
                 dx_sum += ref_pt[0] - target_pt[0]
                 dy_sum += ref_pt[1] - target_pt[1]
             
@@ -484,34 +553,46 @@ class ImageAlignmentNode(NNBlockOperationNode):
             dy = dy_sum / len(sample)
             
             # インライアをカウント
-            inliers = 0
-            for ref_pt, target_pt in matches:
+            cur_inliers = 0
+            for ref_pt, target_pt, _, _ in matches:
                 expected_x = target_pt[0] + dx
                 expected_y = target_pt[1] + dy
                 error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
                 if error < 1.5:  # 1.5ピクセル以内
-                    inliers += 1
+                    cur_inliers += 1
             
-            if inliers > best_inliers:
-                best_inliers = inliers
-                best_offset = (dx, dy)
+            if cur_inliers > inliers:
+                inliers = cur_inliers
+                offset = (dx, dy)
+                
+                # 早期終了条件（十分良い結果）
+                if inliers > len(matches) * 0.5 or inliers > 40:  # 50%以上または40個以上のインライア
+                    break
         
-        if best_inliers >= 5:  # 5個以上のインライア
+        extra_info["ransac_iteration"] = ransac_iteration
+        extra_info["inliers"] = inliers
+        extra_info["inliers_min_required"] = 5
+        
+        if inliers >= 5:  # 5個以上のインライア
             # グリッド別マッチ数を計算
-            grid_match_counts = self._calculateGridMatches(matches, best_offset, refImage.shape)
+            grid_match_counts = self._calculateGridMatches(matches, offset, refImage.shape)
+            extra_info["grid_match_counts"] = grid_match_counts
             
             # インライアを使って回転も含めた変換を計算
             inlier_matches = []
-            for ref_pt, target_pt in matches:
-                expected_x = target_pt[0] + best_offset[0]
-                expected_y = target_pt[1] + best_offset[1]
+            for ref_pt, target_pt, brightness, aspectRatio  in matches:
+                expected_x = target_pt[0] + offset[0]
+                expected_y = target_pt[1] + offset[1]
                 error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
                 if error < 2.0:
-                    inlier_matches.append((ref_pt, target_pt))
+                    inlier_matches.append((ref_pt, target_pt, brightness, aspectRatio))
             
-            dx, dy = best_offset
+            dx, dy = offset
             rotation = 0
-            confidence = min(1.0, best_inliers / 20.0)  # 正規化した信頼度
+            confidence = min(1.0, inliers / 20.0)  # 正規化した信頼度
+            
+            aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in inlier_matches])
+            extra_info["aspectRatioMedian"] = aspectRatioMedian
             
             if len(inlier_matches) >= 3:
                 transform_result = self._calculateAffineTransform(inlier_matches)
@@ -521,14 +602,17 @@ class ImageAlignmentNode(NNBlockOperationNode):
                     dx, dy = transform_result[0, 2], transform_result[1, 2]
                     rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
             
-            extra_info = {
-                'grid_selected': ref_grid_counts,
-                'grid_matched': grid_match_counts
-            }
+            if config.DEBUG:
+                degug = f"dx,dy:{dx:.1f},{dy:.1f} rotation:{rotation:.2f}"
+                degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
+                degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
+                degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
+                degug += " " + f"ransac_iteration:{extra_info['ransac_iteration']}" if 'ransac_iteration' in extra_info else ""
+                print(f"degug: {degug}")
             
-            return AlignmentResult(dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
+            return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
         
-        return None
+        return AlignmentResult(success=False, method="star", extra_info=extra_info)
     
     def _calculateAffineTransform(self, matches):
         """対応点からアフィン変換を計算"""
@@ -563,13 +647,13 @@ class ImageAlignmentNode(NNBlockOperationNode):
     def _calculateGridMatches(self, matches, offset, image_shape):
         """グリッド別のマッチ数を計算"""
         h, w = image_shape
-        grid_rows, grid_cols = self.gridRows, self.gridCols
+        grid_rows, grid_cols = self.star.grid.rows, self.star.grid.cols
         cell_h = h // grid_rows
         cell_w = w // grid_cols
         
         grid_match_counts = [0] * (grid_rows * grid_cols)
         
-        for ref_pt, target_pt in matches:
+        for ref_pt, target_pt, _, _ in matches:
             expected_x = target_pt[0] + offset[0]
             expected_y = target_pt[1] + offset[1]
             error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
@@ -733,40 +817,72 @@ class ImageAlignmentNode(NNBlockOperationNode):
         # バックグラウンドを減算
         subtracted = cv2.subtract(blurred, background)
         
-        # 閾値処理で星を抽出
-        threshold = np.nanpercentile(subtracted[subtracted > 0], self.starThreshold)
-        _, binary = cv2.threshold(subtracted, threshold, 255, cv2.THRESH_BINARY)
+        if self.star.useSaturationMask:
+            # 飽和領域マスク
+            saturation_mask = self._createSaturationMask(subtracted)
+            masked_subtracted = np.where(saturation_mask, subtracted, 0)
+            
+            # 閾値処理
+            threshold = np.nanpercentile(masked_subtracted[masked_subtracted > 0], self.star.threshold)
+            _, binary = cv2.threshold(masked_subtracted, threshold, 255, cv2.THRESH_BINARY)
+        else:
+            # 閾値処理
+            threshold = np.nanpercentile(subtracted[subtracted > 0], self.star.threshold)
+            _, binary = cv2.threshold(subtracted, threshold, 255, cv2.THRESH_BINARY)
         
         # 連結成分で星点を検出
-        contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        min_area = np.pi * (self.star.minDiameter / 2) ** 2
+        max_area = np.pi * (self.star.maxDiameter / 2) ** 2
+        contours = [c for c in contours if min_area <= cv2.contourArea(c) <= max_area]
+        
+        # アスペクト比フィルタ
+        filtered = []
+        aspectRatios = []
+        for contour in contours:
+            # 最小外接矩形（回転考慮）
+            (center), (width, height), angle = cv2.minAreaRect(contour)
+            
+            # アスペクト比計算
+            if width > 0 and height > 0:
+                aspectRatio = max(width, height) / min(width, height)
+                if aspectRatio <= self.star.maxAspectRatio:
+                    filtered.append(contour)
+                    aspectRatios.append(aspectRatio)
+        
+        contours = filtered
         
         stars = []
         max_val = np.nanmax(image)
-        saturation_threshold = max_val * 0.95
         
-        # 直径から面積へ変換
-        min_area = np.pi * (self.starMinDiameter / 2) ** 2
-        max_area = np.pi * (self.starMaxDiameter / 2) ** 2
-        
-        for contour in contours:
+        for contour,aspectRatio in zip(contours,aspectRatios):
             area = cv2.contourArea(contour)
-            if min_area <= area <= max_area:  # 星直径閾値
-                # 重心を計算
-                M = cv2.moments(contour)
-                if M['m00'] > 0:
-                    cx = M['m10'] / M['m00']
-                    cy = M['m01'] / M['m00']
-                    
-                    # その点の明度を取得
-                    x, y = int(cx), int(cy)
-                    if 0 <= x < subtracted.shape[1] and 0 <= y < subtracted.shape[0]:
-                        brightness = float(subtracted[y, x])
-                        # 白跳びしている恒星を除外
-                        original_brightness = float(image[y, x]) if 0 <= x < image.shape[1] and 0 <= y < image.shape[0] else 0
-                        if brightness > 0 and original_brightness < saturation_threshold:
-                            stars.append((cx, cy, brightness))
+            # 重心を計算
+            M = cv2.moments(contour)
+            if M['m00'] > 0:
+                cx = M['m10'] / M['m00']
+                cy = M['m01'] / M['m00']
+                
+                # その点の明度を取得
+                x, y = int(cx), int(cy)
+                if 0 <= x < subtracted.shape[1] and 0 <= y < subtracted.shape[0]:
+                    brightness = float(subtracted[y, x])
+                    if brightness > 0:
+                        stars.append((cx, cy, brightness, aspectRatio))
         
         return stars
+    
+    def _createSaturationMask(self, image):
+        """飽和領域のマスクを作成"""
+        max_val = np.max(image)
+        saturated = image > (max_val * self.saturationThreshold / 100)
+        
+        # 飽和領域を膨張させて周辺も除外
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
+        mask = cv2.dilate(saturated.astype(np.uint8), kernel, iterations=2)
+        
+        return mask == 0  # 有効領域のマスク
     
     def _selectDistributedStars(self, stars, image_shape):
         """画像全体に分散した星を選択"""
@@ -774,7 +890,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
             return stars, []
         
         h, w = image_shape
-        grid_rows, grid_cols = self.gridRows, self.gridCols
+        grid_rows, grid_cols = self.star.grid.rows, self.star.grid.cols
         
         # 各グリッド領域のサイズ
         cell_h = h // grid_rows
@@ -793,28 +909,27 @@ class ImageAlignmentNode(NNBlockOperationNode):
                 
                 # このグリッド内の星を抽出
                 grid_stars = []
-                for x, y, brightness in stars:
+                for x, y, brightness, aspectRatio in stars:
                     if x_min <= x < x_max and y_min <= y < y_max:
-                        grid_stars.append((x, y, brightness))
+                        grid_stars.append((x, y, brightness, aspectRatio))
                 
                 # 明度順でソートして上位指定数を選択
                 selected_count = 0
                 if grid_stars:
                     grid_stars.sort(key=lambda x: x[2], reverse=True)
-                    selected = grid_stars[:self.starsPerGrid]
+                    selected = grid_stars[:self.star.grid.starsPerGrid]
                     distributed_stars.extend(selected)
                     selected_count = len(selected)
                 
                 grid_selected_counts.append(selected_count)
         
         # 全体からも明るい星を追加（重複除去）
-        max_total_stars = grid_rows * grid_cols * self.starsPerGrid + 20
+        max_total_stars = grid_rows * grid_cols * self.star.grid.starsPerGrid + 20
         all_bright = sorted(stars, key=lambda x: x[2], reverse=True)
         for star in all_bright:
             if star not in distributed_stars and len(distributed_stars) < max_total_stars:
                 distributed_stars.append(star)
         
-
         return distributed_stars[:max_total_stars], grid_selected_counts
     
     def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
@@ -822,7 +937,8 @@ class ImageAlignmentNode(NNBlockOperationNode):
         width, height = flowData.getDimensions()
         
         if planeIndex is not None:
-            # 特定プレーンのみを使用（RAW画像対応）
+            # 特定プレーンのみを使用
+            print("in"); time = datetime.datetime.now()
             image = np.zeros((height, width), dtype=np.float32)
             for block in flowData.iterateBlocks():
                 if block and block.planeIndex == planeIndex:
@@ -832,14 +948,28 @@ class ImageAlignmentNode(NNBlockOperationNode):
                         image[y1:y2, x1:x2] = block.data[:, :, 0].astype(np.float32)
                     else:
                         image[y1:y2, x1:x2] = block.data.astype(np.float32)
+            print(f"out {datetime.datetime.now() - time}")
             
-            # 星検出用の正規化処理
-            if normalize_for_detection and np.nanmax(image) > 255:
-                # RAW画像の正規化（より穏健な手法）
-                mean_val = np.mean(image)
-                std_val = np.std(image)
-                image = (image - mean_val) / std_val
-                image = np.clip((image + 3) / 6 * 255, 0, 255)
+            # 星検出用の正規化処理（統計的手法）
+            if normalize_for_detection:
+                min_val = np.min(image)
+                max_val = np.max(image)
+                margin = (max_val - min_val) * float(self.saturationThreshold) / 100
+                saturation_threshold_l = min_val + margin
+                saturation_threshold_h = max_val - margin
+                valid_mask = (image > saturation_threshold_l) & (image < saturation_threshold_h)
+                valid_pixels = image[valid_mask]
+                if np.any(valid_mask):
+                    mean_val = np.mean(valid_pixels)
+                    std_val = np.std(valid_pixels)
+                else:
+                    mean_val = np.mean(image)
+                    std_val = np.std(image)
+                if std_val > 0:
+                    image = (image - mean_val) / std_val
+                    image = np.clip((image + 3) / 6 * 255, 0, 255)
+                else:
+                    image = np.zeros_like(image)
                 image = image.astype(np.uint8)
             # それ以外は入力値域を維持
         else:
@@ -863,7 +993,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         return ImageAlignmentSettingsDialog(self.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.referenceIndex}_{self.gridRows}_{self.gridCols}_{self.starsPerGrid}_{self.alignmentPlane}_{self.starThreshold}_{self.cropMode}_{self.phaseCorrelationMaxOffset}_{self.starSampleRadius}_{self.starMinDiameter}_{self.starMaxDiameter}_{self.templateSearchRange}_{self.ransacIterations}_{self.usePreviousOffset}"
+        config = f"{self.referenceIndex}_{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}_{self.cropMode}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
@@ -871,7 +1001,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.text}設定")
-        self.geometry("450x650")
+        self.geometry("450x800")
         
         self.createWidgets()
         
@@ -916,33 +1046,49 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         thresholdFrame.pack(fill=tk.X, pady=2)
         tk.Label(thresholdFrame, text="    星検出閾値:").pack(side=tk.LEFT)
         self.thresholdEntry = tk.Entry(thresholdFrame, width=5)
-        self.thresholdEntry.insert(0, str(self.node.starThreshold))
+        self.thresholdEntry.insert(0, str(self.node.star.threshold))
         self.thresholdEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(thresholdFrame, text="% (上位%の明るい星を選択)").pack(side=tk.LEFT)
+        
+        # 飽和マスクを使用
+        useSaturationMaskFrame = tk.Frame(mainFrame)
+        useSaturationMaskFrame.pack(fill=tk.X, pady=2)
+        tk.Label(useSaturationMaskFrame, text="    飽和マスクを使用する:").pack(side=tk.LEFT)
+        self.useSaturationMaskVar = tk.BooleanVar(value=self.node.star.useSaturationMask)
+        tk.Checkbutton(useSaturationMaskFrame, text="飽和領域を除いて星検出閾値を適用", variable=self.useSaturationMaskVar).pack(side=tk.LEFT)
         
         # 星直径閾値
         starSizeFrame = tk.Frame(mainFrame)
         starSizeFrame.pack(fill=tk.X, pady=2)
         tk.Label(starSizeFrame, text="    星直径閾値:").pack(side=tk.LEFT)
         self.starMinDiameterEntry = tk.Entry(starSizeFrame, width=5)
-        self.starMinDiameterEntry.insert(0, str(self.node.starMinDiameter))
+        self.starMinDiameterEntry.insert(0, str(self.node.star.minDiameter))
         self.starMinDiameterEntry.pack(side=tk.LEFT, padx=2)
         tk.Label(starSizeFrame, text="~").pack(side=tk.LEFT)
         self.starMaxDiameterEntry = tk.Entry(starSizeFrame, width=5)
-        self.starMaxDiameterEntry.insert(0, str(self.node.starMaxDiameter))
+        self.starMaxDiameterEntry.insert(0, str(self.node.star.maxDiameter))
         self.starMaxDiameterEntry.pack(side=tk.LEFT, padx=2)
         tk.Label(starSizeFrame, text="px (検出対象の星直径)").pack(side=tk.LEFT)
+        
+        # 除外する最大アスペクト比
+        aspectRatioFrame = tk.Frame(mainFrame)
+        aspectRatioFrame.pack(fill=tk.X, pady=2)
+        tk.Label(aspectRatioFrame, text="    除外する最大アスペクト比:").pack(side=tk.LEFT)
+        self.aspectRatioEntry = tk.Entry(aspectRatioFrame, width=5)
+        self.aspectRatioEntry.insert(0, str(self.node.star.maxAspectRatio))
+        self.aspectRatioEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(aspectRatioFrame, text="(この比以上の細長い物体を除外)").pack(side=tk.LEFT)
         
         # グリッド設定
         gridFrame = tk.Frame(mainFrame)
         gridFrame.pack(fill=tk.X, pady=2)
         tk.Label(gridFrame, text="    グリッド:").pack(side=tk.LEFT)
         self.gridRowsEntry = tk.Entry(gridFrame, width=5)
-        self.gridRowsEntry.insert(0, str(self.node.gridRows))
+        self.gridRowsEntry.insert(0, str(self.node.star.grid.rows))
         self.gridRowsEntry.pack(side=tk.LEFT, padx=2)
         tk.Label(gridFrame, text="x").pack(side=tk.LEFT)
         self.gridColsEntry = tk.Entry(gridFrame, width=5)
-        self.gridColsEntry.insert(0, str(self.node.gridCols))
+        self.gridColsEntry.insert(0, str(self.node.star.grid.cols))
         self.gridColsEntry.pack(side=tk.LEFT, padx=2)
         tk.Label(gridFrame, text="(星選択用分割数)").pack(side=tk.LEFT)
         
@@ -951,7 +1097,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         starsFrame.pack(fill=tk.X, pady=2)
         tk.Label(starsFrame, text="    グリッド当たり星数:").pack(side=tk.LEFT)
         self.starsEntry = tk.Entry(starsFrame, width=10)
-        self.starsEntry.insert(0, str(self.node.starsPerGrid))
+        self.starsEntry.insert(0, str(self.node.star.grid.starsPerGrid))
         self.starsEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(starsFrame, text="個 (各グリッドから選ぶ星数)").pack(side=tk.LEFT)
         
@@ -960,7 +1106,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         starDistFrame.pack(fill=tk.X, pady=2)
         tk.Label(starDistFrame, text="    星サンプル半径:").pack(side=tk.LEFT)
         self.starDistEntry = tk.Entry(starDistFrame, width=5)
-        self.starDistEntry.insert(0, str(self.node.starSampleRadius))
+        self.starDistEntry.insert(0, str(self.node.star.ransac.sampleRadius))
         self.starDistEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(starDistFrame, text="px (統計処理用サンプル収集範囲)").pack(side=tk.LEFT)
         
@@ -969,9 +1115,18 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         ransacFrame.pack(fill=tk.X, pady=2)
         tk.Label(ransacFrame, text="    RANSAC試行回数:").pack(side=tk.LEFT)
         self.ransacEntry = tk.Entry(ransacFrame, width=5)
-        self.ransacEntry.insert(0, str(self.node.ransacIterations))
+        self.ransacEntry.insert(0, str(self.node.star.ransac.iterations))
         self.ransacEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(ransacFrame, text="回 (外れ値耐性用繰り返し回数)").pack(side=tk.LEFT)
+        
+        # RANSAC乱数シード
+        seedFrame = tk.Frame(mainFrame)
+        seedFrame.pack(fill=tk.X, pady=2)
+        tk.Label(seedFrame, text="    RANSAC乱数シード:").pack(side=tk.LEFT)
+        self.ransacSeedEntry = tk.Entry(seedFrame, width=5)
+        self.ransacSeedEntry.insert(0, str(self.node.star.ransac.seed))
+        self.ransacSeedEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(seedFrame, text="(1以上、結果が悪い場合は変更)").pack(side=tk.LEFT)
         
         # 優先順位2: 位相相関法
         tk.Label(mainFrame, text="  □ 優先順位2: 位相相関法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
@@ -981,7 +1136,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         phaseFrame.pack(fill=tk.X, pady=2)
         tk.Label(phaseFrame, text="    位相相関最大オフセット:").pack(side=tk.LEFT)
         self.phaseOffsetEntry = tk.Entry(phaseFrame, width=5)
-        self.phaseOffsetEntry.insert(0, str(self.node.phaseCorrelationMaxOffset))
+        self.phaseOffsetEntry.insert(0, str(self.node.phase.maxOffset))
         self.phaseOffsetEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(phaseFrame, text="px (FFT位置合わせ上限)").pack(side=tk.LEFT)
         
@@ -993,7 +1148,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         templateFrame.pack(fill=tk.X, pady=2)
         tk.Label(templateFrame, text="    テンプレート検索範囲:").pack(side=tk.LEFT)
         self.templateSearchEntry = tk.Entry(templateFrame, width=5)
-        self.templateSearchEntry.insert(0, str(self.node.templateSearchRange))
+        self.templateSearchEntry.insert(0, str(self.node.template.searchRange))
         self.templateSearchEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(templateFrame, text="px (パターンマッチング検索範囲)").pack(side=tk.LEFT)
         
@@ -1027,19 +1182,22 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
     def onApply(self):
         try:
             self.node.referenceIndex = max(0, int(self.refEntry.get()) - 1)
-            self.node.gridRows = max(1, int(self.gridRowsEntry.get()))
-            self.node.gridCols = max(1, int(self.gridColsEntry.get()))
-            self.node.starsPerGrid = max(1, int(self.starsEntry.get()))
+            self.node.star.grid.rows = max(1, int(self.gridRowsEntry.get()))
+            self.node.star.grid.cols = max(1, int(self.gridColsEntry.get()))
+            self.node.star.grid.starsPerGrid = max(1, int(self.starsEntry.get()))
             self.node.alignmentPlane = max(0, min(2, int(self.planeEntry.get())))
-            self.node.starThreshold = max(50, min(99, int(self.thresholdEntry.get())))
+            self.node.star.threshold = max(50, min(99, int(self.thresholdEntry.get())))
             self.node.cropMode = self.cropVar.get()
-            self.node.phaseCorrelationMaxOffset = max(10, int(self.phaseOffsetEntry.get()))
-            self.node.starSampleRadius = max(10, int(self.starDistEntry.get()))
-            self.node.starMinDiameter = max(1, int(self.starMinDiameterEntry.get()))
-            self.node.starMaxDiameter = max(self.node.starMinDiameter, int(self.starMaxDiameterEntry.get()))
-            self.node.templateSearchRange = max(10, int(self.templateSearchEntry.get()))
-            self.node.ransacIterations = max(10, min(1000, int(self.ransacEntry.get())))
+            self.node.phase.maxOffset = max(10, int(self.phaseOffsetEntry.get()))
+            self.node.star.ransac.sampleRadius = max(10, int(self.starDistEntry.get()))
+            self.node.star.minDiameter = max(1, int(self.starMinDiameterEntry.get()))
+            self.node.star.maxDiameter = max(self.node.star.minDiameter, int(self.starMaxDiameterEntry.get()))
+            self.node.template.searchRange = max(10, int(self.templateSearchEntry.get()))
+            self.node.star.ransac.iterations = max(10, min(1000, int(self.ransacEntry.get())))
+            self.node.star.ransac.seed = max(1, int(self.ransacSeedEntry.get()))
             self.node.usePreviousOffset = self.usePrevOffsetVar.get()
+            self.node.star.useSaturationMask = self.useSaturationMaskVar.get()
+            self.node.star.maxAspectRatio = max(1.0, float(self.aspectRatioEntry.get()))
             
             self.node.updateNodeText()
             

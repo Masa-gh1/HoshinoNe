@@ -15,6 +15,8 @@ import tkinter as tk
 from tkinter import ttk
 from utils.interval_helper import createHalfOpenEnd
 
+from . import config 
+
 try:
     import numpy as np
     NUMPY_AVAILABLE = True
@@ -223,6 +225,11 @@ class ResultWindow(tk.Toplevel):
             content.extend(result)
         else:
             content.append(result)
+
+        if config.DEBUG:
+            content.append("\n\n")
+            content.append("headers:\n" + str(headers).replace(", '", ",\n'") + "\n")
+            
         return content
     
     def _generateTensorContent(self, flowData):
@@ -331,7 +338,7 @@ class ResultWindow(tk.Toplevel):
         text = "\n"
         text += f"Mode: {mode}\n"
         text += f"Planes: {', '.join(planes)}\n"
-        text += f"Display Levels: {displayLevelMin} - {displayLevelEnd}\n"
+        text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
         text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
         text += f"All levels: {minValue:.3f} - {allLevelEnd:.3f}\n"
         

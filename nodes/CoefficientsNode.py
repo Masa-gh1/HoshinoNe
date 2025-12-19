@@ -12,8 +12,9 @@ import tkinter as tk
 from tkinter import simpledialog
 from base import FlowNode, FlowData, DataBlock
 from utils.interval_helper import createHalfOpenEnd
+from base.ConfigurableNode import ConfigurableNode
 
-class CoefficientsNode(FlowNode):
+class CoefficientsNode(FlowNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         self.planeCount = 3
         self.xOrder = 0

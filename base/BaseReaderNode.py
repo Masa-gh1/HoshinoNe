@@ -15,8 +15,9 @@ import tkinter as tk
 from abc import abstractmethod
 from tkinter import messagebox, ttk, filedialog
 from .FlowNode import FlowNode
+from base.ConfigurableNode import ConfigurableNode
 
-class BaseReaderNode(FlowNode):
+class BaseReaderNode(FlowNode,ConfigurableNode):
     """ファイル読み込みノードの基底クラス"""
     
     def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):

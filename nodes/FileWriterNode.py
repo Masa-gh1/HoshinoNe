@@ -8,12 +8,9 @@ All rights reserved.
 '''
 
 import csv
-import sys
 import os
-import traceback
-from tkinter import filedialog, messagebox
-from base import BaseWriterNode, FlowData
-from config import MAX_WORKERS, BLOCK_SIZE
+from base import BaseWriterNode
+from config import BLOCK_SIZE
 
 class FileWriterNode(BaseWriterNode):
     def __init__(self, canvas, editor, x, y, **kwargs):

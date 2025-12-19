@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import hashlib
 from base import NNBlockOperationNode, DataBlock
+from base.ConfigurableNode import ConfigurableNode
 
 
 try:
@@ -32,7 +33,7 @@ try:
 except ImportError:
     SKIMAGE_AVAILABLE = False
 
-class WaveletDenoiseNode(NNBlockOperationNode):
+class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "wavelet_denoise", "ウェーブレットノイズ除去")
         
