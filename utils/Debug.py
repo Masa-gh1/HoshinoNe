@@ -20,7 +20,7 @@ class Debug:
 
     LEVEL = LEVEL_NONE
 
-    _bugReportLog = []
+    _debugReportLog = []
 
     @classmethod
     def isTestMode(cls):
@@ -35,10 +35,18 @@ class Debug:
 
         t = datetime.datetime.now()
         context = (t , name, message, tb)
-        cls._bugReportLog.append(context)
+        cls._debugReportLog.append(context)
 
         if cls.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
             print(f"{t.isoformat()}: {name}: {message}")
             if tb:
                 for s in tb:
                     print(s)
+    
+    @classmethod
+    def getDebugReport(self):
+        for t , name, message, tb in self._debugReportLog:
+            yield f"{t.isoformat()}: {name}: {message}"
+            if tb:
+                for s in tb:
+                    yield s

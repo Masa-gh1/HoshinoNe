@@ -7,7 +7,6 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import inspect
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import datetime
@@ -15,7 +14,6 @@ import numpy as np
 import sys
 import os
 import traceback
-import gc
 
 from Version import VERSION
 from base import FlowNode
@@ -25,7 +23,6 @@ from base import FlowFile
 from base import CacheManager
 from nodes import NodeFactory
 from .Tray import Tray
-from utils.Debug import Debug
 from utils.ThreadPool import CoalescingExecutor
 
 class FlowEditor:
@@ -732,6 +729,8 @@ class FlowEditor:
     
     def onNodeConfigChanged(self, node):
         """ノードの設定変更時に呼び出される"""
+        from utils.Debug import Debug
+        
         text = node.getText()
         if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadIndex'):
             text = f"{node._loadIndex} {text}"
@@ -798,9 +797,13 @@ class FlowEditor:
     
     def updateCacheStats(self):
         """キャッシュ統計を更新"""
+        import gc
+        from utils.Debug import Debug
         
+        ObjectCount = f"{len(gc.get_objects())}個"
         flowNodeCount = f"{len(self.nodes)}個"
-        trayCount = f"{len(self.trays)}個" if self.trays else ""
+        trayCount = f"{len(self.trays)}個"
+        flowDataCount = f"{sum([len(node.flowDatas) for node in self.nodes])}個"
         
         cacheNodeCount = f"{self.getNodeCount()}個"
         
@@ -827,14 +830,13 @@ class FlowEditor:
             storageStr = f"{int(storageSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
-        nodeInfo = f"Node: {flowNodeCount}"
-        if trayCount:
-            nodeInfo += f" Tray: {trayCount}"
-        
-        info = f"{nodeInfo} Cache: {cacheNodeCount} {cacheStr} storage: {storageStr}"
+        objInfo  = f"Object: {ObjectCount}"
+        nodeInfo = f"Node: {flowNodeCount} Cache: {cacheNodeCount}"
+        dataInfo = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
+        info = f"{nodeInfo} {dataInfo} {objInfo}"
 
         if Debug.LEVEL_NONE < Debug.LEVEL:
-            info = f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount}  {info}"
+            info = f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount} {info}"
         
         self.usageLabel.config(text=info)
         
@@ -842,6 +844,8 @@ class FlowEditor:
         self.root.after(5000, self.updateCacheStats)
 
     def getNodeCount(self):
+        import gc
+        
         nodes = []
         for obj in gc.get_objects():
             if isinstance( obj, FlowNode):
@@ -850,6 +854,9 @@ class FlowEditor:
 
     def forceGarbageCollection(self):
         """ガベージコレクションを強制実行"""
+        import gc
+        from utils.Debug import Debug
+        
         # 実行前のメモリ使用量を取得
         beforeNodeCount = self.getNodeCount()
         _, beforeCache, _, beforeStorage, _, _, _, _, _ = CacheManager.getCacheStats()
@@ -884,14 +891,13 @@ class FlowEditor:
         
         if Debug.LEVEL_NONE < Debug.LEVEL:
             print("========================")
-            self._debugNodeReferences()
+            print(f"References report")
+            self._debugReferencesReport()
             print("========================")
-            if hasattr(self, '_bugReportLog'):
-                for t, name, message, tb in self._bugReportLog:
-                    print(f"{t.isoformat()}: {name}: {message}")
-                    if tb:
-                        print(tb)
-                print("========================")
+            print(f"Debug report")
+            for text in Debug.getDebugReport():
+                print(text)
+            print("========================")
             cacheCount, cacheSize, storageCount, storageSize, cacheMissCount, purgeCount, saveCount, loadCount, elapsedHis = CacheManager.getCacheStats()
             print(f"cacheCount: {cacheCount}")
             print(f"cacheSize: {cacheSize}")
@@ -902,6 +908,7 @@ class FlowEditor:
             print(f"saveCount: {saveCount}")
             print(f"loadCount: {loadCount}")
             for name, his in elapsedHis.items():
+                print("------------------------")
                 print(name)
                 for ms in sorted(his):
                     print(f"{ms} ms: {his[ms]}")
@@ -909,6 +916,8 @@ class FlowEditor:
 
     def toggleDebugMode(self, event):
         """デバッグモードを切り替える"""
+        from utils.Debug import Debug
+        
         Debug.LEVEL = Debug.LEVEL_NONE if Debug.LEVEL_NONE != Debug.LEVEL else Debug.LEVEL_ALL
         self.statusLabel.config(text=f"状態: DEBUGモード {'OFF' if Debug.LEVEL == Debug.LEVEL_NONE else 'ON'}")
 
@@ -917,22 +926,49 @@ class FlowEditor:
 
         return "break"
 
-    def _debugNodeReferences(self):
+    def _debugReferencesReport(self):
         """ノードの参照状況をデバッグ出力"""
+        import gc
         # 全オブジェクトからflowNodeを探す
         objs = []
-        listCount = 0
+        objCount = 0
+        typeCounts = {}
+        moduleCounts = {}
+        nodeCount = 0
         for obj in gc.get_objects():
+            objCount += 1
+
+            t = type(obj)
+            name = t.__name__
+            typeCounts[name] = typeCounts.setdefault(name,0) + 1
+
+            name = getattr(obj, '__module__', getattr(t, '__module__', 'unknown'))
+            moduleCounts[name] = moduleCounts.setdefault(name,0) + 1
+
             if(  isinstance( obj, FlowNode)
         #      or isinstance( obj, FlowData)
               ):
                 objs.append(obj)
-            elif(  isinstance( obj, list)
-                ):
-                listCount += 1
+                nodeCount += 1
         
-        print(f"残存list数: {listCount}")
-        print(f"残存flowNode数: {len(objs)}")
+        print(f"残存object数: {objCount} ", end="")
+        _y = 0
+        for x,y in sorted(list(typeCounts.items()), key=lambda x:x[1]):
+            if _y != y:
+                print(f"\n  {y}: ", end="")
+            print(x, end=" ")
+            _y = y
+        print()
+
+        print(f"残存object数 module別: {len(moduleCounts)} ", end="")
+        _y = 0
+        for x,y in sorted(list(moduleCounts.items()), key=lambda x:x[1]):
+            if _y != y:
+                print(f"\n  {y}: ", end="")
+            print(x, end=" ")
+            _y = y
+        print()
+        print(f"残存flowNode数: {nodeCount}")
         
         for i, obj in enumerate(objs):
             print(f"残存ノード{i}: {getattr(obj, 'text', type(obj).__name__)} (id: {id(obj)}) (loadIndex: {getattr(obj,'_loadIndex',None)})")
@@ -981,6 +1017,9 @@ class FlowEditor:
     
     def _debugNodeReferencesRecursive(self, obj, level = 0, exists=set()):
         """ノードの参照状況を再帰的に収集"""
+        import gc
+        import inspect
+        
         level += 16
         objs = set()
 
@@ -1005,9 +1044,3 @@ class FlowEditor:
                 for ref in referrers:
                     objs.update(self._debugNodeReferencesRecursive(ref, level))
             return(objs)
-
-    def _debugReport(self):
-        if hasattr(self, '_bugReportLog'):
-            print("バグレポート")
-            for log in self._bugReportLog:
-                print(log)
