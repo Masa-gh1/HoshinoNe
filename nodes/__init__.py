@@ -13,7 +13,7 @@ from .BaseReaderNode import BaseReaderNode
 from .BaseReaderNode import BaseReaderSettingsDialog
 from .BaseWriterNode import BaseWriterNode
 from .BaseWriterNode import BaseWriterSettingsDialog
-from .VectorOperationMixin import VectorOperationMixin
+from .TensorOperationMixin import TensorOperationMixin
 from .PolynomialOperationMixin import PolynomialOperationMixin
 from .NodeFactory import NodeFactory
 

@@ -10,10 +10,10 @@ All rights reserved.
 import numpy as np
 from config import BLOCK_SIZE
 from base import DataBlock
-from nodes import N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMixin
+from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
 from utils import numpy_helpers as nh
 
-class SumNode(N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMixin):
+class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "sum", "総和")
     
@@ -23,29 +23,29 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMix
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
         datas = []
-        vectors = []
+        tensors = []
         polynomials = []
         
         for data in inputDatas:
             dataType = data.headers.get('type', 'matrix')
-            if   dataType == 'vector':
-                vectors.append(data)
+            if   dataType == 'tensor':
+                tensors.append(data)
             elif dataType == 'polynomial':
                 polynomials.append(data)
             else:
                 datas.append(data)
         
-        # vector を事前統合(加算)
-        self._combinedVector = self.computeCombinedVector(vectors, np.add)
+        # tensor を事前統合(加算)
+        self._combinedTensor = self.computeCombinedTensor(tensors, np.add)
         
         # polynomial を事前統合(加算)
         self._combinedPolynomial = self.computeCombinedPolynomial(polynomials, np.add)
         
         if datas:
             return datas
-        elif self._combinedVector:
-            datas = [self._combinedVector] 
-            self._combinedVector = None
+        elif self._combinedTensor:
+            datas = [self._combinedTensor] 
+            self._combinedTensor = None
             return datas
         elif self._combinedPolynomial:
             datas = [self._combinedPolynomial] 

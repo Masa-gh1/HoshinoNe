@@ -24,7 +24,7 @@ from .basic.CountNode import CountNode
 from .basic.QuadraticFitNode import QuadraticFitNode
 
 from .preset.AutoLevelsNode import AutoLevelsNode
-from .preset.VectorNode import VectorNode
+from .preset.TensorNode import TensorNode
 from .preset.CoefficientsNode import CoefficientsNode
 from .preset.AbsoluteLowPassFilterNode import AbsoluteLowPassFilterNode
 from .preset.ImageAlignmentNode import ImageAlignmentNode # 廃止 ShiftDetectionNode, TransformNode に分割
@@ -57,7 +57,7 @@ class NodeFactory:
         'product'                : ProductNode,
         'count'                  : CountNode,
         #####
-        'vector'                 : VectorNode,
+        'tensor'                 : TensorNode,
         'coefficients'           : CoefficientsNode,
         'quadratic_fit'          : QuadraticFitNode,
         #####
@@ -99,7 +99,7 @@ class NodeFactory:
         ('product'                , '総積(N:1)'),
         ('count'                  , 'カウント(N:1)'),
         ('separator'              , None),
-        ('vector'                 , '数列'),
+        ('tensor'                 , '数列'),
         ('coefficients'           , '係数'),
         ('quadratic_fit'          , '2次関数近似'),
         ('separator'              , None),

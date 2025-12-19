@@ -1,5 +1,5 @@
 '''
-VectorNode class
+TensorNode class
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -15,23 +15,23 @@ from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
 from utils.interval_helper import createHalfOpenEnd
 
-class VectorNode(FlowNode,ConfigurableNode):
+class TensorNode(FlowNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "vector", "数列")
+        super().__init__(canvas, editor, x, y, "tensor", "数列")
         self.planeCount = 3
         self.xOrder = 1
         self.yOrder = 1
         self.planeNames = ["Plane 0","Plane 1","Plane 2"]
-        self.vector = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIdx,i,j": value}
+        self.tensor = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIdx,i,j": value}
         self.updateNodeText()
     
     def getColor(self):
-        return self._color_vector
+        return self._color_const
     
     def updateNodeText(self):
         constVal = ""
         for planeIndex in range(self.planeCount):
-            value = self.vector.get(f"{planeIndex},0,0", 0)
+            value = self.tensor.get(f"{planeIndex},0,0", 0)
             if     -1 < value < 1:
                 constVal += f" {value:.3f}"
             elif  -10 < value < 10:
@@ -47,7 +47,7 @@ class VectorNode(FlowNode,ConfigurableNode):
         nodeData["planeCount"] = self.planeCount
         nodeData["xOrder"] = self.xOrder
         nodeData["yOrder"] = self.yOrder
-        nodeData["vector"] = self.vector
+        nodeData["tensor"] = self.tensor
         nodeData["planeNames"] = self.planeNames
     
     def restore(self, nodeData):
@@ -57,8 +57,8 @@ class VectorNode(FlowNode,ConfigurableNode):
             self.xOrder = nodeData["xOrder"]
         if "yOrder" in nodeData:
             self.yOrder = nodeData["yOrder"]
-        if "vector" in nodeData:
-            self.vector = nodeData["vector"]
+        if "tensor" in nodeData:
+            self.tensor = nodeData["tensor"]
         if "planeNames" in nodeData:
             self.planeNames = nodeData["planeNames"]
         else:
@@ -67,13 +67,13 @@ class VectorNode(FlowNode,ConfigurableNode):
         self.updateNodeText()
     
     def onEdit(self):
-        return VectorSettingsDialog(self.editor.root, self)
+        return TensorSettingsDialog(self.editor.root, self)
     
-    def applySettings(self, planeCount, xOrder, yOrder, vector, planeNames):
+    def applySettings(self, planeCount, xOrder, yOrder, tensor, planeNames):
         self.planeCount = planeCount
         self.xOrder = xOrder
         self.yOrder = yOrder
-        self.vector = vector
+        self.tensor = tensor
         self.planeNames = planeNames
         self.updateNodeText()
         
@@ -84,7 +84,7 @@ class VectorNode(FlowNode,ConfigurableNode):
     def process(self, context=None):
         self.reportProgress(context, "開始")
         
-        # 指定されたサイズの vector を作成
+        # 指定されたサイズの tensor を作成
         width = self.xOrder
         height = self.yOrder
         
@@ -109,7 +109,7 @@ class VectorNode(FlowNode,ConfigurableNode):
         
         headers = {
             'category': 'auxiliary',
-            'type': 'vector',
+            'type': 'tensor',
             'mode': mode,
             'axes': ['x_order', 'y_order'],
             'columns': columns,
@@ -128,7 +128,7 @@ class VectorNode(FlowNode,ConfigurableNode):
                 row = []
                 for i in range(width):
                     key = f"{planeIdx},{i},{j}"
-                    row.append(self.vector.get(key, 0))
+                    row.append(self.tensor.get(key, 0))
                 polynomialData.append(row)
             dataBlock = DataBlock(polynomialData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
@@ -141,12 +141,12 @@ class VectorNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "完了")
     
     def getConfigHash(self):
-        vectorStr = str(sorted(self.vector.items()))
+        tensorStr = str(sorted(self.tensor.items()))
         planeStr = str(self.planeNames)
-        config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{vectorStr}_{planeStr}"
+        config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{tensorStr}_{planeStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
-class VectorSettingsDialog(tk.Toplevel):
+class TensorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
@@ -252,8 +252,8 @@ class VectorSettingsDialog(tk.Toplevel):
                     for i in range(xOrd):
                         entry = tk.Entry(self.scrollableFrame, width=8)
                         key = f"{planeIdx},{i},{j}"
-                        if key in self.node.vector:
-                            entry.insert(0, str(self.node.vector[key]))
+                        if key in self.node.tensor:
+                            entry.insert(0, str(self.node.tensor[key]))
                         else:
                             entry.insert(0, "0")
                         entry.grid(row=row, column=i + 1, padx=5, pady=2)
@@ -273,12 +273,12 @@ class VectorSettingsDialog(tk.Toplevel):
             
             if planes > 0 and xOrd >= 0 and yOrd >= 0:
                 # 係数を収集
-                vector = {}
+                tensor = {}
                 for key, entry in self.coeffEntries.items():
                     try:
                         val = float(entry.get())
                         if val != 0:
-                            vector[key] = val
+                            tensor[key] = val
                     except ValueError:
                         pass
                 
@@ -290,7 +290,7 @@ class VectorSettingsDialog(tk.Toplevel):
                         name = f"Plane {len(planeNames)}"
                     planeNames.append(name)
                 
-                self.node.applySettings(planes, xOrd, yOrd, vector, planeNames)
+                self.node.applySettings(planes, xOrd, yOrd, tensor, planeNames)
         except ValueError:
             pass
     

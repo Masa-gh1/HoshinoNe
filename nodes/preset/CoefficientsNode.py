@@ -26,7 +26,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         self.updateNodeText()
     
     def getColor(self):
-        return self._color_coff
+        return self._color_const
     
     def updateNodeText(self):
         constVal = ""

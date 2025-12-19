@@ -44,13 +44,13 @@ class FlowNode(AbstractBaseClass):
         self.createVisual()
         self.bindEvents()
     
-    _color_vector = 'lightcyan'    # 定数系 cyan
-    _color_coff   = 'lightblue'    # 係数系 blue
-    _color_func   = 'plum'         # 関数系 magenta
-    _color_op     = 'pink'         # 演算系 red
-    _color_io     = 'lightyellow'  # 入出系 yellow
-    _color_util   = 'lightgrey'    # ユーティリティ  
-    _color_xxx    = 'lightgreen'   # 予約  
+    _color_func  = 'plum'         # 関数系 magenta
+    _color_op    = 'pink'         # 演算系 red
+    _color_io    = 'lightyellow'  # 入出系 yellow
+    _color_xxx   = 'lightgreen'   # 予約 green
+    _color_const = 'lightcyan'    # 定数系 blue
+    _color_yyy   = 'lightblue'    # 予約 cyan
+    _color_util  = 'lightgrey'    # ユーティリティ grey
     
     def getColor(self):
         return 'lightgreen'

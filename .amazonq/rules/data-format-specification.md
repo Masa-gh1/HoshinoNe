@@ -4,7 +4,7 @@
 
 ### 基本ヘッダー（全データ共通）
 - `category`: データ分類 ('primary' | 'auxiliary')
-- `type`: データ種別 ('image' | 'matrix' | 'polynomial' | 'vector')
+- `type`: データ種別 ('image' | 'matrix' | 'polynomial' | 'tensor')
 - `mode`: データモード
 - `planes`: プレーン名リスト
 - `width`: データ幅
@@ -52,11 +52,11 @@
 - `max_orders`: 最大次数リスト
 - `equations`: 方程式説明リスト
 
-### Vector データ (type: 'vector')
+### Tensor データ (type: 'tensor')
 #### mode値
-- `0D`, `1D`, `2D`: ベクトル次元
+- `0D`, `1D`, `2D`: tensor次元
 
-#### Vector固有ヘッダー
+#### Tensor固有ヘッダー
 - `axes`: 軸名リスト (['x_order', 'y_order'])
 - `columns`: 列ラベル (['0', '1', ...])
 - `lines`: 行ラベル (['0', '1', ...])
@@ -126,8 +126,8 @@
 - category='auxiliary', type='polynomial'
 - mode, axes, columns, lines, max_orders, equations設定
 
-#### VectorNode
-- category='auxiliary', type='vector'
+#### TensorNode
+- category='auxiliary', type='tensor'
 - mode, axes, columns, lines, max_orders設定
 
 ### 分類ノード
