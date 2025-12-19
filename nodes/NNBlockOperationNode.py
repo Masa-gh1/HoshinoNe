@@ -12,7 +12,7 @@ from concurrent.futures import as_completed
 
 from base import FlowData
 from base import FlowNode
-from utils.ThreadPool import ProcessExecutor
+from utils.ThreadPool import ProcessExecutorInNode 
 
 class NNBlockOperationNode(FlowNode):
     """データ入出力 N:N のブロック単位計算ノードの基底クラス"""
@@ -50,7 +50,7 @@ class NNBlockOperationNode(FlowNode):
             
             # ブロック単位で並列処理
             for block in inputData.iterateBlocks():
-                future = ProcessExecutor.submit(self.processBlock, block)
+                future = ProcessExecutorInNode .submit(self, self.processBlock, block)
                 futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待つ

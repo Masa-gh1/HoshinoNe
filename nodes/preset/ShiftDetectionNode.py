@@ -16,6 +16,7 @@ from tkinter import messagebox, ttk
 from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
+from utils.Debug import Debug
 
 try:
     import cv2
@@ -42,7 +43,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         # 基準画像選択（auxiliaryでマークされた画像を使用）
         self.usePreviousOffset = True  # 前の画像のズレを考慮する
         # オフセット計算
-        self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B）
+        self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B ...）
         self.saturationThreshold = 95  # 飽和閾値（%）
         # オフセット計算 優先順位1: 星点検出法
         self.star = SimpleNamespace()
@@ -198,10 +199,15 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         totalGlobalBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
         globalProcessedBlocks = 0
         
+        if referenceData.getPlaneCount() <= self.alignmentPlane:
+            alignmentPlane = min(1,referenceData.getPlaneCount()-1)
+        else:
+            alignmentPlane = self.alignmentPlane
+
         # 基準画像を検出用に処理
         if context:
             self.reportProgress(context, "基準画像処理中", globalProcessedBlocks, totalGlobalBlocks)
-        refGray = self._flowDataToImage(referenceData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
+        refGray = self._flowDataToImage(referenceData, planeIndex=alignmentPlane, normalize_for_detection=True)
         
         # 基準画像の星を一度だけ検出して保存
         self._cached_ref_stars = self._detectStars(refGray)
@@ -217,7 +223,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         for i, inputData in enumerate(inputDatas):
             # 対象画像を検出用に処理
-            targetGray = self._flowDataToImage(inputData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
+            targetGray = self._flowDataToImage(inputData, planeIndex=alignmentPlane, normalize_for_detection=True)
             globalProcessedBlocks += 1
             if context:
                 self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
@@ -228,19 +234,19 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             if result:
                 star_result = result
             else:
-                self.editor.bugReport(type(self).__name__,"fail findOffsetByStarDetection")
+                Debug.log(type(self).__name__,"fail findOffsetByStarDetection")
                 star_result = None
                 result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result)
             if result:
                 phase_result = result
             else:
-                self.editor.bugReport(type(self).__name__,"fail findOffsetByPhaseCorrelation")
+                Debug.log(type(self).__name__,"fail findOffsetByPhaseCorrelation")
                 phase_result = None
                 result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result)
             if result:
                 template_result = result
             else:
-                self.editor.bugReport(type(self).__name__,"fail findOffsetByTemplateMatching")
+                Debug.log(type(self).__name__,"fail findOffsetByTemplateMatching")
                 template_result = None
             
             # 成功した結果を選択
@@ -676,7 +682,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
             degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
             degug += " " + f"ransac_iteration:{extra_info['ransac_iteration']}" if 'ransac_iteration' in extra_info else ""
-            self.editor.bugReport(type(self).__name__,f"{degug}")
+            Debug.log(type(self).__name__,f"{degug}")
             
             return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
         
@@ -780,7 +786,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         except (cv2.error, SystemError):
             # OpenCV 4.5.5以降のバグ対応
-            self.editor.bugReport(type(self).__name__,"Retry cv2.findContours")
+            Debug.log(type(self).__name__,"Retry cv2.findContours")
             try:
                 contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             except (cv2.error, SystemError):
@@ -939,7 +945,7 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
         self.planeEntry = tk.Entry(planeFrame, width=5)
         self.planeEntry.insert(0, str(self.node.alignmentPlane))
         self.planeEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(planeFrame, text="(0:R, 1:G, 2:B, 位置検出用)").pack(side=tk.LEFT)
+        tk.Label(planeFrame, text="(0:R, 1:G, 2:B, ... 位置検出用)").pack(side=tk.LEFT)
         
         # 優先順位1: 星点検出法
         tk.Label(mainFrame, text="  □ 優先順位1: 星点検出法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
@@ -1069,7 +1075,7 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
             self.node.star.grid.rows = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols = max(1, int(self.gridColsEntry.get()))
             self.node.star.grid.starsPerGrid = max(1, int(self.starsEntry.get()))
-            self.node.alignmentPlane = max(0, min(2, int(self.planeEntry.get())))
+            self.node.alignmentPlane = max(0, int(self.planeEntry.get()))
             self.node.star.threshold = max(50, min(99, int(self.thresholdEntry.get())))
 
             self.node.phase.maxOffset = max(10, int(self.phaseOffsetEntry.get()))

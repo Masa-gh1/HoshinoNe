@@ -12,7 +12,7 @@ import os
 import sys
 
 from config import HEADERS_EXIF, HEADERS_EXIF_OPT
-from main import Debug
+from .Debug import Debug
 
 # グローバルキャッシュ
 _exif_cache = {}
@@ -83,15 +83,8 @@ def _get_pil_exif(filepath, attr):
                     
                     try:
                         # DateTime特別処理
-                        if tag in ["DateTime", "DateTimeOriginal", "DateTimeDigitized"]:
-                            for fmt in ["%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"]:
-                                try:
-                                    dt = datetime.datetime.strptime(str(value), fmt)
-                                    if "DateTime" not in attr or dt.timestamp() < attr["DateTime"]:
-                                        attr["DateTime"] = dt.timestamp()
-                                    break
-                                except ValueError:
-                                    continue
+                        if tag in ["DateTime", "DateTimeDigitized", "DateTimeOriginal"]:
+                            attr[tag] = str(value)[:10].replace("/","-").replace(":","-")+str(value)[10:]
                         # HEADERS_EXIFによる一般化処理
                         else:
                             for name, tag_name, converter in (HEADERS_EXIF + HEADERS_EXIF_OPT):
@@ -121,15 +114,8 @@ def _get_exifread_exif(filepath, attr):
             for tag, value in exifread_tags.items():
                 try:
                     # DateTime特別処理
-                    if "DateTime" in tag and "DateTime" not in attr:
-                        val_str = str(value)
-                        for fmt in ["%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"]:
-                            try:
-                                dt = datetime.datetime.strptime(val_str, fmt)
-                                attr["DateTime"] = dt.timestamp()
-                                break
-                            except ValueError:
-                                continue
+                    if tag in ["DateTime", "DateTimeDigitized", "DateTimeOriginal"] and tag not in attr:
+                        attr[tag] = str(value)[:10].replace("/","-").replace(":","-")+str(value)[10:]
                     # HEADERS_EXIFによる一般化処理
                     else:
                         for name, tag_name, converter in (HEADERS_EXIF + HEADERS_EXIF_OPT):

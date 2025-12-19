@@ -29,9 +29,9 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
         lazyFlowData.addOperation(self._bayerUnpackOperation)
-        lazyFlowData.addHeaderOperation('mode', self._computeHeaders)
+        lazyFlowData.addHeaderOperation('mode'  , self._computeHeaders)
         lazyFlowData.addHeaderOperation('planes', self._computeHeaders)
-        lazyFlowData.addHeaderOperation('width', self._computeHeaders)
+        lazyFlowData.addHeaderOperation('width' , self._computeHeaders)
         lazyFlowData.addHeaderOperation('height', self._computeHeaders)
 
         width, height = inputData.getDimensions()
@@ -72,31 +72,22 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         
         result = nh.nans((outHeight, outWidth))
         
-        # ベイヤーパターンに応じて抽出
-        if bayer_pattern == 'RGGB':
-            offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]  # R, G1, B, G2
-        elif bayer_pattern == 'GRBG':
-            offsets = [(0, 1), (0, 0), (1, 0), (1, 1)]  # R, G1, B, G2
-        elif bayer_pattern == 'GBRG':
-            offsets = [(1, 0), (0, 0), (0, 1), (1, 1)]  # R, G1, B, G2
-        elif bayer_pattern == 'BGGR':
-            offsets = [(1, 1), (0, 1), (0, 0), (1, 0)]  # R, G1, B, G2
-        else:
-            offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]  # デフォルト(RGGB)
+        # ベイヤーパターンに応じてマスクを作成     [   R      G1      B       G2  ]
+        if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]  
+        elif bayer_pattern == 'GRBG': offsets = [(0, 1), (0, 0), (1, 0), (1, 1)]
+        elif bayer_pattern == 'GBRG': offsets = [(1, 0), (1, 1), (0, 1), (0, 0)]
+        elif bayer_pattern == 'BGGR': offsets = [(1, 1), (1, 0), (0, 0), (0, 1)]
+        else                        : offsets = [(0, 0), (0, 1), (1, 1), (1, 0)] # デフォルト RGGB
         
         # 指定プレーンのオフセット
         if planeIndex < len(offsets):
             dy, dx = offsets[planeIndex]
             
             # numpyスライシングで効率化
-            if data00 is not None:
-                result[0:height00//2, 0:width00//2] = data00[dy::2, dx::2]
-            if data10 is not None:
-                result[0:height10//2, width00//2:width00//2+width10//2] = data10[dy::2, dx::2]
-            if data01 is not None:
-                result[height00//2:height00//2+height01//2, 0:width01//2] = data01[dy::2, dx::2]
-            if data11 is not None:
-                result[height10//2:height10//2+height11//2, width01//2:width01//2+width11//2] = data11[dy::2, dx::2]
+            if data00 is not None: result[0:height00//2                        , 0:width00//2                      ] = data00[dy::2, dx::2]
+            if data10 is not None: result[0:height10//2                        ,   width00//2:width00//2+width10//2] = data10[dy::2, dx::2]
+            if data01 is not None: result[  height00//2:height00//2+height01//2, 0:width01//2                      ] = data01[dy::2, dx::2]
+            if data11 is not None: result[  height10//2:height10//2+height11//2,   width01//2:width01//2+width11//2] = data11[dy::2, dx::2]
         
         return DataBlock(result, planeIndex, x, y)
     
@@ -106,9 +97,9 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         def compute(lazyFlowData):
             sourceHeaders = lazyFlowData.sourceFlowData.headers
             return {
-                'mode': 'RGBG',
+                'mode'  : 'RGBG',
                 'planes': ['R', 'G1', 'B', 'G2'],
-                'width': sourceHeaders['width'] // 2,
+                'width' : sourceHeaders['width'] // 2,
                 'height': sourceHeaders['height'] // 2
             }
         return compute

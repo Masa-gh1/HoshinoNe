@@ -19,6 +19,7 @@ from base import DataBlock
 from nodes import NNBlockOperationNode
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
+from utils.Debug import Debug
 
 try:
     import cv2
@@ -665,7 +666,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
             degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
             degug += " " + f"ransac_iteration:{extra_info['ransac_iteration']}" if 'ransac_iteration' in extra_info else ""
-            self.editor.bugReport(type(self).__name__,f"{degug}")
+            Debug.log(type(self).__name__,f"{degug}")
             
             return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
         
@@ -769,7 +770,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         except (cv2.error, SystemError):
             # OpenCV 4.5.5以降のバグ対応
-            self.editor.bugReport(type(self).__name__,"Retry cv2.findContours")
+            Debug.log(type(self).__name__,"Retry cv2.findContours")
             try:
                 contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             except (cv2.error, SystemError):

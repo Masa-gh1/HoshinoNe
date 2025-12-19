@@ -26,12 +26,6 @@ class FlowDataWrapper(FlowData):
         # 元データの属性を参照
         self.instanceId = orgFlowData.instanceId
         self.cachePolicy = orgFlowData.cachePolicy
-        self._dimensions = orgFlowData._dimensions
-        self._maxValue = orgFlowData._maxValue
-        self._minValue = orgFlowData._minValue
-        self._percentileCache = orgFlowData._percentileCache
-        self._histogramCache = orgFlowData._histogramCache
-        self._existingBlocks = orgFlowData._existingBlocks
     
     # 以下のメソッドは元データに委譲
     def _loadBlock(self, planeIndex, x, y):
@@ -67,6 +61,9 @@ class FlowDataWrapper(FlowData):
     def getMinValue(self):
         return self.orgFlowData.getMinValue()
     
+    def getModeValue(self):
+        return self.orgFlowData.getModeValue()
+
     def getPercentile(self, percentile):
         return self.orgFlowData.getPercentile(percentile)
     

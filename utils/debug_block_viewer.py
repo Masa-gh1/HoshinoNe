@@ -1,7 +1,7 @@
 import numpy as np
 import os
 
-def save_block_image(data, filename, title="Block Data"):
+def save_block_image(data, filename, title=None):
     """
     ブロックデータを画像ファイルとして保存
     """
@@ -19,24 +19,24 @@ def save_block_image(data, filename, title="Block Data"):
             print(f"2D配列が必要です。現在の形状: {data.shape}")
             return
         
+        if title is None:
+            title = os.path.splitext(os.path.basename(filename))[0]
+
         plt.figure(figsize=(8, 8))
         
         if np.any(np.isnan(data)):
             # NaN用の表示
+            max = np.nanmax(data)
+            min = np.nanmin(data)
+            min -= (max-min)/256
             display_data = data.copy()
             nan_mask = np.isnan(data)
-            display_data[nan_mask] = -999
-            
-            valid_data = data[~nan_mask]
-            if len(valid_data) > 0:
-                vmin, vmax = np.min(valid_data), np.max(valid_data)
-            else:
-                vmin, vmax = -1, 1
-            
+            display_data[nan_mask] = min
+
             colors = ['red'] + plt.cm.gray(np.linspace(0, 1, 256)).tolist()
             cmap = ListedColormap(colors)
             
-            plt.imshow(display_data, cmap=cmap, vmin=-999, vmax=vmax)
+            plt.imshow(display_data, cmap=cmap, vmin=min, vmax=max)
             plt.colorbar(label='Value (Red=NaN)')
         else:
             plt.imshow(data, cmap='gray')
@@ -46,7 +46,7 @@ def save_block_image(data, filename, title="Block Data"):
         plt.xlabel('X')
         plt.ylabel('Y')
         
-        filepath = f"c:/workspace/FlowEditor/debug/{filename}.png"
+        filepath = os.path.abspath(f"{filename}.png")
         plt.savefig(filepath, dpi=150, bbox_inches='tight')
         plt.close()
         print(f"画像を保存しました: {filepath}")
@@ -113,7 +113,7 @@ sys.path.append('c:/workspace/FlowEditor')
 from utils.debug_block_viewer import save_block_image, show_block_text, show_block_info
 
 # ブロックデータを画像として保存
-save_block_image(block.data, "input_block", "Input Block")
+save_block_image(block.data, "input_block")
 show_block_info(block.data, "Input Block Info")
 
 # 小さなデータはテキスト表示

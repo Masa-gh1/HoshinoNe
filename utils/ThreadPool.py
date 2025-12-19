@@ -10,10 +10,10 @@ All rights reserved.
 import atexit
 
 from config import MAX_WORKERS
-from utils.ProcessThreadPool import ProcessThreadPool
+from utils.ProcessThreadPool import PerResourceThreadPoolWrapper
 from utils.CoalescingThreadPool import CoalescingThreadPool
 
 # グローバルスレッドプール
-ProcessExecutor = ProcessThreadPool()
+ProcessExecutorInNode  = PerResourceThreadPoolWrapper()
 CoalescingExecutor = CoalescingThreadPool(max_workers=MAX_WORKERS)
 atexit.register(CoalescingExecutor.shutdown)

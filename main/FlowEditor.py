@@ -11,24 +11,20 @@ import inspect
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import datetime
-import json
 import sys
 import os
-import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import atexit
 import gc
 
-from config import VERSION
+from Version import VERSION
 from base import FlowNode
 from base import FlowData
 from base import FlowControl
 from base import FlowFile
 from base import CacheManager
 from nodes import NodeFactory
-from main import Tray
-from . import Debug
+from .Tray import Tray
+from utils.Debug import Debug
 from utils.ThreadPool import CoalescingExecutor
 
 class FlowEditor:
@@ -43,9 +39,9 @@ class FlowEditor:
 
         self.nodes = []
         self.trays = []
-        self.connectionLines = []
+        self.connectionLines = [] # (fromNode, toNode, line)
         self.currentFlowPath = None
-        self.flowModel = FlowControl()
+        self.flowControl = FlowControl()
 
         self.createWidgets()
     
@@ -53,7 +49,6 @@ class FlowEditor:
         # ツールバー
         toolbar = tk.Frame(self.root)
         toolbar.pack(fill=tk.X, padx=5, pady=5)
-        
         tk.Button(toolbar, text="ホーム", command=self.goHome, bg='gray', fg='white').pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="最前面", command=self.bringChildWindowsToFront, bg='gray', fg='white').pack(side=tk.LEFT, padx=2)
         tk.Button(toolbar, text="読込", command=self.loadFlow, bg='orange', fg='white').pack(side=tk.LEFT, padx=2)
@@ -112,7 +107,7 @@ class FlowEditor:
         
         # MAX_NODE_WORKERS数のプログレスバーを事前作成
         self.progressBars = []
-        for i in range(self.flowModel.getMaxNodeWorkers()):
+        for i in range(self.flowControl.getMaxNodeWorkers()):
             frame = tk.Frame(self.progressFrame)
             frame.pack(fill=tk.X, pady=1)
             
@@ -482,18 +477,16 @@ class FlowEditor:
         CoalescingExecutor.submit( self, self.executeFlowAsync)
     
     def executeFlowAsync(self):
-
         try:
             self.resultText.delete(1.0, tk.END)
-            self.flowModel.execute( self.nodes, self.showMessage, self.showProgress)
+            self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
         except Exception as e:
 #            tb = traceback.format_exc()
 #            print(tb,file=sys.stderr)
-            self.root.after(0, lambda: messagebox.showerror("エラー", f"フロー実行エラー: {str(e)}"))
+            self.root.after(0, lambda m = str(e): messagebox.showerror("エラー", f"フロー実行エラー: {m}"))
             raise
         finally:
             self.root.after(0, lambda: self._clearAllProgress())
-
 
     def saveFlow(self):
         if not self.nodes and not self.trays:
@@ -523,10 +516,11 @@ class FlowEditor:
             print(tb,file=sys.stderr)
             messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
-    def loadFlow(self, targetX=0, targetY=0, appendMode=False):
-        filePath = filedialog.askopenfilename(
-            filetypes=[("flow files", "*.flow"), ("All files", "*.*")]
-        )
+    def loadFlow(self, targetX=0, targetY=0, appendMode=False, filePath=None):
+        if not filePath:
+            filePath = filedialog.askopenfilename(
+                filetypes=[("flow files", "*.flow"), ("All files", "*.*")]
+            )
         
         if not filePath:
             return
@@ -539,8 +533,8 @@ class FlowEditor:
             # 自動実行をオフにする
             self.autoExecute.set(False)
             
-            # 現在のフローをクリア
             if not appendMode:
+                # 現在のフローをクリア
                 self.clearFlow()
             
             # zOrder 順を収集
@@ -600,9 +594,10 @@ class FlowEditor:
             # canvasサイズを調整
             self.adjustCanvasSize()
             
-            # ウィンドウタイトルにファイル名を追記
-            fileName = os.path.basename(filePath)
-            self.root.title(f"{self.text} - {fileName}")
+            if not appendMode:
+                # ウィンドウタイトルにファイル名を追記
+                fileName = os.path.basename(filePath)
+                self.root.title(f"{self.text} - {fileName}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
@@ -660,14 +655,11 @@ class FlowEditor:
             if node in inputNode.outputNodes:
                 inputNode.outputNodes.remove(node)
         
-        node.outputNodes.clear()
-        node.inputNodes.clear()
-        
         # ノードリストから削除
         self.nodes.remove(node)
         
         # 選択状態をクリア
-        if self.selectedNode is not node:
+        if self.selectedNode == node:
             self.clearSelectedHighlight()
             self.selectedNode = None
         
@@ -677,10 +669,6 @@ class FlowEditor:
         # ノードのクリーンアップ
         node.cleanUp()
         
-        # 自動実行が有効な場合、自動で実行開始
-        #if self.autoExecute.get():
-        #    self.executeFlow()
-    
     def highlightReprocessingNodes(self):
         """再実行されるノードを強調表示"""
         # 既存のハイライトをクリア
@@ -860,8 +848,10 @@ class FlowEditor:
             self._debugNodeReferences()
             print("========================")
             if hasattr(self, '_bugReportLog'):
-                for msg in self._bugReportLog:
-                    print(msg)
+                for t, name, message, tb in self._bugReportLog:
+                    print(f"{t.isoformat()}: {name}: {message}")
+                    if tb:
+                        print(tb)
                 print("========================")
             _, _, _, _, _, _, _, _, elapsedHis = CacheManager.getCacheStats()
             for name, his in elapsedHis.items():
@@ -879,14 +869,6 @@ class FlowEditor:
             node.updateNodeText()
 
         return "break"
-    
-    def bugReport(self, name, message):
-        if not hasattr(self, '_bugReportLog'):
-            self._bugReportLog=[]
-        text = f"{datetime.datetime.now().isoformat()}: {name}: {message}"
-        self._bugReportLog.append(text)
-        if Debug.LEVEL_NONE < Debug.LEVEL:
-            print(text)
 
     def _debugNodeReferences(self):
         """ノードの参照状況をデバッグ出力"""

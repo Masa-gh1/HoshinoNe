@@ -19,7 +19,7 @@ from config import BLOCK_SIZE
 from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
-from utils.ThreadPool import ProcessExecutor
+from utils.ThreadPool import ProcessExecutorInNode 
 from utils.interval_helper import createHalfOpenEnd
 
 try:
@@ -166,12 +166,9 @@ class FitsReaderNode(BaseReaderNode):
                 for date_key in ['DATE-OBS', 'DATE', 'DATEOBS']:
                     if date_key in hduHeader:
                         try:
-                            obs_date_str = str(hduHeader[date_key])[:19]
-                            if 13<=len(obs_date_str):
-                                dt = datetime.datetime.fromisoformat(obs_date_str)
-                            else:
-                                dt = datetime.datetime.strptime(obs_date_str, '%Y-%m-%d')
-                            date_obs = dt.strftime('%Y-%m-%d %H:%M:%S')
+                            obs_date_str = str(hduHeader[date_key])
+                            dt = datetime.datetime.fromisoformat(obs_date_str)
+                            date_obs = dt.strftime('%Y-%m-%d %H:%M:%S.%f')
                             break
                         except:
                             continue
@@ -198,16 +195,18 @@ class FitsReaderNode(BaseReaderNode):
 
                 # EXIF 追加
                 headers['exif'] = {
-                    'Make': str(hduHeader.get('ORIGIN', '')),
-                    'Model': str(hduHeader.get('TELESCOP', '')),
-                    'ImageWidth': int(hduHeader.get('NAXIS1', 0)),
-                    'ImageLength': int(hduHeader.get('NAXIS2', 0)),
-                    'LensModel': str(hduHeader.get('CAMERA', '')),
-                    'FocalLength': float(hduHeader.get('FOCALLEN', 0)),
-                    'FNumber': 0,
-                    'ExposureTime': float(hduHeader.get('EXPTIME', 0)),
-                    'ISOSpeedRatings': 0,
-                    'DateTime': str(hduHeader.get('DATE-OBS', ''))
+                    'Make'             : str(hduHeader.get('ORIGIN', '')),
+                    'Model'            : str(hduHeader.get('TELESCOP', '')),
+                    'ImageWidth'       : int(hduHeader.get('NAXIS1', 0)),
+                    'ImageLength'      : int(hduHeader.get('NAXIS2', 0)),
+                    'LensModel'        : str(hduHeader.get('CAMERA', '')),
+                    'FocalLength'      : float(hduHeader.get('FOCALLEN', 0)),
+                    'FNumber'          : 0,
+                    'ExposureTime'     : float(hduHeader.get('EXPTIME', 0)),
+                    'ISOSpeedRatings'  : 0,
+                    'DateTimeOriginal' : date_obs,
+                    'DateTimeDigitized': date_obs,
+                    'DateTime'         : date_obs,
                 }
                 
                 flowData = FlowData(headers)
@@ -217,7 +216,7 @@ class FitsReaderNode(BaseReaderNode):
                 # ブロック単位で並列処理
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutor.submit(self._processBlock, data, x, y, planeCount, width, height)
+                        future = ProcessExecutorInNode .submit(self, self._processBlock, data, x, y, planeCount, width, height)
                         futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待ちながら進捗報告

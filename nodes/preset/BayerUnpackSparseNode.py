@@ -51,43 +51,19 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
         y_coords = np.broadcast_to(y_indices, (height, width))
         x_coords = np.broadcast_to(x_indices, (height, width))
         
-        # ベイヤーパターンに応じてマスクを作成
-        if bayer_pattern == 'RGGB':
-            if planeIndex == 0:  # R
-                mask = (y_coords % 2 == 0) & (x_coords % 2 == 0)
-            elif planeIndex == 1:  # G
-                mask = ((y_coords % 2 == 0) & (x_coords % 2 == 1)) | ((y_coords % 2 == 1) & (x_coords % 2 == 0))
-            elif planeIndex == 2:  # B
-                mask = (y_coords % 2 == 1) & (x_coords % 2 == 1)
-        elif bayer_pattern == 'GRBG':
-            if planeIndex == 0:  # R
-                mask = (y_coords % 2 == 0) & (x_coords % 2 == 1)
-            elif planeIndex == 1:  # G
-                mask = ((y_coords % 2 == 0) & (x_coords % 2 == 0)) | ((y_coords % 2 == 1) & (x_coords % 2 == 1))
-            elif planeIndex == 2:  # B
-                mask = (y_coords % 2 == 1) & (x_coords % 2 == 0)
-        elif bayer_pattern == 'GBRG':
-            if planeIndex == 0:  # R
-                mask = (y_coords % 2 == 1) & (x_coords % 2 == 0)
-            elif planeIndex == 1:  # G
-                mask = ((y_coords % 2 == 0) & (x_coords % 2 == 0)) | ((y_coords % 2 == 1) & (x_coords % 2 == 1))
-            elif planeIndex == 2:  # B
-                mask = (y_coords % 2 == 0) & (x_coords % 2 == 1)
-        elif bayer_pattern == 'BGGR':
-            if planeIndex == 0:  # R
-                mask = (y_coords % 2 == 1) & (x_coords % 2 == 1)
-            elif planeIndex == 1:  # G
-                mask = ((y_coords % 2 == 0) & (x_coords % 2 == 1)) | ((y_coords % 2 == 1) & (x_coords % 2 == 0))
-            elif planeIndex == 2:  # B
-                mask = (y_coords % 2 == 0) & (x_coords % 2 == 0)
-        else:
-            # デフォルト（RGGB）
-            if planeIndex == 0:  # R
-                mask = (y_coords % 2 == 0) & (x_coords % 2 == 0)
-            elif planeIndex == 1:  # G
-                mask = ((y_coords % 2 == 0) & (x_coords % 2 == 1)) | ((y_coords % 2 == 1) & (x_coords % 2 == 0))
-            elif planeIndex == 2:  # B
-                mask = (y_coords % 2 == 1) & (x_coords % 2 == 1)
+        # ベイヤーパターンに応じてマスクを作成     [   R      G1      B       G2  ]
+        if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]  
+        elif bayer_pattern == 'GRBG': offsets = [(0, 1), (0, 0), (1, 0), (1, 1)]
+        elif bayer_pattern == 'GBRG': offsets = [(1, 0), (1, 1), (0, 1), (0, 0)]
+        elif bayer_pattern == 'BGGR': offsets = [(1, 1), (1, 0), (0, 0), (0, 1)]
+        else                        : offsets = [(0, 0), (0, 1), (1, 1), (1, 0)] # デフォルト RGGB
+
+        dy, dx = offsets[planeIndex]
+        mask = (y_coords % 2 == dy) & (x_coords % 2 == dx)
+
+        if 1 == planeIndex:  # G は 2つあるのでもう 1 px 追加
+            dy, dx = offsets[3]
+            mask |= (y_coords % 2 == dy) & (x_coords % 2 == dx)
         
         # マスクを適用してピクセルを抽出
         if planeIndex < 3:

@@ -21,12 +21,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from config import BLOCK_SIZE
+from config import RAW_DEMOSAIC_ALGORITHMS
 from config import configRawParams
 from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
 from utils.exif_helper import getExif
-from utils.ThreadPool import ProcessExecutor
+from utils.ThreadPool import ProcessExecutorInNode 
 
 try:
     import rawpy
@@ -52,7 +53,7 @@ class RawReaderNode(BaseReaderNode):
                 ("Sigma RAW", "*.x3f"),
                 ("All files", "*.*")
             ]
-        self.demosaicAlgorithm = "unpack"  # bayer, bayer crop, unpack, raw, AHD, VNG, PPG, AAHD
+        self.demosaicAlgorithm = "unpack"  # bayer, bayer crop, unpack, raw, ...
         self.outputColorspace = "raw"  # raw, sRGB, Adobe RGB, Wide Gamut RGB, ProPhoto RGB
         self.whiteBalance = "daylight"  # camera, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
         self.gammaPower = 1.0  # gamma power
@@ -142,14 +143,8 @@ class RawReaderNode(BaseReaderNode):
         elif self.demosaicAlgorithm == "raw":
             params.half_size          = True
             params.four_color_rgb     = False
-        elif self.demosaicAlgorithm == "AHD":
-            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AHD
-        elif self.demosaicAlgorithm == "AAHD":
-            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AAHD
-        elif self.demosaicAlgorithm == "VNG":
-            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.VNG
-        elif self.demosaicAlgorithm == "PPG":
-            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.PPG
+        elif self.demosaicAlgorithm in RAW_DEMOSAIC_ALGORITHMS:
+            params.demosaic_algorithm = getattr(rawpy.DemosaicAlgorithm,self.demosaicAlgorithm)
         else:
             # デフォルト
             self.demosaicAlgorithm    = "unpack"
@@ -212,15 +207,19 @@ class RawReaderNode(BaseReaderNode):
             
             # raw情報を構築(raw.postprocess 後だと値が変化物がある)
             raw_headers = {
-                'raw_pattern'     : raw_pattern.tolist(),
-                'color_desc'      : color_desc.decode('ascii'),
-                'bayer_pattern'   : bayer_pattern,
-                'crop_left_margin': raw.sizes.crop_left_margin,
-                'crop_top_margin' : raw.sizes.crop_top_margin,
-                'crop_width'      : raw.sizes.crop_width,
-                'crop_height'     : raw.sizes.crop_height,
-                'raw_height'      : raw.sizes.raw_height,
-                'raw_width'       : raw.sizes.raw_width,
+                'raw_pattern'                   : raw_pattern.tolist(),
+                'color_desc'                    : color_desc.decode('ascii'),
+                'bayer_pattern'                 : bayer_pattern,
+                'crop_left_margin'              : raw.sizes.crop_left_margin,
+                'crop_top_margin'               : raw.sizes.crop_top_margin,
+                'crop_width'                    : raw.sizes.crop_width,
+                'crop_height'                   : raw.sizes.crop_height,
+                'raw_height'                    : raw.sizes.raw_height,
+                'raw_width'                     : raw.sizes.raw_width,
+                'black_level_per_channel'       : raw.black_level_per_channel,
+                'white_level'                   : raw.white_level,
+                'camera_white_level_per_channel': raw.camera_white_level_per_channel,
+                'camera_whitebalance'           : raw.camera_whitebalance,
             }
 
             # 元RAWファイルのbit深度を使用してdisplay_levelsを設定
@@ -247,7 +246,7 @@ class RawReaderNode(BaseReaderNode):
                 plane_names = ['Bayer']
                 rgb = bayer_data.reshape(height, width, 1)  # 3次元配列に変換
             else:
-                # RAW現像処理
+                # RAW 後処理
                 rgb = raw.postprocess(params)
                 height, width, planeCount = rgb.shape
                 bayer_pattern = None
@@ -268,10 +267,13 @@ class RawReaderNode(BaseReaderNode):
             orgDateTime = None
             if exif_info:
                 headers_exif = dict(exif_info)
-                if 'DateTime' in headers_exif:
-                    dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
-                    orgDateTime = dt.strftime("%Y-%m-%d %H:%M:%S")
-                    headers_exif['DateTime'] = orgDateTime
+                for tag in ['DateTime', 'DateTimeDigitized', 'DateTimeOriginal']:
+                    if tag in headers_exif:
+                        orgDateTime = headers_exif[tag]
+                if not 'DateTimeOriginal'  in headers_exif:
+                    headers_exif['DateTimeOriginal'] = orgDateTime
+                if not 'DateTimeDigitized' in headers_exif:
+                    headers_exif['DateTimeDigitized'] = orgDateTime
             
             headers = {
                 'type': 'image',
@@ -311,7 +313,7 @@ class RawReaderNode(BaseReaderNode):
                 
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutor.submit(self._processBlock, channelData, planeIndex, x, y, height, width)
+                        future = ProcessExecutorInNode .submit(self, self._processBlock, channelData, planeIndex, x, y, height, width)
                         futures.append(future)
             
             # 全ブロックの処理完了を待ちながら進捗報告
@@ -406,11 +408,10 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
                        "bayer crop - ベイヤー配列の生データを1プレーンで取得(クロップのみ実施)",
                        "unpack - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
                        "raw - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
-                       "AHD - 適応的同質性指向アルゴリズム。高品質だが処理時間が長い", 
-                       "AAHD - 適応的AHD。AHDの改良版",
-                       "VNG - 可変勾配数アルゴリズム。バランスの取れた品質と速度",
-                       "PPG - パターン化ピクセルグループ化。高速だが品質は劣る",
                       ]
+        for name,text in RAW_DEMOSAIC_ALGORITHMS.items():
+            algoOptions.append(f"{name} - {text}")
+        
         # 現在の値に対応する選択肢を設定
         for option in algoOptions:
             if option.startswith(self.node.demosaicAlgorithm):

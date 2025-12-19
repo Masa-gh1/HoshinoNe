@@ -122,7 +122,7 @@ class FlowNode(AbstractBaseClass):
         
         try:
             with(ThreadPoolExecutor(max_workers=MAX_WORKERS) as processExecutor):
-                ProcessExecutor.setExecutor(processExecutor) # グローバルにスレッドプールを提供
+                ProcessExecutorInNode .setExecutor(processExecutor) # グローバルにスレッドプールを提供
                 context = {}
                 self.process(context)
             self.editor.root.after(0,self.updateResult)
@@ -336,7 +336,9 @@ class FlowNode(AbstractBaseClass):
             self._window["result_window"].lift()
 
     def updateResult(self):
-        if 'result_window' in self._window:
+        if( 'result_window' in self._window
+          and self._window["result_window"].winfo_exists()
+          ):
             self._window["result_window"].updateResult()
     
     def liftWindow(self):

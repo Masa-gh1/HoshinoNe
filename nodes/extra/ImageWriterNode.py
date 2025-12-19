@@ -12,6 +12,7 @@ import datetime
 import numpy as np
 from nodes import BaseWriterNode
 from config import BLOCK_SIZE, HEADERS_EXIF, HEADERS_EXIF_OPT
+from utils.Debug import Debug
 
 try:
     from PIL import Image
@@ -186,12 +187,9 @@ class ImageWriterNode(BaseWriterNode):
             preserve_tags = [name for name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)]
             exif_dict = {tag: original_exif[tag] for tag in preserve_tags if tag in original_exif}
             
-            # テストモード時は元のDateTimeを保持、通常モード時のみ更新
-            test_mode = os.getenv('FLOWEDITOR_TEST_MODE', '').lower() in ['1', 'true', 'yes']
-            # テストモード ###################
-            
             exif_dict['Software'] = 'ほしのね'
-            if not test_mode:
+            if not Debug.isTestMode():
+                # テストモードではないので現在時刻を入れる
                 exif_dict['DateTime'] = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S")
         
         if not exif_dict:

@@ -69,7 +69,7 @@ class CoalescingThreadPool:
                 pending_data = self._pending_tasks[obj_key]
                 del self._pending_tasks[obj_key]
                 
-                if isinstance(pending_data, tuple) and len(pending_data) == 4:
+                if isinstance(pending_data, tuple) and 4 == len(pending_data):
                     func, args, kwargs, future = pending_data
                     if not future.cancelled():
                         self._execute_task(obj_key, func, args, kwargs, future)

@@ -139,14 +139,21 @@ class FlowData:
         
         return planeCount * blocksX * blocksY
     
-    def iterateBlocks(self):
+    def iterateBlocks(self, planeIdx=None):
         """全ブロックを順次取得するジェネレータ"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         if planeCount == 0:
             return
         
-        for planeIdx in range(planeCount):
+        if planeIdx is None:
+            for planeIdx in range(planeCount):
+                for y in range(0, height, BLOCK_SIZE):
+                    for x in range(0, width, BLOCK_SIZE):
+                        block = self.getBlock(planeIdx, x, y)
+                        if block:
+                            yield block
+        else:
             for y in range(0, height, BLOCK_SIZE):
                 for x in range(0, width, BLOCK_SIZE):
                     block = self.getBlock(planeIdx, x, y)
@@ -191,13 +198,11 @@ class FlowData:
         planeCount = self.getPlaneCount()
         
         planeHistograms = []
+
         for planeIndex in range(planeCount):
             blockArrays = []
-            for y in range(0, height, BLOCK_SIZE):
-                for x in range(0, width, BLOCK_SIZE):
-                    block = self.getBlock(planeIndex, x, y)
-                    if block and block.data is not None:
-                        blockArrays.append(block.data.flatten())
+            for block in self.iterateBlocks(planeIndex):
+                blockArrays.append(block.data.flatten())
             
             if not blockArrays:
                 planeHistograms.append(None)
@@ -215,7 +220,7 @@ class FlowData:
                     min2_val = min_val
                     max2_val = max_val
                     
-                    while True:
+                    while min2_val < max2_val:
                         # linear bins
                         linear_edges = np.linspace(min2_val, max2_val, 1024+1)
                         
@@ -247,20 +252,30 @@ class FlowData:
                             max2_val = max2_val_new
                         else:
                             break
-
-                    # マージして重複除去
-                    merged_edges = np.unique(np.concatenate([[min_val,max_val], linear_edges, log_edges]))
-
-                    # histogram計算はこの一回だけ
-                    hist, _ = np.histogram(validData, bins=merged_edges)
                     
-                    planeHistograms.append({
-                        'min': min_val,
-                        'max': max_val,
-                        'total_samples': len(validData),
-                        'hist': hist,
-                        'edges': merged_edges
-                    })
+                    if min2_val < max2_val:
+                        # マージして重複除去
+                        merged_edges = np.unique(np.concatenate([[min_val,max_val], linear_edges, log_edges]))
+
+                        # histogram計算はこの一回だけ
+                        hist, _ = np.histogram(validData, bins=merged_edges)
+                    
+                        planeHistograms.append({
+                            'min': min_val,
+                            'max': max_val,
+                            'total_samples': len(validData),
+                            'hist': hist,
+                            'edges': merged_edges
+                        })
+                    else:
+                        planeHistograms.append({
+                            'min': min_val,
+                            'max': max_val,
+                            'total_samples': len(validData),
+                            'hist': nh.array([len(validData)]),
+                            'edges': nh.array([min_val,max2_val])
+                        })
+
         
         self._highResHistCache = planeHistograms
         return planeHistograms
@@ -277,7 +292,7 @@ class FlowData:
         mode_value = 0.0
         
         for hist_data in planeHistograms:
-            if hist_data is not None:
+            if 0 < hist_data['hist'].size:
                 max_idx = np.argmax(hist_data['hist'])
                 if hist_data['hist'][max_idx] > max_count:
                     max_count = hist_data['hist'][max_idx]
@@ -375,7 +390,7 @@ class FlowData:
             else:
                 planeHistograms.append({
                     'counts': [0] * bins,
-                    'bin_edges': list(range(bins + 1)),
+                    'bin_edges': nh.array(range(bins + 1)),
                     'total_samples': 0
                 })
         

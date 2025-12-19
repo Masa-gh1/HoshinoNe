@@ -13,11 +13,6 @@ except ImportError:
     print("numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
     exit()
 
-from version import VERSION_DATE
-
-# varsion
-VERSION = f"0.1.{VERSION_DATE}"
-
 # ノードの並列処理ワーカー数設定
 MAX_WORKERS = 8
 
@@ -26,12 +21,12 @@ DEFAULT_BLOCK_TYPE = np.float32
 DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 
 # ブロックキャッシュサイズ設定(GB)
-MAX_BLOCK_CACHE_SIZE_GB = 4
+MAX_BLOCK_CACHE_SIZE_GB = 8
 
 # ブロックサイズ設定
 BLOCK_SIZE = 256
 
-# ブロック辺りの推定 byte 数 (画像なら)
+# ブロック当たりの推定 byte 数 (画像なら)
 ESTIMATE_SIZE_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
 
 # ブロックキャッシュサイズ設定(ブロック数)
@@ -39,7 +34,7 @@ MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024//ESTIMATE_SIZE_PER
 
 # 画像読み書きノードで使用する
 # データヘッダに含める Exif
-# ここには無いが、"DateTime", "DateTimeOriginal", "DateTimeDigitized" は必須で読み込まれます。
+# ここには無い、"DateTime", "DateTimeDigitized", "DateTimeOriginal" はプリセットされています。
 HEADERS_EXIF = [
     # name                tag                        converter
     ("Make"             , "Make"                   , str  ),
@@ -75,7 +70,7 @@ HEADERS_EXIF_OPT = [
     ("LensMake"         , "LensMake"               , str  ),
     # 色空間・解像度
     ("ColorSpace"       , "ColorSpace"             , str  ),
-    ("WhitePoint"       , "WhitePoint"             , str  ),
+#    ("WhitePoint"       , "WhitePoint"             , float, 2),
     ("Orientation"      , "Orientation"            , int  ),
     ("XResolution"      , "XResolution"            , float),
     ("YResolution"      , "YResolution"            , float),
@@ -83,6 +78,15 @@ HEADERS_EXIF_OPT = [
 ]
 
 # RawReaderNode 用
+# 選択し入れるデモザイクアルゴリズム
+# ここには無い、"bayer", "bayer crop", "unpack", "raw" はプリセットされています。
+RAW_DEMOSAIC_ALGORITHMS = {
+    # name  text
+    "AHD" : "適応的同質性指向アルゴリズム:高品質だが処理時間が長い", 
+    "AAHD": "適応的AHD:AHDの改良版",
+    "VNG" : "可変勾配数アルゴリズム:バランスの取れた品質と速度",
+    "PPG" : "パターン化ピクセルグループ化:高速だが品質は劣る",
+}
 # RAW 読み込み設定 ref https://www.libraw.org/docs/API-datastruct.html
 def configRawParams(params):
     # rawpy 0.25.1 パラメータ

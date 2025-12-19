@@ -8,7 +8,7 @@ All rights reserved.
 '''
 import json
 
-from config import VERSION
+from Version import VERSION
 
 class FlowFile:
     def __init__(self):

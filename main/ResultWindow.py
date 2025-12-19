@@ -7,6 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import json
 import sys
 import traceback
 import io
@@ -14,10 +15,11 @@ import tkinter as tk
 from tkinter import ttk
 
 from config import BLOCK_SIZE
+from base.LazyFlowData import LazyHeadersDict
 from utils import string_helper as sh
 from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
-from . import Debug
+from utils.Debug import Debug
 
 try:
     import numpy as np
@@ -233,8 +235,18 @@ class ResultWindow(tk.Toplevel):
             content.append(result)
 
         if Debug.LEVEL_NONE < Debug.LEVEL:
+            class JSONEncoder(json.JSONEncoder):
+                def default( self, obj):
+                    if isinstance( obj, np.floating):
+                        return float(obj)
+                    elif isinstance( obj, LazyHeadersDict):
+                        return dict(obj)
+                    else:
+                        return json.JSONEncoder.default(self, obj)
+            
+            jsonStr = json.dumps( headers, ensure_ascii=False, indent=2, cls=JSONEncoder)
             content.append("\n\n")
-            content.append("headers:\n" + str(headers).replace(", '", ",\n'") + "\n")
+            content.append("headers:\n" + jsonStr + "\n")
             
         return content
     
@@ -410,7 +422,8 @@ class ResultWindow(tk.Toplevel):
             self._histogramImagesCahace = {}
         if histogramImageKey in self._histogramImagesCahace:
             # キャッシュに在るのでそれを使う
-            histogram_image = self._histogramImagesCahace[histogramImageKey]
+            histogram_text, histogram_image = self._histogramImagesCahace[histogramImageKey]
+            content.append(histogram_text)
             content.append(histogram_image)
         else:
             if not PIL_AVAILABLE:
@@ -462,7 +475,7 @@ class ResultWindow(tk.Toplevel):
                         plane_name = planes[planeIdx] if planeIdx < len(planes) else f'Plane{planeIdx}'
                         ax.plot(bin_centers, np.array(bin_counts) + 1, color=colors[planeIdx], label=plane_name, linewidth=1)
                     
-                    content += f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
+                    histogram_text = f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
                     ax.set_xlabel(f'Value ({ax_xScale})' if "log" == ax_xScale else f'Value ({ax_xScale}, normalized adjusted)')
                     ax.set_ylabel(f'Count ({ax_yScale})')
                     ax.set_yscale(ax_yScale)
@@ -489,7 +502,8 @@ class ResultWindow(tk.Toplevel):
                     #enlarged_img = img.resize((int(img.width * 1.5), int(img.height * 1.5)), Image.Resampling.LANCZOS)
                     histogram_image = ImageTk.PhotoImage(img)
 
-                    self._histogramImagesCahace[histogramImageKey] = histogram_image
+                    self._histogramImagesCahace[histogramImageKey] = (histogram_text,histogram_image)
+                    content.append(histogram_text)
                     content.append(histogram_image)
                 except Exception as e:
                     tb = traceback.format_exc()

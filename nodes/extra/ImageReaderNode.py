@@ -20,7 +20,7 @@ from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
 from utils import numpy_helpers as nh
-from utils.ThreadPool import ProcessExecutor
+from utils.ThreadPool import ProcessExecutorInNode 
 from utils.exif_helper import getExif
 
 try:
@@ -93,10 +93,9 @@ class ImageReaderNode(BaseReaderNode):
         orgDateTime = None
         if exif_info:
             headers_exif = dict(exif_info)
-            if 'DateTime' in headers_exif:
-                dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
-                orgDateTime = dt.strftime("%Y-%m-%d %H:%M:%S")
-                headers_exif['DateTime'] = orgDateTime
+            for tag in ['DateTime', 'DateTimeDigitized', 'DateTimeOriginal']:
+                if tag in headers_exif:
+                    orgDateTime = headers_exif[tag]
         
         headers = {
             'type': 'image',
@@ -121,7 +120,7 @@ class ImageReaderNode(BaseReaderNode):
         # ブロック単位で並列処理
         for y in range(0, height, BLOCK_SIZE):
             for x in range(0, width, BLOCK_SIZE):
-                future = ProcessExecutor.submit(self._processBlock, pixels, x, y, len(plane_names), width, height)
+                future = ProcessExecutorInNode .submit(self, self._processBlock, pixels, x, y, len(plane_names), width, height)
                 futureToDatas[future] = flowData
 
         # 全ブロックの処理完了を待ちながら進捗報告
