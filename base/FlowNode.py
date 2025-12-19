@@ -17,7 +17,8 @@ class FlowNode:
         self.x, self.y = x, y
         self.type = nodeType
         self.text = text
-        self.connections = [] # 接続先ノードの一覧
+        self.outputNodes = [] # 接続先ノードの一覧
+        self.inputNodes = []  # 入力元ノードの一覧
         self.flowDatas = []   # 処理結果データ
         self.dragging = False
         self.startX = 0
@@ -33,6 +34,13 @@ class FlowNode:
         color = self.getColor()
         self.rect = self.canvas.create_rectangle(self.x-50, self.y-20, self.x+50, self.y+20, fill=color, outline='black')
         self.label = self.canvas.create_text(self.x, self.y, text=self.text, font=('Arial', 8))
+    
+    _color_const = 'lightcyan'    # 定数系 cyan
+    _color_coff  = 'lightblue'    # 係数系 blue
+    _color_func  = 'plum'         # 関数系 magenta
+    _color_op    = 'pink'         # 演算系 red
+    _color_io    = 'lightyellow'  # 入出系 yellow
+    _color_xxx   = 'lightgreen'   # 予約  
     
     def getColor(self):
         return 'lightgreen'
@@ -53,10 +61,25 @@ class FlowNode:
         # サブクラスでオーバーライドする
         raise NotImplementedError("サブクラスで実装してください")
     
-    def needsReprocessing(self, inputNodes):
+    def processPreviewOnly(self):
+        """プレビュー専用処理（自ノードのみ）"""
+        if not self.inputNodes or not self.inputNodes[0].flowDatas:
+            return
+        
+        try:
+            context = {}
+            self.process(context)
+            
+            # 開いているResultWindowがあれば直接更新
+            if hasattr(self, '_result_window') and self._result_window.winfo_exists():
+                self.editor._updateResultWindow(self)
+        except Exception as e:
+            print(f"プレビューエラー: {e}")
+    
+    def needsReprocessing(self):
         """再処理が必要かどうかを判定"""
         # ハッシュを計算
-        inputHash = self.getInputHashe(inputNodes)
+        inputHash = self.getInputHashe(self.inputNodes)
         configHash = self.getConfigHash()
         
         # 初回実行または変更ありの場合は再処理
@@ -64,10 +87,10 @@ class FlowNode:
                 or self._lastConfigHash != configHash 
                 or 0 == len(self.flowDatas))
     
-    def updateExecutionHashes(self, inputNodes):
+    def updateExecutionHashes(self):
         """実行後にハッシュを更新"""
         # ハッシュを更新
-        self._lastInputHash = self.getInputHashe(inputNodes)
+        self._lastInputHash = self.getInputHashe(self.inputNodes)
         self._lastConfigHash = self.getConfigHash()
     
     def getInputHashe(self, inputNodes):

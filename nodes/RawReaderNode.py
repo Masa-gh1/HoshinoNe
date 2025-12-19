@@ -16,9 +16,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import numpy as np
 import datetime
+from concurrent.futures import as_completed
 from base import FlowNode, FlowData, DataBlock
 from config import BLOCK_SIZE
+from utils.ThreadPool import ProcessExecutor
 from config import configRawParams
+from utils.exif_helper import get_exif
 
 try:
     import rawpy
@@ -26,13 +29,10 @@ try:
 except ImportError:
     RAWPY_AVAILABLE = False
 
-from utils.exif_helper import get_exif
-
 class RawReaderNode(FlowNode):
     def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
         super().__init__(canvas, editor, x, y, "raw_reader", "RAW読み込み")
         self.filePaths = []
-
         
         self.fileTypes = [
                 ("RAW files", "*.cr2 *.cr3 *.nef *.arw *.dng *.raf *.orf *.rw2 *.pef *.srw *.x3f"),
@@ -59,7 +59,7 @@ class RawReaderNode(FlowNode):
             return
         
     def getColor(self):
-        return 'lightcoral'
+        return self._color_io
     
     def setFilePaths(self, filePaths):
         self.filePaths = filePaths
@@ -221,18 +221,22 @@ class RawReaderNode(FlowNode):
                     outputFlowData.setDimensions(width, height)
                     
                     # RGB各チャンネルをBLOCK_SIZEで分割してDataBlockとして設定
+                    futures = []
+                    
+                    # ブロック単位で並列処理
                     for c in range(channels):
                         channelData = rgb[:, :, c].astype(np.float64)
                         
-                        # BLOCK_SIZEで分割して処理
                         for y in range(0, height, BLOCK_SIZE):
                             for x in range(0, width, BLOCK_SIZE):
-                                endY = min(y + BLOCK_SIZE, height)
-                                endX = min(x + BLOCK_SIZE, width)
-                                
-                                blockData = channelData[y:endY, x:endX].tolist()
-                                block = DataBlock(c, x, y, blockData)
-                                outputFlowData.setBlock(block)
+                                future = ProcessExecutor.submit(self._processBlock, channelData, c, x, y, height, width)
+                                futures.append(future)
+                    
+                    # 全ブロックの処理完了を待つ
+                    for future in as_completed(futures):
+                        block = future.result()
+                        if block:
+                            outputFlowData.setBlock(block)
                     
                     resultFlowDatas.append(outputFlowData)
             except Exception as e:
@@ -242,6 +246,14 @@ class RawReaderNode(FlowNode):
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
+    
+    def _processBlock(self, channelData, c, x, y, height, width):
+        """単一ブロックの処理"""
+        endY = min(y + BLOCK_SIZE, height)
+        endX = min(x + BLOCK_SIZE, width)
+        
+        blockData = channelData[y:endY, x:endX].tolist()
+        return DataBlock(c, x, y, blockData)
     
     def getConfigHash(self):
         config = f"{self.type}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"

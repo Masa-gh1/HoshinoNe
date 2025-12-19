@@ -17,6 +17,7 @@ from .CoefficientsNode import CoefficientsNode
 from .RawReaderNode import RawReaderNode
 from .FitsReaderNode import FitsReaderNode
 from .CountNode import CountNode
+from .ToneCurveNode import ToneCurveNode
 
 class NodeFactory:
     nodeClasses = {
@@ -31,6 +32,7 @@ class NodeFactory:
         'image_reader': ImageReaderNode,
         'raw_reader': RawReaderNode,
         'fits_reader': FitsReaderNode,
+        'tone_curve': ToneCurveNode,
         'file_writer': FileWriterNode,
         'image_writer': ImageWriterNode,
     }
@@ -51,6 +53,8 @@ class NodeFactory:
         ('image_writer'  , '画像書き出し'),
         ('raw_reader'    , 'RAW読み込み'),
         ('fits_reader'   , 'FITS読み込み'),
+        ('separator'     , None),
+        ('tone_curve'    , 'トーンカーブ'),
     ]
     
     @classmethod

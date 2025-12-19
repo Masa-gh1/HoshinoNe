@@ -125,6 +125,22 @@ class ResultWindow:
         
         resultWindow.protocol("WM_DELETE_WINDOW", on_close)
         
+        # ウィンドウの幅変更時のみ画像を再描画（300ms毎）
+        self._resize_timer = None
+        self._last_width = resultWindow.winfo_width()
+        
+        def on_configure(event):
+            if event.widget == resultWindow and not self._resize_timer:
+                current_width = resultWindow.winfo_width()
+                if current_width != self._last_width:
+                    self._last_width = current_width
+                    def update():
+                        self._resize_timer = None
+                        self._updateResultWindow()
+                    self._resize_timer = self.root.after(300, update)
+        
+        resultWindow.bind('<Configure>', on_configure)
+        
         # データ選択コンボボックスを更新
         self._updateDataCombo()
         
@@ -174,6 +190,10 @@ class ResultWindow:
                 self.node._result_window.title(f"{self.node.text} - 処理結果")
             if hasattr(self.node, '_result_text_widget'):
                 text_widget = self.node._result_text_widget
+                
+                # スクロール位置を保存（比率）
+                scroll_pos = text_widget.yview()[0]
+                
                 text_widget.config(state=tk.NORMAL)
                 text_widget.delete(1.0, tk.END)
                 for part in content_parts:
@@ -187,6 +207,9 @@ class ResultWindow:
                             text_widget.images = []
                         text_widget.images.append(part)
                 text_widget.config(state=tk.DISABLED)
+                
+                # スクロール位置を復元
+                text_widget.yview_moveto(scroll_pos)
         
         self.root.after(0, display_result)
         
@@ -495,10 +518,13 @@ class ResultWindow:
                 else:
                     return content.append(f"サポートされていないモード: {mode}\n")
                 
-                # 表示サイズを調整 (最大400x300)
+                # ウィンドウ横幅に合わせて表示サイズを調整
+                window_width = self.node._result_window.winfo_width() if hasattr(self.node, '_result_window') else 600
+                max_width = window_width - 40  # 最小余白
+                
                 display_width, display_height = img.size
-                if display_width > 400 or display_height > 300:
-                    ratio = min(400/display_width, 300/display_height)
+                if display_width > max_width:
+                    ratio = max_width / display_width
                     display_width = int(display_width * ratio)
                     display_height = int(display_height * ratio)
                     img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)

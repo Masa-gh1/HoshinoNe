@@ -11,6 +11,9 @@ class InverseNode(NNBlockOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "inverse", "逆数")
     
+    def getColor(self):
+        return self._color_func
+    
     def processBlock(self, block):
         """単一ブロックの逆数処理"""
         arr = block.data

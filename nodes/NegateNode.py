@@ -11,6 +11,9 @@ class NegateNode(NNBlockOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "negate", "符号反転")
     
+    def getColor(self):
+        return self._color_func
+    
     def processBlock(self, block):
         """単一ブロックの符号反転処理"""
         # 符号反転

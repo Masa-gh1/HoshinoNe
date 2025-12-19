@@ -11,9 +11,10 @@ import numpy as np
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from base import FlowNode, FlowData, DataBlock
-from config import MAX_WORKERS, BLOCK_SIZE
+from config import BLOCK_SIZE
+from utils.ThreadPool import ProcessExecutor
 
 try:
     from PIL import Image
@@ -36,7 +37,7 @@ class ImageReaderNode(FlowNode):
             return
     
     def getColor(self):
-        return 'lightyellow'
+        return self._color_io
     
     def setFilePaths(self, filePaths):
         self.filePaths = filePaths
@@ -75,79 +76,78 @@ class ImageReaderNode(FlowNode):
         
         self.reportProgress(context, "開始")
         
-        # ブロック単位で処理（並列化）
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            resultFlowDatas = []
-            futureToDatas = {}
+        resultFlowDatas = []
+        futureToDatas = {}
+        
+        for fileIdx, filePath in enumerate(self.filePaths):
+            img = Image.open(filePath)
+            width, height = img.size
             
-            for fileIdx, filePath in enumerate(self.filePaths):
-                img = Image.open(filePath)
-                width, height = img.size
-                
-                # plane_names を動的に設定
-                if   'RGB'   == img.mode: plane_names = ['R', 'G', 'B']
-                elif 'RGBA'  == img.mode: plane_names = ['R', 'G', 'B', 'A']
-                elif 'L'     == img.mode: plane_names = ['L']
-                elif 'LA'    == img.mode: plane_names = ['L', 'A']
-                elif 'P'     == img.mode: plane_names = ['Index']
-                elif 'CMYK'  == img.mode: plane_names = ['C', 'M', 'Y', 'K']
-                elif 'YCbCr' == img.mode: plane_names = ['Y', 'Cb', 'Cr']
-                elif 'HSV'   == img.mode: plane_names = ['H', 'S', 'V']
-                elif 'LAB'   == img.mode: plane_names = ['L', 'A', 'B']
-                elif 'I;16'  == img.mode: plane_names = ['L']
-                elif 'I;16B' == img.mode: plane_names = ['L']
-                elif 'I'     == img.mode: plane_names = ['L']
-                elif 'F'     == img.mode: plane_names = ['L']
-                else                    : plane_names = [f'{img.mode}_{i}' for i in range(len(img.getbands()))]
-                
-                # bit深度を検出してdisplay_levelsを設定
-                if   img.mode in ['L', 'LA', 'RGB', 'RGBA', 'P', 'CMYK', 'YCbCr', 'HSV', 'LAB']: 
-                                                    display_levels = {'min': 0,   'max':        255}  # 8bit
-                elif img.mode in ['I;16', 'I;16B']: display_levels = {'min': 0,   'max':      65535}  # 16bit
-                elif 'F' == img.mode              : display_levels = {'min': 0.0, 'max':        1.0}  # 浮動小数点
-                elif 'I' == img.mode              : display_levels = {'min': 0,   'max': 2147483647}  # 32bit int
-                else                              : display_levels = {'min': 0,   'max':        255}  # デフォルト
-                
-                # EXIF情報を取得
-                exif_info = self._getExif(filePath)
-                
-                # DateTimeを文字列化
-                headers_exif = None
-                if exif_info:
-                    headers_exif = dict(exif_info)
-                    if 'DateTime' in headers_exif:
-                        dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
-                        headers_exif['DateTime'] = dt.strftime("%Y-%m-%d %H:%M:%S")
-                
-                headers = {
-                    'type': 'image',
-                    'mode': img.mode,
-                    'planes': plane_names,
-                    'display_levels': display_levels,
-                }
-                if headers_exif:
-                    headers['exif'] = headers_exif
-                
-                pixels = list(img.getdata())
-                flowData = FlowData(headers)
-                flowData.setDimensions(width, height)
-                resultFlowDatas.append(flowData)
-                
-                for blockY in range(0, height, BLOCK_SIZE):
-                    for blockX in range(0, width, BLOCK_SIZE):
-                        future = executor.submit(self._processBlock, pixels, len(plane_names), width, height, blockX, blockY)
-                        futureToDatas[future] = flowData
+            # plane_names を動的に設定
+            if   'RGB'   == img.mode: plane_names = ['R', 'G', 'B']
+            elif 'RGBA'  == img.mode: plane_names = ['R', 'G', 'B', 'A']
+            elif 'L'     == img.mode: plane_names = ['L']
+            elif 'LA'    == img.mode: plane_names = ['L', 'A']
+            elif 'P'     == img.mode: plane_names = ['Index']
+            elif 'CMYK'  == img.mode: plane_names = ['C', 'M', 'Y', 'K']
+            elif 'YCbCr' == img.mode: plane_names = ['Y', 'Cb', 'Cr']
+            elif 'HSV'   == img.mode: plane_names = ['H', 'S', 'V']
+            elif 'LAB'   == img.mode: plane_names = ['L', 'A', 'B']
+            elif 'I;16'  == img.mode: plane_names = ['L']
+            elif 'I;16B' == img.mode: plane_names = ['L']
+            elif 'I'     == img.mode: plane_names = ['L']
+            elif 'F'     == img.mode: plane_names = ['L']
+            else                    : plane_names = [f'{img.mode}_{i}' for i in range(len(img.getbands()))]
+            
+            # bit深度を検出してdisplay_levelsを設定
+            if   img.mode in ['L', 'LA', 'RGB', 'RGBA', 'P', 'CMYK', 'YCbCr', 'HSV', 'LAB']: 
+                                                display_levels = {'min': 0,   'max':        255}  # 8bit
+            elif img.mode in ['I;16', 'I;16B']: display_levels = {'min': 0,   'max':      65535}  # 16bit
+            elif 'F' == img.mode              : display_levels = {'min': 0.0, 'max':        1.0}  # 浮動小数点
+            elif 'I' == img.mode              : display_levels = {'min': 0,   'max': 2147483647}  # 32bit int
+            else                              : display_levels = {'min': 0,   'max':        255}  # デフォルト
+            
+            # EXIF情報を取得
+            exif_info = self._getExif(filePath)
+            
+            # DateTimeを文字列化
+            headers_exif = None
+            if exif_info:
+                headers_exif = dict(exif_info)
+                if 'DateTime' in headers_exif:
+                    dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
+                    headers_exif['DateTime'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+            
+            headers = {
+                'type': 'image',
+                'mode': img.mode,
+                'planes': plane_names,
+                'display_levels': display_levels,
+            }
+            if headers_exif:
+                headers['exif'] = headers_exif
+            
+            pixels = list(img.getdata())
+            flowData = FlowData(headers)
+            flowData.setDimensions(width, height)
+            resultFlowDatas.append(flowData)
+            
+            # ブロック単位で並列処理
+            for blockY in range(0, height, BLOCK_SIZE):
+                for blockX in range(0, width, BLOCK_SIZE):
+                    future = ProcessExecutor.submit(self._processBlock, pixels, len(plane_names), width, height, blockX, blockY)
+                    futureToDatas[future] = flowData
 
-            # 全ブロックの処理完了を待つ
-            self.reportProgress(context, "処理中")
-            totalBlocks = len(futureToDatas)
-            for i, future in enumerate(as_completed(futureToDatas)):
-                blocks = future.result()
-                for block in blocks:
-                    futureToDatas[future].setBlock(block)
-                self.reportProgress(context, "処理中", i + 1, totalBlocks)
-    
-            self.flowDatas = resultFlowDatas
+        # 全ブロックの処理完了を待つ
+        self.reportProgress(context, "処理中")
+        totalBlocks = len(futureToDatas)
+        for i, future in enumerate(as_completed(futureToDatas)):
+            blocks = future.result()
+            for block in blocks:
+                futureToDatas[future].setBlock(block)
+            self.reportProgress(context, "処理中", i + 1, totalBlocks)
+
+        self.flowDatas = resultFlowDatas
                     
         self.reportProgress(context, "完了")
     

@@ -20,7 +20,7 @@ class CoefficientsNode(FlowNode):
         self.updateNodeText()
     
     def getColor(self):
-        return 'lightsteelblue'
+        return self._color_coff
     
     def updateNodeText(self):
         constVal = self.coefficients.get("0,0,0", 0)

@@ -5,12 +5,16 @@ MergeNode class
 '''
 
 from base import N1BlockOperationNode, DataBlock
+from config import BLOCK_SIZE
 import numpy as np
 
 class MultiplicationNode(N1BlockOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "multiplication", "乗算")    
 
+    def getColor(self):
+        return self._color_op
+    
     def getBaseDataIndex(self, inputDatas):
         """乗算ではtensorがある場合は最初のmatrixデータを基準とする"""
         for i, data in enumerate(inputDatas):
@@ -45,7 +49,6 @@ class MultiplicationNode(N1BlockOperationNode):
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
-            from config import BLOCK_SIZE
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
             blockWidth = min(BLOCK_SIZE, resultWidth - x)

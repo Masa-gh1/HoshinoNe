@@ -6,8 +6,8 @@ N1BlockOperationNode base class
 
 from .FlowNode import FlowNode
 from .FlowData import FlowData
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import MAX_WORKERS
+from concurrent.futures import as_completed
+from utils.ThreadPool import ProcessExecutor
 
 class N1BlockOperationNode(FlowNode):
     """データ入出力 N:1 のブロック単位計算ノードの基底クラス"""
@@ -32,7 +32,7 @@ class N1BlockOperationNode(FlowNode):
         inputDatas = []
         
         # このノードに接続されている前のノードからデータを収集
-        for node in context['input_nodes']:
+        for node in self.inputNodes:
             inputDatas.extend(node.flowDatas)
         
         if inputDatas:
@@ -45,21 +45,20 @@ class N1BlockOperationNode(FlowNode):
             flowData = FlowData(baseData.headers)
             flowData.setDimensions(width, height)
             
-            # ブロック単位で処理（並列化）
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                futures = []
-                for block in flowData.iterateBlocks():
-                    future = executor.submit(self.processBlock, block, inputDatas)
-                    futures.append(future)
-                
-                # 全ブロックの処理完了を待つ
-                self.reportProgress(context, "処理中")
-                totalBlocks = len(futures)
-                for i, future in enumerate(as_completed(futures)):
-                    resultBlock = future.result()
-                    if resultBlock:
-                        flowData.setBlock(resultBlock)
-                    self.reportProgress(context, "処理中", i + 1, totalBlocks)
+            # ブロック単位で並列処理
+            futures = []
+            for block in flowData.iterateBlocks():
+                future = ProcessExecutor.submit(self.processBlock, block, inputDatas)
+                futures.append(future)
+            
+            # 全ブロックの処理完了を待つ
+            self.reportProgress(context, "処理中")
+            totalBlocks = len(futures)
+            for i, future in enumerate(as_completed(futures)):
+                resultBlock = future.result()
+                if resultBlock:
+                    flowData.setBlock(resultBlock)
+                self.reportProgress(context, "処理中", i + 1, totalBlocks)
             self.flowDatas = [flowData]
         else:
             self.flowDatas = []

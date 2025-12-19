@@ -13,9 +13,14 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import atexit
 from nodes import NodeFactory
-from config import MAX_WORKERS
 from base.ResultWindow import ResultWindow
+
+# グローバルスレッドプール
+MAX_NODE_WORKERS = 4
+NodeExecutor = ThreadPoolExecutor(max_workers=MAX_NODE_WORKERS)
+atexit.register(NodeExecutor.shutdown)
 
 class FlowEditor:
     def __init__(self, root):
@@ -85,9 +90,9 @@ class FlowEditor:
         self.progressFrame = tk.Frame(self.root)
         self.progressFrame.pack(fill=tk.X, padx=5, pady=2)
         
-        # MAX_WORKERS数のプログレスバーを事前作成
+        # MAX_NODE_WORKERS数のプログレスバーを事前作成
         self.progressBars = []
-        for i in range(MAX_WORKERS):
+        for i in range(MAX_NODE_WORKERS):
             frame = tk.Frame(self.progressFrame)
             frame.pack(fill=tk.X, pady=1)
             
@@ -242,9 +247,10 @@ class FlowEditor:
         
         if self.selectedNode and self.selectedNode != node:
             # 既存の接続をチェック
-            if node in self.selectedNode.connections:
+            if node in self.selectedNode.outputNodes:
                 # 接続を削除
-                self.selectedNode.connections.remove(node)
+                self.selectedNode.outputNodes.remove(node)
+                node.inputNodes.remove(self.selectedNode)
                 # 接続線を削除
                 for i, (f, t, l) in enumerate(self.connectionLines):
                     if f == self.selectedNode and t == node:
@@ -258,7 +264,8 @@ class FlowEditor:
                 self.statusLabel.config(text=f"接続削除: {self.selectedNode.text} → {node.text}")
             else:
                 # 接続を作成
-                self.selectedNode.connections.append(node)
+                self.selectedNode.outputNodes.append(node)
+                node.inputNodes.append(self.selectedNode)
                 x1, y1, x2, y2 = self._getConnectionPoints(self.selectedNode, node)
                 line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
                 self.connectionLines.append((self.selectedNode, node, line))
@@ -371,54 +378,48 @@ class FlowEditor:
             # トポロジカルソートで処理レベルを決定
             processLevels = self.getProcessLevels()
             
-            # レベル毎に並列処理
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                for level, nodes in enumerate(processLevels):
-                    if nodes:
-                        # 同レベルのノードを並列実行
-                        text=""
-                        sep="実行: "
-                        futures = []
-                        for node in nodes:
-                            # 接続元ノードを収集
-                            inputNodes = [n for n in self.nodes if node in n.connections]
-                            
-                            # 再処理が必要かチェック
-                            if node.needsReprocessing(inputNodes):
-                                self.root.after(0, lambda: self.showProgress(id(node), node.text, "待機中"))
-                                context = {
-                                    'input_nodes': inputNodes,
-                                    'result_callback': self.showResult,
-                                    'progress_callback': lambda msg, current=None, total=None, n=node: self.showProgress(id(n), n.text, msg, current, total)
-                                }
-                                future = executor.submit(self._executeNodeWithTiming, node, context)
-                                futures.append((node, future))
-                                text +=f"{sep}{node.text}"
-                                sep=","
-                            elif not self.autoExecute.get():
-                                # スキップしたノードを表示
-                                self.root.after(0, lambda n=node: self.resultText.insert(tk.END, f"スキップ: {n.text}\n"))
-                                self.root.after(0, lambda: self.resultText.see(tk.END))
-                            
-                        
-                        if 0<len(text):
-                            self.root.after(0, lambda: self.statusLabel.config(text=f"状態: {text}"))
-                        if 0<len(text) and not self.autoExecute.get():
-                            self.root.after(0, lambda text=text: self.resultText.insert(tk.END, text))
-                            self.root.after(0, lambda: self.resultText.insert(tk.END, f"\n"))
+            for level, nodes in enumerate(processLevels):
+                if nodes:
+                    # 同レベルのノードを並列実行
+                    text=""
+                    sep="実行: "
+                    futures = []
+                    for node in nodes:
+                        # 再処理が必要かチェック
+                        if node.needsReprocessing():
+                            self.root.after(0, lambda: self.showProgress(id(node), node.text, "待機中"))
+                            context = {
+                                'result_callback': self.showResult,
+                                'progress_callback': lambda msg, current=None, total=None, n=node: self.showProgress(id(n), n.text, msg, current, total)
+                            }
+                            future = NodeExecutor.submit(self._executeNodeWithTiming, node, context)
+                            futures.append((node, future))
+                            text +=f"{sep}{node.text}"
+                            sep=","
+                        elif not self.autoExecute.get():
+                            # スキップしたノードを表示
+                            self.root.after(0, lambda n=node: self.resultText.insert(tk.END, f"スキップ: {n.text}\n"))
                             self.root.after(0, lambda: self.resultText.see(tk.END))
                         
-                        # 同レベルの全ノードの完了を待つ
-                        futureToNode = {future: node for node, future in futures}
-                        for future in as_completed([f for n, f in futures]):
-                            node = futureToNode[future]
-                            elapsedMs = future.result()
-                            self.root.after(0, lambda n=node, ms=elapsedMs: self.resultText.insert(tk.END, f"完了: {n.text} ({ms}ms)\n"))
-                            self.root.after(0, lambda: self.resultText.see(tk.END))
-                            self.root.after(0, lambda n=node: self.statusLabel.config(text=f"完了: {n.text}"))
-                            self.root.after(0, lambda: self._clearAllProgress())
-                            self.root.after(0, lambda: self.highlightReprocessingNodes())
-                            self.root.after(0, lambda n=node: self._updateOpenResultWindows(n))
+                    
+                    if 0<len(text):
+                        self.root.after(0, lambda: self.statusLabel.config(text=f"状態: {text}"))
+                    if 0<len(text) and not self.autoExecute.get():
+                        self.root.after(0, lambda text=text: self.resultText.insert(tk.END, text))
+                        self.root.after(0, lambda: self.resultText.insert(tk.END, f"\n"))
+                        self.root.after(0, lambda: self.resultText.see(tk.END))
+                    
+                    # 同レベルの全ノードの完了を待つ
+                    futureToNode = {future: node for node, future in futures}
+                    for future in as_completed([f for n, f in futures]):
+                        node = futureToNode[future]
+                        elapsedMs = future.result()
+                        self.root.after(0, lambda n=node, ms=elapsedMs: self.resultText.insert(tk.END, f"完了: {n.text} ({ms}ms)\n"))
+                        self.root.after(0, lambda: self.resultText.see(tk.END))
+                        self.root.after(0, lambda n=node: self.statusLabel.config(text=f"完了: {n.text}"))
+                        self.root.after(0, lambda: self._clearAllProgress())
+                        self.root.after(0, lambda: self.highlightReprocessingNodes())
+                        self.root.after(0, lambda n=node: self._updateOpenResultWindows(n))
             
             if not self.autoExecute.get():
                 self.root.after(0, lambda: self.resultText.insert(tk.END, f"実行完了\n"))
@@ -440,7 +441,7 @@ class FlowEditor:
         # 入次数を計算
         inDegree = {node: 0 for node in self.nodes}
         for node in self.nodes:
-            for connectedNode in node.connections:
+            for connectedNode in node.outputNodes:
                 inDegree[connectedNode] += 1
         
         levels = []
@@ -457,7 +458,7 @@ class FlowEditor:
             # 処理したノードを削除し、後続ノードの入次数を更新
             for node in currentLevel:
                 remaining.remove(node)
-                for connectedNode in node.connections:
+                for connectedNode in node.outputNodes:
                     if connectedNode in remaining:
                         inDegree[connectedNode] -= 1
         
@@ -469,7 +470,7 @@ class FlowEditor:
             startTime = time.time()
             node.process(context)
             # 実行後にハッシュを更新
-            node.updateExecutionHashes(context['input_nodes'])
+            node.updateExecutionHashes()
             endTime = time.time()
             elapsedMs = int((endTime - startTime) * 1000)
             return elapsedMs
@@ -522,10 +523,10 @@ class FlowEditor:
         
         # 接続情報を保存
         for node in self.nodes:
-            for connectedNode in node.connections:
+            for outputNode in node.outputNodes:
                 flowData["connections"].append({
                     "from": nodeIds[node],
-                    "to": nodeIds[connectedNode]
+                    "to": nodeIds[outputNode]
                 })
         
         try:
@@ -571,11 +572,12 @@ class FlowEditor:
                     nodeMap[nodeData["id"]] = node
                     self.nodes.append(node)
             
-            # 接続を作成
+            # 接続を作成（双方向）
             for connection in flowData["connections"]:
                 fromNode = nodeMap[connection["from"]]
                 toNode = nodeMap[connection["to"]]
-                fromNode.connections.append(toNode)
+                fromNode.outputNodes.append(toNode)
+                toNode.inputNodes.append(fromNode)
                 
                 # 接続線を描画
                 x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
@@ -623,13 +625,23 @@ class FlowEditor:
                 newConnectionLines.append((f, t, l))
         self.connectionLines = newConnectionLines
         
-        # ノードの接続をクリア
+        # ノードの接続をクリア（双方向）
         for n in self.nodes:
-            if node in n.connections:
-                n.connections.remove(node)
+            if node in n.outputNodes:
+                n.outputNodes.remove(node)
+            if node in n.inputNodes:
+                n.inputNodes.remove(node)
         
-        # 削除されるノードの接続もクリア
-        node.connections.clear()
+        # 削除されるノードの接続もクリア（双方向）
+        for connectedNode in node.outputNodes:
+            if node in connectedNode.inputNodes:
+                connectedNode.inputNodes.remove(node)
+        for inputNode in node.inputNodes:
+            if node in inputNode.outputNodes:
+                inputNode.outputNodes.remove(node)
+        
+        node.outputNodes.clear()
+        node.inputNodes.clear()
         
         # ノードリストから削除
         self.nodes.remove(node)
@@ -672,14 +684,12 @@ class FlowEditor:
     
     def _needsReprocessingRecursive(self, node):
         """上流を再帰的にチェックして再実行が必要か判定"""
-        inputNodes = [n for n in self.nodes if node in n.connections]
-        
         # 自分自身の設定が変更されたかチェック
-        if node.needsReprocessing(inputNodes):
+        if node.needsReprocessing():
             return True
         
         # 上流ノードのいずれかが再実行必要かチェック
-        for inputNode in inputNodes:
+        for inputNode in node.inputNodes:
             if self._needsReprocessingRecursive(inputNode):
                 return True
         

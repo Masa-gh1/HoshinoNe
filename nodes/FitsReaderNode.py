@@ -11,9 +11,10 @@ import numpy as np
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from base import FlowNode, FlowData, DataBlock
-from config import MAX_WORKERS, BLOCK_SIZE
+from config import BLOCK_SIZE
+from utils.ThreadPool import ProcessExecutor
 
 try:
     from astropy.io import fits
@@ -33,7 +34,7 @@ class FitsReaderNode(FlowNode):
             return
     
     def getColor(self):
-        return 'lightblue'
+        return self._color_io
     
     def setFilePaths(self, filePaths):
         self.filePaths = filePaths
@@ -72,11 +73,10 @@ class FitsReaderNode(FlowNode):
         
         self.reportProgress(context, "開始")
         
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            resultFlowDatas = []
-            futureToDatas = {}
-            
-            for fileIdx, filePath in enumerate(self.filePaths):
+        resultFlowDatas = []
+        futureToDatas = {}
+        
+        for fileIdx, filePath in enumerate(self.filePaths):
                 with fits.open(filePath) as hdul:
                     # 各HDUを個別のFlowDataとして処理
                     for hduIndex, hdu in enumerate(hdul):
@@ -167,22 +167,22 @@ class FitsReaderNode(FlowNode):
                     flowData.setDimensions(width, height)
                     resultFlowDatas.append(flowData)
                     
-                    # データをブロック単位で処理
-                    for blockY in range(0, height, BLOCK_SIZE):
-                        for blockX in range(0, width, BLOCK_SIZE):
-                            future = executor.submit(self._processBlock, data, channels, width, height, blockX, blockY)
-                            futureToDatas[future] = flowData
-            
-            # 全ブロックの処理完了を待つ
-            self.reportProgress(context, "処理中")
-            totalBlocks = len(futureToDatas)
-            for i, future in enumerate(as_completed(futureToDatas)):
-                blocks = future.result()
-                for block in blocks:
-                    futureToDatas[future].setBlock(block)
-                self.reportProgress(context, "処理中", i + 1, totalBlocks)
-            
-            self.flowDatas = resultFlowDatas
+                # ブロック単位で並列処理
+                for blockY in range(0, height, BLOCK_SIZE):
+                    for blockX in range(0, width, BLOCK_SIZE):
+                        future = ProcessExecutor.submit(self._processBlock, data, channels, width, height, blockX, blockY)
+                        futureToDatas[future] = flowData
+        
+        # 全ブロックの処理完了を待つ
+        self.reportProgress(context, "処理中")
+        totalBlocks = len(futureToDatas)
+        for i, future in enumerate(as_completed(futureToDatas)):
+            blocks = future.result()
+            for block in blocks:
+                futureToDatas[future].setBlock(block)
+            self.reportProgress(context, "処理中", i + 1, totalBlocks)
+        
+        self.flowDatas = resultFlowDatas
         
         self.reportProgress(context, "完了")
     

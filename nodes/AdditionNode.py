@@ -5,11 +5,15 @@ MergeNode class
 '''
 
 from base import N1BlockOperationNode, DataBlock
+from config import BLOCK_SIZE
 import numpy as np
 
 class AdditionNode(N1BlockOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "addition", "加算")
+    
+    def getColor(self):
+        return self._color_op
     
     def getBaseDataIndex(self, inputDatas):
         """加算ではtensorがある場合は最初のmatrixデータを基準とする"""
@@ -45,7 +49,6 @@ class AdditionNode(N1BlockOperationNode):
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
-            from config import BLOCK_SIZE
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
             blockWidth = min(BLOCK_SIZE, resultWidth - x)

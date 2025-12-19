@@ -14,14 +14,14 @@ class QuadraticFitNode(FlowNode):
         super().__init__(canvas, editor, x, y, "quadratic_fit", "2次関数近似")
     
     def getColor(self):
-        return 'lightcoral'
+        return self._color_func
     
     def process(self, context):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
         flowData = None
-        for node in context['input_nodes']:
+        for node in self.inputNodes:
             if node.flowDatas and node.flowDatas[0].headers.get('type') == 'image':
                 flowData = node.flowDatas[0]
                 break
@@ -109,7 +109,3 @@ class QuadraticFitNode(FlowNode):
         
         self.flowDatas = [outputFlowData]
         self.reportProgress(context, "完了")
-    
-    def getConfigHash(self):
-        config = f"{self.type}"
-        return hashlib.md5(config.encode()).hexdigest()

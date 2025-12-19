@@ -27,7 +27,7 @@ class ImageWriterNode(FlowNode):
         self.defaultOutputExtension = ".jpg"
     
     def getColor(self):
-        return 'lightcyan'
+        return self._color_io
     
     def setOutputFilePath(self, filePath):
         self.outputFilePath = filePath
@@ -62,7 +62,7 @@ class ImageWriterNode(FlowNode):
         
         # 前のノードからデータを収集
         flowDatas = []
-        for node in context['input_nodes']:
+        for node in self.inputNodes:
             flowDatas.extend(node.flowDatas)
         
         if not flowDatas:

@@ -20,7 +20,7 @@ class FileWriterNode(FlowNode):
         self.defaultOutputExtension = ".csv"
     
     def getColor(self):
-        return 'lightcyan'
+        return self._color_io
     
     def setOutputFilePath(self, filePath):
         self.outputFilePath = filePath
@@ -54,7 +54,7 @@ class FileWriterNode(FlowNode):
         
         # 前のノードからデータを収集（最初のデータを使用）
         flowData = None
-        for node in context['input_nodes']:
+        for node in self.inputNodes:
             flowData = node.flowDatas[0]
         
         if not flowData:

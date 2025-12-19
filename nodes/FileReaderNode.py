@@ -18,7 +18,7 @@ class FileReaderNode(FlowNode):
         self.fileTypes = [("CSV files", "*.csv")]
     
     def getColor(self):
-        return 'lightyellow'
+        return self._color_io
     
     def setFilePaths(self, filePaths):
         self.filePaths = filePaths

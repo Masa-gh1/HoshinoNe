@@ -4,7 +4,7 @@ Configuration settings for FlowEditor
 @author: Masakazu Inoue
 '''
 
-# ノード当たりの並列処理ワーカー数設定
+# ノードの並列処理ワーカー数設定
 MAX_WORKERS = 4
 
 # ブロックサイズ設定
