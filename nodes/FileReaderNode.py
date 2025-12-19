@@ -13,9 +13,9 @@ from config import MAX_WORKERS, BLOCK_SIZE
 
 class FileReaderNode(FlowNode):
     def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
-        self.filePaths = []
         super().__init__(canvas, editor, x, y, "file_reader", "ファイル読み込み")
-        self.filetypes = [("CSV files", "*.csv")]
+        self.filePaths = []
+        self.fileTypes = [("CSV files", "*.csv")]
     
     def getColor(self):
         return 'lightyellow'
@@ -68,8 +68,8 @@ class FileReaderNode(FlowNode):
                         continue
                     
                     # プレーンマーカーをチェック
-                    if row[0].startswith('# '):
-                        planeName = row[0][2:]  # '# 'を除去
+                    if row[0].startswith('#'):
+                        planeName = row[0][1:].strip()  # '#'を除去
                         planeNames.append(planeName)
                         if currentPlane > 0:  # 2枚目以降のプレーン
                             planeData.append(fileData)
@@ -116,16 +116,17 @@ class FileReaderNode(FlowNode):
                         allData.extend(planeData[0])
         
         # FlowDataを作成してブロック単位で保存
-        flowHeaders = {'type': dataType, 'mode': '3D' if planeNames else '2D', 'columns': headers, 'lines': rowHeaders}
+        flowHeaders = {'type': dataType, 'mode': '2D', 'columns': headers, 'lines': rowHeaders}
         if planeNames:
             flowHeaders['planes'] = planeNames
+        else:
+            flowHeaders['planes'] = [dataType]
         flowData = FlowData(flowHeaders)
         if planeData:
             # 複数プレーンの場合
             height = len(planeData[0]) if planeData[0] else 0
             width = len(planeData[0][0]) if height > 0 else 0
-            planeCount = len(planeData)
-            flowData.setDimensions(width, height, planeCount)
+            flowData.setDimensions(width, height)
             
             for planeIdx, data in enumerate(planeData):
                 for y in range(0, height, BLOCK_SIZE):
@@ -147,7 +148,7 @@ class FileReaderNode(FlowNode):
             # 単一プレーンの場合
             height = len(allData)
             width = len(allData[0]) if height > 0 else 0
-            flowData.setDimensions(width, height, 1)
+            flowData.setDimensions(width, height)
             
             for y in range(0, height, BLOCK_SIZE):
                 for x in range(0, width, BLOCK_SIZE):

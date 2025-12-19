@@ -5,29 +5,29 @@ FileWriterNode class
 '''
 
 import csv
+import sys
 import os
+import traceback
 from tkinter import filedialog, messagebox
 from base import FlowNode, FlowData
 from config import MAX_WORKERS, BLOCK_SIZE
 
 class FileWriterNode(FlowNode):
     def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
-        self.filePath = ""
         super().__init__(canvas, editor, x, y, "file_writer", "ファイル書き出し")
-        self.filetypes = [("CSV files", "*.csv"), ("All files", "*.*")]
-        self.defaultextension = ".csv"
-        if not nonDialog:
-            self.selectOutputFile()
+        self.outputFilePath = ""
+        self.outputFileTypes = [("CSV files", "*.csv"), ("All files", "*.*")]
+        self.defaultOutputExtension = ".csv"
     
     def getColor(self):
         return 'lightcyan'
     
-    def setFilePath(self, filePath):
-        self.filePath = filePath
+    def setOutputFilePath(self, filePath):
+        self.outputFilePath = filePath
     
     def updateNodeText(self):
-        if self.filePath:
-            fileName = os.path.basename(self.filePath)
+        if self.outputFilePath:
+            fileName = os.path.basename(self.outputFilePath)
             displayText = f"{self.text}\n{fileName}"
         else:
             displayText = self.text
@@ -35,20 +35,20 @@ class FileWriterNode(FlowNode):
     
     def store(self, nodeData):
         flowDir = os.path.dirname(self.editor.currentFlowPath)
-        relativePath = os.path.relpath(self.filePath, flowDir)
-        nodeData["filePath"] = relativePath
+        relativePath = os.path.relpath(self.outputFilePath, flowDir)
+        nodeData["outputFilePath"] = relativePath
     
     def restore(self, nodeData):
-        if "filePath" in nodeData:
+        if "outputFilePath" in nodeData:
             flowDir = os.path.dirname(self.editor.currentFlowPath)
-            self.filePath = os.path.abspath(os.path.join(flowDir, nodeData["filePath"]))
+            self.outputFilePath = os.path.abspath(os.path.join(flowDir, nodeData["outputFilePath"]))
             self.updateNodeText()
     
 
     
     def process(self, context):
         self.reportProgress(context, "開始")
-        if not self.filePath:
+        if not self.outputFilePath:
             messagebox.showerror("エラー", "出力ファイルが設定されていません")
             return
         
@@ -62,12 +62,13 @@ class FileWriterNode(FlowNode):
             return
         
         try:
-            width, height, planeCount = flowData.getDimensions()
+            width, height = flowData.getDimensions()
+            planeCount = flowData.getPlaneCount()
             planeNames = flowData.headers.get('planes', ['data']) if flowData.headers else ['data']
             totalBlocks = ((height + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((width + BLOCK_SIZE - 1) // BLOCK_SIZE) * planeCount
             processedBlocks = 0
             
-            with open(self.filePath, 'w', newline='', encoding='utf-8') as f:
+            with open(self.outputFilePath, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 
                 # 行ヘッダーを取得
@@ -116,9 +117,31 @@ class FileWriterNode(FlowNode):
                             
                             processedBlocks += 1
                         
-            # 処理完了を示すためにflowDatasを設定
-            self.flowDatas = [FlowData()]
+            # 処理完了情報をCSV形式のFlowDataとして設定
+            fileName = os.path.basename(self.outputFilePath)
+            fileSize = os.path.getsize(self.outputFilePath)
+            
+            headers = {
+                'type': 'matrix',
+                'mode': '2D',
+                'columns': ['size', 'planeCount', 'width', 'height'],
+                'lines': [fileName],
+                'planes': ['fileName']
+            }
+            
+            resultFlowData = FlowData(headers)
+            resultFlowData.setDimensions(4, 1)
+            
+            # データブロックを作成（数値のみ）
+            from base import DataBlock
+            data = [[fileSize, planeCount, width, height]]
+            block = DataBlock(0, 0, 0, data)
+            resultFlowData.setBlock(block)
+            
+            self.flowDatas = [resultFlowData]
         except Exception as e:
-            messagebox.showerror("エラー", f"ファイル出力に失敗しました: {str(e)}")
+            tb = traceback.format_exc()
+            print(tb,file=sys.stderr)
+            messagebox.showerror("エラー", f"ファイル出力に失敗しました: {str(e)}\n\nトラックバック:\n{tb}")
         
         self.reportProgress(context, "完了")

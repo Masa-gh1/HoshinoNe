@@ -26,9 +26,9 @@ class N1BlockOperationNode(FlowNode):
             
             # 結果用のFlowDataを初期化
             firstData = inputDatas[0]
-            width, height, planeCount = firstData.getDimensions()
+            width, height = firstData.getDimensions()
             flowData = FlowData(firstData.headers)
-            flowData.setDimensions(width, height, planeCount)
+            flowData.setDimensions(width, height)
             
             # ブロック単位で処理（並列化）
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

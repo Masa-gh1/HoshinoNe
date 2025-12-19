@@ -70,15 +70,6 @@ class CoefficientsNode(FlowNode):
         newHash = self.getConfigHash()
         if newHash != self._lastConfigHash:
             self.editor.onNodeConfigChanged(self)
-        else:
-            self.editor.highlightReprocessingNodes()
-    
-    def onRightClick(self, event):
-        menu = tk.Menu(self.canvas, tearoff=0)
-        menu.add_command(label="編集", command=self.onEdit)
-        menu.add_separator()
-        menu.add_command(label="削除", command=lambda: self.editor.deleteNode(self))
-        menu.post(event.x_root, event.y_root)
     
     def process(self, context):
         self.reportProgress(context, "開始")
@@ -96,7 +87,7 @@ class CoefficientsNode(FlowNode):
         
         headers = {
             'type': 'tensor',
-            'mode': '3D' if self.planeCount > 1 else '2D',
+            'mode': '2D',
             'axes': ['x_order', 'y_order'],
             'columns': columns,
             'lines': lines,
@@ -106,7 +97,7 @@ class CoefficientsNode(FlowNode):
         }
         
         outputFlowData = FlowData(headers)
-        outputFlowData.setDimensions(width, height, self.planeCount)
+        outputFlowData.setDimensions(width, height)
         
         # 各プレーンに係数を設定
         for planeIdx in range(self.planeCount):

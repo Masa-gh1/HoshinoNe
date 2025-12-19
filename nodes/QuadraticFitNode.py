@@ -29,7 +29,8 @@ class QuadraticFitNode(FlowNode):
         if not flowData:
             raise ValueError("画像データが見つかりません")
         
-        width, height, planeCount = flowData.getDimensions()
+        width, height = flowData.getDimensions()
+        planeCount = flowData.getPlaneCount()
         
         # planesヘッダーからプレーン情報を取得
         planeNames = flowData.headers.get('planes', ['L']) if flowData.headers else ['L']
@@ -82,7 +83,7 @@ class QuadraticFitNode(FlowNode):
         # テンソル形式でデータを構築 (3x3の係数テンソル)
         headers = {
             'type': 'tensor',
-            'mode': '3D',
+            'mode': '2D',
             'axes': ['x_order', 'y_order'],
             'columns': ['x^0', 'x^1', 'x^2'],
             'lines': ['y^0', 'y^1', 'y^2'],
@@ -92,7 +93,7 @@ class QuadraticFitNode(FlowNode):
         }
         
         outputFlowData = FlowData(headers)
-        outputFlowData.setDimensions(3, 3, actualPlaneCount)
+        outputFlowData.setDimensions(3, 3)
         
         # 各プレーンに係数テンソルを設定
         for planeIdx, planeName in enumerate(planeNames):

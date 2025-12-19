@@ -30,9 +30,9 @@ class NNBlockOperationNode(FlowNode):
                 
                 for inputData in inputDatas:
                     # 結果用のFlowDataを初期化
-                    width, height, planeCount = inputData.getDimensions()
+                    width, height = inputData.getDimensions()
                     flowData = FlowData(inputData.headers)
-                    flowData.setDimensions(width, height, planeCount)
+                    flowData.setDimensions(width, height)
                     resultFlowDatas.append(flowData)
                     
                     for block in inputData.iterateBlocks():

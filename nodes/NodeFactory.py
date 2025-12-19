@@ -14,11 +14,13 @@ from .ImageReaderNode import ImageReaderNode
 from .ImageWriterNode import ImageWriterNode
 from .QuadraticFitNode import QuadraticFitNode
 from .CoefficientsNode import CoefficientsNode
+from .RawReaderNode import RawReaderNode
 
 class NodeFactory:
     nodeClasses = {
         'file_reader': FileReaderNode,
         'image_reader': ImageReaderNode,
+        'raw_reader': RawReaderNode,
         'addition': AdditionNode,
         'multiplication': MultiplicationNode,
         'inverse': InverseNode,
@@ -29,18 +31,21 @@ class NodeFactory:
         'coefficients': CoefficientsNode,
     }
     
-    nodeLabels = {
-        'file_reader': 'ファイル読み込み',
-        'image_reader': '画像読み込み',
-        'addition': '加算',
-        'negate': '符号反転',
-        'multiplication': '乗算',
-        'inverse': '逆数',
-        'coefficients': '係数',
-        'file_writer': 'ファイル書き出し',
-        'image_writer': '画像書き出し',
-        'quadratic_fit': '2次関数近似',
-    }
+    nodeLabels = [
+        ('addition'      , '加算'),
+        ('multiplication', '乗算'),
+        ('negate'        , '符号反転'),
+        ('inverse'       , '逆数'),
+        ('separator'     , None),
+        ('coefficients'  , '係数'),
+        ('quadratic_fit' , '2次関数近似'),
+        ('separator'     , None),
+        ('file_reader'   , 'ファイル読み込み'),
+        ('file_writer'   , 'ファイル書き出し'),
+        ('image_reader'  , '画像読み込み'),
+        ('image_writer'  , '画像書き出し'),
+        ('raw_reader'    , 'RAW読み込み'),
+    ]
     
     @classmethod
     def createNode(cls, nodeType, canvas, editor, x, y, **kwargs):
@@ -51,4 +56,4 @@ class NodeFactory:
     
     @classmethod
     def getMenuItems(cls):
-        return [(label, nodeType) for nodeType, label in cls.nodeLabels.items()]
+        return cls.nodeLabels

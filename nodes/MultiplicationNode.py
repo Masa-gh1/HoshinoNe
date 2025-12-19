@@ -57,7 +57,8 @@ class MultiplicationNode(N1BlockOperationNode):
     
     def _calculateTensorBlock(self, tensorData, planeIdx, blockX, blockY, blockShape):
         """テンソルデータからブロック内の各座標に対応する値を計算"""
-        width, height, planeCount = tensorData.getDimensions()
+        width, height = tensorData.getDimensions()
+        planeCount = tensorData.getPlaneCount()
         if width < 1 or height < 1 or planeIdx >= planeCount:
             return np.ones(blockShape)
         

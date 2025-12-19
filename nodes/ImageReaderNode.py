@@ -15,9 +15,9 @@ from config import MAX_WORKERS, BLOCK_SIZE
 
 class ImageReaderNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        self.filePaths = []
         super().__init__(canvas, editor, x, y, "image_reader", "画像読み込み")
-        self.filetypes = [("Image files", "*.jpg *.jpeg *.png *.bmp *.gif")]
+        self.filePaths = []
+        self.fileTypes = [("Image files", "*.jpg *.jpeg *.png *.bmp *.gif")]
     
     def getColor(self):
         return 'lightyellow'
@@ -47,8 +47,6 @@ class ImageReaderNode(FlowNode):
             self.filePaths = [os.path.abspath(os.path.join(flowDir, path)) for path in nodeData["filePaths"]]
             self.updateNodeText()
     
-
-    
     def process(self, context):
         self.reportProgress(context, "開始")
         
@@ -66,7 +64,7 @@ class ImageReaderNode(FlowNode):
                     headers = {'type': 'image', 'mode': 'RGB', 'planes': ['R', 'G', 'B']}
                     pixels = list(img.getdata())
                     flowData = FlowData(headers)
-                    flowData.setDimensions(width, height, 3)
+                    flowData.setDimensions(width, height)
                     resultFlowDatas.append(flowData)
                     
                     for blockY in range(0, height, BLOCK_SIZE):
@@ -79,7 +77,7 @@ class ImageReaderNode(FlowNode):
                     img_gray = img.convert('L')
                     pixels = list(img_gray.getdata())
                     flowData = FlowData(headers)
-                    flowData.setDimensions(width, height, 1)
+                    flowData.setDimensions(width, height)
                     resultFlowDatas.append(flowData)
                     
                     for blockY in range(0, height, BLOCK_SIZE):

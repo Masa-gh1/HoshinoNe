@@ -17,15 +17,15 @@ class FlowNode:
         self.x, self.y = x, y
         self.type = nodeType
         self.text = text
-        self.connections = []
-        self.flowDatas = []
+        self.connections = [] # 接続先ノードの一覧
+        self.flowDatas = []   # 処理結果データ
         self.dragging = False
         self.startX = 0
         self.startY = 0
         self._lastInputHash = None
         self._lastConfigHash = None
-        self.filetypes = [("CSV files", "*.csv")]
-        self.defaultextension = ".csv"
+        self.fileTypes = [("CSV files", "*.csv")]
+        self.defaultOutputExtension = ".csv"
         self.createVisual()
         self.bindEvents()
     
@@ -88,22 +88,15 @@ class FlowNode:
             context['progress_callback'](message, current, total)
     
     def selectFiles(self):
-        filePaths = filedialog.askopenfilenames(filetypes=self.filetypes)
-        if not filePaths:
-            raise ValueError("ファイルが選択されませんでした")
+        filePaths = filedialog.askopenfilenames(filetypes=self.fileTypes)
         
         self.setFilePaths(filePaths)
         self.updateNodeText()
         
     def selectOutputFile(self):
-        outputPath = filedialog.asksaveasfilename(
-            defaultextension=self.defaultextension,
-            filetypes=self.filetypes
-        )
-        if not outputPath:
-            raise ValueError("出力ファイルが選択されませんでした")
+        outputPath = filedialog.asksaveasfilename( defaultextension=self.defaultOutputExtension, filetypes=self.outputFileTypes)
         
-        self.filePath = outputPath
+        self.outputFilePath = outputPath
         self.updateNodeText()
     
     def updateNodeText(self):
@@ -163,24 +156,32 @@ class FlowNode:
     
     def onRightClick(self, event):
         menu = tk.Menu(self.canvas, tearoff=0)
-        if hasattr(self, 'filePaths') or hasattr(self, 'filePath'):
-            menu.add_command(label="編集", command=self.onEdit)
-            menu.add_separator()
+        if hasattr(self, 'setFilePaths'):
+            menu.add_command(label="ファイル選択", command=self.onSelectFiles)
+        if hasattr(self, 'setOutputFilePath'):
+            menu.add_command(label="出力ファイル選択", command=self.onSelectOutputFile)
+        if hasattr(self, 'onEdit'):
+            menu.add_command(label="設定", command=self.onEdit)
+        menu.add_separator()
         menu.add_command(label="削除", command=lambda: self.editor.deleteNode(self))
         menu.post(event.x_root, event.y_root)
     
-    def onEdit(self):
+    def onSelectFiles(self):
         """編集メニューから呼び出される編集処理"""
         try:
-            if hasattr(self, 'filePaths'):
-                self.selectFiles()
-            elif hasattr(self, 'filePath'):
-                self.selectOutputFile()
-            
+            self.selectFiles()
             newHash = self.getConfigHash()
             if newHash != self._lastConfigHash:
                 self.editor.onNodeConfigChanged(self)
-            else:
-                self.editor.highlightReprocessingNodes()
+        except ValueError:
+            pass
+        
+    def onSelectOutputFile(self):
+        """編集メニューから呼び出される編集処理"""
+        try:
+            self.selectOutputFile()
+            newHash = self.getConfigHash()
+            if newHash != self._lastConfigHash:
+                self.editor.onNodeConfigChanged(self)
         except ValueError:
             pass

@@ -5,7 +5,9 @@ ImageWriterNode class
 '''
 
 import hashlib
+import sys
 import os
+import traceback
 import numpy as np
 from tkinter import filedialog, messagebox
 from PIL import Image
@@ -14,20 +16,20 @@ from config import BLOCK_SIZE
 
 class ImageWriterNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        self.filePath = ""
         super().__init__(canvas, editor, x, y, "image_writer", "画像書き出し")
-        self.filetypes = [("JPEG files", "*.jpg"), ("PNG files", "*.png"), ("All files", "*.*")]
-        self.defaultextension = ".jpg"
+        self.outputFilePath = ""
+        self.outputFileTypes = [("JPEG files", "*.jpg"), ("PNG files", "*.png"), ("All files", "*.*")]
+        self.defaultOutputExtension = ".jpg"
     
     def getColor(self):
         return 'lightcyan'
     
-    def setFilePath(self, filePath):
-        self.filePath = filePath
+    def setOutputFilePath(self, filePath):
+        self.outputFilePath = filePath
     
     def updateNodeText(self):
-        if self.filePath:
-            fileName = os.path.basename(self.filePath)
+        if self.outputFilePath:
+            fileName = os.path.basename(self.outputFilePath)
             displayText = f"{self.text}\n{fileName}"
         else:
             displayText = self.text
@@ -35,18 +37,18 @@ class ImageWriterNode(FlowNode):
     
     def store(self, nodeData):
         flowDir = os.path.dirname(self.editor.currentFlowPath)
-        relativePath = os.path.relpath(self.filePath, flowDir)
-        nodeData["filePath"] = relativePath
+        relativePath = os.path.relpath(self.outputFilePath, flowDir)
+        nodeData["outputFilePath"] = relativePath
     
     def restore(self, nodeData):
-        if "filePath" in nodeData:
+        if "outputFilePath" in nodeData:
             flowDir = os.path.dirname(self.editor.currentFlowPath)
-            self.filePath = os.path.abspath(os.path.join(flowDir, nodeData["filePath"]))
+            self.outputFilePath = os.path.abspath(os.path.join(flowDir, nodeData["outputFilePath"]))
             self.updateNodeText()
     
     def process(self, context):
         self.reportProgress(context, "開始")
-        if not self.filePath:
+        if not self.outputFilePath:
             messagebox.showerror("エラー", "出力ファイルが設定されていません")
             return
         
@@ -63,7 +65,8 @@ class ImageWriterNode(FlowNode):
             # 全ファイルの総ブロック数を計算
             totalAllBlocks = 0
             for flowData in flowDatas:
-                width, height, planeCount = flowData.getDimensions()
+                width, height = flowData.getDimensions()
+                planeCount = flowData.getPlaneCount()
                 if width > 0 and height > 0:
                     totalAllBlocks += ((height + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((width + BLOCK_SIZE - 1) // BLOCK_SIZE)
             
@@ -73,15 +76,16 @@ class ImageWriterNode(FlowNode):
             self.reportProgress(context, f"処理中 ")
             
             for dataIdx, flowData in enumerate(flowDatas):
-                width, height, planeCount = flowData.getDimensions()
+                width, height = flowData.getDimensions()
+                planeCount = flowData.getPlaneCount()
                 if width == 0 or height == 0:
                     continue
                 
                 # ファイル名の生成
                 if len(flowDatas) == 1:
-                    outputPath = self.filePath
+                    outputPath = self.outputFilePath
                 else:
-                    base, ext = os.path.splitext(self.filePath)
+                    base, ext = os.path.splitext(self.outputFilePath)
                     outputPath = f"{base}_{dataIdx}{ext}"
                 
                 mode = flowData.getMode()
@@ -106,6 +110,36 @@ class ImageWriterNode(FlowNode):
                                 # numpy配列で一括処理
                                 imgArray[blockY:endY, blockX:endX, 0] = np.clip(r_block.data[:endY-blockY, :endX-blockX], 0, 255).astype(np.uint8)
                                 imgArray[blockY:endY, blockX:endX, 1] = np.clip(g_block.data[:endY-blockY, :endX-blockX], 0, 255).astype(np.uint8)
+                                imgArray[blockY:endY, blockX:endX, 2] = np.clip(b_block.data[:endY-blockY, :endX-blockX], 0, 255).astype(np.uint8)
+                            
+                            processedAllBlocks += 1
+                            self.reportProgress(context, f"処理中", processedAllBlocks, totalAllBlocks)
+                    
+                    img = Image.fromarray(imgArray, 'RGB')
+                elif mode == 'RGGB':
+                    # RGGB 4チャンネル画像をRGBに変換
+                    imgArray = np.zeros((height, width, 3), dtype=np.uint8)
+                    
+                    for blockY in range(0, height, BLOCK_SIZE):
+                        for blockX in range(0, width, BLOCK_SIZE):
+                            
+                            r_block = flowData.getBlock(0, blockX, blockY)   # R
+                            g1_block = flowData.getBlock(1, blockX, blockY)  # G1
+                            b_block = flowData.getBlock(2, blockX, blockY)   # B
+                            g2_block = flowData.getBlock(3, blockX, blockY)  # G2
+                            
+                            if r_block and g1_block and b_block and g2_block:
+                                blockHeight = r_block.getHeight()
+                                blockWidth = r_block.getWidth()
+                                
+                                endY = min(blockY + blockHeight, height)
+                                endX = min(blockX + blockWidth, width)
+                                
+                                # G1とG2の平均をGチャンネルとして使用
+                                g_avg = (g1_block.data[:endY-blockY, :endX-blockX] + g2_block.data[:endY-blockY, :endX-blockX]) / 2
+                                
+                                imgArray[blockY:endY, blockX:endX, 0] = np.clip(r_block.data[:endY-blockY, :endX-blockX], 0, 255).astype(np.uint8)
+                                imgArray[blockY:endY, blockX:endX, 1] = np.clip(g_avg, 0, 255).astype(np.uint8)
                                 imgArray[blockY:endY, blockX:endX, 2] = np.clip(b_block.data[:endY-blockY, :endX-blockX], 0, 255).astype(np.uint8)
                             
                             processedAllBlocks += 1
@@ -140,14 +174,36 @@ class ImageWriterNode(FlowNode):
                 
                 img.save(outputPath)
             
-            # 処理完了を示すためにflowDatasを設定
-            self.flowDatas = [FlowData()]
+            # 処理完了情報をCSV形式のFlowDataとして設定
+            fileName = os.path.basename(outputPath)
+            fileSize = os.path.getsize(outputPath)
+            
+            headers = {
+                'type': 'matrix',
+                'mode': '2D',
+                'columns': ['size', 'planeCount', 'width', 'height'],
+                'lines': [fileName],
+                'planes': ['fileName']
+            }
+            
+            resultFlowData = FlowData(headers)
+            resultFlowData.setDimensions(4, 1)
+            
+            # データブロックを作成（数値のみ）
+            from base import DataBlock
+            data = [[fileSize, planeCount, width, height]]
+            block = DataBlock(0, 0, 0, data)
+            resultFlowData.setBlock(block)
+            
+            self.flowDatas = [resultFlowData]
         except Exception as e:
-            messagebox.showerror("エラー", f"画像出力に失敗しました: {str(e)}")
+            tb = traceback.format_exc()
+            print(tb,file=sys.stderr)
+            messagebox.showerror("エラー", f"画像出力に失敗しました: {str(e)}\n\nトラックバック:\n{tb}")
         
         self.reportProgress(context, "完了")
 
     def getConfigHash(self):
         """ファイルパスを含む設定ハッシュ"""
-        config = f"{self.type}_{self.filePath}"
+        config = f"{self.type}_{self.outputFilePath}"
         return hashlib.md5(config.encode()).hexdigest()
