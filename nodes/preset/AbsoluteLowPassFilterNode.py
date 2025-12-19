@@ -83,7 +83,7 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
                 mask = np.abs(result) > auxiliaryBlock.data
                 result = np.where(mask, np.nan, result)
         
-        return DataBlock(result, block.planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, x, y)
     
     @classmethod
     def _computeDisplayLevels(cls):

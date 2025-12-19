@@ -179,7 +179,7 @@ class ImageReaderNode(BaseReaderNode):
         
         # 各プレーンのブロックをnumpy配列で作成
         blocks = []
-        for planeIdx in range(planeCount):
+        for planeIndex in range(planeCount):
             plane_block = nh.nans((blockHeight, blockWidth))
             blocks.append(plane_block)
         
@@ -195,13 +195,13 @@ class ImageReaderNode(BaseReaderNode):
                 for dx in range(blockWidth):
                     pixelIdx = (y + dy) * width + (x + dx)
                     pixel = pixels[pixelIdx]
-                    for planeIdx in range(planeCount):
-                        blocks[planeIdx][dy, dx] = float(pixel[planeIdx])
+                    for planeIndex in range(planeCount):
+                        blocks[planeIndex][dy, dx] = float(pixel[planeIndex])
         
         # 各プレーンのブロック情報を返す
         dataBlocks = []
-        for planeIdx, block in enumerate(blocks):
-            dataBlocks.append(DataBlock(block, planeIdx, x, y))
+        for planeIndex, block in enumerate(blocks):
+            dataBlocks.append(DataBlock(block, planeIndex, x, y))
         return dataBlocks
     
 class ImageSettingsDialog(BaseReaderSettingsDialog):

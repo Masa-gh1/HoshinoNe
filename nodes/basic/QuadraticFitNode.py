@@ -55,21 +55,21 @@ class QuadraticFitNode(FlowNode):
         
         for y in range(0, height, BLOCK_SIZE):
             for x in range(0, width, BLOCK_SIZE):
-                for planeIdx in range(actualPlaneCount):
-                    block = flowData.getBlock(planeIdx, x, y)
+                for planeIndex in range(actualPlaneCount):
+                    block = flowData.getBlock(planeIndex, x, y)
                     if block:
                         blockHeight = min(block.getHeight(), height - y)
                         blockWidth = min(block.getWidth(), width - x)
                         endY = y + blockHeight
                         endX = x + blockWidth
-                        planeData[planeIdx][y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
+                        planeData[planeIndex][y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
         
         # 各プレーン毎に2次関数フィッティング
         coefficients = {}
         equations = []
         
-        for planeIdx, planeName in enumerate(planeNames):
-            self.reportProgress(context, f"{planeName}プレーン計算中", planeIdx + 1, actualPlaneCount)
+        for planeIndex, planeName in enumerate(planeNames):
+            self.reportProgress(context, f"{planeName}プレーン計算中", planeIndex + 1, actualPlaneCount)
             
             # 座標データを準備（スレッドセーフ: np.meshgrid を置き換え）
             y_indices = nh.arange(height).reshape(-1, 1)
@@ -78,7 +78,7 @@ class QuadraticFitNode(FlowNode):
             x_coords = np.broadcast_to(x_indices, (height, width))
             x_flat = x_coords.flatten()
             y_flat = y_coords.flatten()
-            z_flat = planeData[planeIdx].flatten()
+            z_flat = planeData[planeIndex].flatten()
             
             # NaN値を除外して有効なピクセルのみ使用
             valid_mask = ~np.isnan(z_flat)
@@ -125,14 +125,14 @@ class QuadraticFitNode(FlowNode):
         outputFlowData.setDimensions(3, 3)
         
         # 各プレーンに係数Polynomialを設定
-        for planeIdx, planeName in enumerate(planeNames):
+        for planeIndex, planeName in enumerate(planeNames):
             c0, c1_x, c1_y, c2_x2, c2_xy, c2_y2 = coefficients[planeName]
-            polynomialData = [
+            result = [
                 [c0,   c1_x,  c2_x2],   # y^0: 1, x, x²
                 [c1_y, c2_xy, 0],       # y^1: y, xy, 0
                 [c2_y2, 0,    0]        # y^2: y², 0, 0
             ]
-            dataBlock = DataBlock(polynomialData, planeIdx, 0, 0)
+            dataBlock = DataBlock(result, planeIndex=planeIndex, x=0, y=0)
             outputFlowData.setBlock(dataBlock)
 
         

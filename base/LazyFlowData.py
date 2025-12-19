@@ -19,6 +19,13 @@ from utils import numpy_helpers as nh
 
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
+    __slots__ = ('cachePolicy'        ,
+                 'sourceFlowData'     ,
+                 'operation'          ,
+                 'instanceId'         ,
+                 '_headerComputeFuncs',
+                 'headers'            ,
+                )
     
     def __init__(self, sourceFlowData):
         super().__init__(None)

@@ -57,7 +57,7 @@ class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
         lazyFlowData.addOperation(self._MinOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
     @classmethod
@@ -80,10 +80,10 @@ class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
             if auxiliaryBlock:
                 result = np.minimum(result, auxiliaryBlock.data)
         
-        return DataBlock(result, block.planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, x, y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial):
+    def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             # クリップ処理では元の範囲を保持

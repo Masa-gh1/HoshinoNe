@@ -92,7 +92,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     
     def processBlock(self, block, inputDatas):
         """単一ブロックの乗算処理"""
-        planeIdx = block.planeIndex
+        planeIndex = block.planeIndex
         x, y = block.x, block.y
         
         resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -103,7 +103,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         
         # tableデータの乗算（NaN対応）
         for inputData in inputDatas:
-            inputBlock = inputData.getBlock(planeIdx, x, y)
+            inputBlock = inputData.getBlock(planeIndex, x, y)
             if inputBlock:
                 minH = min(blockHeight, inputBlock.data.shape[0])
                 minW = min(blockWidth, inputBlock.data.shape[1])
@@ -130,14 +130,14 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         
         # tensor を乗算（NaN対応）
         if self._combinedTensor:
-            block = self._combinedTensor.getBlock( planeIdx, x, y)
+            block = self._combinedTensor.getBlock( planeIndex, x, y)
             if block:
                 result = result * block.data
         
         # polynomial を乗算（NaN対応）
         if self._combinedPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIdx, x, y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
             if block:
                 result = result * polynomialValues
         
-        return DataBlock(result, planeIdx, x, y)
+        return DataBlock(result, planeIndex, x, y)

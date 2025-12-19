@@ -58,7 +58,7 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
         lazyFlowData.addOperation(self._powerOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
         return lazyFlowData
     
     @classmethod
@@ -84,10 +84,10 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
                 power_result = np.power(result, auxiliaryBlock.data)
                 result = power_result if is_complex else np.real(power_result)
         
-        return DataBlock( result, block.planeIndex, block.x, block.y)
+        return DataBlock( result, planeIndex, x, y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']

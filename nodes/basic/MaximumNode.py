@@ -81,7 +81,7 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     
     def processBlock(self, block, inputDatas):
         """単一ブロックの最大処理"""
-        planeIdx = block.planeIndex
+        planeIndex = block.planeIndex
         x, y = block.x, block.y
         
         resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -96,7 +96,7 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
             result = None
             # ableデータの最大（NaN対応）
             for inputData in inputDatas:
-                inputBlock = inputData.getBlock(planeIdx, x, y)
+                inputBlock = inputData.getBlock(planeIndex, x, y)
                 if inputBlock:
                     minH = min(blockHeight, inputBlock.data.shape[0])
                     minW = min(blockWidth, inputBlock.data.shape[1])
@@ -119,11 +119,11 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         
         for polynomial in self._combinedPolynomials:
             # polynomialデータの最大（NaN対応）
-            polynomialValues = self.calculatePolynomialBlock(polynomial, planeIdx, x, y, result.shape)
+            polynomialValues = self.calculatePolynomialBlock(polynomial, planeIndex, x, y, result.shape)
             result = np.where(
                 np.isnan(result),
                 polynomialValues,
                 np.maximum( result, polynomialValues)
             )
         
-        return DataBlock(result, planeIdx, x, y)
+        return DataBlock(result, planeIndex, x, y)

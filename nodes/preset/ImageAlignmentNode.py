@@ -1000,16 +1000,16 @@ class LazyAlignmentOperations:
             end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
             end_x = min(output_x_in_region + actual_block_width, transformed_region.shape[1])
             
-            output_block = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
+            result = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
             
             # サイズが足りない場合はNaNでパディング
-            if output_block.shape != (actual_block_height, actual_block_width):
+            if result.shape != (actual_block_height, actual_block_width):
                 padded_block = nh.nans((actual_block_height, actual_block_width))
-                h, w = output_block.shape
-                padded_block[:h, :w] = output_block
-                output_block = padded_block
+                h, w = result.shape
+                padded_block[:h, :w] = result
+                result = padded_block
             
-            return DataBlock(output_block, planeIndex, x, y)
+            return DataBlock(result, planeIndex, x, y)
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):

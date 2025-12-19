@@ -50,7 +50,7 @@ class CountNode(N1BlockOperationNode):
     
     def processBlock(self, block, inputDatas):
         """単一ブロックのカウント処理"""
-        planeIdx = block.planeIndex
+        planeIndex = block.planeIndex
         x, y = block.x, block.y
         
         # データタイプを分類
@@ -77,7 +77,7 @@ class CountNode(N1BlockOperationNode):
             
             # table データのカウント（NaN対応）
             for inputData in tableDatas:
-                inputBlock = inputData.getBlock(planeIdx, x, y)
+                inputBlock = inputData.getBlock(planeIndex, x, y)
                 if inputBlock:
                     minH = min(blockHeight, inputBlock.data.shape[0])
                     minW = min(blockWidth, inputBlock.data.shape[1])
@@ -89,19 +89,19 @@ class CountNode(N1BlockOperationNode):
             if polynomialDatas:
                 result += len(polynomialDatas)
             
-            return DataBlock(result, planeIdx, x, y)
+            return DataBlock(result, planeIndex, x, y)
     
     def _processPolynomialCount(self, block, polynomialDatas):
         """全てpolynomialの場合のカウント処理"""
-        planeIdx = block.planeIndex
+        planeIndex = block.planeIndex
         
         # 最初のpolynomialの係数行列を取得してサイズを決定
         firstPolynomial = polynomialDatas[0]
-        coeffBlock = firstPolynomial.getBlock(planeIdx, 0, 0)
+        coeffBlock = firstPolynomial.getBlock(planeIndex, 0, 0)
         if not coeffBlock:
             return None
         
         # polynomial数で埋めた行列を作成
         result = np.full_like(coeffBlock.data, len(polynomialDatas))
         
-        return DataBlock(result, planeIdx, block.x, block.y)
+        return DataBlock(result, planeIndex, 0, 0)

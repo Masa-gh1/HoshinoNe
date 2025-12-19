@@ -80,7 +80,7 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
             if auxiliaryBlock:
                 result = np.multiply(result, auxiliaryBlock.data)
         
-        return DataBlock(result, block.planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, x, y)
     
     @classmethod
     def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):

@@ -45,7 +45,7 @@ class InverseNode(LazyNNOperationNode):
         with np.errstate(divide='ignore', invalid='ignore'):
             result = np.where(arr != 0, 1.0 / arr, np.nan)
         
-        return DataBlock(result, block.planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, x, y)
     
     @classmethod
     def _computeDisplayLevels(cls):

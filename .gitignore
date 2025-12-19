@@ -3,6 +3,8 @@
 /.settings
 /venv
 __pycache__
+/build
+/dist
 *.CR2
 *.DNG
 *.fits

@@ -45,10 +45,10 @@ class FileWriterNode(BaseWriterNode):
             lineHeaders = flowData.headers.get('lines', []) if flowData.headers else []
             
             # 各プレーンを処理
-            for planeIdx in range(planeCount):
+            for planeIndex in range(planeCount):
                 # プレーン数が2以上の場合はプレーン名を書き込み
                 if planeCount >= 2:
-                    writer.writerow([f'# {planeNames[planeIdx]}'])
+                    writer.writerow([f'# {planeNames[planeIndex]}'])
                 
                 # ヘッダー行を書き込み
                 if flowData.headers and 'columns' in flowData.headers:
@@ -60,7 +60,7 @@ class FileWriterNode(BaseWriterNode):
                 currentRow = 0
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        block = flowData.getBlock(planeIdx, x, y)
+                        block = flowData.getBlock(planeIndex, x, y)
                         
                         if block:
                             blockHeight = block.getHeight()

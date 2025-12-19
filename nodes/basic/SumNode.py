@@ -87,7 +87,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     
     def processBlock(self, block, inputDatas):
         """単一ブロックの加算処理"""
-        planeIdx = block.planeIndex
+        planeIndex = block.planeIndex
         x, y = block.x, block.y
         
         resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -98,7 +98,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         # tableデータの加算（NaN対応）
         for inputData in inputDatas:
-            inputBlock = inputData.getBlock(planeIdx, x, y)
+            inputBlock = inputData.getBlock(planeIndex, x, y)
             if inputBlock:
                 minH = min(blockHeight, inputBlock.data.shape[0])
                 minW = min(blockWidth, inputBlock.data.shape[1])
@@ -125,22 +125,22 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         # polynomialデータの加算（NaN対応）
         if self._combinedPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIdx, x, y, result.shape)
+            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape)
             result = np.where(
                 np.isnan(result),
                 polynomialValues,
                 result + polynomialValues
             )
         
-        return DataBlock(result, planeIdx, x, y)
+        return DataBlock(result, planeIndex, x, y)
     
     def _processPolynomialAddition(self, block, polynomialDatas):
         """全てpolynomialの場合の加算処理"""
-        planeIdx = block.planeIndex
+        planeIndex = block.planeIndex
         
         # 最初のpolynomialの係数行列を取得
         firstPolynomial = polynomialDatas[0]
-        coeffBlock = firstPolynomial.getBlock(planeIdx, 0, 0)
+        coeffBlock = firstPolynomial.getBlock(planeIndex, 0, 0)
         if not coeffBlock:
             return None
         
@@ -148,12 +148,12 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         # 他のpolynomialの係数行列を加算
         for polynomialData in polynomialDatas[1:]:
-            coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
+            coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)
             if coeffBlock:
                 # サイズを合わせて加算
                 minH = min(result.shape[0], coeffBlock.data.shape[0])
                 minW = min(result.shape[1], coeffBlock.data.shape[1])
                 result[:minH, :minW] += coeffBlock.data[:minH, :minW]
         
-        return DataBlock(result, planeIdx, block.x, block.y)
+        return DataBlock(result, planeIndex, block.x, block.y)
     

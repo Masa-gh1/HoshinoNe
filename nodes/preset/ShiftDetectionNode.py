@@ -324,8 +324,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         rows, cols = table_array.shape
         for y in range(0, rows, BLOCK_SIZE):
             block_height = min(BLOCK_SIZE, rows - y)
-            block_data = table_array[y:y+block_height, :]
-            flowData.setBlock(DataBlock(block_data, 0, 0, y))
+            result = table_array[y:y+block_height, :]
+            flowData.setBlock(DataBlock(result, 0, 0, y))
         
         # ヘッダー情報を設定
         flowData.headers.update({

@@ -33,7 +33,7 @@ class TensorNode(FlowNode,ConfigurableNode):
         self.xOrder = 1
         self.yOrder = 1
         self.planeNames = ["Plane 0","Plane 1","Plane 2"]
-        self.tensor = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIdx,i,j": value}
+        self.tensor = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIndex,i,j": value}
     
     def getText(self):
         """ノードのテキストを取得"""
@@ -118,15 +118,15 @@ class TensorNode(FlowNode,ConfigurableNode):
         outputFlowData.setDimensions(width, height)
         
         # 各プレーンに数列を設定
-        for planeIdx in range(self.planeCount):
-            polynomialData = []
+        for planeIndex in range(self.planeCount):
+            result = []
             for j in range(height):
                 row = []
                 for i in range(width):
-                    key = f"{planeIdx},{i},{j}"
+                    key = f"{planeIndex},{i},{j}"
                     row.append(self.tensor.get(key, 0))
-                polynomialData.append(row)
-            dataBlock = DataBlock(polynomialData, planeIdx, 0, 0)
+                result.append(row)
+            dataBlock = DataBlock(result, planeIndex, 0, 0)
             outputFlowData.setBlock(dataBlock)
         
         minValue = outputFlowData.getMinValue()
@@ -221,13 +221,13 @@ class TensorSettingsDialog(tk.Toplevel):
             return
         
         row = 0
-        for planeIdx in range(planes):
+        for planeIndex in range(planes):
             # プレーン名をテキストボックスで表示
             planeNameEntry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
-            if planeIdx < len(self.node.planeNames):
-                planeNameEntry.insert(0, self.node.planeNames[planeIdx])
+            if planeIndex < len(self.node.planeNames):
+                planeNameEntry.insert(0, self.node.planeNames[planeIndex])
             else:
-                planeNameEntry.insert(0, f"Plane {planeIdx}")
+                planeNameEntry.insert(0, f"Plane {planeIndex}")
             planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
             
             self.planeNameEntries.append(planeNameEntry)
@@ -246,7 +246,7 @@ class TensorSettingsDialog(tk.Toplevel):
                 
                 for i in range(xOrd):
                     entry = tk.Entry(self.scrollableFrame, width=8)
-                    key = f"{planeIdx},{i},{j}"
+                    key = f"{planeIndex},{i},{j}"
                     if key in self.node.tensor:
                         entry.insert(0, str(self.node.tensor[key]))
                     else:

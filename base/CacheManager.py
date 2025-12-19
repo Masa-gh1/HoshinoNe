@@ -7,13 +7,13 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import time
 import numpy as np
 import sys
 import os
 import threading
 import tempfile
 import shutil
-import time
 import atexit
 
 from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK, BLOCK_SIZE
@@ -97,7 +97,7 @@ class CacheManager:
             cls._globalBlockCache[cacheKey] = cache # 最後尾に再追加(LRU)
             _, data = cache
         
-        if data is not None:
+        if not data is None:
             return data
         elif CachePolicy.PERSISTENT == cachePolicy:
             # ポリシー persistent なのでストレージから復元

@@ -52,20 +52,20 @@ class PolynomialOperationMixin:
         # 各プレーン毎に計算
         planeCount = polynomialDatas[0].getPlaneCount()
         if combineFunc:
-            for planeIdx in range(planeCount):
-                resultBlock = combineFunc(planeIdx, polynomialDatas)
+            for planeIndex in range(planeCount):
+                resultBlock = combineFunc(planeIndex, polynomialDatas)
                 result.setBlock(resultBlock)
         else:
-            for planeIdx in range(planeCount):
+            for planeIndex in range(planeCount):
                 # 最初の polynomial の係数行列を取得
-                coeffBlock = polynomialDatas[0].getBlock(planeIdx, 0, 0)
+                coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
                 data = coeffBlock.data.copy()
 
                 # 残りの polynomial を順次適用
                 for polynomialData in polynomialDatas[1:]:
-                    otherBlock = polynomialData.getBlock(planeIdx, 0, 0)
+                    otherBlock = polynomialData.getBlock(planeIndex, 0, 0)
                     data = operation(data, otherBlock.data)
-                    result.setBlock(DataBlock(data, planeIdx, 0, 0))
+                    result.setBlock(DataBlock(data, planeIndex, 0, 0))
         
         # headers 更新
         if updateHeadersFunc:
@@ -97,11 +97,11 @@ class PolynomialOperationMixin:
         return min(v1, v2, v3, v4, v5), max(v1, v2, v3, v4, v5)
     
     @classmethod
-    def calculatePolynomialBlock(cls, polynomialData, planeIdx, x, y, blockShape, defaultValue=0.0):
+    def calculatePolynomialBlock(cls, polynomialData, planeIndex, x, y, blockShape, defaultValue=0.0):
         """Polynomial データからブロック内の各座標に対応する値を計算"""
         width, height = polynomialData.getDimensions()
         planeCount = polynomialData.getPlaneCount()
-        if width < 1 or height < 1 or planeIdx >= planeCount:
+        if width < 1 or height < 1 or planeIndex >= planeCount:
             if defaultValue == 0.0:
                 return nh.zeros(blockShape)
             elif defaultValue == 1.0:
@@ -110,7 +110,7 @@ class PolynomialOperationMixin:
                 return nh.full(blockShape, defaultValue)
         
         # 指定プレーンの係数行列を取得
-        coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
+        coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)
         if not coeffBlock:
             if defaultValue == 0.0:
                 return nh.zeros(blockShape)
@@ -144,33 +144,33 @@ class PolynomialOperationMixin:
         return result
     
     @classmethod
-    def _addPolynomialPlane(cls, planeIdx, polynomialDatas):
+    def _addPolynomialPlane(cls, planeIndex, polynomialDatas):
         """polynomial の加算処理"""
         # 最初の polynomial の係数行列を取得
-        coeffBlock = polynomialDatas[0].getBlock(planeIdx, 0, 0)
+        coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
         data = coeffBlock.data.copy()
 
         # 残りの polynomial を順次適用
         for polynomialData in polynomialDatas[1:]:
-            otherBlock = polynomialData.getBlock(planeIdx, 0, 0)
+            otherBlock = polynomialData.getBlock(planeIndex, 0, 0)
             data = np.add(data, otherBlock.data)
         
-        return DataBlock(data, planeIdx, 0, 0)
+        return DataBlock(data, planeIndex, 0, 0)
 
     @classmethod
-    def _multiplyPolynomialPlane(cls, planeIdx, polynomialDatas):
+    def _multiplyPolynomialPlane(cls, planeIndex, polynomialDatas):
         """polynomial の乗算処理（係数の畳み込み）"""
         # 最初の polynomial の係数行列を取得
-        coeffBlock = polynomialDatas[0].getBlock(planeIdx, 0, 0)
+        coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
         data = coeffBlock.data.copy()
         
         # 他の polynomial と畳み込み乗算
         for polynomialData in polynomialDatas[1:]:
-            coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
+            coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)
             if coeffBlock:
                 data = cls._convolvePolynomialCoeffs(data, coeffBlock.data)
         
-        return DataBlock(data, planeIdx, 0, 0)
+        return DataBlock(data, planeIndex, 0, 0)
     
     @classmethod
     def _convolvePolynomialCoeffs(cls, coeffs1, coeffs2):

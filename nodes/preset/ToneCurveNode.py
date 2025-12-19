@@ -102,7 +102,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
             return None
         
         # DataBlockから実際のデータを取得
-        data = nh.array(block.data)
+        data = block.data
         
         # NaN値を事前に検出・分離
         nan_mask = np.isnan(data)
@@ -124,11 +124,11 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
             curveFunction = CubicSpline( xValues, yValues, bc_type=self.boundaryCondition, extrapolate=True)
         
         # 結果データを初期化（NaN値を保持）
-        resultData = data.copy()
+        result = data.copy()
         
         # 有効値（NaN以外）のみ処理
         valid_mask = ~nan_mask
-        valid_data = data[valid_mask]
+        valid_data = result[valid_mask]
         
         # 始点・終点の外側をクランプ
         startPoint = sortedPoints[0]
@@ -159,10 +159,10 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         processedData = np.clip(processedData, self.outputMin, self.outputEnd)
         
         # 有効値のみ結果に反映
-        resultData[valid_mask] = processedData
+        result[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
-        return DataBlock(resultData, block.planeIndex, block.x, block.y)
+        return DataBlock(result, block.planeIndex, block.x, block.y)
     
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):
         self.displayMin = inputMin
@@ -384,7 +384,7 @@ class ToneCurveDialog(tk.Toplevel):
                 displayEnd = self.node.displayEnd
             
             # 全プレーンのヒストグラムを重ねて表示
-            for planeIdx, planeHist in enumerate(histogramData['planes']):
+            for planeIndex, planeHist in enumerate(histogramData['planes']):
                 binCounts = planeHist['bin_counts']
                 binEdges = planeHist['bin_edges']
                 
@@ -402,7 +402,7 @@ class ToneCurveDialog(tk.Toplevel):
                         filteredCounts = np.array(filteredCounts) + 1
                     
                     # プレーン別の色で表示
-                    color = colors[planeIdx % len(colors)]
+                    color = colors[planeIndex % len(colors)]
                     self.histAxes.plot(filteredCenters, filteredCounts, alpha=0.4, color=color, linewidth=1)
 
             self.histAxes.set_xlim(displayMin, displayEnd)

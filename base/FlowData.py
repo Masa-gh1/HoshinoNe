@@ -24,6 +24,18 @@ except ImportError:
     NUMPY_AVAILABLE = False
 
 class FlowData:
+    """ノードの実行結果を保存する"""
+    __slots__ = ('instanceId'       ,
+                 'cachePolicy'      ,
+                 'headers'          ,
+                 '_dimensions'      ,
+                 '_maxValue'        , 
+                 '_minValue'        ,
+                 '_percentileCache' ,
+                 '_histogramCache'  ,
+                 '_highResHistCache',
+                 '_existingBlocks'  ,
+                )
     def __init__(self, headers={}):
         self.instanceId = str(uuid.uuid4())
         
@@ -139,24 +151,24 @@ class FlowData:
         
         return planeCount * blocksX * blocksY
     
-    def iterateBlocks(self, planeIdx=None):
+    def iterateBlocks(self, planeIndex=None):
         """全ブロックを順次取得するジェネレータ"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         if planeCount == 0:
             return
         
-        if planeIdx is None:
-            for planeIdx in range(planeCount):
+        if planeIndex is None:
+            for planeIndex in range(planeCount):
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        block = self.getBlock(planeIdx, x, y)
+                        block = self.getBlock(planeIndex, x, y)
                         if block:
                             yield block
         else:
             for y in range(0, height, BLOCK_SIZE):
                 for x in range(0, width, BLOCK_SIZE):
-                    block = self.getBlock(planeIdx, x, y)
+                    block = self.getBlock(planeIndex, x, y)
                     if block:
                         yield block
     
@@ -361,28 +373,28 @@ class FlowData:
         planeHighResHists = self._getHighResHistograms()
         
         planeHistograms = []
-        for planeIdx in range(planeCount):
-            if(  len(planeHighResHists) <= planeIdx
-              or planeHighResHists[planeIdx] is None
+        for planeIndex in range(planeCount):
+            if(  len(planeHighResHists) <= planeIndex
+              or planeHighResHists[planeIndex] is None
               ):
                 planeHistograms.append({
                     'bin_counts': [0] * bins,
                     'bin_edges': nh.array([float(x)/bins for x in range(bins)]+[1.0]),
                     'total_samples': 0,
                 })
-            elif(  planeHighResHists[planeIdx]['max'] <= planeHighResHists[planeIdx]['min']
-                or len(planeHighResHists[planeIdx]['edges']) <= 2
+            elif(  planeHighResHists[planeIndex]['max'] <= planeHighResHists[planeIndex]['min']
+                or len(planeHighResHists[planeIndex]['edges']) <= 2
                 ):
-                min = planeHighResHists[planeIdx]['max'] # 大小が逆かも知れないので入れ替え
-                max = planeHighResHists[planeIdx]['min'] # 大小が逆かも知れないので入れ替え
-                sum = planeHighResHists[planeIdx]['total_samples']
+                min = planeHighResHists[planeIndex]['max'] # 大小が逆かも知れないので入れ替え
+                max = planeHighResHists[planeIndex]['min'] # 大小が逆かも知れないので入れ替え
+                sum = planeHighResHists[planeIndex]['total_samples']
                 planeHistograms.append({
                     'bin_counts': nh.array(([0]*(bins//2))+[sum]+([0]*(bins//2-1))),
                     'bin_edges': nh.array(([min]*(bins//2+1))+([max]*(bins//2))),
                     'total_samples': sum,
                 })
             else:
-                hist_data = planeHighResHists[planeIdx]
+                hist_data = planeHighResHists[planeIndex]
                 
                 range_min = hist_data['edges'][1]  # 両端に count 1 の集約があるので捨てる
                 range_max = hist_data['edges'][-2] # 両端に count 1 の集約があるので捨てる

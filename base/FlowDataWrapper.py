@@ -10,6 +10,11 @@ All rights reserved.
 from . import FlowData
 
 class FlowDataWrapper(FlowData):
+    __slots__ = ('instanceId' ,
+                 'cachePolicy',
+                 'orgFlowData',
+                 'headers'    ,
+                )
     def __init__(self, orgFlowData, updateHeaders={}):
         """
         FlowDataをラップし、headerのみ元を変更せず上書き可能にする
@@ -18,15 +23,15 @@ class FlowDataWrapper(FlowData):
             orgFlowData (FlowData): ラップ対象のFlowDataインスタンス
             updateHeaders (dict): 追加のheader情報
         """
+        # 元データの属性を参照
+        self.instanceId = orgFlowData.instanceId
+        self.cachePolicy = orgFlowData.cachePolicy
+    
         # 親クラスの初期化をスキップして直接属性を設定
         self.orgFlowData = orgFlowData
         self.headers = orgFlowData.headers.copy()
         self.headers.update(updateHeaders)
         
-        # 元データの属性を参照
-        self.instanceId = orgFlowData.instanceId
-        self.cachePolicy = orgFlowData.cachePolicy
-    
     # 以下のメソッドは元データに委譲
     def _loadBlock(self, planeIndex, x, y):
         return self.orgFlowData._loadBlock(planeIndex, x, y)

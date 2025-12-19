@@ -124,7 +124,7 @@ class FileReaderNode(BaseReaderNode):
                 width = len(planeData[0][0]) if height > 0 else 0
                 flowData.setDimensions(width, height)
                 
-                for planeIdx, data in enumerate(planeData):
+                for planeIndex, data in enumerate(planeData):
                     for y in range(0, height, BLOCK_SIZE):
                         for x in range(0, width, BLOCK_SIZE):
                             endY = min(y + BLOCK_SIZE, height)
@@ -137,7 +137,7 @@ class FileReaderNode(BaseReaderNode):
                                     block.append(blockRow)
                             
                             if block:
-                                dataBlock = DataBlock(block, planeIdx, x, y)
+                                dataBlock = DataBlock(block, planeIndex, x, y)
                                 flowData.setBlock(dataBlock)
                                 self.reportBlockProgress(context)
                 return flowData
