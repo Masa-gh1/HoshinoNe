@@ -90,10 +90,10 @@ class PowerNode(LazyNNOperationNode, TensorOperationMixin):
             inputMax = inputLevels['exclusive_upper']
             
             if combinedAuxiliaryTensor:
-                coeffBlock = combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                if coeffBlock:
+                tensor = combinedAuxiliaryTensor.getBlock(0, 0, 0)
+                if tensor:
                     width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    expMin, expMax = cls.calculateTensorRange(coeffBlock.data, width, height)
+                    expMin, expMax = cls.calculateTensorRange(tensor.data, width, height)
                     
                     # 冪乗の範囲計算（実数部のみ）
                     powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax), 

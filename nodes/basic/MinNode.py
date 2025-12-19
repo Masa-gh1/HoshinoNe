@@ -1,5 +1,5 @@
 '''
-ScaleNode - 乗算ノード
+MinNode - 比較小ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -11,12 +11,12 @@ from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, TensorOperationMixin 
 
-class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
+class MinNode(LazyNNOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "scale", "乗算")
+        super().__init__(canvas, editor, x, y, "min", "比較小")
     
     def getColor(self):
-        return self._color_op
+        return self._color_func
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
@@ -35,10 +35,10 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
             else:
                 primaryDatas.append(data)
         
-        # auxiliary tensorを事前統合（乗算）
-        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.multiply)
+        # auxiliary tensor を事前統合（比較小）
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.minimum)
         
-        # auxiliary matrixを事前統合（最初のもののみ使用）
+        # auxiliary matrix を事前統合（最初のもののみ使用）
         self._combinedAuxiliaryMatrix = None
         if auxiliaryMatrices:
             self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
@@ -48,12 +48,12 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addOperation(self._MinOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryTensor)
         return lazyFlowData
     
     @classmethod
-    def _scaleOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
+    def _MinOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
         """スケール操作（事前統合されたauxiliaryデータを乗算）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -61,16 +61,16 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
         
         result = block.data.copy()
         
-        # auxiliary tensorを乗算
+        # auxiliary tensorを比較小
         if combinedAuxiliaryTensor:
             tensorValues = cls.calculateTensorBlock(combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
-            result = np.multiply(result, tensorValues)
+            result = np.minimum(result, tensorValues)
         
-        # auxiliary matrixを乗算
+        # auxiliary matrixを比較小
         if combinedAuxiliaryMatrix:
             auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
-                result = np.multiply(result, auxiliaryBlock.data)
+                result = np.minimum(result, auxiliaryBlock.data)
         
         return DataBlock(result, block.planeIndex, block.x, block.y)
     
@@ -78,29 +78,7 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def _computeDisplayLevels(cls, combinedAuxiliaryTensor):
         """display_levelsを計算"""
         def compute(lazyFlowData):
+            # クリップ処理では元の範囲を保持
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                return None
-                
-            inputMin = inputLevels['min']
-            inputMax = inputLevels['exclusive_upper']
-            
-            if combinedAuxiliaryTensor:
-                tensor = combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                if tensor:
-                    width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    scaleMin, scaleMax = cls.calculateTensorRange(tensor.data, width, height)
-                    
-                    # 乗算の場合は範囲が複雑になる
-                    products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
-                    
-                    return {
-                        'display_levels': {
-                            'min': min(products),
-                            'exclusive_upper': max(products)
-                        }
-                    }
-            # auxiliary matrixの場合は範囲計算が複雑なので省略
-            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
-            return {'display_levels': inputLevels}
+            return {'display_levels': inputLevels} if inputLevels else None
         return compute

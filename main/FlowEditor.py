@@ -484,6 +484,7 @@ class FlowEditor:
     def executeFlowAsync(self):
 
         try:
+            self.resultText.delete(1.0, tk.END)
             self.flowModel.execute( self.nodes, self.showMessage, self.showProgress)
         except Exception as e:
 #            tb = traceback.format_exc()

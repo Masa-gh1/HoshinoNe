@@ -1,0 +1,193 @@
+{
+  "version": "0.1.20251130",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 13,
+      "x": -726.3125,
+      "y": -29.8125,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 7,
+      "x": -725.3125,
+      "y": -89.8125,
+      "type": "scale",
+      "text": "乗算",
+      "connections": [
+        11
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 5,
+      "x": -850.3125,
+      "y": -90.8125,
+      "type": "sum",
+      "text": "総和",
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 3,
+      "x": -971.3125,
+      "y": -88.8125,
+      "type": "transform",
+      "text": "変形",
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 21,
+      "x": -722.3125,
+      "y": 137.1875,
+      "type": "transform",
+      "text": "変形",
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 17,
+      "x": -724.3125,
+      "y": 25.1875,
+      "type": "inverse",
+      "text": "逆数",
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 19,
+      "x": -724.3125,
+      "y": 81.1875,
+      "type": "sum",
+      "text": "総和",
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 31,
+      "x": -847.3125,
+      "y": 57.1875,
+      "type": "min",
+      "text": "比較小",
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 25,
+      "x": -969.3125,
+      "y": 2.1875,
+      "type": "absolute",
+      "text": "絶対値",
+      "connections": [
+        9
+      ]
+    },
+    {
+      "index": 9,
+      "zOrder": 27,
+      "x": -849.3125,
+      "y": 1.1875,
+      "type": "offset",
+      "text": "加算",
+      "connections": [
+        7
+      ]
+    },
+    {
+      "index": 10,
+      "zOrder": 29,
+      "x": -965.3125,
+      "y": 57.1875,
+      "type": "coefficients",
+      "text": "係数",
+      "planeCount": 4,
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": 1.0,
+        "1,0,0": 1.0,
+        "2,0,0": 1.0,
+        "3,0,0": 1.0
+      },
+      "planeNames": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2",
+        "Plane 3"
+      ],
+      "connections": [
+        9,
+        7
+      ]
+    },
+    {
+      "index": 11,
+      "zOrder": 9,
+      "x": -608.3125,
+      "y": -87.8125,
+      "type": "pass",
+      "text": "通点",
+      "connections": []
+    },
+    {
+      "index": 12,
+      "zOrder": 11,
+      "x": -1095.3125,
+      "y": -85.8125,
+      "type": "pass",
+      "text": "通点",
+      "connections": [
+        3,
+        8
+      ]
+    },
+    {
+      "index": 13,
+      "zOrder": 15,
+      "x": -1093.3125,
+      "y": -12.8125,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "connections": [
+        3,
+        4
+      ]
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": -850.3125,
+      "y": 10.1875,
+      "width": 512,
+      "height": 314,
+      "title": "ピクセルコンプリート"
+    },
+    {
+      "zOrder": 23,
+      "x": -909.3125,
+      "y": 18.1875,
+      "width": 240,
+      "height": 143,
+      "title": "NaN 以外を 1"
+    }
+  ]
+}

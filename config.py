@@ -25,58 +25,65 @@ MAX_WORKERS = 8
 DEFAULT_BLOCK_TYPE = np.float32
 DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 
+# ブロックキャッシュサイズ設定(GB)
+MAX_BLOCK_CACHE_SIZE_GB = 4
+
 # ブロックサイズ設定
 BLOCK_SIZE = 256
-
-# ブロックキャッシュサイズ設定
-MAX_BLOCK_CACHE_SIZE = 16000
 
 # ブロック辺りの推定 byte 数 (画像なら)
 ESTIMATE_SIZE_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
 
+# ブロックキャッシュサイズ設定(ブロック数)
+MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024//ESTIMATE_SIZE_PER_BLOCK
+
+# 画像読み書きノードで使用する
 # データヘッダに含める Exif
+# ここには無いが、"DateTime", "DateTimeOriginal", "DateTimeDigitized" は必須で読み込まれます。
 HEADERS_EXIF = [
     # name                tag                        converter
-    ("Make"             , "Make"                   , str),
-    ("Model"            , "Model"                  , str),
-    ("ImageWidth"       , "ImageWidth"             , int),
-    ("ImageWidth"       , "ExifImageWidth"         , int),
-    ("ImageLength"      , "ImageLength"            , int),
-    ("ImageLength"      , "ExifImageHeight"        , int),
-    ("LensModel"        , "LensModel"              , str),
+    ("Make"             , "Make"                   , str  ),
+    ("Model"            , "Model"                  , str  ),
+    ("ImageWidth"       , "ImageWidth"             , int  ),
+    ("ImageWidth"       , "ExifImageWidth"         , int  ),
+    ("ImageLength"      , "ImageLength"            , int  ),
+    ("ImageLength"      , "ExifImageHeight"        , int  ),
+    ("LensModel"        , "LensModel"              , str  ),
     ("FocalLength"      , "FocalLength"            , float),
     ("FNumber"          , "FNumber"                , float),
     ("ExposureTime"     , "ExposureTime"           , float),
-    ("ISOSpeedRatings"  , "ISO"                    , int),
-    ("ISOSpeedRatings"  , "ISOSpeedRatings"        , int),
-    ("ISOSpeedRatings"  , "PhotographicSensitivity", int),
+    ("ISOSpeedRatings"  , "ISO"                    , int  ),
+    ("ISOSpeedRatings"  , "ISOSpeedRatings"        , int  ),
+    ("ISOSpeedRatings"  , "PhotographicSensitivity", int  ),
 ]
 HEADERS_EXIF_OPT = [
+    # name                tag                        converter
     # 位置情報
     ("GPSLatitude"      , "GPSLatitude"            , float),
     ("GPSLongitude"     , "GPSLongitude"           , float),
     ("GPSAltitude"      , "GPSAltitude"            , float),
     # 著作権情報
-    ("Artist"           , "Artist"                 , str),
-    ("Copyright"        , "Copyright"              , str),
+    ("Artist"           , "Artist"                 , str  ),
+    ("Copyright"        , "Copyright"              , str  ),
     # カメラ設定
-    ("Flash"            , "Flash"                  , str),
-    ("MeteringMode"     , "MeteringMode"           , str),
-    ("ExposureMode"     , "ExposureMode"           , str),
-    ("WhiteBalance"     , "WhiteBalance"           , str),
+    ("Flash"            , "Flash"                  , str  ),
+    ("MeteringMode"     , "MeteringMode"           , str  ),
+    ("ExposureMode"     , "ExposureMode"           , str  ),
+    ("WhiteBalance"     , "WhiteBalance"           , str  ),
     # レンズ情報
-    ("LensSerialNumber" , "LensSerialNumber"       , str),
-    ("LensMake"         , "LensMake"               , str),
+    ("LensSerialNumber" , "LensSerialNumber"       , str  ),
+    ("LensMake"         , "LensMake"               , str  ),
     # 色空間・解像度
-    ("ColorSpace"       , "ColorSpace"             , str),
-    ("WhitePoint"       , "WhitePoint"             , str),
-    ("Orientation"      , "Orientation"            , int),
+    ("ColorSpace"       , "ColorSpace"             , str  ),
+    ("WhitePoint"       , "WhitePoint"             , str  ),
+    ("Orientation"      , "Orientation"            , int  ),
     ("XResolution"      , "XResolution"            , float),
     ("YResolution"      , "YResolution"            , float),
-    ("ResolutionUnit"   , "ResolutionUnit"         , int),
+    ("ResolutionUnit"   , "ResolutionUnit"         , int  ),
 ]
 
-# RAW読み込み設定 ref https://www.libraw.org/docs/API-datastruct.html
+# RawReaderNode 用
+# RAW 読み込み設定 ref https://www.libraw.org/docs/API-datastruct.html
 def configRawParams(params):
     # rawpy 0.25.1 パラメータ
     # 初期値メンバ                 既定値         初期値

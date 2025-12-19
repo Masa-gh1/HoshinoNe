@@ -52,7 +52,7 @@ class RawReaderNode(BaseReaderNode):
                 ("Sigma RAW", "*.x3f"),
                 ("All files", "*.*")
             ]
-        self.demosaicAlgorithm = "none"  # none, raw, AHD, VNG, PPG, AAHD
+        self.demosaicAlgorithm = "unpack"  # bayer, bayer crop, unpack, raw, AHD, VNG, PPG, AAHD
         self.outputColorspace = "raw"  # raw, sRGB, Adobe RGB, Wide Gamut RGB, ProPhoto RGB
         self.whiteBalance = "daylight"  # camera, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
         self.gammaPower = 1.0  # gamma power
@@ -65,10 +65,10 @@ class RawReaderNode(BaseReaderNode):
     def updateNodeText(self):
         if self.filePaths:
             if len(self.filePaths) == 1:
-                displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])}\nベイヤー変換: {self.demosaicAlgorithm}"
+                displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])}\nproc: {self.demosaicAlgorithm}"
             else:
                 dirname = os.path.dirname(self.filePaths[0])
-                displayText = f"{self.text}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}\nベイヤー変換: {self.demosaicAlgorithm}"
+                displayText = f"{self.text}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}\nproc: {self.demosaicAlgorithm}"
         else:
             displayText = "{self.text}\n未選択"
         self.editor.updateNodeText(self, displayText)
@@ -101,7 +101,7 @@ class RawReaderNode(BaseReaderNode):
             with rawpy.imread(filePath) as raw:
                 height, width = raw.sizes.raw_height, raw.sizes.raw_width
                 # デモザイクアルゴリズムによってサイズが変わる
-                if self.demosaicAlgorithm in ["none", "raw"]:
+                if self.demosaicAlgorithm in ["unpack", "raw"]:
                     height //= 2
                     width //= 2
                 
@@ -111,7 +111,7 @@ class RawReaderNode(BaseReaderNode):
                 # チャンネル数を考慮
                 if self.demosaicAlgorithm == "bayer":
                     planeCount = 1
-                elif self.demosaicAlgorithm == "none":
+                elif self.demosaicAlgorithm == "unpack":
                     planeCount = 4
                 else:
                     planeCount = 3
@@ -132,7 +132,11 @@ class RawReaderNode(BaseReaderNode):
         configRawParams(params)
         
         # デモザイクアルゴリズム
-        if self.demosaicAlgorithm == "none":
+        if   self.demosaicAlgorithm in "bayer":
+            pass
+        elif self.demosaicAlgorithm in "bayer crop":
+            pass
+        elif self.demosaicAlgorithm == "unpack":
             params.half_size          = True
             params.four_color_rgb     = True
         elif self.demosaicAlgorithm == "raw":
@@ -146,6 +150,12 @@ class RawReaderNode(BaseReaderNode):
             params.demosaic_algorithm = rawpy.DemosaicAlgorithm.VNG
         elif self.demosaicAlgorithm == "PPG":
             params.demosaic_algorithm = rawpy.DemosaicAlgorithm.PPG
+        else:
+            # デフォルト
+            self.demosaicAlgorithm    = "unpack"
+            params.half_size          = True
+            params.four_color_rgb     = True
+
         
         # 出力色空間
         if self.outputColorspace == "raw":
@@ -158,6 +168,10 @@ class RawReaderNode(BaseReaderNode):
             params.output_color = rawpy.ColorSpace.Wide.value
         elif self.outputColorspace == "ProPhoto RGB":
             params.output_color = rawpy.ColorSpace.ProPhoto.value
+        else:
+            # デフォルト
+            self.outputColorspace = "raw"
+            params.output_color = rawpy.ColorSpace.raw.value
         
         # ホワイトバランス
         if self.whiteBalance == "auto":
@@ -176,6 +190,10 @@ class RawReaderNode(BaseReaderNode):
             params.user_wb = [0.8, 1.0, 1.4, 1.0]  # 蛍光灯の近似値
         elif self.whiteBalance == "flash":
             params.user_wb = [1.0, 1.0, 1.0, 1.0]  # フラッシュの近似値
+        else:
+            # デフォルト
+            self.whiteBalance = "daylight"
+            params.user_wb = [1.0, 1.0, 1.0, 1.0]  # 昼光の近似値
 
         # ガンマ設定
         params.gamm = (float(self.gammaPower), float(self.gammaSlope))
@@ -214,7 +232,15 @@ class RawReaderNode(BaseReaderNode):
             # ベイヤー配列の生データを取得
             if self.demosaicAlgorithm == "bayer":
                 # ベイヤー配列のまま1プレーンで取得
-                bayer_data = raw.raw_image  # クロップされた可視領域のみを得る場合は raw_image_visible
+                bayer_data = raw.raw_image
+                height, width = bayer_data.shape
+                planeCount = 1
+                mode = 'BAYER'
+                plane_names = ['Bayer']
+                rgb = bayer_data.reshape(height, width, 1)  # 3次元配列に変換
+            elif self.demosaicAlgorithm == "bayer crop":
+                # ベイヤー配列のまま1プレーンで取得(クロップ)
+                bayer_data = raw.raw_image_visible
                 height, width = bayer_data.shape
                 planeCount = 1
                 mode = 'BAYER'
@@ -227,7 +253,7 @@ class RawReaderNode(BaseReaderNode):
                 bayer_pattern = None
                 
                 # mode と plane_names を動的に設定
-                if self.demosaicAlgorithm == "none" and planeCount == 4:
+                if self.demosaicAlgorithm == "unpack" and planeCount == 4:
                     mode = 'RGBG'
                     plane_names = ['R', 'G1', 'B', 'G2']
                 else:
@@ -377,7 +403,8 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         tk.Label(demosaicFrame, text="ベイヤー変換アルゴリズム:").pack(anchor="w")
         self.demosaicVar = tk.StringVar()
         algoOptions = ["bayer - ベイヤー配列の生データを1プレーンで取得(以下の後処理設定も無効)",
-                       "none - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
+                       "bayer crop - ベイヤー配列の生データを1プレーンで取得(クロップのみ実施)",
+                       "unpack - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
                        "raw - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
                        "AHD - 適応的同質性指向アルゴリズム。高品質だが処理時間が長い", 
                        "AAHD - 適応的AHD。AHDの改良版",

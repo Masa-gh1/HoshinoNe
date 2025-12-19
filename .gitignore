@@ -1,6 +1,7 @@
 *.bak
+/debug
+/.vscode
 /.settings
 *.CR2
 *.DNG
 *.fits
-/.vscode

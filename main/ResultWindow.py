@@ -247,7 +247,7 @@ class ResultWindow(tk.Toplevel):
         planes = headers.get('planes', [])
         
         for planeIdx, planeName in enumerate(planes):
-            content += f"\n[{planeName} プレーン]\n"
+            content += f"\n[plane: {planeName}]\n"
             
             # ヘッダー行
             if columns:
@@ -264,7 +264,15 @@ class ResultWindow(tk.Toplevel):
                 for x in range(width):
                     try:
                         value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                        row_data.append(f"{value:.6f}")
+                        if   -0.0001 < value < 0.0001:
+                            s = f"{value:.9f}"
+                        elif    -0.1 < value < 0.1:
+                            s = f"{value:.6f}"
+                        elif    -100 < value < 100:
+                            s = f"{value:.3f}"
+                        else:
+                            s = f"{value:.0f}"
+                        row_data.append(s)
                     except (IndexError, TypeError):
                         row_data.append("0.000000")
                 
@@ -299,11 +307,11 @@ class ResultWindow(tk.Toplevel):
                     for dx in range(w):
                         try:
                             value = block.data[dy][dx]
-                            if abs(value) < 0.00001:
+                            if   -0.0001 < value < 0.0001:
                                 s = f"{value:.9f}"
-                            elif abs(value) < 0.01:
+                            elif    -0.1 < value < 0.1:
                                 s = f"{value:.6f}"
-                            elif abs(value) < 10:
+                            elif    -100 < value < 100:
                                 s = f"{value:.3f}"
                             else:
                                 s = f"{value:.0f}"
@@ -585,6 +593,56 @@ class ResultWindow(tk.Toplevel):
         
         return content
     
+    def _generateGenericContent(self, flowData):
+        """一般的なデータの内容を生成"""
+        headers = flowData.headers
+        content = "\n"
+
+        width, height = flowData.getDimensions()
+        planes = headers.get('planes', [])
+
+        # データ行 (最初の10行,10列のみ表示)
+        displayRows = min(height, 10)  # 最初の10行のみ
+        displayCols = min(width , 10)  # 最初の10列のみ
+        
+        for planeIdx, planeName in enumerate(planes):
+            content += f"\n[plane: {planeName}]\n"
+        
+            # ヘッダー行
+            if width:
+                content += "\t" + "\t".join([f"{x}" for x in range(width)]) + "\n"
+            
+            if 0 < displayRows and 0 < displayCols:
+                block = flowData.getBlock(0, 0, 0)
+                if block and block.data is not None:
+                    h, w = block.data.shape
+                    for dy in range(h):
+                        row_data = [f"{dy}"]
+                        for dx in range(w):
+                            try:
+                                value = block.data[dy][dx]
+                                if   -0.0001 < value < 0.0001:
+                                    s = f"{value:.9f}"
+                                elif    -0.1 < value < 0.1:
+                                    s = f"{value:.6f}"
+                                elif    -100 < value < 100:
+                                    s = f"{value:.3f}"
+                                else:
+                                    s = f"{value:.0f}"
+                                row_data.append(s)
+                            except (IndexError, TypeError):
+                                row_data.append("_")
+
+                        if width > displayCols:
+                            row_data.append("...")
+                    
+                        content += "\t".join(row_data) + "\n"
+            
+                    if height > displayRows:
+                        content += "...\n"
+        
+        return content
+        
     def _updateControlVisibility(self):
         """コントロールフレームの表示/非表示を制御"""
         # 画像制御部分のみ画像データがある場合に表示
@@ -597,8 +655,6 @@ class ResultWindow(tk.Toplevel):
                     child.pack(fill=tk.X, pady=(5,0))
                 else:
                     child.pack_forget()
-        
-
     
     def _updateDataCombo(self):
         """データ選択コンボボックスを更新"""
@@ -660,31 +716,3 @@ class ResultWindow(tk.Toplevel):
             self._selected_data_var.set(current_values[new_index])
             self.updateResult()
             return 'break'  # デフォルト動作を無効化
-    
-    def _generateGenericContent(self, flowData):
-        """一般的なデータの内容を生成"""
-        headers = flowData.headers
-        content = "\n"
-        width, height = flowData.getDimensions()
-        planeCount = flowData.getPlaneCount()
-        
-        for planeIdx in range(min(planeCount, 3)):
-            if planeCount > 1:
-                content += f"\n[プレーン {planeIdx}]\n"
-            
-            for y in range(min(height, 5)):
-                row_data = []
-                for x in range(min(width, 10)):
-                    block = flowData.getBlock(planeIdx, x, y)
-                    if block and hasattr(block, 'data') and block.data is not None:
-                        try:
-                            value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                            row_data.append(f"{value:.3f}")
-                        except (IndexError, TypeError):
-                            row_data.append("0.000")
-                    else:
-                        row_data.append("0.000")
-                
-                content += "\t".join(row_data) + "\n"
-        
-        return content

@@ -16,18 +16,21 @@ from .basic.PowerNode import PowerNode
 from .basic.NegateNode import NegateNode
 from .basic.InverseNode import InverseNode
 from .basic.AbsoluteNode import AbsoluteNode
+from .basic.MaxNode import MaxNode
+from .basic.MinNode import MinNode
 from .basic.SumNode import SumNode
 from .basic.ProductNode import ProductNode
 from .basic.CountNode import CountNode
 from .basic.QuadraticFitNode import QuadraticFitNode
 
 from .preset.AutoLevelsNode import AutoLevelsNode
+from .preset.VectorNode import VectorNode
 from .preset.CoefficientsNode import CoefficientsNode
-from .basic.AbsoluteLowPassFilterNode import AbsoluteLowPassFilterNode
+from .preset.AbsoluteLowPassFilterNode import AbsoluteLowPassFilterNode
+from .preset.ImageAlignmentNode import ImageAlignmentNode # 廃止 ShiftDetectionNode, TransformNode に分割
+from .preset.ShiftDetectionNode import ShiftDetectionNode
 from .preset.TransformNode import TransformNode
 from .preset.ToneCurveNode import ToneCurveNode
-from .preset.ImageAlignmentNode import ImageAlignmentNode
-from .preset.ShiftDetectionNode import ShiftDetectionNode
 from .preset.BayerUnpackSparseNode import BayerUnpackSparseNode
 from .preset.BayerUnpackDenseNode import BayerUnpackDenseNode
 
@@ -42,41 +45,44 @@ from .extra.WaveletDenoiseNode import WaveletDenoiseNode
 
 class NodeFactory:
     nodeClasses = {
-        'offset': OffsetNode,
-        'scale': ScaleNode,
-        'power': PowerNode,
-        'negate': NegateNode,
-        'inverse': InverseNode,
-        'absolute': AbsoluteNode,
-        'sum': SumNode,
-        'product': ProductNode,
-        'count': CountNode,
+        'offset'                 : OffsetNode,
+        'scale'                  : ScaleNode,
+        'power'                  : PowerNode,
+        'negate'                 : NegateNode,
+        'inverse'                : InverseNode,
+        'absolute'               : AbsoluteNode,
+        'max'                    : MaxNode,
+        'min'                    : MinNode,
+        'sum'                    : SumNode,
+        'product'                : ProductNode,
+        'count'                  : CountNode,
         #####
-        'coefficients': CoefficientsNode,
-        'quadratic_fit': QuadraticFitNode,
+        'vector'                 : VectorNode,
+        'coefficients'           : CoefficientsNode,
+        'quadratic_fit'          : QuadraticFitNode,
         #####
         'absolute_lowpass_filter': AbsoluteLowPassFilterNode,
-        'auto_levels': AutoLevelsNode,
-        'tone_curve': ToneCurveNode,
-        'bayer_unpack_sparse': BayerUnpackSparseNode,
-        'bayer_unpack_dense': BayerUnpackDenseNode,
+        'auto_levels'            : AutoLevelsNode,
+        'tone_curve'             : ToneCurveNode,
+        'bayer_unpack_sparse'    : BayerUnpackSparseNode,
+        'bayer_unpack_dense'     : BayerUnpackDenseNode,
         #####
-        'transform': TransformNode,
+        'image_alignment'        : ImageAlignmentNode, # 廃止 ShiftDetectionNode, TransformNode に分割
+        'shift_detection'        : ShiftDetectionNode,
+        'transform'              : TransformNode,
         #####
-        'chroma_denoise': ChromaDenoiseNode,
-        'wavelet_denoise': WaveletDenoiseNode,
-        'image_alignment': ImageAlignmentNode,
-        'shift_detection': ShiftDetectionNode,
+        'chroma_denoise'         : ChromaDenoiseNode,
+        'wavelet_denoise'        : WaveletDenoiseNode,
         #####
-        'category_auxiliary': CategoryAuxiliaryNode,
-        'pass': PassNode,
+        'category_auxiliary'     : CategoryAuxiliaryNode,
+        'pass'                   : PassNode,
         #####
-        'file_reader': FileReaderNode,
-        'file_writer': FileWriterNode,
-        'image_reader': ImageReaderNode,
-        'image_writer': ImageWriterNode,
-        'raw_reader': RawReaderNode,
-        'fits_reader': FitsReaderNode,
+        'file_reader'            : FileReaderNode,
+        'file_writer'            : FileWriterNode,
+        'image_reader'           : ImageReaderNode,
+        'image_writer'           : ImageWriterNode,
+        'raw_reader'             : RawReaderNode,
+        'fits_reader'            : FitsReaderNode,
     }
     
     nodeLabels = [
@@ -86,10 +92,14 @@ class NodeFactory:
         ('negate'                 , '符号反転(N:N)'),
         ('inverse'                , '逆数(N:N)'),
         ('absolute'               , '絶対値(N:N)'),
+        ('max'                    , '比較大(N:N)'),
+        ('min'                    , '比較小(N:N)'),
+        ('separator'              , None),
         ('sum'                    , '総和(N:1)'),
         ('product'                , '総積(N:1)'),
         ('count'                  , 'カウント(N:1)'),
         ('separator'              , None),
+        ('vector'                 , '数列'),
         ('coefficients'           , '係数'),
         ('quadratic_fit'          , '2次関数近似'),
         ('separator'              , None),
@@ -99,15 +109,14 @@ class NodeFactory:
         ('bayer_unpack_sparse'    , 'ベイヤー分離(疎)(N:N)'),
         ('bayer_unpack_dense'     , 'ベイヤー分離(密)(N:N)'),
         ('separator'              , None),
+        ('shift_detection'        , 'ズレ検出(N:1)'),
         ('transform'              , '変形(N:N)'),
         ('separator'              , None),
         ('chroma_denoise'         , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
         ('wavelet_denoise'        , 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),
-        ('image_alignment'        , '画像位置合わせ(N:N)'),
-        ('shift_detection'        , 'ズレ検出(N:1)'),
         ('separator'              , None),
         ('category_auxiliary'     , '補正値として使う'),
-        ('pass'                   , '通点'),
+        ('pass'                   , '通点(何もしない)'),
         ('separator'              , None),
         ('file_reader'            , 'ファイル読み込み(0:N)'),
         ('file_writer'            , 'ファイル書き出し(N:0)'),

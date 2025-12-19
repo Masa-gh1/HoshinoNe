@@ -30,7 +30,7 @@ class NNBlockOperationNode(FlowNode):
             self.reportProgress(context, "完了")
             return
         
-        # 前処理（サブクラスでオーバーライド可能）
+        # 前処理
         processedInputs = self.preprocessInputs(inputDatas)
         
         resultFlowDatas = []
@@ -75,8 +75,6 @@ class NNBlockOperationNode(FlowNode):
             処理対象データのリスト
         """
         return inputDatas
-    
-
     
     def setupDisplayLevels(self, outputFlowData, inputFlowData):
         """出力FlowDataのdisplay_levelsを設定（サブクラスでオーバーライド可能）

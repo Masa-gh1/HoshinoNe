@@ -12,7 +12,7 @@ from base import DataBlock
 import utils.numpy_helpers as nh
 
 class TensorOperationMixin:
-    """tensor操作の共通機能を提供するMixin"""
+    """tensor 操作の共通機能を提供するMixin"""
     
     @classmethod
     def computeCombinedTensor(cls, tensorDatas, operation):
@@ -24,7 +24,14 @@ class TensorOperationMixin:
         
         # 最初のtensorをベースとしてコピー
         result = FlowData(tensorDatas[0].headers.copy())
-        result.setDimensions(*tensorDatas[0].getDimensions())
+
+        # 出力の範囲を縦横最大にする
+        width, height = tensorDatas[0].getDimensions()
+        for tensorData in tensorDatas[1:]:
+            w, h = tensorData.getDimensions()
+            width  = max(width , w)
+            height = max(height, h)
+        result.setDimensions(width, height)
         
         # 最初のtensorのデータをコピー
         for block in tensorDatas[0].iterateBlocks():
@@ -41,15 +48,15 @@ class TensorOperationMixin:
         return result
     
     @classmethod
-    def calculateTensorRange(cls, coeffMatrix, width, height):
+    def calculateTensorRange(cls, tensor, width, height):
         """多項式tensorの範囲を計算（四隅と中央で評価）"""
         def evalPoly(x, y):
             value = 0.0
             y_power = 1.0
-            for j in range(coeffMatrix.shape[0]):
+            for j in range(tensor.shape[0]):
                 x_power = 1.0
-                for i in range(coeffMatrix.shape[1]):
-                    value += coeffMatrix[j, i] * x_power * y_power
+                for i in range(tensor.shape[1]):
+                    value += tensor[j, i] * x_power * y_power
                     x_power *= x
                 y_power *= y
             return value

@@ -1,5 +1,5 @@
 '''
-CoefficientsNode class
+VectorNode class
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -15,23 +15,23 @@ from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
 from utils.interval_helper import createHalfOpenEnd
 
-class CoefficientsNode(FlowNode,ConfigurableNode):
+class VectorNode(FlowNode,ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "coefficients", "係数")
+        super().__init__(canvas, editor, x, y, "vector", "数列")
         self.planeCount = 3
-        self.xOrder = 0
-        self.yOrder = 0
+        self.xOrder = 1
+        self.yOrder = 1
         self.planeNames = ["Plane 0","Plane 1","Plane 2"]
-        self.coefficients = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIdx,i,j": value}
+        self.vector = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIdx,i,j": value}
         self.updateNodeText()
     
     def getColor(self):
-        return self._color_coff
+        return self._color_vector
     
     def updateNodeText(self):
         constVal = ""
         for planeIndex in range(self.planeCount):
-            value = self.coefficients.get(f"{planeIndex},0,0", 0)
+            value = self.vector.get(f"{planeIndex},0,0", 0)
             if     -1 < value < 1:
                 constVal += f" {value:.3f}"
             elif  -10 < value < 10:
@@ -47,7 +47,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         nodeData["planeCount"] = self.planeCount
         nodeData["xOrder"] = self.xOrder
         nodeData["yOrder"] = self.yOrder
-        nodeData["coefficients"] = self.coefficients
+        nodeData["vector"] = self.vector
         nodeData["planeNames"] = self.planeNames
     
     def restore(self, nodeData):
@@ -57,8 +57,8 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
             self.xOrder = nodeData["xOrder"]
         if "yOrder" in nodeData:
             self.yOrder = nodeData["yOrder"]
-        if "coefficients" in nodeData:
-            self.coefficients = nodeData["coefficients"]
+        if "vector" in nodeData:
+            self.vector = nodeData["vector"]
         if "planeNames" in nodeData:
             self.planeNames = nodeData["planeNames"]
         else:
@@ -69,11 +69,11 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     def onEdit(self):
         return TensorSettingsDialog(self.editor.root, self)
     
-    def applySettings(self, planeCount, xOrder, yOrder, coefficients, planeNames):
+    def applySettings(self, planeCount, xOrder, yOrder, vector, planeNames):
         self.planeCount = planeCount
         self.xOrder = xOrder
         self.yOrder = yOrder
-        self.coefficients = coefficients
+        self.vector = vector
         self.planeNames = planeNames
         self.updateNodeText()
         
@@ -85,8 +85,8 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "開始")
         
         # 指定されたサイズの係数テンソルを作成
-        width = self.xOrder + 1
-        height = self.yOrder + 1
+        width = self.xOrder
+        height = self.yOrder
         
         # モードを判断
         if width == 1 and height == 1:
@@ -104,32 +104,31 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         planeNames = self.planeNames
         
         # 列ラベルと行ラベルを生成
-        columns = [f'x^{i}' for i in range(width)]
-        lines = [f'y^{j}' for j in range(height)]
+        columns = [f'{i}' for i in range(width)]
+        lines = [f'{j}' for j in range(height)]
         
         headers = {
             'category': 'auxiliary',
-            'type': 'tensor',
+            'type': 'vector',
             'mode': mode,
             'axes': ['x_order', 'y_order'],
             'columns': columns,
             'lines': lines,
             'planes': planeNames,
             'max_orders': [self.xOrder, self.yOrder],
-            'equations': [f'{name} = coefficients' for name in planeNames]
         }
         
         outputFlowData = FlowData(headers)
         outputFlowData.setDimensions(width, height)
         
-        # 各プレーンに係数を設定
+        # 各プレーンに数列を設定
         for planeIdx in range(self.planeCount):
             tensorData = []
             for j in range(height):
                 row = []
                 for i in range(width):
                     key = f"{planeIdx},{i},{j}"
-                    row.append(self.coefficients.get(key, 0))
+                    row.append(self.vector.get(key, 0))
                 tensorData.append(row)
             dataBlock = DataBlock(tensorData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
@@ -142,9 +141,9 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "完了")
     
     def getConfigHash(self):
-        coeffStr = str(sorted(self.coefficients.items()))
+        vectorStr = str(sorted(self.vector.items()))
         planeStr = str(self.planeNames)
-        config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{coeffStr}_{planeStr}"
+        config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{vectorStr}_{planeStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
@@ -166,17 +165,17 @@ class TensorSettingsDialog(tk.Toplevel):
         self.planeEntry.insert(0, str(node.planeCount))
         self.planeEntry.grid(row=0, column=1, padx=5, pady=2)
         
-        tk.Label(basicFrame, text="X次数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
+        tk.Label(basicFrame, text="x項数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         self.xOrderEntry = tk.Entry(basicFrame, width=5)
         self.xOrderEntry.insert(0, str(node.xOrder))
         self.xOrderEntry.grid(row=0, column=3, padx=5, pady=2)
         
-        tk.Label(basicFrame, text="Y次数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
+        tk.Label(basicFrame, text="Y項数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(node.yOrder))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
         
-        tk.Button(basicFrame, text="次数更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
+        tk.Button(basicFrame, text="項数更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
         # 係数設定フレーム（スクロール可能）
         coeffFrame = tk.Frame(self, height=120)
@@ -211,8 +210,6 @@ class TensorSettingsDialog(tk.Toplevel):
         # ウィンドウが閉じられたときのクリーンアップ
         self.protocol("WM_DELETE_WINDOW", self.onClose)
     
-
-    
     def updateOrder(self):
         # 既存の係数エントリーをクリア
         for widget in self.scrollableFrame.winfo_children():
@@ -225,7 +222,7 @@ class TensorSettingsDialog(tk.Toplevel):
             xOrd = int(self.xOrderEntry.get())
             yOrd = int(self.yOrderEntry.get())
             
-            if planes <= 0 or xOrd < 0 or yOrd < 0:
+            if planes <= 0 or xOrd <= 0 or yOrd <= 0:
                 return
             
             row = 0
@@ -243,20 +240,20 @@ class TensorSettingsDialog(tk.Toplevel):
                 row += 1
                 
                 # X軸ラベル（上部）
-                for i in range(xOrd + 1):
-                    tk.Label(self.scrollableFrame, text=f"x^{i}").grid(row=row, column=i + 1, padx=5, pady=2)
+                for i in range(xOrd):
+                    tk.Label(self.scrollableFrame, text=f"x:{i}").grid(row=row, column=i + 1, padx=5, pady=2)
                 row += 1
                 
                 # 係数エントリー
-                for j in range(yOrd + 1):
+                for j in range(yOrd):
                     # Y軸ラベル（左側）
-                    tk.Label(self.scrollableFrame, text=f"y^{j}").grid(row=row, column=0, sticky="w", padx=5, pady=2)
+                    tk.Label(self.scrollableFrame, text=f"y:{j}").grid(row=row, column=0, sticky="w", padx=5, pady=2)
                     
-                    for i in range(xOrd + 1):
+                    for i in range(xOrd):
                         entry = tk.Entry(self.scrollableFrame, width=8)
                         key = f"{planeIdx},{i},{j}"
-                        if key in self.node.coefficients:
-                            entry.insert(0, str(self.node.coefficients[key]))
+                        if key in self.node.vector:
+                            entry.insert(0, str(self.node.vector[key]))
                         else:
                             entry.insert(0, "0")
                         entry.grid(row=row, column=i + 1, padx=5, pady=2)
@@ -276,12 +273,12 @@ class TensorSettingsDialog(tk.Toplevel):
             
             if planes > 0 and xOrd >= 0 and yOrd >= 0:
                 # 係数を収集
-                coefficients = {}
+                vector = {}
                 for key, entry in self.coeffEntries.items():
                     try:
                         val = float(entry.get())
                         if val != 0:
-                            coefficients[key] = val
+                            vector[key] = val
                     except ValueError:
                         pass
                 
@@ -293,7 +290,7 @@ class TensorSettingsDialog(tk.Toplevel):
                         name = f"Plane {len(planeNames)}"
                     planeNames.append(name)
                 
-                self.node.applySettings(planes, xOrd, yOrd, coefficients, planeNames)
+                self.node.applySettings(planes, xOrd, yOrd, vector, planeNames)
         except ValueError:
             pass
     

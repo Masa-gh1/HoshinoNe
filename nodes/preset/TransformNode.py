@@ -7,6 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
+import hashlib
 from tkinter import messagebox
 
 from config import BLOCK_SIZE
@@ -84,31 +85,34 @@ class TransformNode(LazyNNOperationNode):
     def _loadMatrixData(self, auxiliaryDatas):
         """matrix形式データを読み込み"""
         # 複数のauxiliaryデータからmatrix形式を探す
-        matrixdata = None
         lines   = []
         columns = None
+        matrixdatas = []
         for matrixFlowData in auxiliaryDatas:
             if matrixFlowData.headers.get('type') == 'matrix':
                 lines.extend(matrixFlowData.headers.get('lines', []))
+                columnCur = matrixFlowData.headers.get('columns', [])
                 
                 # 縦1列のブロックのみを結合
                 for block in matrixFlowData.iterateBlocks():
-                    if block and block.data is not None and 0 == block.x:
-                        if matrixdata is None:
-                            columns = matrixFlowData.headers.get('columns', [])
-                            matrixdata = block.data
-                        elif columns == matrixFlowData.headers.get('columns', []):
-                            matrixdata = np.vstack([matrixdata, block.data])
+                    if not block or block.data is None or 0 != block.x:
+                        pass
+                    elif not columns:
+                        columns = columnCur
+                        matrixdatas.append(block.data)
+                    elif columns == columnCur:
+                        matrixdatas.append(block.data)
         
-        if matrixdata is None:
-            messagebox.showerror(f"{self.text} エラー", "変換パラメータのデータが見つかりません")
-            return None
-        else:
-            return {
-                'columns': columns,
-                'lines': lines,
-                'data': matrixdata
-            }
+        if not matrixdatas:
+            raise ValueError("変形パラメータが必要です")
+        
+        matrixdata = np.vstack(matrixdatas)
+        
+        return {
+            'columns': columns,
+            'lines': lines,
+            'data': matrixdata
+        }
     
     def _calculateExpand(self, inputDatas, matrix_data):
         """拡張領域計算"""
@@ -168,7 +172,6 @@ class TransformNode(LazyNNOperationNode):
         if datetime_str:
             return f"datetime_{datetime_str}"
         
-        import hashlib
         data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
         return f"hash_{data_hash}"
     
@@ -244,6 +247,7 @@ class LazyTransformOperations:
             region_image = nh.nans((region_height, region_width))
             
             # 必要なブロックを取得して部分画像に配置
+            isAnyNaN = False # 必要なブロックに NaN が含まれているか
             for by in range(min_block_y, max_block_y, BLOCK_SIZE):
                 for bx in range(min_block_x, max_block_x, BLOCK_SIZE):
                     block = flowData.getBlock(planeIndex, bx, by)
@@ -258,6 +262,10 @@ class LazyTransformOperations:
                         rel_y = by - min_block_y
                         h, w = block_data.shape
                         region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
+
+                        if np.isnan(block_data).any():
+                            # 必要なブロックに NaN が含まれていた
+                            isAnyNaN = True
             
             # 変換行列を作成（部分画像座標系）
             if rotation != 0:
@@ -274,11 +282,28 @@ class LazyTransformOperations:
             transform_output_width = min(region_width, new_width - (x - min_block_x))
             transform_output_height = min(region_height, new_height - (y - min_block_y))
             
-            # 部分画像を変換
-            transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
-                                            flags=cv2.INTER_LINEAR,
-                                            borderMode=cv2.BORDER_CONSTANT,
-                                            borderValue=np.nan)
+            # 部分画像を変形
+            if not isAnyNaN:
+                transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
+                                                    flags=cv2.INTER_LINEAR,
+                                                    borderMode=cv2.BORDER_CONSTANT,
+                                                    borderValue=np.nan)
+            else:
+                # NaN対応の補間変形
+                validMask = ~np.isnan(region_image)              # 有効データマスクを作成
+                imageData = np.where(validMask, region_image, 0) # 無効データを 0 にした画像
+                imageMask = np.where(validMask, np.nan, 0)       # 有効データを NaN に、無効データを 0 にした画像
+                transformed_data = cv2.warpAffine(imageData, M, (transform_output_width, transform_output_height),  # データを変形
+                                                flags=cv2.INTER_LINEAR,
+                                                borderMode=cv2.BORDER_CONSTANT,
+                                                borderValue=0)
+                transformed_mask = cv2.warpAffine(imageMask, M, (transform_output_width, transform_output_height),  # 重みを変形
+                                                flags=cv2.INTER_LINEAR,
+                                                borderMode=cv2.BORDER_CONSTANT,
+                                                borderValue=0)
+                # 有効データを NaN に、無効データを 0 にしたマスク画像を用いているから
+                # NaN = NaN * 0 なので NaN のある場所が有効なデータとなる
+                transformed_region =  np.where( np.isnan(transformed_mask), transformed_data, np.nan)
             
             # 出力ブロック位置を部分画像座標系に変換
             output_x_in_region = x - min_block_x

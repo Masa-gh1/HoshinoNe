@@ -224,12 +224,27 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
                 self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
             
             # 位置合わせ計算
-            star_result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
-            phase_result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result) if not star_result.success else None
-            template_result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result) if not star_result.success and (phase_result is None or not phase_result.success) else None
+            result = None
+            result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
+            if result:
+                star_result = result
+            else:
+                self.editor.bugReport(type(self).__name__,"fail findOffsetByStarDetection")
+                star_result = None
+                result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result)
+            if result:
+                phase_result = result
+            else:
+                self.editor.bugReport(type(self).__name__,"fail findOffsetByPhaseCorrelation")
+                phase_result = None
+                result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result)
+            if result:
+                template_result = result
+            else:
+                self.editor.bugReport(type(self).__name__,"fail findOffsetByTemplateMatching")
+                template_result = None
             
             # 成功した結果を選択
-            result = star_result if star_result.success else (phase_result if phase_result and phase_result.success else template_result)
             if result is None:
                 result = AlignmentResult()
             
@@ -778,46 +793,59 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
                 contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             except (cv2.error, SystemError):
                 contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        stars = contours
         
+        # 面積フィルタ
         min_area = np.pi * (self.star.minDiameter / 2) ** 2
         max_area = np.pi * (self.star.maxDiameter / 2) ** 2
-        contours = [c for c in contours if min_area <= cv2.contourArea(c) <= max_area]
-        
+        areaFiltered = [c for c in stars if min_area <= cv2.contourArea(c) <= max_area]
+        stars = areaFiltered
+
         # アスペクト比フィルタ
-        filtered = []
+        aspectFiltered = []
         aspectRatios = []
-        for contour in contours:
+        for star in stars:
             # 最小外接矩形（回転考慮）
-            (center), (width, height), angle = cv2.minAreaRect(contour)
+            (center), (width, height), angle = cv2.minAreaRect(star)
             
             # アスペクト比計算
             if width > 0 and height > 0:
                 aspectRatio = max(width, height) / min(width, height)
                 if aspectRatio <= self.star.maxAspectRatio:
-                    filtered.append(contour)
+                    aspectFiltered.append(star)
                     aspectRatios.append(aspectRatio)
-        
-        contours = filtered
-        
-        stars = []
-        max_val = np.nanmax(image)
-        
-        for contour,aspectRatio in zip(contours,aspectRatios):
-            area = cv2.contourArea(contour)
+        stars = aspectFiltered
+
+        # 星の位置と明るさを取得
+        positions = []
+        brightnesses = []
+        for star in stars:
+            area = cv2.contourArea(star)
             # 重心を計算
-            M = cv2.moments(contour)
-            if M['m00'] > 0:
+            M = cv2.moments(star)
+            if M['m00'] <= 0:
+                positions.append(None)
+                brightnesses.append(None)
+            else:
                 cx = M['m10'] / M['m00']
                 cy = M['m01'] / M['m00']
+                positions.append((cx, cy))
                 
                 # その点の明度を取得
                 x, y = int(cx), int(cy)
                 if 0 <= x < subtracted.shape[1] and 0 <= y < subtracted.shape[0]:
                     brightness = float(subtracted[y, x])
-                    if brightness > 0:
-                        stars.append((cx, cy, brightness, aspectRatio))
+                    brightnesses.append(brightness)
+                else:
+                    brightnesses.append(None)
         
-        return stars
+        ret = []
+        for pos, brightness, aspectRatio in zip(positions,brightnesses,aspectRatios):
+            if pos:
+                cx, cy = pos
+                ret.append((cx, cy, brightness, aspectRatio))
+        
+        return ret
     
     def _createSaturationMask(self, image):
         """飽和領域のマスクを作成"""

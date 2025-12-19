@@ -88,10 +88,10 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
                 inputMax = inputLevels['exclusive_upper']
                 
                 if combinedAuxiliaryTensor:
-                    coeffBlock = combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                    if coeffBlock:
+                    tensor = combinedAuxiliaryTensor.getBlock(0, 0, 0)
+                    if tensor:
                         width, height = lazyFlowData.sourceFlowData.getDimensions()
-                        offsetMin, offsetMax = cls.calculateTensorRange(coeffBlock.data, width, height)
+                        offsetMin, offsetMax = cls.calculateTensorRange(tensor.data, width, height)
                         return {
                             'display_levels': {
                                 'min': inputMin + offsetMin,
