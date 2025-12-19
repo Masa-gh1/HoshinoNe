@@ -1,5 +1,9 @@
 '''
 TensorOperationMixin - tensor操作の共通機能
+
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 import numpy as np

@@ -1,6 +1,10 @@
 '''
-Created on 2025/10/21
+Flow Editor - Visual Flow-based Image Processing Tool
 
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
+Created on 2025/10/21
 @author: Masakazu Inoue
 '''
 

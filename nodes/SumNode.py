@@ -1,6 +1,9 @@
 '''
 SumNode - 統合加算ノード（N→1）
 
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 

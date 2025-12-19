@@ -1,6 +1,9 @@
 '''
 ChromaDenoiseNode class - 色空間分離ノイズ除去
 
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 

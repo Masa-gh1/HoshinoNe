@@ -1,5 +1,5 @@
 # 必須ライブラリ
-numpy==2.3.4  # 数値計算・配列処理
+numpy==2.2.6  # 数値計算・配列処理・NaN値処理
 
 # オプションライブラリ（対応する機能ノード）
 matplotlib==3.10.7  # グラフ描画（ResultWindow, ToneCurveNode設定画面）
@@ -9,6 +9,7 @@ astropy==7.1.1  # FITS天体画像読み込み（FitsReaderNode）
 scipy==1.16.3  # 科学計算・補間・スプライン（ToneCurveNode, ChromaDenoiseNode, WaveletDenoiseNode）
 PyWavelets==1.9.0  # ウェーブレット変換（WaveletDenoiseNode）
 scikit-image==0.25.2  # 画像処理・モルフォロジー（WaveletDenoiseNode）
+opencv-python==4.12.0.88  # 画像処理・位置合わせ（ImageAlignmentNode）
 ExifRead==3.5.1  # EXIF情報読み込み補完（utils/exif_helper.py）
 
 # 依存によるインストール
@@ -16,10 +17,14 @@ astropy-iers-data==0.2025.10.27.0.39.10
 contourpy==1.3.3
 cycler==0.12.1
 fonttools==4.60.1
+ImageIO==2.37.2
 kiwisolver==1.4.9
+lazy_loader==0.4
+networkx==3.5
 packaging==25.0
 pyerfa==2.0.1.5
 pyparsing==3.2.5
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 six==1.17.0
+tifffile==2025.10.16

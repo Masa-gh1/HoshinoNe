@@ -1,5 +1,9 @@
 '''
 半開区間ヘルパー関数
+
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 

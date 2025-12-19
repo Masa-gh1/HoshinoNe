@@ -1,3 +1,12 @@
+'''
+ToneCurveNode class
+
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
+@author: Masakazu Inoue
+'''
+
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox

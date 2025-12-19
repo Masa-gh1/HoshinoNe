@@ -1,5 +1,9 @@
 '''
 OffsetNode - オフセット加算ノード
+
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 import numpy as np

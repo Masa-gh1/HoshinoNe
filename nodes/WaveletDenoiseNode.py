@@ -1,6 +1,9 @@
 '''
 WaveletDenoiseNode class - 星保護付きウェーブレットノイズ除去
 
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 

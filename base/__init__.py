@@ -1,6 +1,9 @@
 '''
 Base package for FlowEditor
 
+Copyright (c) 2025 Masakazu Inoue
+All rights reserved.
+
 @author: Masakazu Inoue
 '''
 
