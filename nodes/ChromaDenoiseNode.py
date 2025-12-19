@@ -13,6 +13,7 @@ from tkinter import ttk, messagebox
 import hashlib
 from base import FlowNode, DataBlock, FlowData
 from base.ConfigurableNode import ConfigurableNode
+from utils import numpy_helpers as nh
 
 try:
     from scipy.ndimage import gaussian_filter, sobel
@@ -111,7 +112,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _reconstruct_rgb_image(self, flowData, width, height):
         """FlowDataからRGB画像を再構築"""
-        rgb_image = np.zeros((height, width, 3), dtype=np.float64)
+        rgb_image = nh.zeros((height, width, 3))
         
         from config import BLOCK_SIZE
         for blockY in range(0, height, BLOCK_SIZE):

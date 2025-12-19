@@ -20,6 +20,7 @@ from base.BaseReaderNode import BaseReaderSettingsDialog
 from config import BLOCK_SIZE
 from utils.ThreadPool import ProcessExecutor
 from utils.exif_helper import getExif
+from utils import numpy_helpers as nh
 
 try:
     from PIL import Image
@@ -162,7 +163,7 @@ class ImageReaderNode(BaseReaderNode):
         # 各プレーンのブロックをnumpy配列で作成
         blocks = []
         for planeIdx in range(planeCount):
-            plane_block = np.zeros((blockHeight, blockWidth), dtype=np.float64)
+            plane_block = nh.nans((blockHeight, blockWidth))
             blocks.append(plane_block)
         
         for y in range(blockHeight):

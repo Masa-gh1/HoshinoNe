@@ -7,9 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import numpy as np
 from base import N1BlockOperationNode, TensorOperationMixin, DataBlock
 from config import BLOCK_SIZE
-import numpy as np
+from utils import numpy_helpers as nh
 
 class SumNode(N1BlockOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -89,7 +90,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
                     
                     if result is None:
                         # 最初のブロックで初期化
-                        result = np.full((blockHeight, blockWidth), np.nan, dtype=np.float64)
+                        result = nh.nans((blockHeight, blockWidth))
                         result[:minH, :minW] = inputBlock.data[:minH, :minW]
                     else:
                         # NaN対応加算（効率的な順序）
@@ -105,7 +106,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
             
             # matrixデータがない場合の初期化
             if result is None:
-                result = np.full((blockHeight, blockWidth), np.nan, dtype=np.float64)
+                result = nh.nans((blockHeight, blockWidth))
             
             # tensorデータの加算（NaN対応）
             if tensorDatas:

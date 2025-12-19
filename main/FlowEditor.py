@@ -20,8 +20,8 @@ import atexit
 import gc
 from nodes import NodeFactory
 from base.FlowNode import FlowNode
+from utils.ThreadPool import CoalescingExecutor
 from .CacheManager import CacheManager
-
 from . import config
 
 # グローバルスレッドプール
@@ -378,9 +378,7 @@ class FlowEditor:
             return
         
         # フロー実行を別スレッドで実行
-        thread = threading.Thread(target=self.processNodes)
-        thread.daemon = True
-        thread.start()
+        CoalescingExecutor.submit( self, self.processNodes)
     
     def processNodes(self):
         startTime = time.time()
@@ -779,11 +777,11 @@ class FlowEditor:
             cacheStr = f"{int(cacheSize/1024/1024/1024)}GB"
         
         # ディスクサイズを適切な単位で表示
-        if diskSize < 1024:
+        if diskSize < 10*1024:
             diskStr = f"{int(diskSize)}B"
-        elif diskSize < 1024*1024:
+        elif diskSize < 10*1024*1024:
             diskStr = f"{int(diskSize/1024)}KB"
-        elif diskSize < 1024*1024*1024:
+        elif diskSize < 10*1024*1024*1024:
             diskStr = f"{int(diskSize/1024/1024)}MB"
         else:
             diskStr = f"{int(diskSize/1024/1024/1024)}GB"

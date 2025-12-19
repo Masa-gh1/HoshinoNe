@@ -13,7 +13,7 @@ from tkinter import ttk, messagebox
 import hashlib
 from base import NNBlockOperationNode, DataBlock
 from base.ConfigurableNode import ConfigurableNode
-
+from utils import numpy_helpers as nh
 
 try:
     from scipy.ndimage import gaussian_filter, sobel
@@ -100,7 +100,7 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         if not PYWT_AVAILABLE or not SKIMAGE_AVAILABLE or not SCIPY_AVAILABLE:
             return block
         
-        data = np.array(block.data, dtype=np.float64)
+        data = nh.array(block.data)
         
         # NaN値を事前に検出
         nan_mask = np.isnan(data)

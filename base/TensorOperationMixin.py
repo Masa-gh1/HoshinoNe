@@ -8,6 +8,7 @@ All rights reserved.
 '''
 import numpy as np
 from config import BLOCK_SIZE
+import utils.numpy_helpers as nh
 
 class TensorOperationMixin:
     """tensor操作の共通機能を提供するMixin"""
@@ -67,37 +68,37 @@ class TensorOperationMixin:
         planeCount = tensorData.getPlaneCount()
         if width < 1 or height < 1 or planeIdx >= planeCount:
             if defaultValue == 0.0:
-                return np.zeros(blockShape)
+                return nh.zeros(blockShape)
             elif defaultValue == 1.0:
-                return np.ones(blockShape)
+                return nh.ones(blockShape)
             else:
-                return np.full(blockShape, defaultValue)
+                return nh.full(blockShape, defaultValue)
         
         # 指定プレーンの係数行列を取得
         coeffBlock = tensorData.getBlock(planeIdx, 0, 0)
         if not coeffBlock:
             if defaultValue == 0.0:
-                return np.zeros(blockShape)
+                return nh.zeros(blockShape)
             elif defaultValue == 1.0:
-                return np.ones(blockShape)
+                return nh.ones(blockShape)
             else:
-                return np.full(blockShape, defaultValue)
+                return nh.full(blockShape, defaultValue)
         
         coeffMatrix = coeffBlock.data
         maxOrderY, maxOrderX = coeffMatrix.shape
         
         # ブロック内の座標配列を作成（スレッドセーフ: np.meshgrid 置き換え）
         blockHeight, blockWidth = blockShape
-        y_indices = np.arange(blockHeight, dtype=np.float64).reshape(-1, 1)
-        x_indices = np.arange(blockWidth, dtype=np.float64)
+        y_indices = nh.arange(blockHeight).reshape(-1, 1)
+        x_indices = nh.arange(blockWidth)
         y_coords = blockY + np.broadcast_to(y_indices, (blockHeight, blockWidth))
         x_coords = blockX + np.broadcast_to(x_indices, (blockHeight, blockWidth))
         
         # numpy配列演算で多項式計算
-        result = np.zeros(blockShape, dtype=np.float64)
-        y_power = np.ones_like(x_coords, dtype=np.float64)
+        result = nh.zeros(blockShape)
+        y_power = nh.ones(x_coords.shape)
         for j in range(maxOrderY):
-            x_power = np.ones_like(x_coords, dtype=np.float64)
+            x_power = nh.ones(x_coords.shape)
             for i in range(maxOrderX):
                 coeff = coeffMatrix[j, i]
                 if coeff != 0:

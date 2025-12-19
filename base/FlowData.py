@@ -9,9 +9,10 @@ All rights reserved.
 
 import uuid
 from tkinter import messagebox
-from config import BLOCK_SIZE
+from config import DEFAULT_BLOCK_TYPE, BLOCK_SIZE
 from .DataBlock import DataBlock
 from main.CacheManager import CacheManager
+from utils import numpy_helpers as nh
 
 try:
     import numpy as np
@@ -31,6 +32,7 @@ class FlowData:
         self._minValue = None
         self._percentileCache = {} # パーセンタイルキャッシュ
         self._histogramCache = {}  # ヒストグラムキャッシュ
+        self._highResHistCache = {}  # 高解像度ヒストグラムキャッシュ
         self._existingBlocks = set()  # 保存済みブロックの記録 上書きチェックなどに使用する
         
         if not NUMPY_AVAILABLE:
@@ -67,19 +69,20 @@ class FlowData:
                 # データ更新時にキャッシュをクリア
                 self._percentileCache.clear()
                 self._histogramCache.clear()
+                self._highResHistCache.clear()
     
     def setDimensions(self, width, height):
-        """データの次元を設定"""
+        """次元を設定"""
         self._dimensions = (width, height)
     
     def getType(self):
-        """データの型を取得"""
+        """型を取得"""
         if 'type' in self.headers:
             return self.headers['type']
         return 'matrix'
     
     def getMode(self):
-        """データのモードを取得"""
+        """モードを取得"""
         if 'mode' in self.headers:
             return self.headers['mode']
         # プレーン数から推定
@@ -94,7 +97,7 @@ class FlowData:
             return None
     
     def getDimensions(self):
-        """データの次元を取得 (width, height)"""
+        """次元を取得 (width, height)"""
         return self._dimensions
     
     def getPlaneCount(self):
@@ -105,7 +108,7 @@ class FlowData:
         return None
     
     def getArea(self):
-        """データの面積を取得"""
+        """面積を取得"""
         width, height = self.getDimensions()
         return (width*height)
     
@@ -156,7 +159,9 @@ class FlowData:
         
         # numpy配列として正規化
         if isinstance(dataBlock.data, list):
-            arr = np.array(dataBlock.data, dtype=np.float64)
+            arr = nh.array(dataBlock.data)
+        elif dataBlock.data.dtype != nh.BDTYPE:
+            arr = dataBlock.data.astype(nh.BDTYPE)
         else:
             arr = dataBlock.data
         
@@ -166,92 +171,152 @@ class FlowData:
         self._updateStatistics(dataBlock.planeIndex, dataBlock.x, dataBlock.y, arr)
         
     def getMaxValue(self):
-        """データの最大値を取得"""
+        """最大値を取得"""
         return self._maxValue
     
     def getMinValue(self):
-        """データの最小値を取得"""
+        """最小値を取得"""
         return self._minValue
+    
+    def _getHighResHistograms(self, maxPlanes=None):
+        """高解像度ヒストグラムを取得（中間生成物キャッシュ）"""
+        if maxPlanes in self._highResHistCache:
+            return self._highResHistCache[maxPlanes]
+        
+        width, height = self.getDimensions()
+        planeCount = self.getPlaneCount()
+        
+        if maxPlanes is None:
+            maxPlanes = planeCount
+        
+        planeHistograms = []
+        for planeIdx in range(min(planeCount, maxPlanes)):
+            blockArrays = []
+            for blockY in range(0, height, self._blockSize):
+                for blockX in range(0, width, self._blockSize):
+                    block = self.getBlock(planeIdx, blockX, blockY)
+                    if block and hasattr(block, 'data') and block.data is not None:
+                        blockArrays.append(block.data.flatten())
+            
+            if blockArrays:
+                planeData = np.concatenate(blockArrays)
+                validData = planeData[~np.isnan(planeData)]
+                if len(validData) > 0:
+                    min_val, max_val = np.min(validData), np.max(validData)
+                    
+                    # linear bins
+                    linear_edges = np.linspace(min_val, max_val, 1025)  # 1024ビン
+                    
+                    # log bins (getHistogram と同じ正規化をする)
+                    log_edges = np.logspace(np.log10(0.1), np.log10(1.0), 1025)  # 1024ビン
+                    scale = 0.9 / (max_val - min_val)
+                    offset = -min_val + 0.1 / scale
+                    log_edges = log_edges / scale - offset
+                    
+                    # マージして重複除去
+                    merged_edges = np.unique(np.concatenate([linear_edges, log_edges]))
+                    
+                    # histogram計算はこの一回だけ
+                    hist, _ = np.histogram(validData, bins=merged_edges)
+                    
+                    planeHistograms.append({
+                        'min': min_val,
+                        'max': max_val,
+                        'total_samples': len(validData),
+                        'hist': hist,
+                        'edges': merged_edges
+                    })
+                else:
+                    planeHistograms.append(None)
+            else:
+                planeHistograms.append(None)
+        
+        self._highResHistCache[maxPlanes] = planeHistograms
+        return planeHistograms
     
     def getPercentile(self, percentile):
         """指定したパーセンタイル値を取得（キャッシュ付き）"""
         if percentile in self._percentileCache:
             return self._percentileCache[percentile]
         
-        # 全ピクセルでパーセンタイルを計算
-        allValues = []
-        width, height = self.getDimensions()
+        # 高解像度ヒストグラムで全プレーンを取得
         planeCount = self.getPlaneCount()
+        planeHistograms = self._getHighResHistograms(planeCount)
         
-        for planeIdx in range(min(planeCount, 3)):  # RGBのみ
-            for blockY in range(0, height, self._blockSize):
-                for blockX in range(0, width, self._blockSize):
-                    block = self.getBlock(planeIdx, blockX, blockY)
-                    if block and hasattr(block, 'data') and block.data is not None:
-                        # 全ピクセルを使用
-                        allValues.extend(block.data.flatten())
-        
-        if allValues:
-            # NaN値を除外してパーセンタイル計算
-            validValues = np.array(allValues)
-            validValues = validValues[~np.isnan(validValues)]
-            if len(validValues) > 0:
-                result = np.percentile(validValues, percentile)
+        if planeHistograms and any(hist is not None for hist in planeHistograms):
+            # 全プレーンのビン中央値を収集
+            all_centers = []
+            all_counts = []
+            
+            for hist_data in planeHistograms:
+                if hist_data is not None:
+                    centers = (hist_data['edges'][:-1] + hist_data['edges'][1:]) / 2
+                    all_centers.append(centers)
+                    all_counts.append(hist_data['hist'])
+            
+            # 結合
+            combined_centers = np.concatenate(all_centers)
+            combined_counts = np.concatenate(all_counts)
+            
+            # ソートしてパーセンタイル計算
+            sort_idx = np.argsort(combined_centers)
+            sorted_centers = combined_centers[sort_idx]
+            sorted_counts = combined_counts[sort_idx]
+            
+            total_samples = np.sum(sorted_counts)
+            if total_samples > 0:
+                target_count = (percentile / 100.0) * total_samples
+                cumsum = np.cumsum(sorted_counts)
+                
+                bin_idx = np.searchsorted(cumsum, target_count)
+                bin_idx = min(bin_idx, len(sorted_centers) - 1)
+                
+                result = sorted_centers[bin_idx]
                 self._percentileCache[percentile] = result
                 return result
         return 0.0
     
-    def getHistogram(self, bins=256, range_min=None, range_max=None, log_scale=False):
+    def getHistogram(self, bins=256, log_scale=False):
         """プレーン別ヒストグラムを取得（キャッシュ付き）"""
-        cacheKey = (bins, range_min, range_max, log_scale)
+        cacheKey = (bins, log_scale)
         if cacheKey in self._histogramCache:
             return self._histogramCache[cacheKey]
         
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         
-        # プレーン別にヒストグラムを計算
+        # 高解像度ヒストグラムでプレーン別ヒストグラムを計算
+        planeHighResHists = self._getHighResHistograms(planeCount)
+        
         planeHistograms = []
-        for planeIdx in range(min(planeCount, 4)):
-            planeValues = []
-            for blockY in range(0, height, self._blockSize):
-                for blockX in range(0, width, self._blockSize):
-                    block = self.getBlock(planeIdx, blockX, blockY)
-                    if block and hasattr(block, 'data') and block.data is not None:
-                        planeValues.extend(block.data.flatten())
-            
-            if planeValues:
-                planeValues = np.array(planeValues)
-                # NaN値を除外して範囲計算
-                validValues = planeValues[~np.isnan(planeValues)]
-                if len(validValues) > 0:
-                    if range_min is None:
-                        range_min = np.min(validValues)
-                    if range_max is None:
-                        range_max = np.max(validValues)
-                    planeValues = validValues
-                else:
-                    planeValues = []
+        for planeIdx in range(planeCount):
+            if(   planeIdx < len(planeHighResHists)
+              and planeHighResHists[planeIdx] is not None
+              and planeHighResHists[planeIdx]['min'] < planeHighResHists[planeIdx]['max']
+              ):
+                hist_data = planeHighResHists[planeIdx]
                 
-                # 等比数列のビンを作成
+                range_min = hist_data['min']
+                range_max = hist_data['max']
+                
+                # 目標ビンエッジを作成
                 if log_scale:
                     bin_edges = np.logspace(np.log10(0.1), np.log10(1.0), bins + 1)
-                    # 正規化パラメータ
                     scale = 0.9 / (range_max - range_min)
                     offset = -range_min + 0.1 / scale
-                    # 正規化を戻す
                     bin_edges = bin_edges / scale - offset
                 else:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 
-                if len(planeValues) > 0:
-                    hist, _ = np.histogram(planeValues, bins=bin_edges)
-                else:
-                    hist = np.zeros(bins, dtype=int)
+                # 高解像度ヒストグラムを目標解像度にリサンプリング
+                source_centers = (hist_data['edges'][:-1] + hist_data['edges'][1:]) / 2
+                target_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                resampled_hist = np.interp(target_centers, source_centers, hist_data['hist'])
+                
                 planeHistograms.append({
-                    'counts': hist.tolist(),
+                    'counts': resampled_hist.astype(int).tolist(),
                     'bin_edges': bin_edges.tolist(),
-                    'total_samples': len(planeValues)
+                    'total_samples': hist_data['total_samples']
                 })
             else:
                 planeHistograms.append({

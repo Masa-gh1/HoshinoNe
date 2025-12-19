@@ -79,7 +79,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         if context:
             context['totalBlocks'] = totalBlocks
             context['processedBlocks'] = 0
-            context['_block_lock'] = threading.Lock()
+            context['processedBlocks_lock'] = threading.Lock()
         
         # 複数データの場合はファイル名に連番を付加
         fileInfos = []
@@ -132,7 +132,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
     def reportBlockProgress(self, context, message="処理中"):
         """ブロック進捗を報告（BaseReaderNodeと同様）"""
         if context and 'totalBlocks' in context:
-            with context['_block_lock']:
+            with context['processedBlocks_lock']:
                 context['processedBlocks'] += 1
                 current = context['processedBlocks']
                 total = context['totalBlocks']

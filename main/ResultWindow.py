@@ -8,12 +8,12 @@ All rights reserved.
 '''
 
 import sys
-import threading
 import traceback
 import io
 import tkinter as tk
 from tkinter import ttk
 from utils.interval_helper import createHalfOpenEnd
+from utils.ThreadPool import CoalescingExecutor
 
 from . import config 
 
@@ -119,9 +119,7 @@ class ResultWindow(tk.Toplevel):
         self._updateDataCombo()
         
         # 初回表示（別スレッドで実行）
-        thread = threading.Thread(target=self._updateResultWindowAsync)
-        thread.daemon = True
-        thread.start()
+        CoalescingExecutor.submit( self, self._updateResultWindowAsync)
         
         # コントロールフレームの表示状態を更新
         self._updateControlVisibility()
@@ -149,9 +147,7 @@ class ResultWindow(tk.Toplevel):
     
     def _updateResultWindow(self):
         """結果ウィンドウの内容を更新（別スレッドで実行）"""
-        thread = threading.Thread(target=self._updateResultWindowAsync)
-        thread.daemon = True
-        thread.start()
+        CoalescingExecutor.submit(self, self._updateResultWindowAsync)
     
     def _updateResultWindowAsync(self):
         """結果ウィンドウの内容を非同期で更新"""
@@ -357,75 +353,84 @@ class ResultWindow(tk.Toplevel):
         content.append(text)
         
         # ヒストグラムグラフを作成
-        if not PIL_AVAILABLE:
-            content.append("\nImage is not available.\n\n")
-        elif not PYPLOT_AVAILABLE:
-            content.append("\nmatplotlib is not available.\n\n")
-        elif not NUMPY_AVAILABLE:
-            content.append("\nNumpy is not available.\n\n")
+        histogramImageKey = (flowData, self._x_scale_var.get(), self._y_scale_var.get())
+        if not hasattr(self,'_histogramImagesCahace'):
+            self._histogramImagesCahace = {}
+        if histogramImageKey in self._histogramImagesCahace:
+            # キャッシュに在るのでそれを使う
+            histogram_image = self._histogramImagesCahace[histogramImageKey]
+            content.append(histogram_image)
         else:
-            try:
-                # FlowData.getHistogramを使用してプレーン別ヒストグラムを取得
-                fig, ax = plt.subplots(figsize=(6, 3))
-                colors = ['red', 'green', 'blue', 'cyan']
-                plane_names = planes[:min(planeCount, 4)]
-                
-                # 軸スケール設定を取得
-                ax_xScale = self._x_scale_var.get()
-                ax_yScale = self._y_scale_var.get()
-                
-                histogram_data = flowData.getHistogram(log_scale=("log"==ax_xScale))
-                total_samples = 0
-                
-                if "log" == ax_xScale and adpLevelEnd > adpLevelMin:
-                    # 正規化パラメータ
-                    xScale = 0.9 / (maxValue - minValue)
-                    xOffset = -minValue + 0.1 / xScale
-                else:
-                    # 無変換
-                    xScale = 1.0
-                    xOffset = 0.0
-                
-                for planeIdx, plane_hist in enumerate(histogram_data['planes'][:4]):
-                    bin_counts = plane_hist['counts']
-                    bin_edges = plane_hist['bin_edges']
-                    total_samples += plane_hist['total_samples']
+            if not PIL_AVAILABLE:
+                content.append("\nImage is not available.\n\n")
+            elif not PYPLOT_AVAILABLE:
+                content.append("\nmatplotlib is not available.\n\n")
+            elif not NUMPY_AVAILABLE:
+                content.append("\nNumpy is not available.\n\n")
+            else:
+                try:
+                    # FlowData.getHistogramを使用してプレーン別ヒストグラムを取得
+                    fig, ax = plt.subplots(figsize=(6, 3))
+                    colors = ['red', 'green', 'blue', 'cyan']
                     
-                    # オフセット適用
-                    bin_centers = [((bin_edges[i] + bin_edges[i+1]) / 2 + xOffset) * xScale for i in range(len(bin_counts))]
+                    # 軸スケール設定を取得
+                    ax_xScale = self._x_scale_var.get()
+                    ax_yScale = self._y_scale_var.get()
                     
-                    # ステップグラフで表示
-                    plane_name = plane_names[planeIdx] if planeIdx < len(plane_names) else f'Plane{planeIdx}'
-                    ax.step(bin_centers, np.array(bin_counts) + 1, where='mid', color=colors[planeIdx], label=plane_name, linewidth=1.5)
-                
-                content += f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
-                ax.set_xlabel(f'Value ({ax_xScale})' if "log" == ax_xScale else f'Value ({ax_xScale}, normalized adjusted)')
-                ax.set_ylabel(f'Count ({ax_yScale})')
-                ax.set_yscale(ax_yScale)
-                ax.set_xscale(ax_xScale)
-                ax.set_title('Histogram by Plane')
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                
-                if "log"==ax_xScale:
-                    # log用カスタム目盛り
-                    custom_ticks = [0.1, 0.2, 0.3, 0.6, 1.0]
-                    ax.set_xticks(custom_ticks)
-                    ax.set_xticklabels([f'{tick / xScale - xOffset:.0f}' for tick in custom_ticks])
-                
-                # グラフを画像に変換
-                buf = io.BytesIO()
-                plt.savefig(buf, format='png', dpi=80, bbox_inches='tight')
-                buf.seek(0)
-    
-                histogram_image = ImageTk.PhotoImage(Image.open(buf))
-                plt.close(fig)
-                
-                content.append(histogram_image)
-            except Exception as e:
-                tb = traceback.format_exc()
-                print(tb,file=sys.stderr)
-                content.append(f"Histogram error: {str(e)}\n")
+                    histogram_data = flowData.getHistogram(log_scale=("log"==ax_xScale))
+                    total_samples = 0
+                    
+                    if "log" == ax_xScale and adpLevelEnd > adpLevelMin:
+                        # 正規化パラメータ
+                        xScale = 0.9 / (maxValue - minValue)
+                        xOffset = -minValue + 0.1 / xScale
+                    else:
+                        # 無変換
+                        xScale = 1.0
+                        xOffset = 0.0
+                    
+                    for planeIdx, plane_hist in enumerate(histogram_data['planes'][:4]):
+                        bin_counts = plane_hist['counts']
+                        bin_edges = plane_hist['bin_edges']
+                        total_samples += plane_hist['total_samples']
+                        
+                        # オフセット適用
+                        bin_centers = [((bin_edges[i] + bin_edges[i+1]) / 2 + xOffset) * xScale for i in range(len(bin_counts))]
+                        
+                        # ステップグラフで表示
+                        plane_name = planes[planeIdx] if planeIdx < len(planes) else f'Plane{planeIdx}'
+                        ax.step(bin_centers, np.array(bin_counts) + 1, where='mid', color=colors[planeIdx], label=plane_name, linewidth=1.5)
+                    
+                    content += f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
+                    ax.set_xlabel(f'Value ({ax_xScale})' if "log" == ax_xScale else f'Value ({ax_xScale}, normalized adjusted)')
+                    ax.set_ylabel(f'Count ({ax_yScale})')
+                    ax.set_yscale(ax_yScale)
+                    ax.set_xscale(ax_xScale)
+                    ax.set_title('Histogram by Plane')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    
+                    if "log"==ax_xScale:
+                        # log用カスタム目盛り
+                        custom_ticks = [0.1, 0.2, 0.3, 0.6, 1.0]
+                        ax.set_xticks(custom_ticks)
+                        ax.set_xticklabels([f'{tick / xScale - xOffset:.0f}' for tick in custom_ticks])
+                    
+                    # グラフを画像に変換
+                    buf = io.BytesIO()
+                    plt.savefig(buf, format='png', dpi=60)
+
+                    # 画像を2倍に拡大
+                    img = Image.open(buf)
+                    enlarged_img = img.resize((int(img.width * 1.5), int(img.height * 1.5)), Image.Resampling.LANCZOS)
+                    histogram_image = ImageTk.PhotoImage(enlarged_img)
+
+                    self._histogramImagesCahace[histogramImageKey] = histogram_image
+                    content.append(histogram_image)
+                except Exception as e:
+                    tb = traceback.format_exc()
+                    print(tb,file=sys.stderr)
+                    content.append(f"Histogram error: {str(e)}\n")
         
         if not PIL_AVAILABLE:
             content.append("\nImage is not available.\n\n")
@@ -456,14 +461,14 @@ class ResultWindow(tk.Toplevel):
                         for blockY in range(0, height, 256):
                             for blockX in range(0, width, 256):
                                 block = flowData.getBlock(planeIdx, blockX, blockY)
-                                if block and hasattr(block, 'data') and block.data is not None:
+                                if block and block.data is not None:
                                     try:
                                         blockHeight = min(256, height - blockY)
                                         blockWidth = min(256, width - blockX)
                                         endY = blockY + blockHeight
                                         endX = blockX + blockWidth
                                         
-                                        # 適応的スケーリングで補正（NaNは0に変換）
+                                        # レベル調整を適用（NaNは0に変換）
                                         data = block.data[:blockHeight, :blockWidth]
                                         normalized = np.nan_to_num((data - offset) * scale, nan=0.0)
                                         imgArray[blockY:endY, blockX:endX, planeIdx] = np.clip(normalized, 0, 255).astype(np.uint8)
@@ -482,10 +487,11 @@ class ResultWindow(tk.Toplevel):
                             g2_block = flowData.getBlock(3, blockX, blockY)
                             
                             if r_block and g1_block and b_block and g2_block:
-                                if (hasattr(r_block, 'data') and r_block.data is not None and
-                                    hasattr(g1_block, 'data') and g1_block.data is not None and
-                                    hasattr(b_block, 'data') and b_block.data is not None and
-                                    hasattr(g2_block, 'data') and g2_block.data is not None):
+                                if (   r_block.data is not None
+                                   and g1_block.data is not None
+                                   and b_block.data is not None
+                                   and g2_block.data is not None
+                                   ):
                                     try:
                                         blockHeight = min(256, height - blockY)
                                         blockWidth = min(256, width - blockX)
@@ -494,7 +500,7 @@ class ResultWindow(tk.Toplevel):
                                         
                                         g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
                                         
-                                        # 適応的スケーリングで補正（NaNは0に変換）
+                                        # レベル調整を適用（NaNは0に変換）
                                         r_norm = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                                         g_norm = np.nan_to_num((g_avg - offset) * scale, nan=0.0)
                                         b_norm = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
@@ -512,14 +518,14 @@ class ResultWindow(tk.Toplevel):
                     for blockY in range(0, height, 256):
                         for blockX in range(0, width, 256):
                             block = flowData.getBlock(0, blockX, blockY)
-                            if block and hasattr(block, 'data') and block.data is not None:
+                            if block and block.data is not None:
                                 try:
                                     blockHeight = min(256, height - blockY)
                                     blockWidth = min(256, width - blockX)
                                     endY = blockY + blockHeight
                                     endX = blockX + blockWidth
                                     
-                                    # 適応的スケーリングで補正（NaNは0に変換）
+                                        # レベル調整を適用（NaNは0に変換）
                                     normalized = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                                     imgArray[blockY:endY, blockX:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
                                 except (IndexError, TypeError, ValueError):
@@ -529,7 +535,6 @@ class ResultWindow(tk.Toplevel):
                 else:
                     return content.append(f"サポートされていないモード: {mode}\n")
                 
-                # ウィンドウ横幅に合わせて表示サイズを調整
                 window_width = self.winfo_width()
                 max_width = window_width - 40  # 最小余白
                 
@@ -560,25 +565,21 @@ class ResultWindow(tk.Toplevel):
     
     def _updateControlVisibility(self):
         """コントロールフレームの表示/非表示を制御"""
-        if hasattr(self, '_control_frame'):
-            # 画像制御部分のみ画像データがある場合に表示
-            has_image_data = any(data.headers and data.headers.get('type') == 'image' for data in self.node.flowDatas)
-            
-            # ヒストグラム軸制御と表示レベル制御の表示/非表示
-            for child in self._control_frame.winfo_children():
-                if hasattr(child, '_is_image_control'):
-                    if has_image_data:
-                        child.pack(fill=tk.X, pady=(5,0))
-                    else:
-                        child.pack_forget()
+        # 画像制御部分のみ画像データがある場合に表示
+        has_image_data = any(data.headers and data.headers.get('type') == 'image' for data in self.node.flowDatas)
+        
+        # ヒストグラム軸制御と表示レベル制御の表示/非表示
+        for child in self._control_frame.winfo_children():
+            if hasattr(child, '_is_image_control'):
+                if has_image_data:
+                    child.pack(fill=tk.X, pady=(5,0))
+                else:
+                    child.pack_forget()
         
 
     
     def _updateDataCombo(self):
         """データ選択コンボボックスを更新"""
-        if not hasattr(self, '_data_combo'):
-            return
-        
         # コンボボックスの選択肢を更新
         options = []
         for i, flowData in enumerate(self.node.flowDatas):
@@ -602,9 +603,6 @@ class ResultWindow(tk.Toplevel):
     
     def _getSelectedFlowData(self):
         """選択されたフローデータを取得"""
-        if not hasattr(self, '_selected_data_var') or not self.node.flowDatas:
-            return self.node.flowDatas[0] if self.node.flowDatas else None
-        
         selected = self._selected_data_var.get()
         if not selected:
             return self.node.flowDatas[0] if self.node.flowDatas else None

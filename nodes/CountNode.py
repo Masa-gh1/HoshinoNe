@@ -7,9 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import numpy as np
 from base import N1BlockOperationNode, DataBlock
 from config import BLOCK_SIZE
-import numpy as np
+from utils import numpy_helpers as nh
 
 class CountNode(N1BlockOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -63,7 +64,7 @@ class CountNode(N1BlockOperationNode):
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
             blockWidth = min(BLOCK_SIZE, resultWidth - x)
-            result = np.zeros((blockHeight, blockWidth), dtype=np.float64)
+            result = nh.zeros((blockHeight, blockWidth))
             
             # matrixデータのカウント（NaN対応）
             for inputData in matrixDatas:
@@ -73,7 +74,7 @@ class CountNode(N1BlockOperationNode):
                     minW = min(blockWidth, inputBlock.data.shape[1])
                     # NaNでない有効なピクセルのみカウント
                     valid_mask = ~np.isnan(inputBlock.data[:minH, :minW])
-                    result[:minH, :minW] += valid_mask.astype(np.float64)
+                    result[:minH, :minW] += valid_mask
             
             # tensorは全領域に影響するので全体にtensor数を加算
             if tensorDatas:
@@ -92,6 +93,6 @@ class CountNode(N1BlockOperationNode):
             return None
         
         # tensor数で埋めた行列を作成
-        result = np.full_like(coeffBlock.data, len(tensorDatas), dtype=np.float64)
+        result = np.full_like(coeffBlock.data, len(tensorDatas))
         
         return DataBlock(planeIdx, block.x, block.y, result)

@@ -15,7 +15,7 @@ import tempfile
 import shutil
 import time
 import atexit
-from config import MAX_BLOCK_CACHE_SIZE
+from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK
 
 class CacheManager:
     """キャッシュポリシーベースの統一キャッシュ管理"""
@@ -41,7 +41,7 @@ class CacheManager:
     def _getGlobelTempDir(cls):
         """テンポラリディレクトリを取得"""
         if not cls._cleanup_registered:
-            # 初回だけクリーンアップの実施を登録を行う
+            # 初回だけクリーンアップの実施と終了時の登録を行う
             atexit.register(cls._cleanupOldTempDirs)
             cls._cleanupOldTempDirs()
             cls._cleanup_registered = True
@@ -58,17 +58,20 @@ class CacheManager:
             tempRoot = tempfile.gettempdir()
             currentTime = time.time()
             
+            if cls._globalTempDir:
+                shutil.rmtree(cls._globalTempDir, ignore_errors=True) # 現在のテンポラリディレクトリを削除
+
             for item in os.listdir(tempRoot):
-                if item.startswith("FlowData_"):
-                    itemPath = os.path.join(tempRoot, item)
-                    if os.path.isdir(itemPath):
-                        isOld = currentTime - os.path.getmtime(itemPath) > 24*60*60
-                        isEmpty = len(os.listdir(itemPath)) == 0
-                        
-                        if isOld or isEmpty:
-                            shutil.rmtree(itemPath, ignore_errors=True)
-                            if cls._globalTempDir == itemPath:
-                                cls._globalTempDir = None
+                itemPath = os.path.join(tempRoot, item)
+                if not item.startswith("FlowData_"):
+                    pass
+                elif not os.path.isdir(itemPath):
+                    pass
+                elif( (24*60*60 < currentTime - os.path.getmtime(itemPath)) # 24時間以上前
+                    or(0 == len(os.listdir(itemPath))) # ディレクトリが空
+                    ):
+                    shutil.rmtree(itemPath, ignore_errors=True)
+                            
         except (OSError, IOError):
             pass
     
@@ -174,47 +177,39 @@ class CacheManager:
     @classmethod
     def clearByInstanceId(cls, instanceId):
         """指定instanceIdの全データを削除"""
-        with cls._tempLock:
-            for key in list(cls._globalBlockTemp.keys()):
-                if len(key) > 0 and key[0] == instanceId:
-                    del cls._globalBlockTemp[key]
+        # ディスクファイルも削除対象に含める
+        if cls._globalTempDir and os.path.exists(cls._globalTempDir):
+            for fileName in os.listdir(cls._globalTempDir):
+                if instanceId in fileName and fileName.endswith(".pkl"):
+                    try:
+                        # ディスクファイルを削除
+                        os.remove(os.path.join(cls._globalTempDir, fileName))
+                    except (OSError, IOError):
+                        pass
         
         with cls._cacheLock:
             keysToRemove = []
-            diskFilesToRemove = []
-            
             # メモリキャッシュから対象キーを収集
             for key in cls._globalBlockCache.keys():
                 if len(key) > 0 and key[0] == instanceId:
                     keysToRemove.append(key)
             
-            # ディスクファイルも削除対象に含める
-            if cls._globalTempDir and os.path.exists(cls._globalTempDir):
-                try:
-                    for fileName in os.listdir(cls._globalTempDir):
-                        if fileName.startswith(f"{instanceId}_") and fileName.endswith(".pkl"):
-                            diskFilesToRemove.append(os.path.join(cls._globalTempDir, fileName))
-                except (OSError, IOError):
-                    pass
-            
             # メモリキャッシュから削除
             for key in keysToRemove:
                 del cls._globalBlockCache[key]
             
-            # ディスクファイルを削除
-            for filePath in diskFilesToRemove:
-                try:
-                    os.remove(filePath)
-                except (OSError, IOError):
-                    pass
-    
+        with cls._tempLock:
+            for key in list(cls._globalBlockTemp.keys()):
+                if len(key) > 0 and key[0] == instanceId:
+                    del cls._globalBlockTemp[key]
+        
     @classmethod
     def getCacheStats(cls):
         """キャッシュ量とディスク使用量を取得"""
         from config import BLOCK_SIZE
         
         cacheCount = len(cls._globalBlockCache)
-        cacheSize = cacheCount * BLOCK_SIZE * BLOCK_SIZE * 8  # 1ブロック = BLOCK_SIZE x BLOCK_SIZE x 8バイト(float64)
+        cacheSize = cacheCount * ESTIMATE_SIZE_PER_BLOCK
         
         diskSize = 0
         diskFileCount = 0

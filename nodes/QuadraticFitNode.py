@@ -7,10 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import hashlib
 import numpy as np
 from base import FlowNode, FlowData, DataBlock
 from config import BLOCK_SIZE
+from utils import numpy_helpers as nh
 
 class QuadraticFitNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -41,7 +41,7 @@ class QuadraticFitNode(FlowNode):
         actualPlaneCount = len(planeNames)
         
         # データを読み込み
-        planeData = [np.zeros((height, width), dtype=np.float64) for _ in range(actualPlaneCount)]
+        planeData = [nh.zeros((height, width)) for _ in range(actualPlaneCount)]
                 
         self.reportProgress(context, "データ読み込み中")
         
@@ -62,8 +62,8 @@ class QuadraticFitNode(FlowNode):
             self.reportProgress(context, f"{planeName}プレーン計算中", planeIdx + 1, actualPlaneCount)
             
             # 座標データを準備（スレッドセーフ: np.meshgrid を置き換え）
-            y_indices = np.arange(height, dtype=np.float64).reshape(-1, 1)
-            x_indices = np.arange(width, dtype=np.float64)
+            y_indices = nh.arange(height).reshape(-1, 1)
+            x_indices = nh.arange(width)
             y_coords = np.broadcast_to(y_indices, (height, width))
             x_coords = np.broadcast_to(x_indices, (height, width))
             x_flat = x_coords.flatten()

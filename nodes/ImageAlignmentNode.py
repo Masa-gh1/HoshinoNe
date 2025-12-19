@@ -9,16 +9,18 @@ All rights reserved.
 import hashlib
 import datetime
 import numpy as np
+import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 from types import SimpleNamespace
 from base.NNBlockOperationNode import NNBlockOperationNode
 from base.FlowData import FlowData
+from base.LazyFlowData import LazyFlowData, LazyOperations
 from base.DataBlock import DataBlock
 from config import BLOCK_SIZE
 from base.ConfigurableNode import ConfigurableNode
-
 from main import config
+from utils import numpy_helpers as nh
 
 try:
     import cv2
@@ -70,8 +72,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
         # 拡張領域計算
         # 位置合わせ実行
-        # 余白処理
-        self.cropMode = "none"  # 余白処理: "none", "common", "fill"
         
         self.lastConfigHash = None
         
@@ -111,7 +111,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         nodeData["ransacSeed"] = self.star.ransac.seed
         nodeData["phaseMaxOffset"] = self.phase.maxOffset
         nodeData["templateSearchRange"] = self.template.searchRange
-        nodeData["cropMode"] = self.cropMode
     
     def restore(self, nodeData):
         if "referenceIndex" in nodeData:
@@ -148,8 +147,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             self.phase.maxOffset = nodeData["phaseMaxOffset"]
         if "templateSearchRange" in nodeData:
             self.template.searchRange = nodeData["templateSearchRange"]
-        if "cropMode" in nodeData:
-            self.cropMode = nodeData["cropMode"]
         self.updateNodeText()
     
     def preprocessInputs(self, inputDatas):
@@ -173,7 +170,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         return block
     
     def process(self, context=None):
-        """画像位置合わせのメイン処理"""
+        """画像位置合わせのメイン処理（LazyFlowData対応）"""
         self.reportProgress(context, "開始")
         
         # 入力データを収集
@@ -186,25 +183,27 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             self.flowDatas = inputDatas
             return
         
-        # 基準画像を決定
+        # 移動/回転計算のみを実行
+        alignment_metadata = self._calculateAlignmentMetadata(inputDatas, context)
+        
+        # LazyFlowDataを生成
+        self.flowDatas = self._createLazyOutputs(inputDatas, alignment_metadata)
+        
+        self.reportProgress(context, "完了")
+    
+    def _calculateAlignmentMetadata(self, inputDatas, context):
+        """移動/回転計算のみを実行"""
+        # 基準画像決定
         if self.referenceIndex >= len(inputDatas):
             self.referenceIndex = 0
         
         referenceData = inputDatas[self.referenceIndex]
-        
-        # 結果データを初期化
-        resultFlowDatas = []
-        
-        # 全画像の総ブロック数を仮計算（ズレ計算も含む）
-        width, height = referenceData.getDimensions()
-        planeCount = inputDatas[0].getPlaneCount() if hasattr(inputDatas[0], 'getPlaneCount') else 1
-        # 拡張サイズは仮で計算（後で更新）
-        blocksPerImage = planeCount * ((width + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((height + BLOCK_SIZE - 1) // BLOCK_SIZE)
-        offsetCalculationBlocks = blocksPerImage*(1 + 2*(len(inputDatas) - 1))  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
-        totalGlobalBlocks = len(inputDatas) * blocksPerImage + offsetCalculationBlocks
+
+        # 経過報告用全画像のズレ計算ステップ数
+        totalGlobalBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
         globalProcessedBlocks = 0
         
-        # 基準画像を一度だけ処理
+        # 基準画像を検出用に処理
         if context:
             self.reportProgress(context, "基準画像処理中", globalProcessedBlocks, totalGlobalBlocks)
         refGray = self._flowDataToImage(referenceData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
@@ -212,24 +211,24 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # 基準画像の星を一度だけ検出して保存
         self._cached_ref_stars = self._detectStars(refGray)
         
-        globalProcessedBlocks += blocksPerImage
+        globalProcessedBlocks += 1
         if context:
             self.reportProgress(context, f"画像1のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
         
-        # 全オフセットと位置合わせ情報を収集
+        # 各画像の移動/回転を計算
         all_results = []
-        all_method_results_list = []  # 各画像の処理法結果を保存
+        all_method_results_list = []  # 各画像の計算法毎の結果を保存
         previous_result = AlignmentResult()  # 前画像の結果
         
         for i, inputData in enumerate(inputDatas):
             if i != self.referenceIndex:
-                # 対象画像を処理
+                # 対象画像を検出用に処理
                 targetGray = self._flowDataToImage(inputData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
-                globalProcessedBlocks += blocksPerImage
+                globalProcessedBlocks += 1
                 if context:
                     self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
-
-                # 位置合わせ
+                
+                # 位置合わせ計算
                 star_result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
                 phase_result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result) if not star_result.success else None
                 template_result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result) if not star_result.success and (phase_result is None or not phase_result.success) else None
@@ -239,90 +238,98 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
                 if result is None:
                     result = AlignmentResult()
                 
-                # この画像の全ての結果を保存
+                # この画像の計算法毎の結果を保存
                 method_results = {'star': star_result, 'phase': phase_result, 'template': template_result}
                 
                 all_results.append(result)
                 all_method_results_list.append(method_results)
                 previous_result = result
                 
-                globalProcessedBlocks += blocksPerImage
+                globalProcessedBlocks += 1
                 if context:
                     self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
             else:
-                all_results.append(AlignmentResult())
+                all_results.append(AlignmentResult( success=True, method="reference"))  # 基準画像
                 all_method_results_list.append({})
         
-        # 拡張領域を計算
-        min_dx = min(result.dx for result in all_results)
-        min_dy = min(result.dy for result in all_results)
-        max_dx = max(result.dx for result in all_results)
-        max_dy = max(result.dy for result in all_results)
-        
-        # 元画像サイズ
+        # 回転を考慮した拡張領域計算
         width, height = referenceData.getDimensions()
+        all_corners = []
         
-        # 拡張サイズを計算
-        expand_left = int(max(0, -min_dx))
-        expand_top = int(max(0, -min_dy))
-        expand_right = int(max(0, max_dx))
-        expand_bottom = int(max(0, max_dy))
+        for result in all_results:
+            corners = self._calculateTransformedCorners(width, height, result.dx, result.dy, result.rotation)
+            all_corners.extend(corners)
         
-        new_width = int(width + expand_left + expand_right)
-        new_height = int(height + expand_top + expand_bottom)
+        min_x = min(corner[0] for corner in all_corners)
+        min_y = min(corner[1] for corner in all_corners)
+        max_x = max(corner[0] for corner in all_corners)
+        max_y = max(corner[1] for corner in all_corners)
         
-        # 総ブロック数を正確なサイズで再計算
-        blocksPerImage = planeCount * ((new_width + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((new_height + BLOCK_SIZE - 1) // BLOCK_SIZE)
-        totalGlobalBlocks = len(inputDatas) * blocksPerImage + offsetCalculationBlocks
+        expand_left = int(max(0, -min_x))
+        expand_top = int(max(0, -min_y))
+        new_width = int(max_x - min_x)
+        new_height = int(max_y - min_y)
         
-        # 各画像を処理
-        for i, inputData in enumerate(inputDatas):
-            if i == self.referenceIndex:
-                # 基準画像を拡張領域に配置
-                expandedData = self._expandFlowData(inputData, expand_left, expand_top, new_width, new_height, context, [globalProcessedBlocks, totalGlobalBlocks])
-                globalProcessedBlocks += blocksPerImage
-                # 基準画像の情報を追加
-                expandedData.headers['grid'] = {'columns': self.star.grid.cols, 'rows': self.star.grid.rows}
-                expandedData.headers['grid_selection_counts'] = [0] * (self.star.grid.cols * self.star.grid.rows)
-                expandedData.headers['grid_match_counts'] = [0] * (self.star.grid.cols * self.star.grid.rows)
-                expandedData.headers['reference_image_movement'] = {'dx': 0, 'dy': 0, 'rotation': 0}
-                expandedData.headers['method'] = 'reference'
-                expandedData.headers['success'] = True
-                expandedData.headers['confidence'] = 1.0
-                resultFlowDatas.append(expandedData)
-            else:
-                # 位置合わせを実行
-                result = all_results[i]
-                method_results = all_method_results_list[i]
-                alignedData = self._alignImageWithExpansion(inputData, int(result.dx + expand_left), int(result.dy + expand_top), new_width, new_height, context, [globalProcessedBlocks, totalGlobalBlocks])
-                globalProcessedBlocks += blocksPerImage
-                
-                # 位置合わせ情報をheadersに追加
-                alignedData.headers['grid'] = {'columns': self.star.grid.cols, 'rows': self.star.grid.rows}
-                alignedData.headers['method'] = result.method
-                alignedData.headers['success'] = result.success
-                alignedData.headers['confidence'] = result.confidence
-                alignedData.headers['reference_image_movement'] = {'dx': result.dx, 'dy': result.dy, 'rotation': result.rotation}
-                
-                # 各処理法の結果を個別に記録
-                for method_name, method_result in method_results.items():
-                    if method_result:
-                        alignedData.headers[f'{method_name}_success'] = method_result.success
-                        alignedData.headers[f'{method_name}_confidence'] = method_result.confidence
-                        alignedData.headers[f'{method_name}_dx'] = method_result.dx
-                        alignedData.headers[f'{method_name}_dy'] = method_result.dy
-                        alignedData.headers[f'{method_name}_rotation'] = method_result.rotation
-                        if method_result.extra_info:
-                            alignedData.headers[f'{method_name}_extra_info'] = method_result.extra_info
-                
-                resultFlowDatas.append(alignedData)
+        return {
+            'results': all_results,
+            'method_results': all_method_results_list,
+            'expand_params': (expand_left, expand_top, new_width, new_height)
+        }
+    
+    def _calculateTransformedCorners(self, width, height, dx, dy, rotation):
+        """画像の4隅の変換後座標を計算（画像中心回転）"""
+        corners = nh.array([[0, 0], [width, 0], [width, height], [0, height]])
         
-        # 余白処理を適用
-        if self.cropMode == "common":
-            resultFlowDatas = self._cropToCommonArea(resultFlowDatas)
+        if rotation != 0:
+            center = (width / 2, height / 2)
+            M = cv2.getRotationMatrix2D(center, rotation, 1.0)
+            M[0, 2] += dx
+            M[1, 2] += dy
+            transformed = cv2.transform(corners.reshape(-1, 1, 2), M).reshape(-1, 2)
+        else:
+            transformed = corners + np.array([dx, dy])
         
-        self.flowDatas = resultFlowDatas
-        self.reportProgress(context, "完了")
+        return transformed.tolist()
+    
+    def _createLazyOutputs(self, inputDatas, metadata):
+        """LazyFlowDataを生成"""
+        results = metadata['results']
+        method_results = metadata['method_results']
+        expand_left, expand_top, new_width, new_height = metadata['expand_params']
+        
+        lazy_outputs = []
+        
+        for i, (inputData, result, method_result) in enumerate(zip(inputDatas, results, method_results)):
+            lazy_data = LazyFlowData(inputData)
+            
+            # 画像移動量 = 検出移動量 + 拡張領域
+            actual_dx = result.dx + expand_left
+            actual_dy = result.dy + expand_top
+            
+            lazy_data.addOperation(LazyAlignmentOperations.alignAndExpand,
+                                    actual_dx, actual_dy, result.rotation, new_width, new_height)
+            
+            # 位置合わせ情報をheadersに追加
+            alignment_info = {}
+            alignment_info['method'] = result.method
+            alignment_info['success'] = result.success
+            alignment_info['confidence'] = result.confidence
+            alignment_info['movement_from_reference'] = {'dx': result.dx, 'dy': result.dy, 'rotation': result.rotation}
+            
+            # 各処理法の結果を個別に記録
+            for method, value in method_result.items():
+                if value:
+                    alignment_info[f'{method}_success'] = value.success
+                    alignment_info[f'{method}_confidence'] = value.confidence
+                    alignment_info[f'{method}_movement'] = {'dx': value.dx, 'dy': value.dy, 'rotation': value.rotation}
+                    if value.extra_info:
+                        alignment_info[f'{method}_extra_info'] = value.extra_info
+
+            lazy_data.headers.update(alignment_info)
+            lazy_data.setDimensions(new_width, new_height)
+            lazy_outputs.append(lazy_data)
+            
+        return lazy_outputs
     
     def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
         """FlowDataから画像配列を構築"""
@@ -330,15 +337,15 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         if planeIndex is not None:
             # 特定プレーンのみを使用
-            image = np.zeros((height, width), dtype=np.float32)
+            image = nh.zeros((height, width))
             for block in flowData.iterateBlocks():
                 if block and block.planeIndex == planeIndex:
                     y1, y2 = block.y, block.y + block.getHeight()
                     x1, x2 = block.x, block.x + block.getWidth()
                     if len(block.data.shape) == 3:
-                        image[y1:y2, x1:x2] = block.data[:, :, 0].astype(np.float32)
+                        image[y1:y2, x1:x2] = block.data[:, :, 0]
                     else:
-                        image[y1:y2, x1:x2] = block.data.astype(np.float32)
+                        image[y1:y2, x1:x2] = block.data
             
             # 星検出用の正規化処理（統計的手法）
             if normalize_for_detection:
@@ -439,15 +446,15 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         max_offset = self.phase.maxOffset
         # エッジ強化で特徴を明確化
-        ref_edges = cv2.Laplacian(refImage, cv2.CV_64F)
+        ref_edges    = cv2.Laplacian(refImage   , cv2.CV_64F)
         target_edges = cv2.Laplacian(targetImage, cv2.CV_64F)
         
         # エッジと元画像を組み合わせ
-        ref_combined = 0.7 * refImage.astype(np.float64) + 0.3 * np.abs(ref_edges)
-        target_combined = 0.7 * targetImage.astype(np.float64) + 0.3 * np.abs(target_edges)
+        ref_combined    = 0.7 * refImage.astype(nh.BDTYPE)    + 0.3 * np.abs(ref_edges)
+        target_combined = 0.7 * targetImage.astype(nh.BDTYPE) + 0.3 * np.abs(target_edges)
         
         # コントラスト正規化
-        ref_combined = (ref_combined - ref_combined.mean()) / (ref_combined.std() + 1e-10)
+        ref_combined    = (ref_combined    - ref_combined.mean()   ) / (ref_combined.std()    + 1e-10)
         target_combined = (target_combined - target_combined.mean()) / (target_combined.std() + 1e-10)
         
         # ウィンドウ関数を適用
@@ -530,6 +537,9 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             previous_result = AlignmentResult()
         
         extra_info = {}
+        
+        # 現在の画像サイズを保存（_calculateAffineTransformで使用）
+        self._current_image_shape = refImage.shape
         
         # RANSAC用固定シードを設定
         rng = np.random.default_rng(self.star.ransac.seed)
@@ -658,7 +668,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
                     rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
             
             if config.DEBUG:
-                degug = f"dx,dy:{dx:.1f},{dy:.1f} rotation:{rotation:.2f}"
+                degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
                 degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
                 degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
                 degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
@@ -670,28 +680,43 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         return AlignmentResult(success=False, method="star", extra_info=extra_info)
     
     def _calculateAffineTransform(self, matches):
-        """対応点からアフィン変換を計算"""
-        ref_pts = np.array([match[0] for match in matches], dtype=np.float32)
-        target_pts = np.array([match[1] for match in matches], dtype=np.float32)
+        """対応点からアフィン変換を計算（画像中心回転）"""
+        ref_pts = np.array([match[0] for match in matches])
+        target_pts = np.array([match[1] for match in matches])
         
-        # アフィン変換行列を計算
-        M = cv2.estimateAffinePartial2D(target_pts, ref_pts, method=cv2.RANSAC, 
+        # 画像中心を回転中心として使用
+        h, w = self._current_image_shape  # 現在処理中の画像サイズ
+        image_center = np.array([w/2, h/2])
+        
+        # 画像中心を原点とした座標系に変換
+        ref_centered = ref_pts - image_center
+        target_centered = target_pts - image_center
+        
+        # 中心座標系でアフィン変換を計算
+        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC, 
                                         ransacReprojThreshold=2.0)[0]
         
         if M is not None:
-            # 平行移動成分を抽出
-            dx, dy = M[0, 2], M[1, 2]
-            
             # 回転角を計算
             rotation_angle = np.arctan2(M[1, 0], M[0, 0]) * 180 / np.pi
             
-
-            
             # 小さな回転のみ適用（天体写真では通常数度以内）
             if abs(rotation_angle) < 10.0:
-                return M
+                # 画像中心回転用の変換行列を作成
+                cos_r = M[0, 0]
+                sin_r = M[1, 0]
+                
+                # 平行移動成分を画像中心回転に合わせて調整
+                dx = M[0, 2] + image_center[0] * (1 - cos_r) + image_center[1] * sin_r
+                dy = M[1, 2] + image_center[1] * (1 - cos_r) - image_center[0] * sin_r
+                
+                # 画像中心回転の変換行列を返す
+                M_centered = nh.array([[cos_r, -sin_r, dx], [sin_r, cos_r, dy]])
+                return M_centered
             else:
                 # 大きな回転は平行移動のみ適用
+                dx = M[0, 2]
+                dy = M[1, 2]
                 return (dx, dy)
         
         # アフィン変換が失敗した場合は平行移動のみ
@@ -748,7 +773,13 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             _, binary = cv2.threshold(subtracted, threshold, 255, cv2.THRESH_BINARY)
         
         # 連結成分で星点を検出
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        try:
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        except (cv2.error, SystemError):
+            # OpenCV 4.5.5以降のバグ対応
+            if config.DEBUG:
+                print("Retry cv2.findContours", file=sys.stderr)
+            contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         min_area = np.pi * (self.star.minDiameter / 2) ** 2
         max_area = np.pi * (self.star.maxDiameter / 2) ** 2
@@ -849,145 +880,110 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         return distributed_stars[:max_total_stars], grid_selected_counts
     
-    def _expandFlowData(self, flowData, offset_x, offset_y, new_width, new_height, context=None, globalProgress=None):
-        """拡張領域にFlowDataを配置"""
-        
-        headers = flowData.headers.copy() if flowData.headers else {}
-        expanded_data = FlowData(headers)
-        expanded_data.setDimensions(new_width, new_height)
-        
-        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
-        
-        for planeIndex in range(planeCount):
-            # 元画像を取得
-            original_image = self._flowDataToImage(flowData, planeIndex)
-            
-            # 拡張領域に配置（余白はNaN）
-            expanded_image = np.full((new_height, new_width), np.nan, dtype=np.float64)
-            h, w = original_image.shape
-            expanded_image[offset_y:offset_y+h, offset_x:offset_x+w] = original_image.astype(np.float64)
-            
-            # ブロック化
-            for y in range(0, new_height, BLOCK_SIZE):
-                for x in range(0, new_width, BLOCK_SIZE):
-                    blockHeight = min(BLOCK_SIZE, new_height - y)
-                    blockWidth = min(BLOCK_SIZE, new_width - x)
-                    
-                    blockData = expanded_image[y:y+blockHeight, x:x+blockWidth]
-                    block = DataBlock(planeIndex, x, y, blockData)
-                    expanded_data.setBlock(block)
-                    
-                    if context and globalProgress:
-                        globalProgress[0] += 1
-                        if globalProgress[0] % 10 == 0:
-                            self.reportProgress(context, "拡張処理中", globalProgress[0], globalProgress[1])
-        
-        return expanded_data
-    
-    def _alignImageWithExpansion(self, flowData, dx, dy, new_width, new_height, context=None, globalProgress=None):
-        """拡張領域で位置合わせを実行"""
-        
-        headers = flowData.headers.copy() if flowData.headers else {}
-        aligned_data = FlowData(headers)
-        aligned_data.setDimensions(new_width, new_height)
-        
-        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
-        
-        for planeIndex in range(planeCount):
-            # 元画像を取得
-            original_image = self._flowDataToImage(flowData, planeIndex)
-            
-            # 平行移動行列を作成
-            M = np.float32([[1, 0, dx], [0, 1, dy]])
-            
-            # 拡張領域で変換（余白はNaN）
-            temp_image = cv2.warpAffine(original_image.astype(np.float64), M, (new_width, new_height))
-            aligned_image = np.where(temp_image == 0, np.nan, temp_image)
-            
-            # ブロック化
-            for y in range(0, new_height, BLOCK_SIZE):
-                for x in range(0, new_width, BLOCK_SIZE):
-                    blockHeight = min(BLOCK_SIZE, new_height - y)
-                    blockWidth = min(BLOCK_SIZE, new_width - x)
-                    
-                    blockData = aligned_image[y:y+blockHeight, x:x+blockWidth]
-                    block = DataBlock(planeIndex, x, y, blockData)
-                    aligned_data.setBlock(block)
-                    
-                    if context and globalProgress:
-                        globalProgress[0] += 1
-                        if globalProgress[0] % 10 == 0:
-                            self.reportProgress(context, "位置合わせ中", globalProgress[0], globalProgress[1])
-        
-        return aligned_data
-    
-    def _cropToCommonArea(self, flowDatas):
-        """全画像の共通領域を計算してクロップ"""
-        if not flowDatas:
-            return flowDatas
-        
-        # 各画像の有効領域を計算
-        valid_regions = []
-        for flowData in flowDatas:
-            width, height = flowData.getDimensions()
-            # 黒い部分とNaN値（余白）を除いた有効領域を検出
-            image = self._flowDataToImage(flowData, planeIndex=0)
-            mask = (image > 0) & ~np.isnan(image)
-            
-            if np.any(mask):
-                coords = np.where(mask)
-                y_min, y_max = coords[0].min(), coords[0].max()
-                x_min, x_max = coords[1].min(), coords[1].max()
-                valid_regions.append((x_min, y_min, x_max, y_max))
-            else:
-                valid_regions.append((0, 0, width-1, height-1))
-        
-        # 共通領域を計算
-        x_min = max(region[0] for region in valid_regions)
-        y_min = max(region[1] for region in valid_regions)
-        x_max = min(region[2] for region in valid_regions)
-        y_max = min(region[3] for region in valid_regions)
-        
-        if x_min >= x_max or y_min >= y_max:
-            return flowDatas  # 共通領域がない場合はそのまま
-        
-        # 各画像をクロップ
-        cropped_datas = []
-        for flowData in flowDatas:
-            # 指定範囲でFlowDataをクロップ
-            crop_width = x_max - x_min + 1
-            crop_height = y_max - y_min + 1
-            
-            headers = flowData.headers.copy() if flowData.headers else {}
-            cropped_data = FlowData(headers)
-            cropped_data.setDimensions(crop_width, crop_height)
-            
-            planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
-            
-            for planeIndex in range(planeCount):
-                plane_image = self._flowDataToImage(flowData, planeIndex)
-                cropped_plane = plane_image[y_min:y_max+1, x_min:x_max+1]
-                
-                for y in range(0, crop_height, BLOCK_SIZE):
-                    for x in range(0, crop_width, BLOCK_SIZE):
-                        blockHeight = min(BLOCK_SIZE, crop_height - y)
-                        blockWidth = min(BLOCK_SIZE, crop_width - x)
-                        
-                        blockData = cropped_plane[y:y+blockHeight, x:x+blockWidth]
-                        block = DataBlock(planeIndex, x, y, blockData)
-                        cropped_data.setBlock(block)
-            
-            cropped_datas.append(cropped_data)
-        
 
-        return cropped_datas
     
     def onEdit(self):
         return ImageAlignmentSettingsDialog(self.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.referenceIndex}_{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}_{self.cropMode}"
+        config = f"{self.referenceIndex}_{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
         return hashlib.md5(config.encode()).hexdigest()
+
+class LazyAlignmentOperations:
+    """位置合わせ専用の遅延操作"""
+    
+    @staticmethod
+    def alignAndExpand(flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
+        """位置合わせ + 拡張を一度に実行"""
+        
+        blockSize = flowData._blockSize
+        orig_width, orig_height = flowData.getDimensions()
+        
+        # 出力ブロックの4隅を逆変換して必要な入力範囲を計算
+        corners = np.array([[x, y], [x+blockSize, y], [x+blockSize, y+blockSize], [x, y+blockSize]], dtype=np.float64)
+        
+        if rotation != 0:
+            # 回転ありの場合は逆変換行列で計算
+            center = (orig_width / 2, orig_height / 2)
+            M_inv = cv2.getRotationMatrix2D(center, -rotation, 1.0)
+            M_inv[0, 2] -= dx
+            M_inv[1, 2] -= dy
+            source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
+        else:
+            # 平行移動のみ
+            source_corners = corners - np.array([dx, dy])
+        
+        # 必要な入力範囲を計算
+        min_x = int(np.floor(np.min(source_corners[:, 0])))
+        max_x = int(np.ceil(np.max(source_corners[:, 0])))
+        min_y = int(np.floor(np.min(source_corners[:, 1])))
+        max_y = int(np.ceil(np.max(source_corners[:, 1])))
+        
+        # ブロック境界に拡張
+        min_block_x = (min_x // blockSize) * blockSize
+        max_block_x = (max_x // blockSize) * blockSize + blockSize
+        min_block_y = (min_y // blockSize) * blockSize
+        max_block_y = (max_y // blockSize) * blockSize + blockSize
+        
+        min_block_x = max(min_block_x, 0)
+        max_block_x = min(max_block_x, orig_width)
+        min_block_y = max(min_block_y, 0)
+        max_block_y = min(max_block_y, orig_height)
+
+        # 必要な範囲の部分画像を構築
+        region_width  = max_block_x - min_block_x
+        region_height = max_block_y - min_block_y
+        region_image = nh.nans((region_height, region_width))
+        
+        # 必要なブロックを取得して部分画像に配置
+        for by in range(min_block_y, max_block_y, blockSize):
+            for bx in range(min_block_x, max_block_x, blockSize):
+                block = flowData.getBlock(planeIndex, bx, by)
+                if block and block.data is not None:
+                    if len(block.data.shape) == 3:
+                        block_data = block.data[:, :, 0]
+                    else:
+                        block_data = block.data
+                    
+                    # 部分画像内の位置に配置
+                    rel_x = bx - min_block_x
+                    rel_y = by - min_block_y
+                    h, w = block_data.shape
+                    region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
+        
+        # 変換行列を作成（部分画像座標系）
+        if rotation != 0:
+            # 元画像の中心を部分画像座標系に変換
+            orig_center_x = orig_width  / 2 - min_block_x
+            orig_center_y = orig_height / 2 - min_block_y
+            M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), rotation, 1.0)
+            M[0, 2] += dx
+            M[1, 2] += dy
+        else:
+            M = np.float64([[1, 0, dx], [0, 1, dy]])
+        
+        # 部分画像を変換
+        transformed_region = cv2.warpAffine(region_image, M, (region_width, region_height),
+                                          flags=cv2.INTER_LINEAR,
+                                          borderMode=cv2.BORDER_CONSTANT,
+                                          borderValue=np.nan)
+        
+        # 出力ブロック位置を部分画像座標系に変換
+        output_x_in_region = x - min_block_x
+        output_y_in_region = y - min_block_y
+        
+        # 出力ブロック部分を切り出し
+        output_block = transformed_region[output_y_in_region:output_y_in_region+blockSize,
+                                        output_x_in_region:output_x_in_region+blockSize]
+        
+        # サイズが足りない場合はNaNでパディング
+        if output_block.shape != (blockSize, blockSize):
+            padded_block = nh.nans((blockSize, blockSize))
+            h, w = output_block.shape
+            padded_block[:h, :w] = output_block
+            output_block = padded_block
+        
+        return DataBlock(planeIndex, x, y, output_block)
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
@@ -1153,15 +1149,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         tk.Label(mainFrame, text="■ 位置合わせ実行", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
         tk.Label(mainFrame, text="パラメーターなし", fg="gray").pack(anchor=tk.W, pady=2)
         
-        # 余白処理
-        tk.Label(mainFrame, text="■ 余白処理", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
-        cropFrame = tk.Frame(mainFrame)
-        cropFrame.pack(fill=tk.X, pady=2)
-        tk.Label(cropFrame, text="余白処理:").pack(side=tk.LEFT)
-        self.cropVar = tk.StringVar(value=self.node.cropMode)
-        cropCombo = ttk.Combobox(cropFrame, textvariable=self.cropVar, values=["none", "common"], width=10, state="readonly")
-        cropCombo.pack(side=tk.LEFT, padx=5)
-        tk.Label(cropFrame, text="(none:なし, common:共通領域)").pack(side=tk.LEFT)
+
         
         # ボタンフレーム
         buttonFrame = tk.Frame(self)
@@ -1180,7 +1168,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
             self.node.star.grid.starsPerGrid = max(1, int(self.starsEntry.get()))
             self.node.alignmentPlane = max(0, min(2, int(self.planeEntry.get())))
             self.node.star.threshold = max(50, min(99, int(self.thresholdEntry.get())))
-            self.node.cropMode = self.cropVar.get()
+
             self.node.phase.maxOffset = max(10, int(self.phaseOffsetEntry.get()))
             self.node.star.ransac.sampleRadius = max(10, int(self.starDistEntry.get()))
             self.node.star.minDiameter = max(1, int(self.starMinDiameterEntry.get()))

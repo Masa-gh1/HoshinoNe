@@ -80,7 +80,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         if context:
             context['totalBlocks'] = totalBlocks
             context['processedBlocks'] = 0
-            context['_block_lock'] = threading.Lock()
+            context['processedBlocks_lock'] = threading.Lock()
         
         # 全ファイルを処理
         resultFlowDatas = []
@@ -114,7 +114,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
     def reportBlockProgress(self, context, message="処理中"):
         """ブロック進捗を報告（スレッドセーフ）"""
         if context and 'totalBlocks' in context:
-            with context['_block_lock']:
+            with context['processedBlocks_lock']:
                 context['processedBlocks'] += 1
                 current = context['processedBlocks']
                 total = context['totalBlocks']

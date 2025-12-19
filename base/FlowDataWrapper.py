@@ -71,5 +71,5 @@ class FlowDataWrapper(FlowData):
     def getPercentile(self, percentile):
         return self.orgFlowData.getPercentile(percentile)
     
-    def getHistogram(self, bins=256, range_min=None, range_max=None, log_scale=False):
-        return self.orgFlowData.getHistogram(bins, range_min, range_max, log_scale)
+    def getHistogram(self, bins=256, log_scale=False):
+        return self.orgFlowData.getHistogram(bins, log_scale)

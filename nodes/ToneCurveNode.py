@@ -10,13 +10,13 @@ All rights reserved.
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
-import threading
 import hashlib
-
 from base.NNBlockOperationNode import NNBlockOperationNode
 from base.FlowData import FlowData
 from utils.interval_helper import createHalfOpenEnd
 from base.ConfigurableNode import ConfigurableNode
+from utils import numpy_helpers as nh
+from utils.ThreadPool import CoalescingExecutor
 
 # scipyのインポートチェック
 try:
@@ -39,8 +39,8 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         super().__init__(canvas, editor, x, y, "tone_curve", "トーンカーブ")
 
         # デフォルト設定 - 半開区間 [0.0, 1.0) で正規化範囲
-        self.inputMin = 0.0
-        self.inputEnd = 1.0
+        self.displayMin = 0.0
+        self.displayEnd = 1.0
         self.outputMin = 0.0
         self.outputEnd = 1.0
         self.controlPoints = [(0.0, 0.0), (1.0, 1.0)]  # (入力, 出力)
@@ -66,18 +66,18 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         self.editor.updateNodeText(self, displayText)
     
     def store(self, nodeData):
-        nodeData["inputMin"] = self.inputMin
-        nodeData["inputEnd"] = self.inputEnd
+        nodeData["displayMin"] = self.displayMin
+        nodeData["displayEnd"] = self.displayEnd
         nodeData["outputMin"] = self.outputMin
         nodeData["outputEnd"] = self.outputEnd
         nodeData["controlPoints"] = self.controlPoints
         nodeData["boundaryCondition"] = self.boundaryCondition
     
     def restore(self, nodeData):
-        if "inputMin" in nodeData:
-            self.inputMin = nodeData["inputMin"]
-        if "inputEnd" in nodeData:
-            self.inputEnd = nodeData["inputEnd"]
+        if "displayMin" in nodeData:
+            self.displayMin = nodeData["displayMin"]
+        if "displayEnd" in nodeData:
+            self.displayEnd = nodeData["displayEnd"]
         if "outputMin" in nodeData:
             self.outputMin = nodeData["outputMin"]
         if "outputEnd" in nodeData:
@@ -96,7 +96,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
             return None
         
         # DataBlockから実際のデータを取得
-        data = np.array(block.data, dtype=np.float64)
+        data = nh.array(block.data)
         
         # NaN値を事前に検出・分離
         nan_mask = np.isnan(data)
@@ -109,67 +109,60 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         sortedPoints = sorted(self.controlPoints, key=lambda p: p[0])
         xValues = [p[0] for p in sortedPoints]
         yValues = [p[1] for p in sortedPoints]
-        
-        # 入力範囲を正規化範囲にマッピング
-        normalizedX = [(x - self.inputMin) / (self.inputEnd - self.inputMin) for x in xValues]
-        
+
         # 制御点数に応じて補間方法を選択
-        if len(normalizedX) < 3:
-            curveFunction = interp1d(normalizedX, yValues, kind='linear', 
-                                bounds_error=False, fill_value='extrapolate')
+        if len(xValues) <= 2:
+            # 2点なので線形補完
+            curveFunction = interp1d( xValues, yValues, kind='linear', bounds_error=False, fill_value='extrapolate')
         else:
-            # 選択された境界条件でスプライン
-            curveFunction = CubicSpline(normalizedX, yValues, bc_type=self.boundaryCondition, extrapolate=True)
+            # 3点以上なのでスプライン補完
+            curveFunction = CubicSpline( xValues, yValues, bc_type=self.boundaryCondition, extrapolate=True)
         
         # 結果データを初期化（NaN値を保持）
         resultData = data.copy()
         
         # 有効値（NaN以外）のみ処理
         valid_mask = ~nan_mask
-        if np.any(valid_mask):
-            valid_data = data[valid_mask]
-            
-            # 入力範囲 [inputMin, inputEnd) を [0.0, 1.0) に正規化
-            normalizedData = (valid_data - self.inputMin) / (self.inputEnd - self.inputMin)
-            
-            # 始点・終点の外側をクランプ
-            startPoint = sortedPoints[0]
-            endPoint = sortedPoints[-1]
-            
-            # 範囲外の処理
-            mask_below = valid_data < startPoint[0]
-            mask_above = valid_data > endPoint[0]
-            mask_inside = ~(mask_below | mask_above)
-            
-            # 結果データを初期化
-            adjustedData = np.zeros_like(normalizedData)
-            
-            # 範囲内のデータにトーンカーブを適用
-            if np.any(mask_inside):
-                adjustedData[mask_inside] = curveFunction(normalizedData[mask_inside])
-            
-            # 範囲外のデータを始点・終点の値に設定
-            if np.any(mask_below):
-                adjustedData[mask_below] = startPoint[1]
-            if np.any(mask_above):
-                adjustedData[mask_above] = endPoint[1]
-            
-            # [0.0, 1.0) から出力範囲 [outputMin, outputEnd) に変換
-            processedData = adjustedData * (self.outputEnd - self.outputMin) + self.outputMin
-            
-            # 出力範囲内にクリップ
-            processedData = np.clip(processedData, self.outputMin, self.outputEnd)
-            
-            # 有効値のみ結果に反映
-            resultData[valid_mask] = processedData
+        valid_data = data[valid_mask]
+        
+        # 始点・終点の外側をクランプ
+        startPoint = sortedPoints[0]
+        endPoint = sortedPoints[-1]
+        
+        # 範囲外の処理
+        mask_below = valid_data < startPoint[0]
+        mask_above = valid_data > endPoint[0]
+        mask_inside = ~(mask_below | mask_above)
+        
+        # 結果データを初期化
+        adjustedData = np.zeros_like(valid_data)
+        
+        # 範囲内のデータにトーンカーブを適用
+        if np.any(mask_inside):
+            adjustedData[mask_inside] = curveFunction(valid_data[mask_inside])
+        
+        # 範囲外のデータを始点・終点の値に設定
+        if np.any(mask_below):
+            adjustedData[mask_below] = startPoint[1]
+        if np.any(mask_above):
+            adjustedData[mask_above] = endPoint[1]
+        
+        # [0.0, 1.0) から出力範囲 [outputMin, outputEnd) に変換
+        processedData = adjustedData * (self.outputEnd - self.outputMin) + self.outputMin
+        
+        # 出力範囲内にクリップ
+        processedData = np.clip(processedData, self.outputMin, self.outputEnd)
+        
+        # 有効値のみ結果に反映
+        resultData[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
         from base.DataBlock import DataBlock
         return DataBlock(block.planeIndex, block.x, block.y, resultData.tolist())
     
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):
-        self.inputMin = inputMin
-        self.inputEnd = inputEnd
+        self.displayMin = inputMin
+        self.displayEnd = inputEnd
         self.outputMin = outputMin
         self.outputEnd = outputEnd
         self.controlPoints = controlPoints
@@ -189,7 +182,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         }
     
     def getConfigHash(self):
-        config = f"{self.inputMin}_{self.inputEnd}_{self.outputMin}_{self.outputEnd}_{self.controlPoints}_{self.boundaryCondition}"
+        config = f"{self.outputMin}_{self.outputEnd}_{self.controlPoints}_{self.boundaryCondition}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class ToneCurveDialog(tk.Toplevel):
@@ -218,8 +211,8 @@ class ToneCurveDialog(tk.Toplevel):
         
         # プレビュー用 元の設定を保存
         self.originalSettings = {
-            'inputMin': self.node.inputMin,
-            'inputEnd': self.node.inputEnd,
+            'inputMin': self.node.displayMin,
+            'inputEnd': self.node.displayEnd,
             'outputMin': self.node.outputMin,
             'outputEnd': self.node.outputEnd,
             'controlPoints': self.node.controlPoints.copy(),
@@ -237,20 +230,22 @@ class ToneCurveDialog(tk.Toplevel):
         basicFrame = tk.Frame(self)
         basicFrame.pack(fill=tk.X, padx=10, pady=5)
         
-        # 入力範囲行
-        inputFrame = tk.Frame(basicFrame)
-        inputFrame.pack(fill=tk.X, pady=2)
-        tk.Label(inputFrame, text="入力範囲:").pack(side=tk.LEFT, padx=(0,5))
-        self.minEntry = tk.Entry(inputFrame, width=10)
-        self.minEntry.insert(0, str(self.node.inputMin))
-        self.minEntry.pack(side=tk.LEFT, padx=(0,2))
-        self.minEntry.bind('<Return>', self.onRangeChange)
-        tk.Label(inputFrame, text="～").pack(side=tk.LEFT, padx=2)
-        self.endEntry = tk.Entry(inputFrame, width=10)
-        self.endEntry.insert(0, str(self.node.inputEnd))
-        self.endEntry.pack(side=tk.LEFT, padx=(2,5))
-        self.endEntry.bind('<Return>', self.onRangeChange)
-        tk.Button(inputFrame, text="入力元フィット", command=self.fitInputRange).pack(side=tk.LEFT, padx=5)
+        # 表示範囲行
+        displayFrame = tk.Frame(basicFrame)
+        displayFrame.pack(fill=tk.X, pady=2)
+        tk.Label(displayFrame, text="表示範囲:").pack(side=tk.LEFT, padx=(0,5))
+        self.displayMinEntry = tk.Entry(displayFrame, width=10)
+        self.displayMinEntry.insert(0, str(self.node.displayMin))
+        self.displayMinEntry.pack(side=tk.LEFT, padx=(0,2))
+        self.displayMinEntry.bind('<Return>', self.onRangeChange)
+        tk.Label(displayFrame, text="～").pack(side=tk.LEFT, padx=2)
+        self.displayEndEntry = tk.Entry(displayFrame, width=10)
+        self.displayEndEntry.insert(0, str(self.node.displayEnd))
+        self.displayEndEntry.pack(side=tk.LEFT, padx=(2,5))
+        self.displayEndEntry.bind('<Return>', self.onRangeChange)
+        tk.Button(displayFrame, text="入力元フィット", command=self.fitDisplayToInput).pack(side=tk.LEFT, padx=5)
+        tk.Button(displayFrame, text="0.1-99.9%範囲", command=self.fitDisplayToPercentile).pack(side=tk.LEFT, padx=5)
+        tk.Button(displayFrame, text="制御点フィット", command=self.fitDisplayToControlPoint).pack(side=tk.LEFT, padx=5)
         
         # 出力範囲行
         outputFrame = tk.Frame(basicFrame)
@@ -274,19 +269,15 @@ class ToneCurveDialog(tk.Toplevel):
         self.boundaryCombobox.set(self.node.boundaryCondition)
         self.boundaryCombobox.pack(side=tk.LEFT, padx=(0,5))
         self.boundaryCombobox.bind('<<ComboboxSelected>>', self.onBoundaryChange)
-        tk.Button(curveFrame, text="制御点フィット", command=self.fitControlPoint).pack(side=tk.LEFT, padx=5)
-        tk.Button(curveFrame, text="0.1-99.9%範囲", command=self.zoomToHistogram).pack(side=tk.LEFT, padx=5)
+        tk.Button(curveFrame, text="表示範囲フィット", command=self.fitControlPointToDisplay).pack(side=tk.LEFT, padx=5)
         
         # ヒストグラムY軸行
         histYFrame = tk.Frame(basicFrame)
         histYFrame.pack(fill=tk.X, pady=2)
         tk.Label(histYFrame, text="ヒストグラムY軸:").pack(side=tk.LEFT, padx=(0,5))
-        self.yScaleMode = "log"  # デフォルトはlog
         self.yScaleVar = tk.StringVar(value="log")
-        self.yScaleLog = tk.Radiobutton(histYFrame, text="Log", variable=self.yScaleVar, value="log", command=lambda: self.setYScale("log"))
-        self.yScaleLinear = tk.Radiobutton(histYFrame, text="Linear", variable=self.yScaleVar, value="linear", command=lambda: self.setYScale("linear"))
-        self.yScaleLog.pack(side=tk.LEFT, padx=2)
-        self.yScaleLinear.pack(side=tk.LEFT, padx=2)
+        tk.Radiobutton(histYFrame, text="Log", variable=self.yScaleVar, value="log", command=self.updatePlot).pack(side=tk.LEFT, padx=2)
+        tk.Radiobutton(histYFrame, text="Linear", variable=self.yScaleVar, value="linear", command=self.updatePlot).pack(side=tk.LEFT, padx=2)
         
         # グラフフレーム
         graphFrame = tk.Frame(self, height=250)
@@ -328,35 +319,27 @@ class ToneCurveDialog(tk.Toplevel):
         
         tk.Button(buttonFrame, text="閉じる", command=self.onClose).pack(side=tk.LEFT, padx=5)
         
-    def setYScale(self, mode):
-        self.yScaleMode = mode
-        self.updatePlot()
-    
     def updatePlot(self):
         self.axes.clear()
         
-        # 入力データの有無をチェック
-        hasInputData = (hasattr(self.node, 'inputNodes') and self.node.inputNodes and 
-                       hasattr(self.node.inputNodes[0], 'flowDatas') and self.node.inputNodes[0].flowDatas)
-        
         # ヒストグラム表示（入力データがある場合のみ）
-        if hasInputData:
+        if self.node.inputNodes and self.node.inputNodes[0].flowDatas:
             self.plotHistogram(self.node.inputNodes[0].flowDatas[0])
         
-        # トーンカーブ表示（常に表示）
+        # トーンカーブ表示
         self.plotToneCurve()
         
-        # 制御点表示（常に表示）
+        # 制御点表示
         self.plotControlPoints()
         
         # 軸の範囲をUI入力値で設定
         try:
-            inputMin = float(self.minEntry.get())
-            inputEnd = float(self.endEntry.get())
+            displayMin = float(self.displayMinEntry.get())
+            displayEnd = float(self.displayEndEntry.get())
             outputMin = float(self.outputMinEntry.get())
             outputEnd = float(self.outputEndEntry.get())
             
-            self.axes.set_xlim(inputMin, inputEnd)
+            self.axes.set_xlim(displayMin, displayEnd)
             self.axes.set_ylim(outputMin, outputEnd)
         except ValueError:
             # デフォルト値
@@ -378,10 +361,10 @@ class ToneCurveDialog(tk.Toplevel):
         self.histAxes.clear()
         
         # 軸スケール設定を取得
-        yScale = self.yScaleMode
+        yScale = self.yScaleVar.get()
         
         # flowData.getHistogramを使用してヒストグラムデータを取得
-        histogramData = flowData.getHistogram(log_scale=False)
+        histogramData = flowData.getHistogram()
         
         if histogramData and 'planes' in histogramData:
             # プレーン用の色を定義
@@ -403,17 +386,17 @@ class ToneCurveDialog(tk.Toplevel):
                 
                 # UI入力値を取得
                 try:
-                    inputMin = float(self.minEntry.get())
-                    inputEnd = float(self.endEntry.get())
+                    displayMin = float(self.displayMinEntry.get())
+                    displayEnd = float(self.displayEndEntry.get())
                 except ValueError:
-                    inputMin = self.node.inputMin
-                    inputEnd = self.node.inputEnd
+                    displayMin = self.node.displayMin
+                    displayEnd = self.node.displayEnd
                 
                 # 入力範囲内のビンのみをフィルタリング
                 filteredCenters = []
                 filteredCounts = []
                 for i, center in enumerate(binCenters):
-                    if inputMin <= center <= inputEnd:
+                    if displayMin <= center <= displayEnd:
                         filteredCenters.append(center)
                         filteredCounts.append(binCounts[i])
                 
@@ -427,7 +410,7 @@ class ToneCurveDialog(tk.Toplevel):
                     self.histAxes.step(filteredCenters, filteredCounts, where='mid', 
                                      alpha=0.4, color=color, linewidth=1)
             
-            self.histAxes.set_xlim(inputMin, inputEnd)
+            self.histAxes.set_xlim(displayMin, displayEnd)
             
             # ログスケール時は下限のみ1に固定
             if yScale == "log":
@@ -440,8 +423,8 @@ class ToneCurveDialog(tk.Toplevel):
         if len(self.tempControlPoints) >= 2:
             try:
                 # UI入力値を取得
-                inputMin = float(self.minEntry.get())
-                inputEnd = float(self.endEntry.get())
+                displayMin = float(self.displayMinEntry.get())
+                displayEnd = float(self.displayEndEntry.get())
                 outputMin = float(self.outputMinEntry.get())
                 outputEnd = float(self.outputEndEntry.get())
                 boundaryCondition = self.boundaryCombobox.get()
@@ -452,7 +435,7 @@ class ToneCurveDialog(tk.Toplevel):
                 yValues = [p[1] for p in sortedPoints]
                 
                 # 正規化された制御点で補間
-                xNormalized = [(x - inputMin) / (inputEnd - inputMin) for x in xValues]
+                xNormalized = [(x - displayMin) / (displayEnd - displayMin) for x in xValues]
                 
                 if len(xNormalized) >= 2:
                     # 制御点数に応じて補間方法を選択
@@ -464,8 +447,8 @@ class ToneCurveDialog(tk.Toplevel):
                         curveFunction = CubicSpline(xNormalized, yValues, bc_type=boundaryCondition, extrapolate=True)
                     
                     # 実際の値でカーブを描画
-                    xSmooth = np.linspace(inputMin, inputEnd, 256)
-                    xSmoothNormalized = (xSmooth - inputMin) / (inputEnd - inputMin)
+                    xSmooth = np.linspace(displayMin, displayEnd, 256)
+                    xSmoothNormalized = (xSmooth - displayMin) / (displayEnd - displayMin)
                     
                     # 始点・終点の外側をクランプ
                     startPoint = sortedPoints[0]
@@ -516,13 +499,13 @@ class ToneCurveDialog(tk.Toplevel):
         nearestPoint = None
         
         try:
-            inputMin = float(self.minEntry.get())
-            inputEnd = float(self.endEntry.get())
+            displayMin = float(self.displayMinEntry.get())
+            displayEnd = float(self.displayEndEntry.get())
             outputMin = float(self.outputMinEntry.get())
             outputEnd = float(self.outputEndEntry.get())
             
             # 判定範囲を実際の値に合わせて調整
-            thresholdX = (inputEnd - inputMin) * 0.03
+            thresholdX = (displayEnd - displayMin) * 0.03
             thresholdY = (outputEnd - outputMin) * 0.03
             
             for i, (pointX, pointY) in enumerate(self.tempControlPoints):
@@ -564,7 +547,7 @@ class ToneCurveDialog(tk.Toplevel):
             # 空いている場所をプレス：即座に制御点を追加
             xActual = float(event.xdata)
             yActual = float(event.ydata)
-            yNormalized = (yActual - self.node.outputMin) / (self.node.outputEnd - self.node.outputMin)
+            yNormalized = (yActual - float(self.outputMinEntry.get())) / (float(self.outputEndEntry.get()) - float(self.outputMinEntry.get()))
             yNormalized = max(0, min(1, yNormalized))
             newPoint = (xActual, yNormalized)
             
@@ -595,7 +578,7 @@ class ToneCurveDialog(tk.Toplevel):
         xActual = float(event.xdata)
         yActual = float(event.ydata)
         # Y値を正規化して保存
-        yNormalized = (yActual - self.node.outputMin) / (self.node.outputEnd - self.node.outputMin)
+        yNormalized = (yActual - float(self.outputMinEntry.get())) / (float(self.outputEndEntry.get()) - float(self.outputMinEntry.get()))
         yNormalized = max(0, min(1, yNormalized))
         
         self.tempControlPoints[self.selectedPoint] = (xActual, yNormalized)
@@ -631,8 +614,8 @@ class ToneCurveDialog(tk.Toplevel):
             return
         
         try:
-            currentMin = float(self.minEntry.get())
-            currentEnd = float(self.endEntry.get())
+            currentMin = float(self.displayMinEntry.get())
+            currentEnd = float(self.displayEndEntry.get())
             currentRange = currentEnd - currentMin
             
             # ズーム倍率
@@ -648,10 +631,10 @@ class ToneCurveDialog(tk.Toplevel):
             
             # 最小範囲制限
             if newRange > 1e-10:
-                self.minEntry.delete(0, tk.END)
-                self.minEntry.insert(0, f"{newMin:.8f}")
-                self.endEntry.delete(0, tk.END)
-                self.endEntry.insert(0, f"{newEnd:.8f}")
+                self.displayMinEntry.delete(0, tk.END)
+                self.displayMinEntry.insert(0, f"{newMin:.3f}")
+                self.displayEndEntry.delete(0, tk.END)
+                self.displayEndEntry.insert(0, f"{newEnd:.3f}")
                 
                 self.updatePlot()
         except ValueError:
@@ -677,13 +660,13 @@ class ToneCurveDialog(tk.Toplevel):
             # プレビュー無効：確定値を適用して実行
             self.restoreConfirmedSettings()
         
-        threading.Thread(target=self.node.processPreviewOnly, daemon=True).start()
+        CoalescingExecutor.submit( self, self.node.processPreviewOnly)
     
     def restoreTemporarySettings(self):
         # 一時保存値をノードに適用
         try:
-            self.node.inputMin = float(self.minEntry.get())
-            self.node.inputEnd = float(self.endEntry.get())
+            self.node.displayMin = float(self.displayMinEntry.get())
+            self.node.displayEnd = float(self.displayEndEntry.get())
             self.node.outputMin = float(self.outputMinEntry.get())
             self.node.outputEnd = float(self.outputEndEntry.get())
             self.node.controlPoints = self.tempControlPoints
@@ -694,8 +677,8 @@ class ToneCurveDialog(tk.Toplevel):
     def restoreConfirmedSettings(self):
         # 確定値をノードに適用
         if self.originalSettings:
-            self.node.inputMin = self.originalSettings['inputMin']
-            self.node.inputEnd = self.originalSettings['inputEnd'] 
+            self.node.displayMin = self.originalSettings['inputMin']
+            self.node.displayEnd = self.originalSettings['inputEnd'] 
             self.node.outputMin = self.originalSettings['outputMin']
             self.node.outputEnd = self.originalSettings['outputEnd'] 
             self.node.controlPoints = self.originalSettings['controlPoints'] 
@@ -705,31 +688,29 @@ class ToneCurveDialog(tk.Toplevel):
         if self.previewVariable.get():
             # プレビュー有効：一時保存値を適用
             self.restoreTemporarySettings()
-            threading.Thread(target=self.node.processPreviewOnly, daemon=True).start()
+            CoalescingExecutor.submit( self, self.node.processPreviewOnly)
     
-    def fitInputRange(self):
+    def fitDisplayToInput(self):
         # 入力データから最大最小値を取得してUIに設定
-        if (hasattr(self.node, 'inputNodes') and self.node.inputNodes and 
-            hasattr(self.node.inputNodes[0], 'flowDatas') and self.node.inputNodes[0].flowDatas):
+        if self.node.inputNodes and self.node.inputNodes[0].flowDatas:
             
             flowData = self.node.inputNodes[0].flowDatas[0]
             minValue = flowData.getMinValue()
             maxValue = flowData.getMaxValue()
             
             if minValue is not None and maxValue is not None:
-                inputEnd = createHalfOpenEnd(minValue, maxValue)
+                endValue = createHalfOpenEnd(minValue, maxValue)
                 
-                self.minEntry.delete(0, tk.END)
-                self.minEntry.insert(0, str(minValue))
-                self.endEntry.delete(0, tk.END)
-                self.endEntry.insert(0, str(inputEnd))
+                self.displayMinEntry.delete(0, tk.END)
+                self.displayMinEntry.insert(0, f"{minValue:.3f}")
+                self.displayEndEntry.delete(0, tk.END)
+                self.displayEndEntry.insert(0, f"{endValue:.3f}")
                 
                 self.updatePlot()
     
-    def zoomToHistogram(self):
-        # ヒストグラムのパーセンタイル範囲（1%～99%）にズーム
-        if (hasattr(self.node, 'inputNodes') and self.node.inputNodes and 
-            hasattr(self.node.inputNodes[0], 'flowDatas') and self.node.inputNodes[0].flowDatas):
+    def fitDisplayToPercentile(self):
+        # パーセンタイル範囲（1%～99%）にズーム
+        if self.node.inputNodes and self.node.inputNodes[0].flowDatas:
             
             flowData = self.node.inputNodes[0].flowDatas[0]
             histogramData = flowData.getHistogram(log_scale=False)
@@ -766,29 +747,42 @@ class ToneCurveDialog(tk.Toplevel):
                     zoomMin = p001_value - margin
                     zoomMax = p999_value + margin
                     
-                    self.minEntry.delete(0, tk.END)
-                    self.minEntry.insert(0, f"{zoomMin:.6f}")
-                    self.endEntry.delete(0, tk.END)
-                    self.endEntry.insert(0, f"{zoomMax:.6f}")
+                    self.displayMinEntry.delete(0, tk.END)
+                    self.displayMinEntry.insert(0, f"{zoomMin:.3f}")
+                    self.displayEndEntry.delete(0, tk.END)
+                    self.displayEndEntry.insert(0, f"{zoomMax:.3f}")
                     
                     self.updatePlot()
     
-    def fitControlPoint(self):
+    def fitDisplayToControlPoint(self):
+        # 制御点の範囲にズーム
+        if self.tempControlPoints:
+            # 最小値と最大値を取得
+            pointMin = self.tempControlPoints[0][0]
+            pointEnd = self.tempControlPoints[-1][0]
+
+            # UIに設定
+            self.displayMinEntry.delete(0, tk.END)
+            self.displayMinEntry.insert(0, str(pointMin))
+            self.displayEndEntry.delete(0, tk.END)
+            self.displayEndEntry.insert(0, str(pointEnd))
+
+            self.updatePlot()
+
+    def fitControlPointToDisplay(self):
         try:
-            inputMin = float(self.minEntry.get())
-            inputEnd = float(self.endEntry.get())
-            outputMin = float(self.outputMinEntry.get())
-            outputEnd = float(self.outputEndEntry.get())
+            displayMin = float(self.displayMinEntry.get())
+            displayEnd = float(self.displayEndEntry.get())
             
-            if inputMin < inputEnd and outputMin < outputEnd:
+            if displayMin < displayEnd:
                 # 始点・終点を更新
-                self.tempControlPoints[0] = (inputMin, 0.0)
-                self.tempControlPoints[-1] = (inputEnd, 1.0)
+                self.tempControlPoints[0] = (displayMin, 0.0)
+                self.tempControlPoints[-1] = (displayEnd, 1.0)
                 
                 # 中間の制御点を範囲内に調整
                 for i in range(1, len(self.tempControlPoints) - 1):
                     x, y = self.tempControlPoints[i]
-                    x = max(inputMin, min(inputEnd, x))
+                    x = max(displayMin, min(displayEnd, x))
                     self.tempControlPoints[i] = (x, y)
                 
                 self.updatePlot()
@@ -799,19 +793,19 @@ class ToneCurveDialog(tk.Toplevel):
     def onApply(self):
         # 一時保存値を確定値とする
         try:
-            inputMin = float(self.minEntry.get())
-            inputEnd = float(self.endEntry.get())
+            displayMin = float(self.displayMinEntry.get())
+            displayEnd = float(self.displayEndEntry.get())
             outputMin = float(self.outputMinEntry.get())
             outputEnd = float(self.outputEndEntry.get())
             boundaryCondition = self.boundaryCombobox.get()
             
-            if inputMin < inputEnd and outputMin < outputEnd:
+            if displayMin < displayEnd and outputMin < outputEnd:
                 # 確定値を更新
-                self.node.applySettings(inputMin, inputEnd, outputMin, outputEnd, self.tempControlPoints, boundaryCondition)
+                self.node.applySettings(displayMin, displayEnd, outputMin, outputEnd, self.tempControlPoints, boundaryCondition)
                 # 確定値を更新
                 self.originalSettings = {
-                    'inputMin': inputMin,
-                    'inputEnd': inputEnd,
+                    'displayMin': displayMin,
+                    'displayEnd': displayEnd,
                     'outputMin': outputMin,
                     'outputEnd': outputEnd,
                     'controlPoints': self.tempControlPoints.copy(),
@@ -824,6 +818,6 @@ class ToneCurveDialog(tk.Toplevel):
         # プレビュー表示を解除して閉じる
         if self.previewVariable.get():
             self.restoreConfirmedSettings()
-            threading.Thread(target=self.node.processPreviewOnly, daemon=True).start()
+            CoalescingExecutor.submit( self, self.node.processPreviewOnly)
         
         self.destroy()

@@ -7,9 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import numpy as np
 from base import N1BlockOperationNode, TensorOperationMixin, DataBlock
 from config import BLOCK_SIZE
-import numpy as np
+from utils import numpy_helpers as nh
 
 class ProductNode(N1BlockOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -94,7 +95,7 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
                     
                     if result is None:
                         # 最初のブロックで初期化
-                        result = np.full((blockHeight, blockWidth), np.nan, dtype=np.float64)
+                        result = np.nans((blockHeight, blockWidth))
                         result[:minH, :minW] = inputBlock.data[:minH, :minW]
                     else:
                         # NaN対応乗算（効率的な順序）
@@ -110,7 +111,7 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
             
             # matrixデータがない場合の初期化
             if result is None:
-                result = np.full((blockHeight, blockWidth), np.nan, dtype=np.float64)
+                result = np.nsna((blockHeight, blockWidth))
             
             # tensorデータの乗算（NaN対応）
             if tensorDatas:
@@ -154,7 +155,7 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
         
         resultH = h1 + h2 - 1
         resultW = w1 + w2 - 1
-        result = np.zeros((resultH, resultW), dtype=np.float64)
+        result = nh.zeros((resultH, resultW))
         
         # numpyのブロードキャストを活用した効率的な実装
         for i in range(h2):

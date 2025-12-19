@@ -245,9 +245,9 @@ class FitsReaderNode(BaseReaderNode):
         blocks = []
         for c in range(channels):
             if channels == 1:
-                blockData = data[blockY:endY, blockX:endX].astype(np.float64)
+                blockData = data[blockY:endY, blockX:endX]
             else:
-                blockData = data[c, blockY:endY, blockX:endX].astype(np.float64)
+                blockData = data[c, blockY:endY, blockX:endX]
             blocks.append(DataBlock(c, blockX, blockY, blockData))
         
         return blocks

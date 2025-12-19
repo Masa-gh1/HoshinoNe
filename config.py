@@ -7,14 +7,27 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+try:
+    import numpy as np
+except ImportError:
+    print("numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
+    exit()
+
 # ノードの並列処理ワーカー数設定
 MAX_WORKERS = 4
+
+# デフォルトのブロックデータタイプ
+DEFAULT_BLOCK_TYPE = np.float64
+DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 
 # ブロックサイズ設定
 BLOCK_SIZE = 256
 
 # ブロックキャッシュサイズ設定
 MAX_BLOCK_CACHE_SIZE = 8000
+
+# ブロック辺りの推定 byte 数 (画像なら)
+ESTIMATE_SIZE_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
 
 # データヘッダに含める Exif
 HEADERS_EXIF = [
@@ -37,7 +50,7 @@ HEADERS_EXIF = [
 # RAW読み込み設定 ref https://www.libraw.org/docs/API-datastruct.html
 def configRawParams(params):
     # rawpy 0.25.1 パラメータ
-    # 初期値メンバ                 規定値         初期値
+    # 初期値メンバ                 既定値         初期値
     #params.aber               = (1, 1)       # tuple: (1, 1)
     #params.gamm               = (0.45, 4.5)  # tuple: (0.45, 4.5)
     #params.user_mul           = [0, 0, 0, 0] # list:  [0, 0, 0, 0]

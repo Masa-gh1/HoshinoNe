@@ -10,6 +10,8 @@ All rights reserved.
 import numpy as np
 from base import FlowNode
 from base.FlowDataWrapper import FlowDataWrapper
+from config import BLOCK_SIZE
+from utils import numpy_helpers as nh
 
 class AutoLevelsNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -28,21 +30,21 @@ class AutoLevelsNode(FlowNode):
         
         # 各入力データのdisplay_levelsを1%と99%のパーセンタイルで設定
         for inputData in inputDatas:
-            if inputData.headers and inputData.headers.get('type') == 'image':
+            if inputData.headers and inputData.headers.get('type') in ('image','matrix'):
                 width, height = inputData.getDimensions()
                 planeCount = inputData.getPlaneCount()
                 
                 # 全画像データを読み込み
-                imageData = np.zeros((height, width), dtype=np.float64)
+                imageData = nh.zeros((height, width))
                 
-                from config import BLOCK_SIZE
-                for blockY in range(0, height, BLOCK_SIZE):
-                    for blockX in range(0, width, BLOCK_SIZE):
-                        block = inputData.getBlock(0, blockX, blockY)  # 最初のプレーンを使用
-                        if block:
-                            endY = min(blockY + block.getHeight(), height)
-                            endX = min(blockX + block.getWidth(), width)
-                            imageData[blockY:endY, blockX:endX] = block.data[:endY-blockY, :endX-blockX]
+                for planeIndex in range(planeCount):
+                    for blockY in range(0, height, BLOCK_SIZE):
+                        for blockX in range(0, width, BLOCK_SIZE):
+                            block = inputData.getBlock(planeIndex, blockX, blockY)
+                            if block:
+                                endY = min(blockY + block.getHeight(), height)
+                                endX = min(blockX + block.getWidth(), width)
+                                imageData[blockY:endY, blockX:endX] = block.data[:endY-blockY, :endX-blockX]
                 
                 # NaN値を除外して1%と99%のパーセンタイルを計算
                 validData = imageData[~np.isnan(imageData)]

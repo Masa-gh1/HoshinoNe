@@ -13,6 +13,7 @@ from .FlowData import FlowData
 from .DataBlock import DataBlock
 from main.CacheManager import CacheManager
 from collections import UserDict
+from utils import numpy_helpers as nh
 
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
@@ -61,7 +62,7 @@ class LazyFlowData(FlowData):
         for i,operation in enumerate(self.operationChain):
             block = operation(curFlowData, planeIndex, x, y)
             if block is None:
-                block = DataBlock(planeIndex, x, y, np.full((self._blockSize, self._blockSize), np.nan))
+                block = DataBlock(planeIndex, x, y, nh.nans((self._blockSize, self._blockSize)))
                 block.blockId = (self.instanceId, planeIndex, x, y)
                 block.cachePolicy = self.cachePolicy
                 break
@@ -127,8 +128,8 @@ class LazyOperation:
         self.args = args
         self.kwargs = kwargs
     
-    def __call__(self, flowData, planeIndex, blockX, blockY):
-        return self.func(flowData, planeIndex, blockX, blockY, *self.args, **self.kwargs)
+    def __call__(self, flowData, planeIndex, x, y):
+        return self.func(flowData, planeIndex, x, y, *self.args, **self.kwargs)
 
 class LazyHeaderOperation:
     """遅延実行されるヘッダー操作"""
@@ -179,7 +180,7 @@ class LazyOperations:
         }
     
     @staticmethod
-    def transform(flowData, planeIndex, blockX, blockY, transformMatrix, fillValue=np.nan):
+    def transform(flowData, planeIndex, blockX, blockY, transformMatrix):
         """アフィン変換"""
         import cv2
         
@@ -206,31 +207,31 @@ class LazyOperations:
         
         # 変換実行
         transformed_extended = cv2.warpAffine(
-            extended_data.astype(np.float32), matrix2x3,
+            extended_data, matrix2x3,
             extended_data.shape[::-1],
-            flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=fillValue
+            flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan
         )
         
         # 出力ブロックサイズに切り出し
         margin = (extended_data.shape[0] - blockSize) // 2
         result = transformed_extended[margin:margin+blockSize, margin:margin+blockSize]
         
-        return DataBlock(planeIndex, blockX * blockSize, blockY * blockSize, result.astype(np.float64))
+        return DataBlock(planeIndex, blockX * blockSize, blockY * blockSize, result)
     
     @staticmethod
-    def _getExtendedBlockData(flowData, planeIndex, blockX, blockY, margin=64):
+    def _getExtendedBlockData(flowData, planeIndex, x, y, margin=64):
         """隣接ブロックを含む拡張データを取得"""
         blockSize = flowData._blockSize
+        blockX = x // blockSize
+        blockY = y // blockSize
         extendedSize = blockSize + 2 * margin
-        extended_data = np.full((extendedSize, extendedSize), np.nan, dtype=np.float64)
+        extended_data = nh.nans((extendedSize, extendedSize))
         
         # 3x3の隣接ブロックを取得
         for dy in [-1, 0, 1]:
             for dx in [-1, 0, 1]:
-                neighborBlockX = blockX + dx
-                neighborBlockY = blockY + dy
-                neighborX = neighborBlockX * blockSize
-                neighborY = neighborBlockY * blockSize
+                neighborX = (blockX + dx) * blockSize
+                neighborY = (blockY + dy) * blockSize
                 
                 try:
                     neighborBlock = flowData.getBlock(planeIndex, neighborX, neighborY)

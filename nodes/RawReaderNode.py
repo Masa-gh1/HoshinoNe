@@ -231,7 +231,7 @@ class RawReaderNode(BaseReaderNode):
                 
                 # ブロック単位で並列処理
                 for c in range(channels):
-                    channelData = rgb[:, :, c].astype(np.float64)
+                    channelData = rgb[:, :, c]
                     
                     for y in range(0, height, BLOCK_SIZE):
                         for x in range(0, width, BLOCK_SIZE):
