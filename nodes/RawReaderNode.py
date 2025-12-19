@@ -62,9 +62,9 @@ class RawReaderNode(BaseReaderNode):
         if self.filePaths:
             if len(self.filePaths) == 1:
                 fileName = os.path.basename(self.filePaths[0])
-                displayText = f"RAW読み込み\n{fileName}\n{self.demosaicAlgorithm}"
+                displayText = f"RAW読み込み\n{fileName}\nベイヤー変換: {self.demosaicAlgorithm}"
             else:
-                displayText = f"RAW読み込み\n{len(self.filePaths)}ファイル\n{self.demosaicAlgorithm}"
+                displayText = f"RAW読み込み\n{len(self.filePaths)}ファイル\nベイヤー変換: {self.demosaicAlgorithm}"
         else:
             displayText = "RAW読み込み\n未選択"
         self.editor.updateNodeText(self, displayText)

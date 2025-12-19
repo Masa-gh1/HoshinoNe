@@ -7,6 +7,9 @@ import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
 from base.NNBlockOperationNode import NNBlockOperationNode
+from base.FlowData import FlowData
+from base.DataBlock import DataBlock
+from config import BLOCK_SIZE
 
 try:
     import cv2
@@ -14,18 +17,40 @@ try:
 except ImportError:
     CV2_AVAILABLE = False
 
+class AlignmentResult:
+    def __init__(self, dx=0, dy=0, rotation=0, confidence=0, method="", extra_info=None):
+        self.dx = dx
+        self.dy = dy
+        self.rotation = rotation
+        self.confidence = confidence
+        self.method = method
+        self.extra_info = extra_info or {}
+
 class ImageAlignmentNode(NNBlockOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "image_alignment", "画像位置合わせ")
         
         # 設定パラメータ
+        # 基準画像選択
         self.referenceIndex = 0  # 基準画像のインデックス
-        self.cropMode = "none"  # 余白処理: "none", "common", "fill"
+        # オフセット計算
+        self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B）
+        # オフセット計算 優先順位1: 星点検出法
+        self.starThreshold = 95  # 星検出閾値（%）
+        self.starMinDiameter = 2  # 星最小直径（ピクセル）
+        self.starMaxDiameter = 16  # 星最大直径（ピクセル）
         self.gridRows = 3  # グリッド行数
         self.gridCols = 3  # グリッド列数
         self.starsPerGrid = 8  # グリッド当たりの選択星数
-        self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B）
-        self.starThreshold = 95  # 星検出闾値（%）
+        self.starSampleRadius = 100  # 星サンプル半径（ピクセル）
+        # オフセット計算 優先順位2: 位相相関法
+        self.phaseCorrelationMaxOffset = 100  # 位相相関最大オフセット（ピクセル）
+        # オフセット計算 優先順位3: テンプレートマッチング法
+        self.templateSearchRange = 150  # テンプレート検索範囲（ピクセル）
+        # 拡張領域計算
+        # 位置合わせ実行
+        # 余白処理
+        self.cropMode = "none"  # 余白処理: "none", "common", "fill"
         
         self.lastConfigHash = None
         
@@ -35,6 +60,54 @@ class ImageAlignmentNode(NNBlockOperationNode):
     
     def getColor(self):
         return self._color_op
+    
+    def updateNodeText(self):
+        displayText = f"{self.text}\n基準: {self.referenceIndex + 1}"
+        self.editor.updateNodeText(self, displayText)
+        
+        newHash = self.getConfigHash()
+        if newHash != self.lastConfigHash:
+            self.lastConfigHash = newHash
+            if hasattr(self.editor, 'onNodeConfigChanged'):
+                self.editor.onNodeConfigChanged(self)
+    
+    def store(self, nodeData):
+        nodeData["referenceIndex"] = self.referenceIndex
+        nodeData["gridRows"] = self.gridRows
+        nodeData["gridCols"] = self.gridCols
+        nodeData["starsPerGrid"] = self.starsPerGrid
+        nodeData["alignmentPlane"] = self.alignmentPlane
+        nodeData["starThreshold"] = self.starThreshold
+        nodeData["phaseCorrelationMaxOffset"] = self.phaseCorrelationMaxOffset
+        nodeData["starSampleRadius"] = self.starSampleRadius
+        nodeData["starMinDiameter"] = self.starMinDiameter
+        nodeData["starMaxDiameter"] = self.starMaxDiameter
+        nodeData["templateSearchRange"] = self.templateSearchRange
+    
+    def restore(self, nodeData):
+        if "referenceIndex" in nodeData:
+            self.referenceIndex = nodeData["referenceIndex"]
+        if "gridRows" in nodeData:
+            self.gridRows = nodeData["gridRows"]
+        if "gridCols" in nodeData:
+            self.gridCols = nodeData["gridCols"]
+        if "starsPerGrid" in nodeData:
+            self.starsPerGrid = nodeData["starsPerGrid"]
+        if "alignmentPlane" in nodeData:
+            self.alignmentPlane = nodeData["alignmentPlane"]
+        if "starThreshold" in nodeData:
+            self.starThreshold = nodeData["starThreshold"]
+        if "phaseCorrelationMaxOffset" in nodeData:
+            self.phaseCorrelationMaxOffset = nodeData["phaseCorrelationMaxOffset"]
+        if "starSampleRadius" in nodeData:
+            self.starSampleRadius = nodeData["starSampleRadius"]
+        if "starMinDiameter" in nodeData:
+            self.starMinDiameter = nodeData["starMinDiameter"]
+        if "starMaxDiameter" in nodeData:
+            self.starMaxDiameter = nodeData["starMaxDiameter"]
+        if "templateSearchRange" in nodeData:
+            self.templateSearchRange = nodeData["templateSearchRange"]
+        self.updateNodeText()
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：基準画像を決定"""
@@ -80,63 +153,57 @@ class ImageAlignmentNode(NNBlockOperationNode):
         resultFlowDatas = []
         
         # 全画像の総ブロック数を仮計算（ズレ計算も含む）
-        from config import BLOCK_SIZE
         width, height = referenceData.getDimensions()
         planeCount = inputDatas[0].getPlaneCount() if hasattr(inputDatas[0], 'getPlaneCount') else 1
         # 拡張サイズは仮で計算（後で更新）
         blocksPerImage = planeCount * ((width + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((height + BLOCK_SIZE - 1) // BLOCK_SIZE)
-        offsetCalculationBlocks = 3*(len(inputDatas) - 1)  # 基準画像以外のズレ計算
+        offsetCalculationBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
         totalGlobalBlocks = len(inputDatas) * blocksPerImage + offsetCalculationBlocks
         globalProcessedBlocks = 0
         
-        # 全オフセットを収集して拡張領域を計算
-        all_offsets = []
-        globalProgress = [globalProcessedBlocks, totalGlobalBlocks]
+        # 基準画像を一度だけ処理
+        if context:
+            self.reportProgress(context, "基準画像処理中", globalProcessedBlocks, totalGlobalBlocks)
+        refGray = self._flowDataToImage(referenceData, planeIndex=self.alignmentPlane)
+        
+        # 全オフセットと位置合わせ情報を収集
+        all_results = []
+        previous_result = AlignmentResult()  # 前画像の結果
+        
+        globalProcessedBlocks += 1
+        if context:
+            self.reportProgress(context, f"画像1のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
         
         for i, inputData in enumerate(inputDatas):
             if i != self.referenceIndex:
-                # 前回の位置合わせ情報をリセット
-                if hasattr(self, '_alignment_info'):
-                    delattr(self, '_alignment_info')
-                
-                refGray = self._flowDataToImage(referenceData, planeIndex=self.alignmentPlane)
-                globalProgress[0] += 1
-                if context:
-                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProgress[0], globalProgress[1])
-
                 targetGray = self._flowDataToImage(inputData, planeIndex=self.alignmentPlane)
-                globalProgress[0] += 1
+                globalProcessedBlocks += 1
                 if context:
-                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProgress[0], globalProgress[1])
+                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
 
-                offset = self._findOffsetByStarDetection(refGray, targetGray)
-                if offset is None:
-                    offset = self._findOffsetByPhaseCorrelation(refGray, targetGray)
-                if offset is None:
-                    offset = self._findOffsetByTemplateMatching(refGray, targetGray)
+                result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
+                if result is None:
+                    result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result)
+                    if result is None:
+                        result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result)
                 
-                if isinstance(offset, tuple) and len(offset) == 2:
-                    dx, dy = offset
-                    all_offsets.append(offset)
-                elif offset is not None:
-                    dx, dy = offset[0, 2], offset[1, 2]
-                    all_offsets.append((dx, dy))
-                else:
-                    all_offsets.append((0, 0))
+                if result is None:
+                    result = AlignmentResult()
                 
-                globalProgress[0] += 1
+                all_results.append(result)
+                previous_result = result
+                
+                globalProcessedBlocks += 1
                 if context:
-                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProgress[0], globalProgress[1])
+                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
             else:
-                all_offsets.append((0, 0))
-        
-        globalProcessedBlocks = globalProgress[0]
+                all_results.append(AlignmentResult())
         
         # 拡張領域を計算
-        min_dx = min(dx for dx, dy in all_offsets)
-        min_dy = min(dy for dx, dy in all_offsets)
-        max_dx = max(dx for dx, dy in all_offsets)
-        max_dy = max(dy for dx, dy in all_offsets)
+        min_dx = min(result.dx for result in all_results)
+        min_dy = min(result.dy for result in all_results)
+        max_dx = max(result.dx for result in all_results)
+        max_dy = max(result.dy for result in all_results)
         
         # 元画像サイズ
         width, height = referenceData.getDimensions()
@@ -153,15 +220,13 @@ class ImageAlignmentNode(NNBlockOperationNode):
         # 総ブロック数を正確なサイズで再計算
         blocksPerImage = planeCount * ((new_width + BLOCK_SIZE - 1) // BLOCK_SIZE) * ((new_height + BLOCK_SIZE - 1) // BLOCK_SIZE)
         totalGlobalBlocks = len(inputDatas) * blocksPerImage + offsetCalculationBlocks
-        globalProcessedBlocks = globalProgress[0]  # ズレ計算分を反映
         
         # 各画像を処理
         for i, inputData in enumerate(inputDatas):
             if i == self.referenceIndex:
                 # 基準画像を拡張領域に配置
-                globalProgress = [globalProcessedBlocks, totalGlobalBlocks]
-                expandedData = self._expandFlowData(inputData, expand_left, expand_top, new_width, new_height, context, globalProgress)
-                globalProcessedBlocks = globalProgress[0]
+                expandedData = self._expandFlowData(inputData, expand_left, expand_top, new_width, new_height, context, [globalProcessedBlocks, totalGlobalBlocks])
+                globalProcessedBlocks += blocksPerImage
                 # 基準画像の情報を追加
                 expandedData.headers['grid'] = {'columns': self.gridCols, 'rows': self.gridRows}
                 expandedData.headers['grid_selection_counts'] = [0] * (self.gridCols * self.gridRows)
@@ -170,25 +235,20 @@ class ImageAlignmentNode(NNBlockOperationNode):
                 resultFlowDatas.append(expandedData)
             else:
                 # 位置合わせを実行
-                dx, dy = all_offsets[i]
-                globalProgress = [globalProcessedBlocks, totalGlobalBlocks]
-                alignedData = self._alignImageWithExpansion(inputData, int(dx + expand_left), int(dy + expand_top), new_width, new_height, context, globalProgress)
-                globalProcessedBlocks = globalProgress[0]
+                result = all_results[i]
+                alignedData = self._alignImageWithExpansion(inputData, int(result.dx + expand_left), int(result.dy + expand_top), new_width, new_height, context, [globalProcessedBlocks, totalGlobalBlocks])
+                globalProcessedBlocks += blocksPerImage
                 
                 # 位置合わせ情報をheadersに追加
                 alignedData.headers['grid'] = {'columns': self.gridCols, 'rows': self.gridRows}
-                if hasattr(self, '_alignment_info'):
-                    info = self._alignment_info
-                    alignedData.headers['grid_selection_counts'] = info['grid_selected']
-                    alignedData.headers['grid_match_counts'] = info['grid_matched']
-                    if len(info['offset']) == 2:
-                        alignedData.headers['reference_image_movement'] = {'dx': info['offset'][0], 'dy': info['offset'][1], 'rotation': 0}
-                    else:
-                        alignedData.headers['reference_image_movement'] = {'dx': info['offset'][0], 'dy': info['offset'][1], 'rotation': info['offset'][2]}
+                if result.extra_info:
+                    alignedData.headers['grid_selection_counts'] = result.extra_info.get('grid_selected', [0] * (self.gridCols * self.gridRows))
+                    alignedData.headers['grid_match_counts'] = result.extra_info.get('grid_matched', [0] * (self.gridCols * self.gridRows))
                 else:
                     alignedData.headers['grid_selection_counts'] = [0] * (self.gridCols * self.gridRows)
                     alignedData.headers['grid_match_counts'] = [0] * (self.gridCols * self.gridRows)
-                    alignedData.headers['reference_image_movement'] = {'dx': dx, 'dy': dy, 'rotation': 0}
+                
+                alignedData.headers['reference_image_movement'] = {'dx': result.dx, 'dy': result.dy, 'rotation': result.rotation}
                 
                 resultFlowDatas.append(alignedData)
         
@@ -199,8 +259,11 @@ class ImageAlignmentNode(NNBlockOperationNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def _findOffsetByTemplateMatching(self, refImage, targetImage):
+    def _findOffsetByTemplateMatching(self, refImage, targetImage, previous_result=None):
         """テンプレートマッチングでオフセットを検出"""
+        if previous_result is None:
+            previous_result = AlignmentResult()
+        
         h, w = refImage.shape
         
         # 中央部分をテンプレートとして使用
@@ -213,12 +276,17 @@ class ImageAlignmentNode(NNBlockOperationNode):
         
         template = refImage[y1:y2, x1:x2]
         
-        # 検索範囲（±300ピクセルに拡大）
-        search_range = 300
-        search_y1 = max(0, y1 - search_range)
-        search_y2 = min(h, y2 + search_range)
-        search_x1 = max(0, x1 - search_range)
-        search_x2 = min(w, x2 + search_range)
+        # 前画像のオフセットを中心とした検索範囲
+        search_range = self.templateSearchRange  # 前画像位置からの検索範囲
+        
+        # 検索中心を前画像位置に設定
+        search_center_x = x1 + previous_result.dx
+        search_center_y = y1 + previous_result.dy
+        
+        search_y1 = max(0, int(search_center_y - search_range))
+        search_y2 = min(h, int(search_center_y + search_range))
+        search_x1 = max(0, int(search_center_x - search_range))
+        search_x2 = min(w, int(search_center_x + search_range))
         
         search_area = targetImage[search_y1:search_y2, search_x1:search_x2]
         
@@ -237,10 +305,14 @@ class ImageAlignmentNode(NNBlockOperationNode):
         dx = actual_x - x1
         dy = actual_y - y1
         
-        return dx, dy
+        return AlignmentResult(dx=dx, dy=dy, confidence=max_val, method="template")
     
-    def _findOffsetByPhaseCorrelation(self, refImage, targetImage):
+    def _findOffsetByPhaseCorrelation(self, refImage, targetImage, previous_result=None):
         """位相相関法でオフセットを検出"""
+        if previous_result is None:
+            previous_result = AlignmentResult()
+        
+        max_offset = self.phaseCorrelationMaxOffset
         # エッジ強化で特徴を明確化
         ref_edges = cv2.Laplacian(refImage, cv2.CV_64F)
         target_edges = cv2.Laplacian(targetImage, cv2.CV_64F)
@@ -316,14 +388,20 @@ class ImageAlignmentNode(NNBlockOperationNode):
         
 
         
-        # より緩い闾値で微小なズレも検出
-        if peak_sharpness < 1.5 or abs(dx) > 100 or abs(dy) > 100:
+        # 前画像位置からの距離をチェック
+        distance_from_prev = np.sqrt((dx - previous_result.dx)**2 + (dy - previous_result.dy)**2)
+        
+        # より緩い閾値で微小なズレも検出
+        if peak_sharpness < 1.5 or distance_from_prev > max_offset:
             return None
         
-        return dx, dy
+        confidence = min(1.0, peak_sharpness / 10.0)  # 正規化した信頼度
+        return AlignmentResult(dx=dx, dy=dy, confidence=confidence, method="phase")
     
-    def _findOffsetByStarDetection(self, refImage, targetImage):
+    def _findOffsetByStarDetection(self, refImage, targetImage, previous_result=None):
         """星点検出による天体写真用位置合わせ"""
+        if previous_result is None:
+            previous_result = AlignmentResult()
         # 星点を検出
         ref_stars = self._detectStars(refImage)
         target_stars = self._detectStars(targetImage)
@@ -335,13 +413,30 @@ class ImageAlignmentNode(NNBlockOperationNode):
         ref_bright, ref_grid_counts = self._selectDistributedStars(ref_stars, refImage.shape)
         target_bright, target_grid_counts = self._selectDistributedStars(target_stars, targetImage.shape)
         
-        # 対応点を探す
+        # 前画像のオフセット・回転を考慮した対応点探索
         matches = []
         for i, (rx, ry, _) in enumerate(ref_bright):
             for j, (tx, ty, _) in enumerate(target_bright):
-                # 距離が近い星を仮の対応とする
-                dist = np.sqrt((rx - tx)**2 + (ry - ty)**2)
-                if dist < 100:  # 100ピクセル以内
+                # 前画像位置からの予測位置を計算
+                expected_tx = tx + previous_result.dx
+                expected_ty = ty + previous_result.dy
+                
+                # 前画像の回転も考慮（簡易回転補正）
+                if abs(previous_result.rotation) > 0.1:  # 0.1度以上の回転がある場合
+                    angle_rad = np.radians(previous_result.rotation)
+                    cos_a, sin_a = np.cos(angle_rad), np.sin(angle_rad)
+                    cx, cy = refImage.shape[1] // 2, refImage.shape[0] // 2
+                    # 回転中心からの相対位置
+                    rel_x, rel_y = tx - cx, ty - cy
+                    # 回転適用
+                    rot_x = rel_x * cos_a - rel_y * sin_a
+                    rot_y = rel_x * sin_a + rel_y * cos_a
+                    expected_tx = rot_x + cx + previous_result.dx
+                    expected_ty = rot_y + cy + previous_result.dy
+                
+                # 予測位置との距離をチェック
+                dist = np.sqrt((rx - expected_tx)**2 + (ry - expected_ty)**2)
+                if dist < self.starSampleRadius:  # 設定値ピクセル以内
                     matches.append(((rx, ry), (tx, ty)))
         
         if len(matches) < 5:
@@ -381,14 +476,6 @@ class ImageAlignmentNode(NNBlockOperationNode):
         if best_inliers >= 5:  # 5個以上のインライア
             # グリッド別マッチ数を計算
             grid_match_counts = self._calculateGridMatches(matches, best_offset, refImage.shape)
-
-            
-            # 結果情報を保存
-            self._alignment_info = {
-                'grid_selected': ref_grid_counts,
-                'grid_matched': grid_match_counts,
-                'offset': best_offset
-            }
             
             # インライアを使って回転も含めた変換を計算
             inlier_matches = []
@@ -399,17 +486,24 @@ class ImageAlignmentNode(NNBlockOperationNode):
                 if error < 2.0:
                     inlier_matches.append((ref_pt, target_pt))
             
+            dx, dy = best_offset
+            rotation = 0
+            confidence = min(1.0, best_inliers / 20.0)  # 正規化した信頼度
+            
             if len(inlier_matches) >= 3:
-                result = self._calculateAffineTransform(inlier_matches)
-                if isinstance(result, tuple):
-                    self._alignment_info['offset'] = result
+                transform_result = self._calculateAffineTransform(inlier_matches)
+                if isinstance(transform_result, tuple):
+                    dx, dy = transform_result
                 else:
-                    dx, dy = result[0, 2], result[1, 2]
-                    rotation = np.arctan2(result[1, 0], result[0, 0]) * 180 / np.pi
-                    self._alignment_info['offset'] = (dx, dy, rotation)
-                return result
-            else:
-                return best_offset
+                    dx, dy = transform_result[0, 2], transform_result[1, 2]
+                    rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
+            
+            extra_info = {
+                'grid_selected': ref_grid_counts,
+                'grid_matched': grid_match_counts
+            }
+            
+            return AlignmentResult(dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
         
         return None
     
@@ -508,9 +602,6 @@ class ImageAlignmentNode(NNBlockOperationNode):
     
     def _cropFlowData(self, flowData, x_min, y_min, x_max, y_max):
         """指定範囲でFlowDataをクロップ"""
-        from base.FlowData import FlowData
-        from base.DataBlock import DataBlock
-        from config import BLOCK_SIZE
         
         crop_width = x_max - x_min + 1
         crop_height = y_max - y_min + 1
@@ -538,9 +629,6 @@ class ImageAlignmentNode(NNBlockOperationNode):
     
     def _expandFlowData(self, flowData, offset_x, offset_y, new_width, new_height, context=None, globalProgress=None):
         """拡張領域にFlowDataを配置"""
-        from base.FlowData import FlowData
-        from base.DataBlock import DataBlock
-        from config import BLOCK_SIZE
         
         headers = flowData.headers.copy() if flowData.headers else {}
         expanded_data = FlowData(headers)
@@ -576,9 +664,6 @@ class ImageAlignmentNode(NNBlockOperationNode):
     
     def _alignImageWithExpansion(self, flowData, dx, dy, new_width, new_height, context=None, globalProgress=None):
         """拡張領域で位置合わせを実行"""
-        from base.FlowData import FlowData
-        from base.DataBlock import DataBlock
-        from config import BLOCK_SIZE
         
         headers = flowData.headers.copy() if flowData.headers else {}
         aligned_data = FlowData(headers)
@@ -635,9 +720,13 @@ class ImageAlignmentNode(NNBlockOperationNode):
         max_val = np.max(image)
         saturation_threshold = max_val * 0.95
         
+        # 直径から面積へ変換
+        min_area = np.pi * (self.starMinDiameter / 2) ** 2
+        max_area = np.pi * (self.starMaxDiameter / 2) ** 2
+        
         for contour in contours:
             area = cv2.contourArea(contour)
-            if 3 <= area <= 200:  # 星のサイズ範囲
+            if min_area <= area <= max_area:  # 星直径閾値
                 # 重心を計算
                 M = cv2.moments(contour)
                 if M['m00'] > 0:
@@ -746,39 +835,6 @@ class ImageAlignmentNode(NNBlockOperationNode):
         
         return image
     
-    def updateNodeText(self):
-        displayText = f"{self.text}\n基準: {self.referenceIndex + 1}"
-        self.editor.updateNodeText(self, displayText)
-        
-        newHash = self.getConfigHash()
-        if newHash != self.lastConfigHash:
-            self.lastConfigHash = newHash
-            if hasattr(self.editor, 'onNodeConfigChanged'):
-                self.editor.onNodeConfigChanged(self)
-    
-    def store(self, nodeData):
-        nodeData["referenceIndex"] = self.referenceIndex
-        nodeData["gridRows"] = self.gridRows
-        nodeData["gridCols"] = self.gridCols
-        nodeData["starsPerGrid"] = self.starsPerGrid
-        nodeData["alignmentPlane"] = self.alignmentPlane
-        nodeData["starThreshold"] = self.starThreshold
-    
-    def restore(self, nodeData):
-        if "referenceIndex" in nodeData:
-            self.referenceIndex = nodeData["referenceIndex"]
-        if "gridRows" in nodeData:
-            self.gridRows = nodeData["gridRows"]
-        if "gridCols" in nodeData:
-            self.gridCols = nodeData["gridCols"]
-        if "starsPerGrid" in nodeData:
-            self.starsPerGrid = nodeData["starsPerGrid"]
-        if "alignmentPlane" in nodeData:
-            self.alignmentPlane = nodeData["alignmentPlane"]
-        if "starThreshold" in nodeData:
-            self.starThreshold = nodeData["starThreshold"]
-        self.updateNodeText()
-    
     def onEdit(self):
         if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
             self._settings_dialog.lift()
@@ -786,7 +842,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
             self._settings_dialog = ImageAlignmentSettingsDialog(self.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.referenceIndex}_{self.gridRows}_{self.gridCols}_{self.starsPerGrid}_{self.alignmentPlane}_{self.starThreshold}_{self.cropMode}"
+        config = f"{self.referenceIndex}_{self.gridRows}_{self.gridCols}_{self.starsPerGrid}_{self.alignmentPlane}_{self.starThreshold}_{self.cropMode}_{self.phaseCorrelationMaxOffset}_{self.starSampleRadius}_{self.starMinDiameter}_{self.starMaxDiameter}_{self.templateSearchRange}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
@@ -794,7 +850,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.text}設定")
-        self.geometry("400x300")
+        self.geometry("450x650")
         
         self.createWidgets()
         
@@ -803,20 +859,56 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # 基準画像選択
+        tk.Label(mainFrame, text="■ 基準画像選択", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(5,2))
         refFrame = tk.Frame(mainFrame)
-        refFrame.pack(fill=tk.X, pady=5)
+        refFrame.pack(fill=tk.X, pady=2)
         tk.Label(refFrame, text="基準画像:").pack(side=tk.LEFT)
         self.refEntry = tk.Entry(refFrame, width=10)
         self.refEntry.insert(0, str(self.node.referenceIndex + 1))
         self.refEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(refFrame, text="番目 (基準となる画像)").pack(side=tk.LEFT)
         
-
+        # オフセット計算
+        tk.Label(mainFrame, text="■ オフセット計算", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
+        
+        # 位置合わせ用プレーン
+        planeFrame = tk.Frame(mainFrame)
+        planeFrame.pack(fill=tk.X, pady=2)
+        tk.Label(planeFrame, text="位置合わせプレーン:").pack(side=tk.LEFT)
+        self.planeEntry = tk.Entry(planeFrame, width=5)
+        self.planeEntry.insert(0, str(self.node.alignmentPlane))
+        self.planeEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(planeFrame, text="(0:R, 1:G, 2:B, 位置検出用)").pack(side=tk.LEFT)
+        
+        # 優先順位1: 星点検出法
+        tk.Label(mainFrame, text="  □ 優先順位1: 星点検出法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
+        
+        # 星検出閾値
+        thresholdFrame = tk.Frame(mainFrame)
+        thresholdFrame.pack(fill=tk.X, pady=2)
+        tk.Label(thresholdFrame, text="    星検出閾値:").pack(side=tk.LEFT)
+        self.thresholdEntry = tk.Entry(thresholdFrame, width=5)
+        self.thresholdEntry.insert(0, str(self.node.starThreshold))
+        self.thresholdEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(thresholdFrame, text="% (上位%の明るい星を選択)").pack(side=tk.LEFT)
+        
+        # 星直径閾値
+        starSizeFrame = tk.Frame(mainFrame)
+        starSizeFrame.pack(fill=tk.X, pady=2)
+        tk.Label(starSizeFrame, text="    星直径閾値:").pack(side=tk.LEFT)
+        self.starMinDiameterEntry = tk.Entry(starSizeFrame, width=5)
+        self.starMinDiameterEntry.insert(0, str(self.node.starMinDiameter))
+        self.starMinDiameterEntry.pack(side=tk.LEFT, padx=2)
+        tk.Label(starSizeFrame, text="~").pack(side=tk.LEFT)
+        self.starMaxDiameterEntry = tk.Entry(starSizeFrame, width=5)
+        self.starMaxDiameterEntry.insert(0, str(self.node.starMaxDiameter))
+        self.starMaxDiameterEntry.pack(side=tk.LEFT, padx=2)
+        tk.Label(starSizeFrame, text="px (検出対象の星直径)").pack(side=tk.LEFT)
         
         # グリッド設定
         gridFrame = tk.Frame(mainFrame)
-        gridFrame.pack(fill=tk.X, pady=5)
-        tk.Label(gridFrame, text="グリッド:").pack(side=tk.LEFT)
+        gridFrame.pack(fill=tk.X, pady=2)
+        tk.Label(gridFrame, text="    グリッド:").pack(side=tk.LEFT)
         self.gridRowsEntry = tk.Entry(gridFrame, width=5)
         self.gridRowsEntry.insert(0, str(self.node.gridRows))
         self.gridRowsEntry.pack(side=tk.LEFT, padx=2)
@@ -828,34 +920,58 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         
         # グリッド当たりの選択星数
         starsFrame = tk.Frame(mainFrame)
-        starsFrame.pack(fill=tk.X, pady=5)
-        tk.Label(starsFrame, text="グリッド当たり星数:").pack(side=tk.LEFT)
+        starsFrame.pack(fill=tk.X, pady=2)
+        tk.Label(starsFrame, text="    グリッド当たり星数:").pack(side=tk.LEFT)
         self.starsEntry = tk.Entry(starsFrame, width=10)
         self.starsEntry.insert(0, str(self.node.starsPerGrid))
         self.starsEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(starsFrame, text="個 (各グリッドから選ぶ星数)").pack(side=tk.LEFT)
         
-        # 位置合わせ用プレーン
-        planeFrame = tk.Frame(mainFrame)
-        planeFrame.pack(fill=tk.X, pady=5)
-        tk.Label(planeFrame, text="位置合わせプレーン:").pack(side=tk.LEFT)
-        self.planeEntry = tk.Entry(planeFrame, width=5)
-        self.planeEntry.insert(0, str(self.node.alignmentPlane))
-        self.planeEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(planeFrame, text="(0:R, 1:G, 2:B, 位置検出用)").pack(side=tk.LEFT)
+        # 星サンプル半径
+        starDistFrame = tk.Frame(mainFrame)
+        starDistFrame.pack(fill=tk.X, pady=2)
+        tk.Label(starDistFrame, text="    星サンプル半径:").pack(side=tk.LEFT)
+        self.starDistEntry = tk.Entry(starDistFrame, width=5)
+        self.starDistEntry.insert(0, str(self.node.starSampleRadius))
+        self.starDistEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(starDistFrame, text="px (統計処理用サンプル収集範囲)").pack(side=tk.LEFT)
         
-        # 星検出闾値
-        thresholdFrame = tk.Frame(mainFrame)
-        thresholdFrame.pack(fill=tk.X, pady=5)
-        tk.Label(thresholdFrame, text="星検出闾値:").pack(side=tk.LEFT)
-        self.thresholdEntry = tk.Entry(thresholdFrame, width=5)
-        self.thresholdEntry.insert(0, str(self.node.starThreshold))
-        self.thresholdEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(thresholdFrame, text="% (上位%の明るい星を選択)").pack(side=tk.LEFT)
+        # 優先順位2: 位相相関法
+        tk.Label(mainFrame, text="  □ 優先順位2: 位相相関法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
         
-        # 余白処理モード
+        # 位相相関最大オフセット
+        phaseFrame = tk.Frame(mainFrame)
+        phaseFrame.pack(fill=tk.X, pady=2)
+        tk.Label(phaseFrame, text="    位相相関最大オフセット:").pack(side=tk.LEFT)
+        self.phaseOffsetEntry = tk.Entry(phaseFrame, width=5)
+        self.phaseOffsetEntry.insert(0, str(self.node.phaseCorrelationMaxOffset))
+        self.phaseOffsetEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(phaseFrame, text="px (FFT位置合わせ上限)").pack(side=tk.LEFT)
+        
+        # 優先順位3: テンプレートマッチング法
+        tk.Label(mainFrame, text="  □ 優先順位3: テンプレートマッチング法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
+        
+        # テンプレート検索範囲
+        templateFrame = tk.Frame(mainFrame)
+        templateFrame.pack(fill=tk.X, pady=2)
+        tk.Label(templateFrame, text="    テンプレート検索範囲:").pack(side=tk.LEFT)
+        self.templateSearchEntry = tk.Entry(templateFrame, width=5)
+        self.templateSearchEntry.insert(0, str(self.node.templateSearchRange))
+        self.templateSearchEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(templateFrame, text="px (パターンマッチング検索範囲)").pack(side=tk.LEFT)
+        
+        # 拡張領域計算
+        tk.Label(mainFrame, text="■ 拡張領域計算", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
+        tk.Label(mainFrame, text="パラメーターなし", fg="gray").pack(anchor=tk.W, pady=2)
+        
+        # 位置合わせ実行
+        tk.Label(mainFrame, text="■ 位置合わせ実行", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
+        tk.Label(mainFrame, text="パラメーターなし", fg="gray").pack(anchor=tk.W, pady=2)
+        
+        # 余白処理
+        tk.Label(mainFrame, text="■ 余白処理", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
         cropFrame = tk.Frame(mainFrame)
-        cropFrame.pack(fill=tk.X, pady=5)
+        cropFrame.pack(fill=tk.X, pady=2)
         tk.Label(cropFrame, text="余白処理:").pack(side=tk.LEFT)
         self.cropVar = tk.StringVar(value=self.node.cropMode)
         cropCombo = ttk.Combobox(cropFrame, textvariable=self.cropVar, values=["none", "common"], width=10, state="readonly")
@@ -880,6 +996,11 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
             self.node.alignmentPlane = max(0, min(2, int(self.planeEntry.get())))
             self.node.starThreshold = max(50, min(99, int(self.thresholdEntry.get())))
             self.node.cropMode = self.cropVar.get()
+            self.node.phaseCorrelationMaxOffset = max(10, int(self.phaseOffsetEntry.get()))
+            self.node.starSampleRadius = max(10, int(self.starDistEntry.get()))
+            self.node.starMinDiameter = max(1, int(self.starMinDiameterEntry.get()))
+            self.node.starMaxDiameter = max(self.node.starMinDiameter, int(self.starMaxDiameterEntry.get()))
+            self.node.templateSearchRange = max(10, int(self.templateSearchEntry.get()))
             
             self.node.updateNodeText()
             

@@ -220,7 +220,8 @@ class ResultWindow:
     
     def _generateFlowDataContent(self, flowData):
         """フローデータの内容を文字列として生成（非同期処理用）"""
-        headers = flowData.headers if flowData.headers else {}
+        headers = flowData.headers
+        
         dataType = headers.get('type', 'unknown')
         width, height = flowData.getDimensions()
         planeCount = flowData.getPlaneCount()
@@ -231,10 +232,10 @@ class ResultWindow:
         text += f"Dimensions: {width} x {height}\n"
         content.append(text)
         
-        if   dataType == 'tensor': result = self._generateTensorContent(flowData, headers)
-        elif dataType == 'matrix': result = self._generateMatrixContent(flowData, headers)
-        elif dataType == 'image' : result = self._generateImageContent(flowData, headers)
-        else:                      result = self._generateGenericContent(flowData, headers)
+        if   dataType == 'tensor': result = self._generateTensorContent(flowData)
+        elif dataType == 'matrix': result = self._generateMatrixContent(flowData)
+        elif dataType == 'image' : result = self._generateImageContent(flowData)
+        else:                      result = self._generateGenericContent(flowData)
         
         if isinstance(result, list):
             content.extend(result)
@@ -242,8 +243,9 @@ class ResultWindow:
             content.append(result)
         return content
     
-    def _generateTensorContent(self, flowData, headers):
+    def _generateTensorContent(self, flowData):
         """テンソルデータの内容を生成"""
+        headers = flowData.headers
         content = "\n"
         
         columns = headers.get('columns', [])
@@ -279,8 +281,9 @@ class ResultWindow:
         
         return content
     
-    def _generateMatrixContent(self, flowData, headers):
+    def _generateMatrixContent(self, flowData):
         """マトリックスデータの内容を生成"""
+        headers = flowData.headers
         content = "\n"
         
         columns = headers.get('columns', [])
@@ -320,13 +323,15 @@ class ResultWindow:
         
         return content
     
-    def _generateImageContent(self, flowData, headers):
+    def _generateImageContent(self, flowData):
         """画像データの内容を生成"""
+        headers = flowData.headers
+        
         mode = flowData.getMode()
         planes = headers.get('planes', [])
         width, height = flowData.getDimensions()
         planeCount = flowData.getPlaneCount()
-        displayLevels = headers.get('display_levels')
+        displayLevels = headers['display_levels']
         displayLevelMin = displayLevels["min"]
         displayLevelEnd = displayLevels["exclusive_upper"]
         
@@ -347,9 +352,8 @@ class ResultWindow:
         text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
         text += f"All levels: {minValue:.3f} - {allLevelEnd:.3f}\n"
         
-        
         if 'reference_image_movement' in headers:
-            movement = headers.get('reference_image_movement')
+            movement = headers['reference_image_movement']
             movement_dx = movement["dx"]
             movement_dy = movement["dy"]
             movement_rot = movement["rotation"]
@@ -644,8 +648,9 @@ class ResultWindow:
             self._updateResultWindow()
             return 'break'  # デフォルト動作を無効化
     
-    def _generateGenericContent(self, flowData, headers):
+    def _generateGenericContent(self, flowData):
         """一般的なデータの内容を生成"""
+        headers = flowData.headers
         content = "\n"
         width, height = flowData.getDimensions()
         planeCount = flowData.getPlaneCount()
