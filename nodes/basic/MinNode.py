@@ -9,9 +9,9 @@ All rights reserved.
 import numpy as np
 from base import DataBlock
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, TensorOperationMixin 
+from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
-class MinNode(LazyNNOperationNode, TensorOperationMixin):
+class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "min", "比較小")
     
@@ -21,22 +21,22 @@ class MinNode(LazyNNOperationNode, TensorOperationMixin):
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
-        auxiliaryTensors = []
+        auxiliaryPolynomials = []
         auxiliaryMatrices = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
                 dataType = data.headers.get('type', 'matrix')
-                if dataType == 'tensor':
-                    auxiliaryTensors.append(data)
+                if dataType == 'polynomial':
+                    auxiliaryPolynomials.append(data)
                 else:
                     auxiliaryMatrices.append(data)
             else:
                 primaryDatas.append(data)
         
-        # auxiliary tensor を事前統合（比較小）
-        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.minimum)
+        # auxiliary polynomial を事前統合（比較小）
+        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.minimum)
         
         # auxiliary matrix を事前統合（最初のもののみ使用）
         self._combinedAuxiliaryMatrix = None
@@ -48,12 +48,12 @@ class MinNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._MinOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryTensor)
+        lazyFlowData.addOperation(self._MinOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
         return lazyFlowData
     
     @classmethod
-    def _MinOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
+    def _MinOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
         """スケール操作（事前統合されたauxiliaryデータを乗算）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -61,10 +61,10 @@ class MinNode(LazyNNOperationNode, TensorOperationMixin):
         
         result = block.data.copy()
         
-        # auxiliary tensorを比較小
-        if combinedAuxiliaryTensor:
-            tensorValues = cls.calculateTensorBlock(combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
-            result = np.minimum(result, tensorValues)
+        # auxiliary polynomialを比較小
+        if combinedAuxiliaryPolynomial:
+            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            result = np.minimum(result, polynomialValues)
         
         # auxiliary matrixを比較小
         if combinedAuxiliaryMatrix:
@@ -75,7 +75,7 @@ class MinNode(LazyNNOperationNode, TensorOperationMixin):
         return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryTensor):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             # クリップ処理では元の範囲を保持

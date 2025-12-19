@@ -9,9 +9,9 @@ All rights reserved.
 import numpy as np
 from base import DataBlock
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, TensorOperationMixin 
+from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
-class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
+class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "scale", "乗算")
     
@@ -21,22 +21,22 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
-        auxiliaryTensors = []
+        auxiliaryPolynomials = []
         auxiliaryMatrices = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
                 dataType = data.headers.get('type', 'matrix')
-                if dataType == 'tensor':
-                    auxiliaryTensors.append(data)
+                if dataType == 'polynomial':
+                    auxiliaryPolynomials.append(data)
                 else:
                     auxiliaryMatrices.append(data)
             else:
                 primaryDatas.append(data)
         
-        # auxiliary tensorを事前統合（乗算）
-        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.multiply)
+        # auxiliary polynomialを事前統合（乗算）
+        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.multiply)
         
         # auxiliary matrixを事前統合（最初のもののみ使用）
         self._combinedAuxiliaryMatrix = None
@@ -48,12 +48,12 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryTensor)
+        lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
         return lazyFlowData
     
     @classmethod
-    def _scaleOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
+    def _scaleOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
         """スケール操作（事前統合されたauxiliaryデータを乗算）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -61,10 +61,10 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
         
         result = block.data.copy()
         
-        # auxiliary tensorを乗算
-        if combinedAuxiliaryTensor:
-            tensorValues = cls.calculateTensorBlock(combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
-            result = np.multiply(result, tensorValues)
+        # auxiliary polynomialを乗算
+        if combinedAuxiliaryPolynomial:
+            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            result = np.multiply(result, polynomialValues)
         
         # auxiliary matrixを乗算
         if combinedAuxiliaryMatrix:
@@ -75,7 +75,7 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
         return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryTensor):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
@@ -85,11 +85,11 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
             inputMin = inputLevels['min']
             inputMax = inputLevels['exclusive_upper']
             
-            if combinedAuxiliaryTensor:
-                tensor = combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                if tensor:
+            if combinedAuxiliaryPolynomial:
+                polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
+                if polynomial:
                     width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    scaleMin, scaleMax = cls.calculateTensorRange(tensor.data, width, height)
+                    scaleMin, scaleMax = cls.calculatePolynomialRange(polynomial.data, width, height)
                     
                     # 乗算の場合は範囲が複雑になる
                     products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]

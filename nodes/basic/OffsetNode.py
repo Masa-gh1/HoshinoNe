@@ -9,12 +9,12 @@ All rights reserved.
 import numpy as np
 from base import DataBlock
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, TensorOperationMixin 
+from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
-class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
+class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "offset", "加算")
-        self._combinedTensor = None
+        self._combinedPolynomial = None
     
     def getColor(self):
         return self._color_op
@@ -22,22 +22,22 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
-        auxiliaryTensors = []
+        auxiliaryPolynomials = []
         auxiliaryMatrices = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
                 dataType = data.headers.get('type', 'matrix')
-                if dataType == 'tensor':
-                    auxiliaryTensors.append(data)
+                if dataType == 'polynomial':
+                    auxiliaryPolynomials.append(data)
                 else:
                     auxiliaryMatrices.append(data)
             else:
                 primaryDatas.append(data)
         
-        # auxiliary tensorを事前統合
-        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.add)
+        # auxiliary polynomialを事前統合
+        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
         
         # auxiliary matrixを事前統合（最初のものをベースに加算）
         self._combinedAuxiliaryMatrix = None
@@ -49,12 +49,12 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._offsetOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addOperation(self._offsetOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
         return lazyFlowData
     
     @classmethod
-    def _offsetOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
+    def _offsetOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
         """オフセット操作（事前統合されたauxiliaryデータを加算）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -62,10 +62,10 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
         
         result = block.data.copy()
         
-        # auxiliary tensorを加算
-        if combinedAuxiliaryTensor:
-            tensorValues = cls.calculateTensorBlock(combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape)
-            result = np.add(result, tensorValues)
+        # auxiliary polynomialを加算
+        if combinedAuxiliaryPolynomial:
+            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape)
+            result = np.add(result, polynomialValues)
         
         # auxiliary matrixを加算
         if combinedAuxiliaryMatrix:
@@ -76,7 +76,7 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
         return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             try:
@@ -87,11 +87,11 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
                 inputMin = inputLevels['min']
                 inputMax = inputLevels['exclusive_upper']
                 
-                if combinedAuxiliaryTensor:
-                    tensor = combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                    if tensor:
+                if combinedAuxiliaryPolynomial:
+                    polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
+                    if polynomial:
                         width, height = lazyFlowData.sourceFlowData.getDimensions()
-                        offsetMin, offsetMax = cls.calculateTensorRange(tensor.data, width, height)
+                        offsetMin, offsetMax = cls.calculatePolynomialRange(polynomial.data, width, height)
                         return {
                             'display_levels': {
                                 'min': inputMin + offsetMin,

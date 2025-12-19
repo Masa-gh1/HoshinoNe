@@ -67,7 +67,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         self.updateNodeText()
     
     def onEdit(self):
-        return TensorSettingsDialog(self.editor.root, self)
+        return PolynomialSettingsDialog(self.editor.root, self)
     
     def applySettings(self, planeCount, xOrder, yOrder, coefficients, planeNames):
         self.planeCount = planeCount
@@ -84,7 +84,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     def process(self, context=None):
         self.reportProgress(context, "開始")
         
-        # 指定されたサイズの係数テンソルを作成
+        # 指定されたサイズの係数Polynomialを作成
         width = self.xOrder + 1
         height = self.yOrder + 1
         
@@ -109,7 +109,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         
         headers = {
             'category': 'auxiliary',
-            'type': 'tensor',
+            'type': 'polynomial',
             'mode': mode,
             'axes': ['x_order', 'y_order'],
             'columns': columns,
@@ -124,14 +124,14 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         
         # 各プレーンに係数を設定
         for planeIdx in range(self.planeCount):
-            tensorData = []
+            polynomialData = []
             for j in range(height):
                 row = []
                 for i in range(width):
                     key = f"{planeIdx},{i},{j}"
                     row.append(self.coefficients.get(key, 0))
-                tensorData.append(row)
-            dataBlock = DataBlock(tensorData, planeIdx, 0, 0)
+                polynomialData.append(row)
+            dataBlock = DataBlock(polynomialData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
         
         minValue = outputFlowData.getMinValue()
@@ -147,7 +147,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{coeffStr}_{planeStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
-class TensorSettingsDialog(tk.Toplevel):
+class PolynomialSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node

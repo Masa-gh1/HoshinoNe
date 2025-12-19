@@ -4,7 +4,7 @@
 
 ### 基本ヘッダー（全データ共通）
 - `category`: データ分類 ('primary' | 'auxiliary')
-- `type`: データ種別 ('image' | 'matrix' | 'tensor')
+- `type`: データ種別 ('image' | 'matrix' | 'polynomial' | 'vector')
 - `mode`: データモード
 - `planes`: プレーン名リスト
 - `width`: データ幅
@@ -41,16 +41,26 @@
 - `lines`: 行識別子リスト (ファイル名など)
 - `method_definitions`: method_id マッピング辞書
 
-### Tensor データ (type: 'tensor')
+### Polynomial データ (type: 'polynomial')
 #### mode値
-- `0D`, `1D`, `2D`: テンソル次元
+- `0D`, `1D`, `2D`: 多項式次元
 
-#### Tensor固有ヘッダー
+#### Polynomial固有ヘッダー
 - `axes`: 軸名リスト (['x_order', 'y_order'])
 - `columns`: 列ラベル (['x^0', 'x^1', ...])
 - `lines`: 行ラベル (['y^0', 'y^1', ...])
 - `max_orders`: 最大次数リスト
 - `equations`: 方程式説明リスト
+
+### Vector データ (type: 'vector')
+#### mode値
+- `0D`, `1D`, `2D`: ベクトル次元
+
+#### Vector固有ヘッダー
+- `axes`: 軸名リスト (['x_order', 'y_order'])
+- `columns`: 列ラベル (['0', '1', ...])
+- `lines`: 行ラベル (['0', '1', ...])
+- `max_orders`: 最大次数リスト
 
 ### 位置合わせ関連ヘッダー
 - `method`: 使用した位置合わせ手法 ('star' | 'phase' | 'template')
@@ -113,8 +123,12 @@
 
 ### 生成ノード
 #### CoefficientsNode
-- category='auxiliary', type='tensor'
+- category='auxiliary', type='polynomial'
 - mode, axes, columns, lines, max_orders, equations設定
+
+#### VectorNode
+- category='auxiliary', type='vector'
+- mode, axes, columns, lines, max_orders設定
 
 ### 分類ノード
 #### CategoryAuxiliary

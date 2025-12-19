@@ -99,10 +99,10 @@ class QuadraticFitNode(FlowNode):
             coefficients[planeName] = [c0, c1_x, c1_y, c2_x2, c2_xy, c2_y2]
             equations.append(f'{planeName} = {c0:.6f} + {c1_x:.6f}x + {c1_y:.6f}y + {c2_x2:.6f}x² + {c2_xy:.6f}xy + {c2_y2:.6f}y²')
         
-        # テンソル形式でデータを構築 (3x3の係数テンソル)
+        # Polynomial形式でデータを構築 (3x3の係数Polynomial)
         headers = {
             'category': 'auxiliary',
-            'type': 'tensor',
+            'type': 'polynomial',
             'mode': '2D',
             'axes': ['x_order', 'y_order'],
             'columns': ['x^0', 'x^1', 'x^2'],
@@ -116,15 +116,15 @@ class QuadraticFitNode(FlowNode):
         outputFlowData = FlowData(headers)
         outputFlowData.setDimensions(3, 3)
         
-        # 各プレーンに係数テンソルを設定
+        # 各プレーンに係数Polynomialを設定
         for planeIdx, planeName in enumerate(planeNames):
             c0, c1_x, c1_y, c2_x2, c2_xy, c2_y2 = coefficients[planeName]
-            tensorData = [
+            polynomialData = [
                 [c0,   c1_x,  c2_x2],   # y^0: 1, x, x²
                 [c1_y, c2_xy, 0],       # y^1: y, xy, 0
                 [c2_y2, 0,    0]        # y^2: y², 0, 0
             ]
-            dataBlock = DataBlock(tensorData, planeIdx, 0, 0)
+            dataBlock = DataBlock(polynomialData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
 
         

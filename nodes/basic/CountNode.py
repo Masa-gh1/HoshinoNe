@@ -21,12 +21,12 @@ class CountNode(N1BlockOperationNode):
         return self._color_func
     
     def getBaseDataIndex(self, inputDatas):
-        """カウントではtensorがある場合は最初のmatrixデータを基準とする"""
+        """カウントではpolynomialがある場合は最初のmatrixデータを基準とする"""
         for i, data in enumerate(inputDatas):
             dataType = data.headers.get('type', 'matrix') if data.headers else 'matrix'
-            if dataType != 'tensor':
+            if dataType != 'polynomial':
                 return i
-        return 0  # tensorのみの場合は最初のtensorを基準とする
+        return 0  # polynomialのみの場合は最初のpolynomialを基準とする
     
     def getResultDimensions(self, inputDatas):
         """カウントでは全入力データを包含するサイズを使用"""
@@ -46,21 +46,21 @@ class CountNode(N1BlockOperationNode):
         x, y = block.x, block.y
         
         # データタイプを分類
-        tensorDatas = []
+        polynomialDatas = []
         matrixDatas = []
         
         for inputData in inputDatas:
             dataType = inputData.headers.get('type', 'matrix') if inputData.headers else 'matrix'
-            if dataType == 'tensor':
-                tensorDatas.append(inputData)
+            if dataType == 'polynomial':
+                polynomialDatas.append(inputData)
             else:
                 matrixDatas.append(inputData)
         
-        # 全てtensorの場合はtensor数を返す
-        if len(tensorDatas) == len(inputDatas):
-            return self._processTensorCount(block, tensorDatas)
+        # 全てpolynomialの場合はpolynomial数を返す
+        if len(polynomialDatas) == len(inputDatas):
+            return self._processPolynomialCount(block, polynomialDatas)
         else:
-            # matrixとtensorの混在またはmatrixのみの場合
+            # matrixとpolynomialの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
@@ -77,23 +77,23 @@ class CountNode(N1BlockOperationNode):
                     valid_mask = ~np.isnan(inputBlock.data[:minH, :minW])
                     result[:minH, :minW] += valid_mask
             
-            # tensorは全領域に影響するので全体にtensor数を加算
-            if tensorDatas:
-                result += len(tensorDatas)
+            # polynomialは全領域に影響するので全体にpolynomial数を加算
+            if polynomialDatas:
+                result += len(polynomialDatas)
             
             return DataBlock(result, planeIdx, x, y)
     
-    def _processTensorCount(self, block, tensorDatas):
-        """全てtensorの場合のカウント処理"""
+    def _processPolynomialCount(self, block, polynomialDatas):
+        """全てpolynomialの場合のカウント処理"""
         planeIdx = block.planeIndex
         
-        # 最初のtensorの係数行列を取得してサイズを決定
-        firstTensor = tensorDatas[0]
-        coeffBlock = firstTensor.getBlock(planeIdx, 0, 0)
+        # 最初のpolynomialの係数行列を取得してサイズを決定
+        firstPolynomial = polynomialDatas[0]
+        coeffBlock = firstPolynomial.getBlock(planeIdx, 0, 0)
         if not coeffBlock:
             return None
         
-        # tensor数で埋めた行列を作成
-        result = np.full_like(coeffBlock.data, len(tensorDatas))
+        # polynomial数で埋めた行列を作成
+        result = np.full_like(coeffBlock.data, len(polynomialDatas))
         
         return DataBlock(result, planeIdx, block.x, block.y)

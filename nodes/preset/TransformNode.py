@@ -35,7 +35,7 @@ class TransformNode(LazyNNOperationNode):
             return
     
     def getColor(self):
-        return self._color_op
+        return self._color_func
     
     def updateNodeText(self):
         self.editor.updateNodeText(self, self.text)

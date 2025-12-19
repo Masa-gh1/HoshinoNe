@@ -10,10 +10,10 @@ All rights reserved.
 import numpy as np
 from config import BLOCK_SIZE
 from base import DataBlock
-from nodes import N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin
+from nodes import N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMixin
 from utils import numpy_helpers as nh
 
-class ProductNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin):
+class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "product", "総積")
 
@@ -21,25 +21,25 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMix
         return self._color_op
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：Tensorを事前統合"""
+        """入力データの前処理：Polynomialを事前統合"""
         datas = []
         vectors = []
-        tensors = []
+        polynomials = []
         
         for data in inputDatas:
             dataType = data.headers.get('type', 'matrix')
             if   dataType == 'vector':
                 vectors.append(data)
-            elif dataType == 'tensor':
-                tensors.append(data)
+            elif dataType == 'polynomial':
+                polynomials.append(data)
             else:
                 datas.append(data)
         
         # vector を事前統合(乗算)
         self._combinedVector = self.computeCombinedVector(vectors, np.multiply)
         
-        # tensor を事前統合(乗算)
-        self._combinedTensor = self.computeCombinedTensor(tensors, np.multiply)
+        # polynomial を事前統合(乗算)
+        self._combinedPolynomial = self.computeCombinedPolynomial(polynomials, np.multiply)
         
         if datas:
             return datas
@@ -47,9 +47,9 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMix
             datas = [self._combinedVector] 
             self._combinedVector = None
             return datas
-        elif self._combinedTensor:
-            datas = [self._combinedTensor] 
-            self._combinedTensor = None
+        elif self._combinedPolynomial:
+            datas = [self._combinedPolynomial] 
+            self._combinedPolynomial = None
             return datas
         else:
             return None
@@ -126,35 +126,35 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMix
             if block:
                 result = result * block.data
         
-        # tensor を乗算（NaN対応）
-        if self._combinedTensor:
-            tensorValues = self.calculateTensorBlock(self._combinedTensor, planeIdx, x, y, result.shape, defaultValue=1.0)
+        # polynomial を乗算（NaN対応）
+        if self._combinedPolynomial:
+            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIdx, x, y, result.shape, defaultValue=1.0)
             if block:
-                result = result * tensorValues
+                result = result * polynomialValues
         
         return DataBlock(result, planeIdx, x, y)
     
-    def _processTensorMultiplication(self, block, tensorDatas):
-        """全てtensorの場合の乗算処理（係数の畳み込み）"""
+    def _processPolynomialMultiplication(self, block, polynomialDatas):
+        """全てpolynomialの場合の乗算処理（係数の畳み込み）"""
         planeIdx = block.planeIndex
         
-        # 最初のtensorの係数行列を取得
-        firstTensor = tensorDatas[0]
-        coeffBlock = firstTensor.getBlock(planeIdx, 0, 0)
+        # 最初のpolynomialの係数行列を取得
+        firstPolynomial = polynomialDatas[0]
+        coeffBlock = firstPolynomial.getBlock(planeIdx, 0, 0)
         if not coeffBlock:
             return None
         
         result = coeffBlock.data.copy()
         
-        # 他のtensorと畳み込み乗算
-        for tensorData in tensorDatas[1:]:
-            coeffBlock = tensorData.getBlock(planeIdx, 0, 0)
+        # 他のpolynomialと畳み込み乗算
+        for polynomialData in polynomialDatas[1:]:
+            coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
             if coeffBlock:
-                result = self._convolveTensorCoeffs(result, coeffBlock.data)
+                result = self._convolvePolynomialCoeffs(result, coeffBlock.data)
         
         return DataBlock(result, planeIdx, block.x, block.y)
     
-    def _convolveTensorCoeffs(self, coeffs1, coeffs2):
+    def _convolvePolynomialCoeffs(self, coeffs1, coeffs2):
         """係数行列の畳み込み乗算"""
         # numpyで2次元畳み込みを実装
         h1, w1 = coeffs1.shape

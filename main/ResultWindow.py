@@ -221,7 +221,7 @@ class ResultWindow(tk.Toplevel):
         text += f"Dimensions: {width} x {height}\n"
         content.append(text)
         
-        if   dataType == 'tensor': result = self._generateTensorContent(flowData)
+        if   dataType == 'polynomial': result = self._generatePolynomialContent(flowData)
         elif dataType == 'matrix': result = self._generateMatrixContent(flowData)
         elif dataType == 'image' : result = self._generateImageContent(flowData)
         else:                      result = self._generateGenericContent(flowData)
@@ -237,8 +237,8 @@ class ResultWindow(tk.Toplevel):
             
         return content
     
-    def _generateTensorContent(self, flowData):
-        """テンソルデータの内容を生成"""
+    def _generatePolynomialContent(self, flowData):
+        """Polynomialデータの内容を生成"""
         headers = flowData.headers
         content = "\n"
         

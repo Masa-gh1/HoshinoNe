@@ -10,10 +10,10 @@ All rights reserved.
 import numpy as np
 from config import BLOCK_SIZE
 from base import DataBlock
-from nodes import N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin
+from nodes import N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMixin
 from utils import numpy_helpers as nh
 
-class SumNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin):
+class SumNode(N1BlockOperationNode, PolynomialOperationMixin, VectorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "sum", "総和")
     
@@ -21,25 +21,25 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin):
         return self._color_op
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：Tensorを事前統合"""
+        """入力データの前処理：Polynomialを事前統合"""
         datas = []
         vectors = []
-        tensors = []
+        polynomials = []
         
         for data in inputDatas:
             dataType = data.headers.get('type', 'matrix')
             if   dataType == 'vector':
                 vectors.append(data)
-            elif dataType == 'tensor':
-                tensors.append(data)
+            elif dataType == 'polynomial':
+                polynomials.append(data)
             else:
                 datas.append(data)
         
         # vector を事前統合(加算)
         self._combinedVector = self.computeCombinedVector(vectors, np.add)
         
-        # tensor を事前統合(加算)
-        self._combinedTensor = self.computeCombinedTensor(tensors, np.add)
+        # polynomial を事前統合(加算)
+        self._combinedPolynomial = self.computeCombinedPolynomial(polynomials, np.add)
         
         if datas:
             return datas
@@ -47,9 +47,9 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin):
             datas = [self._combinedVector] 
             self._combinedVector = None
             return datas
-        elif self._combinedTensor:
-            datas = [self._combinedTensor] 
-            self._combinedTensor = None
+        elif self._combinedPolynomial:
+            datas = [self._combinedPolynomial] 
+            self._combinedPolynomial = None
             return datas
         else:
             return None
@@ -115,32 +115,32 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin, VectorOperationMixin):
         if result is None:
             result = nh.nans((blockHeight, blockWidth))
         
-        # tensorデータの加算（NaN対応）
-        if self._combinedTensor:
-            tensorValues = self.calculateTensorBlock(self._combinedTensor, planeIdx, x, y, result.shape)
+        # polynomialデータの加算（NaN対応）
+        if self._combinedPolynomial:
+            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIdx, x, y, result.shape)
             result = np.where(
                 np.isnan(result),
-                tensorValues,
-                result + tensorValues
+                polynomialValues,
+                result + polynomialValues
             )
         
         return DataBlock(result, planeIdx, x, y)
     
-    def _processTensorAddition(self, block, tensorDatas):
-        """全てtensorの場合の加算処理"""
+    def _processPolynomialAddition(self, block, polynomialDatas):
+        """全てpolynomialの場合の加算処理"""
         planeIdx = block.planeIndex
         
-        # 最初のtensorの係数行列を取得
-        firstTensor = tensorDatas[0]
-        coeffBlock = firstTensor.getBlock(planeIdx, 0, 0)
+        # 最初のpolynomialの係数行列を取得
+        firstPolynomial = polynomialDatas[0]
+        coeffBlock = firstPolynomial.getBlock(planeIdx, 0, 0)
         if not coeffBlock:
             return None
         
         result = coeffBlock.data.copy()
         
-        # 他のtensorの係数行列を加算
-        for tensorData in tensorDatas[1:]:
-            coeffBlock = tensorData.getBlock(planeIdx, 0, 0)
+        # 他のpolynomialの係数行列を加算
+        for polynomialData in polynomialDatas[1:]:
+            coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
             if coeffBlock:
                 # サイズを合わせて加算
                 minH = min(result.shape[0], coeffBlock.data.shape[0])

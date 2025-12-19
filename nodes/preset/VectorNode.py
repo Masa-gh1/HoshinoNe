@@ -67,7 +67,7 @@ class VectorNode(FlowNode,ConfigurableNode):
         self.updateNodeText()
     
     def onEdit(self):
-        return TensorSettingsDialog(self.editor.root, self)
+        return VectorSettingsDialog(self.editor.root, self)
     
     def applySettings(self, planeCount, xOrder, yOrder, vector, planeNames):
         self.planeCount = planeCount
@@ -84,7 +84,7 @@ class VectorNode(FlowNode,ConfigurableNode):
     def process(self, context=None):
         self.reportProgress(context, "開始")
         
-        # 指定されたサイズの係数テンソルを作成
+        # 指定されたサイズの vector を作成
         width = self.xOrder
         height = self.yOrder
         
@@ -123,14 +123,14 @@ class VectorNode(FlowNode,ConfigurableNode):
         
         # 各プレーンに数列を設定
         for planeIdx in range(self.planeCount):
-            tensorData = []
+            polynomialData = []
             for j in range(height):
                 row = []
                 for i in range(width):
                     key = f"{planeIdx},{i},{j}"
                     row.append(self.vector.get(key, 0))
-                tensorData.append(row)
-            dataBlock = DataBlock(tensorData, planeIdx, 0, 0)
+                polynomialData.append(row)
+            dataBlock = DataBlock(polynomialData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
         
         minValue = outputFlowData.getMinValue()
@@ -146,7 +146,7 @@ class VectorNode(FlowNode,ConfigurableNode):
         config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{vectorStr}_{planeStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
-class TensorSettingsDialog(tk.Toplevel):
+class VectorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
