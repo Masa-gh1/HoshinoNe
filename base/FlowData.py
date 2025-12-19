@@ -8,6 +8,7 @@ All rights reserved.
 '''
 
 import uuid
+import sys
 from tkinter import messagebox
 
 from config import BLOCK_SIZE
@@ -53,7 +54,7 @@ class FlowData:
         blockKey = (planeIndex, x, y)
         if blockKey in self._existingBlocks:
             if CacheManager.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
-                print(f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
+                print(f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}", file=sys.stderr)
         else:
             self._existingBlocks.add(blockKey)
             
@@ -160,6 +161,9 @@ class FlowData:
         # numpy配列として正規化
         if isinstance(dataBlock.data, list):
             arr = nh.array(dataBlock.data)
+        elif np.iscomplexobj(dataBlock.data):
+            # 複素数型は複素数型を保持
+            arr = dataBlock.data
         elif dataBlock.data.dtype != nh.BDTYPE:
             arr = dataBlock.data.astype(nh.BDTYPE)
         else:
@@ -190,11 +194,11 @@ class FlowData:
             maxPlanes = planeCount
         
         planeHistograms = []
-        for planeIdx in range(min(planeCount, maxPlanes)):
+        for planeIndex in range(min(planeCount, maxPlanes)):
             blockArrays = []
-            for blockY in range(0, height, self._blockSize):
-                for blockX in range(0, width, self._blockSize):
-                    block = self.getBlock(planeIdx, blockX, blockY)
+            for y in range(0, height, self._blockSize):
+                for x in range(0, width, self._blockSize):
+                    block = self.getBlock(planeIndex, x, y)
                     if block and block.data is not None:
                         blockArrays.append(block.data.flatten())
             

@@ -1,5 +1,5 @@
 '''
-CategoryAuxiliaryNode - データをauxiliaryカテゴリに設定するノード
+CategoryAuxiliaryNode - データを auxiliary カテゴリに設定するノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.

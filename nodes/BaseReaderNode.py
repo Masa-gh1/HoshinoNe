@@ -36,7 +36,8 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
             if len(self.filePaths) == 1:
                 displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])}"
             else:
-                displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])} ... 計{len(self.filePaths)}"
+                dirname = os.path.dirname(self.filePaths[0])
+                displayText = f"{self.text}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}"
         else:
             displayText = f"{self.text}\n未選択"
         self.editor.updateNodeText(self, displayText)

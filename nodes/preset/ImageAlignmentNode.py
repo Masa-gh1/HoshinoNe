@@ -40,9 +40,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         super().__init__(canvas, editor, x, y, "image_alignment", "画像位置合わせ")
         
         # 設定パラメータ
-        # 基準画像選択
-        self.referenceIndex = 0  # 基準画像のインデックス
-        self.usePreviousOffset = True  # 前回画像のズレを考慮する
+        # 基準画像選択（auxiliaryでマークされた画像を使用）
+        self.usePreviousOffset = True  # 前の画像のズレを考慮する
         # オフセット計算
         self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B）
         self.saturationThreshold = 95  # 飽和閾値（%）
@@ -58,7 +57,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         self.star.grid.cols = 3  # グリッド列数
         self.star.grid.starsPerGrid = 8  # グリッド当たりの選択星数
         self.star.ransac = SimpleNamespace()
-        self.star.ransac.sampleRadius = 100  # RANSAC対応点探索半径（ピクセル）
+        self.star.ransac.sampleRadius = 100  # RANSAC対応点サンプル半径（ピクセル）
         self.star.ransac.iterations = 100  # RANSAC試行回数
         self.star.ransac.seed = 2725  # RANSAC乱数シード（１以上）
         # オフセット計算 優先順位2: 位相相関法
@@ -80,8 +79,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         return self._color_op
     
     def updateNodeText(self):
-        exclude_info = ""
-        displayText = f"{self.text}\n基準: {self.referenceIndex + 1}{exclude_info}"
+        displayText = f"{self.text}\nG:{self.star.grid.cols}x{self.star.grid.rows} S:{self.star.ransac.sampleRadius}"
         self.editor.updateNodeText(self, displayText)
         
         newHash = self.getConfigHash()
@@ -91,7 +89,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
                 self.editor.onNodeConfigChanged(self)
     
     def store(self, nodeData):
-        nodeData["referenceIndex"] = self.referenceIndex
         nodeData["usePreviousOffset"] = self.usePreviousOffset
         nodeData["alignmentPlane"] = self.alignmentPlane
         nodeData["starThreshold"] = self.star.threshold
@@ -110,8 +107,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         nodeData["templateSearchRange"] = self.template.searchRange
     
     def restore(self, nodeData):
-        if "referenceIndex" in nodeData:
-            self.referenceIndex = nodeData["referenceIndex"]
         if "usePreviousOffset" in nodeData:
             self.usePreviousOffset = nodeData["usePreviousOffset"]
         if "alignmentPlane" in nodeData:
@@ -147,15 +142,26 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         self.updateNodeText()
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：基準画像を決定"""
-        if not inputDatas:
-            return []
+        """入力データの前処理：primary/auxiliaryで分類"""
+        primaryDatas = []
+        auxiliaryDatas = []
         
-        # 基準画像のインデックスを調整
-        if self.referenceIndex >= len(inputDatas):
-            self.referenceIndex = 0
+        for data in inputDatas:
+            category = data.headers.get('category', 'primary')
+            if category == 'auxiliary':
+                auxiliaryDatas.append(data)
+            else:
+                primaryDatas.append(data)
         
-        return inputDatas
+        if 0 == len(auxiliaryDatas):
+            # 基準画像（auxiliary）が必要
+            messagebox.showerror("エラー", "基準画像（補正用）が必要です")
+            self._referenceData = None
+        else:
+            # 複数ある場合は最初のものを採用
+            self._referenceData = auxiliaryDatas[0]
+        
+        return primaryDatas
     
     def processBlock(self, block):
         """ブロック単位での位置合わせ処理"""
@@ -175,26 +181,24 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         for node in self.inputNodes:
             inputDatas.extend(node.flowDatas)
         
-        if len(inputDatas) < 2:
-            messagebox.showwarning("警告", "位置合わせには2枚以上の画像が必要です")
+        # primary/auxiliaryで分類
+        primaryDatas = self.preprocessInputs(inputDatas)
+        if self._referenceData is None:
             self.flowDatas = inputDatas
             return
         
         # 移動/回転計算のみを実行
-        alignment_metadata = self._calculateAlignmentMetadata(inputDatas, context)
+        alignment_metadata = self._calculateAlignmentMetadata(primaryDatas, context)
         
         # LazyFlowDataを生成
-        self.flowDatas = self._createLazyOutputs(inputDatas, alignment_metadata)
+        self.flowDatas = self._createLazyOutputs(primaryDatas, alignment_metadata)
         
         self.reportProgress(context, "完了")
     
     def _calculateAlignmentMetadata(self, inputDatas, context):
         """移動/回転計算のみを実行"""
-        # 基準画像決定
-        if self.referenceIndex >= len(inputDatas):
-            self.referenceIndex = 0
-        
-        referenceData = inputDatas[self.referenceIndex]
+        # 基準画像
+        referenceData = self._referenceData
 
         # 経過報告用全画像のズレ計算ステップ数
         totalGlobalBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
@@ -218,36 +222,33 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         previous_result = AlignmentResult()  # 前画像の結果
         
         for i, inputData in enumerate(inputDatas):
-            if i != self.referenceIndex:
-                # 対象画像を検出用に処理
-                targetGray = self._flowDataToImage(inputData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
-                globalProcessedBlocks += 1
-                if context:
-                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
-                
-                # 位置合わせ計算
-                star_result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
-                phase_result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result) if not star_result.success else None
-                template_result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result) if not star_result.success and (phase_result is None or not phase_result.success) else None
-                
-                # 成功した結果を選択
-                result = star_result if star_result.success else (phase_result if phase_result and phase_result.success else template_result)
-                if result is None:
-                    result = AlignmentResult()
-                
-                # この画像の計算法毎の結果を保存
-                method_results = {'star': star_result, 'phase': phase_result, 'template': template_result}
-                
-                all_results.append(result)
-                all_method_results_list.append(method_results)
-                previous_result = result
-                
-                globalProcessedBlocks += 1
-                if context:
-                    self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
-            else:
-                all_results.append(AlignmentResult( success=True, method="reference"))  # 基準画像
-                all_method_results_list.append({})
+            # 対象画像を検出用に処理
+            targetGray = self._flowDataToImage(inputData, planeIndex=self.alignmentPlane, normalize_for_detection=True)
+            globalProcessedBlocks += 1
+            if context:
+                self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
+            
+            # 位置合わせ計算
+            star_result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
+            phase_result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result) if not star_result.success else None
+            template_result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result) if not star_result.success and (phase_result is None or not phase_result.success) else None
+            
+            # 成功した結果を選択
+            result = star_result if star_result.success else (phase_result if phase_result and phase_result.success else template_result)
+            if result is None:
+                result = AlignmentResult()
+            
+            # この画像の計算法毎の結果を保存
+            method_results = {'star': star_result, 'phase': phase_result, 'template': template_result}
+            
+            all_results.append(result)
+            all_method_results_list.append(method_results)
+            previous_result = result
+            
+            globalProcessedBlocks += 1
+            if context:
+                self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
+
         
         # 回転を考慮した拡張領域計算
         width, height = referenceData.getDimensions()
@@ -264,8 +265,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         expand_left = int(max(0, -min_x))
         expand_top = int(max(0, -min_y))
-        new_width = int(max_x - min_x)
-        new_height = int(max_y - min_y)
+        new_width = int(np.ceil(max_x - min_x))
+        new_height = int(np.ceil(max_y - min_y))
         
         return {
             'results': all_results,
@@ -881,7 +882,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         return ImageAlignmentSettingsDialog(self.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.referenceIndex}_{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
+        config = f"{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class LazyAlignmentOperations:
@@ -957,8 +958,12 @@ class LazyAlignmentOperations:
         else:
             M = np.float64([[1, 0, dx], [0, 1, dy]])
         
+        # 変換後に必要なサイズを計算
+        transform_output_width = min(region_width, new_width - (x - min_block_x))
+        transform_output_height = min(region_height, new_height - (y - min_block_y))
+        
         # 部分画像を変換
-        transformed_region = cv2.warpAffine(region_image, M, (region_width, region_height),
+        transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
                                           flags=cv2.INTER_LINEAR,
                                           borderMode=cv2.BORDER_CONSTANT,
                                           borderValue=np.nan)
@@ -967,13 +972,19 @@ class LazyAlignmentOperations:
         output_x_in_region = x - min_block_x
         output_y_in_region = y - min_block_y
         
+        # 画面端での適切なブロックサイズを計算
+        actual_block_width = min(blockSize, new_width - x)
+        actual_block_height = min(blockSize, new_height - y)
+        
         # 出力ブロック部分を切り出し
-        output_block = transformed_region[output_y_in_region:output_y_in_region+blockSize,
-                                        output_x_in_region:output_x_in_region+blockSize]
+        end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
+        end_x = min(output_x_in_region + actual_block_width, transformed_region.shape[1])
+        
+        output_block = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
         
         # サイズが足りない場合はNaNでパディング
-        if output_block.shape != (blockSize, blockSize):
-            padded_block = nh.nans((blockSize, blockSize))
+        if output_block.shape != (actual_block_height, actual_block_width):
+            padded_block = nh.nans((actual_block_height, actual_block_width))
             h, w = output_block.shape
             padded_block[:h, :w] = output_block
             output_block = padded_block
@@ -985,7 +996,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.text}設定")
-        self.geometry("450x800")
+        self.geometry("450x700")
         
         self.createWidgets()
         
@@ -994,20 +1005,13 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # 基準画像選択
-        tk.Label(mainFrame, text="■ 基準画像選択", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(5,2))
-        refFrame = tk.Frame(mainFrame)
-        refFrame.pack(fill=tk.X, pady=2)
-        tk.Label(refFrame, text="基準画像:").pack(side=tk.LEFT)
-        self.refEntry = tk.Entry(refFrame, width=10)
-        self.refEntry.insert(0, str(self.node.referenceIndex + 1))
-        self.refEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(refFrame, text="番目 (基準となる画像)").pack(side=tk.LEFT)
+        tk.Label(mainFrame, text="■ 基準画像", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(5,2))
         
         # 前回ズレ考慮機能
         prevOffsetFrame = tk.Frame(mainFrame)
         prevOffsetFrame.pack(fill=tk.X, pady=2)
         self.usePrevOffsetVar = tk.BooleanVar(value=self.node.usePreviousOffset)
-        tk.Checkbutton(prevOffsetFrame, text="前回画像のズレを考慮する", variable=self.usePrevOffsetVar).pack(side=tk.LEFT)
+        tk.Checkbutton(prevOffsetFrame, text="前の画像のズレを考慮する", variable=self.usePrevOffsetVar).pack(side=tk.LEFT)
         tk.Label(prevOffsetFrame, text="(検索範囲の中央を前回位置に設定)").pack(side=tk.LEFT, padx=5)
         
         # オフセット計算
@@ -1157,7 +1161,6 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
     
     def onApply(self):
         try:
-            self.node.referenceIndex = max(0, int(self.refEntry.get()) - 1)
             self.node.star.grid.rows = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols = max(1, int(self.gridColsEntry.get()))
             self.node.star.grid.starsPerGrid = max(1, int(self.starsEntry.get()))

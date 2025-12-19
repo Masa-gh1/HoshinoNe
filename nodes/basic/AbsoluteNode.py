@@ -1,5 +1,5 @@
 '''
-NegateNode - 符号反転ノード
+AbsoluteNode - 絶対値ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -10,11 +10,11 @@ All rights reserved.
 import numpy as np
 from base import DataBlock
 from base import LazyFlowData
-from nodes import LazyNNOperationNode
+from nodes import LazyNNOperationNode 
 
-class NegateNode(LazyNNOperationNode):
+class AbsoluteNode(LazyNNOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "negate", "符号反転")
+        super().__init__(canvas, editor, x, y, "absolute", "絶対値")
     
     def getColor(self):
         return self._color_func
@@ -22,17 +22,18 @@ class NegateNode(LazyNNOperationNode):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._negateOperation)
+        lazyFlowData.addOperation(self._absoluteOperation)
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _negateOperation(self, flowData, planeIndex, x, y):
-        """符号反転操作"""
+    def _absoluteOperation(self, flowData, planeIndex, x, y):
+        """絶対値操作"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
         
-        result = -block.data
+        result = np.abs(block.data)
+        
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
     def _computeDisplayLevels(self):
@@ -46,10 +47,14 @@ class NegateNode(LazyNNOperationNode):
                 inputMin = inputLevels['min']
                 inputMax = inputLevels['exclusive_upper']
                 
+                # 絶対値変換: [a, b) → [0, max(|a|, |b|))
+                absMin = abs(inputMin)
+                absMax = abs(inputMax)
+                
                 return {
                     'display_levels': {
-                        'min': -inputMax,
-                        'exclusive_upper': -inputMin
+                        'min': 0.0,
+                        'exclusive_upper': max(absMin, absMax)
                     }
                 }
             except (KeyError, AttributeError):

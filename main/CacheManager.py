@@ -21,7 +21,7 @@ class CacheManager:
     """キャッシュポリシーベースの統一キャッシュ管理"""
     
     # キャッシュポリシー定義
-    PERSISTENT = 'persistent'    # 永続化（ディスク退避あり）
+    PERSISTENT = 'persistent'    # 永続化（ストレージ退避あり）
     CALCULABLE = 'calculable'    # 計算可能（キャッシュする:上限まで保持）
     TEMPORARY  = 'temporary'     # 一時データ(キャッシュしない：削除されるまで保持)
     
@@ -34,8 +34,8 @@ class CacheManager:
     
     _cacheMissCount = 0
     _purgeCount = 0
-    _saveDiskCount = 0
-    _loadDiskCount = 0
+    _saveCount = 0
+    _loadCount = 0
     
     @classmethod
     def _getGlobelTempDir(cls):
@@ -76,12 +76,6 @@ class CacheManager:
             pass
     
     @classmethod
-    def isCached(cls, cacheKey, cachePolicy):
-        """キャッシュされているかどうかを判定"""
-        with cls._cacheLock:
-            return cacheKey in cls._globalBlockCache
-    
-    @classmethod
     def get(cls, cacheKey, cachePolicy):
         """キャッシュから取得"""
         if CacheManager.TEMPORARY == cachePolicy:
@@ -100,8 +94,8 @@ class CacheManager:
         if data is not None:
             return data
         elif CacheManager.PERSISTENT == cachePolicy:
-            cls._loadDiskCount += 1
-            return CacheManager.loadFromDisk(cacheKey)
+            cls._loadCount += 1
+            return CacheManager._loadFromStorage(cacheKey)
         else:
             return None
     
@@ -118,6 +112,19 @@ class CacheManager:
                 cls._globalBlockCache[cacheKey] = (blockData, cachePolicy)
     
     @classmethod
+    def isCached(cls, cacheKey, cachePolicy):
+        """キャッシュされているかどうかを判定"""
+        with cls._cacheLock:
+            return cacheKey in cls._globalBlockCache
+
+    @classmethod
+    def isStoraged(cls, cacheKey, cachePolicy):
+        """ストレージ保存されているかどうかを判定"""
+        tempDir = cls._getGlobelTempDir()
+        fileName = os.path.join(tempDir, f"{cacheKey}.pkl")
+        return os.path.exists(fileName)
+
+    @classmethod
     def _evictOldest(cls):
         """最古エントリの退避・削除"""
         if not cls._globalBlockCache:
@@ -133,33 +140,39 @@ class CacheManager:
         oldestKey = sortedKeys[0]
         blockData, policy = cls._globalBlockCache[oldestKey]
         
-        # persistentポリシーのみディスク退避
         if policy == cls.PERSISTENT:
-            if cls._saveToDisk(oldestKey, blockData):
-                cls._saveDiskCount += 1
+            # persistent ポリシーのみストレージに退避
+            if cls.isStoraged( oldestKey, policy):
+                # 既に保存ずみなのでキャッシュから削除
+                del cls._globalBlockCache[oldestKey]
+            elif cls._saveToStorage(oldestKey, blockData):
+                # 保存成功したのでキャッシュから削除
+                cls._saveCount += 1
                 del cls._globalBlockCache[oldestKey]
         else:
             cls._purgeCount += 1
             del cls._globalBlockCache[oldestKey]
     
     @classmethod
-    def _saveToDisk(cls, cacheKey, blockData):
-        """ディスクに退避（永続化データのみ）"""
+    def _saveToStorage(cls, cacheKey, blockData):
+        """ストレージに退避（永続化データのみ）"""
         try:
             tempDir = cls._getGlobelTempDir()
             fileName = os.path.join(tempDir, f"{cacheKey}.pkl")
             with open(fileName, 'wb') as f:
                 pickle.dump(blockData, f)
+                f.flush()
+                os.fsync(f.fileno())
             
             return True
         except (OSError, IOError, ValueError):
-            print(f"Warning: Unable to save block data to disk : key: {cacheKey}", file=sys.stderr)
+            print(f"Warning: Unable to save block data to storage : key: {cacheKey}", file=sys.stderr)
             return False
         
     
     @classmethod
-    def loadFromDisk(cls, cacheKey):
-        """ディスクから読み込み（永続化データのみ）"""
+    def _loadFromStorage(cls, cacheKey):
+        """ストレージから読み込み（永続化データのみ）"""
         try:
             if cls._globalTempDir is None:
                 return None
@@ -171,18 +184,18 @@ class CacheManager:
             cls.set(cacheKey, blockData, cls.PERSISTENT)
             return blockData
         except (OSError, IOError, ValueError):
-            print(f"Warning: Unable to load block data from disk : key: {cacheKey}", file=sys.stderr)
+            print(f"Warning: Unable to load block data from storage : key: {cacheKey}", file=sys.stderr)
             return None
     
     @classmethod
     def clearByInstanceId(cls, instanceId):
         """指定instanceIdの全データを削除"""
-        # ディスクファイルも削除対象に含める
+        # ファイルも削除対象に含める
         if cls._globalTempDir and os.path.exists(cls._globalTempDir):
             for fileName in os.listdir(cls._globalTempDir):
                 if instanceId in fileName and fileName.endswith(".pkl"):
                     try:
-                        # ディスクファイルを削除
+                        # ファイルを削除
                         os.remove(os.path.join(cls._globalTempDir, fileName))
                     except (OSError, IOError):
                         pass
@@ -205,22 +218,22 @@ class CacheManager:
         
     @classmethod
     def getCacheStats(cls):
-        """キャッシュ量とディスク使用量を取得"""
+        """キャッシュ量とストレージ使用量を取得"""
         from config import BLOCK_SIZE
         
         cacheCount = len(cls._globalBlockCache)
         cacheSize = cacheCount * ESTIMATE_SIZE_PER_BLOCK
         
-        diskSize = 0
-        diskFileCount = 0
+        storageSize = 0
+        storageFileCount = 0
         if cls._globalTempDir and os.path.exists(cls._globalTempDir):
             try:
                 for root, dirs, files in os.walk(cls._globalTempDir):
                     for file in files:
                         if file.endswith('.pkl'):
-                            diskFileCount += 1
-                            diskSize += os.path.getsize(os.path.join(root, file))
+                            storageFileCount += 1
+                            storageSize += os.path.getsize(os.path.join(root, file))
             except (OSError, IOError):
                 pass
         
-        return cacheSize, diskSize, cls._cacheMissCount, cls._purgeCount, cls._saveDiskCount, cls._loadDiskCount
+        return cacheSize, storageSize, cls._cacheMissCount, cls._purgeCount, cls._saveCount, cls._loadCount

@@ -131,7 +131,7 @@ class FlowEditor:
         self.gcButton.bind('<Double-Button-3>', self.toggleDebugMode)
         self.gcButton.pack(side=tk.RIGHT, padx=(5, 0))
         
-        self.usageLabel = tk.Label(statusFrame, text="Cache: 0B Disk: 0B", bg='lightgray', anchor=tk.E)
+        self.usageLabel = tk.Label(statusFrame, text="Cache: 0B storage: 0B", bg='lightgray', anchor=tk.E)
         self.usageLabel.pack(side=tk.RIGHT)
         
         # キャッシュ統計の定期更新
@@ -178,6 +178,8 @@ class FlowEditor:
             pass
     
     def updateNodeText(self, node, text):
+        if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadFlowId'):
+            text = f"{node._loadFlowId} {text}"
         self.canvas.itemconfig(node.label, text=text)
     
     def adjustCanvasSize(self):
@@ -591,6 +593,7 @@ class FlowEditor:
                     # ノード固有のデータ復元
                     if hasattr(node, 'restore'):
                         node.restore(nodeData)
+                    node._loadFlowId = nodeData["id"]
                     
                     nodeMap[nodeData["id"]] = node
                     self.nodes.append(node)
@@ -770,7 +773,7 @@ class FlowEditor:
         
         cacheNodeCount = f"{self.getNodeCount()}個"
         
-        cacheSize, diskSize, cacheMissCount, purgeCount, saveDiskCount, loadDiskCount = CacheManager.getCacheStats()
+        cacheSize, storageSize, cacheMissCount, purgeCount, saveCount, loadCount = CacheManager.getCacheStats()
         
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 10*1024:
@@ -783,20 +786,20 @@ class FlowEditor:
             cacheStr = f"{int(cacheSize/1024/1024/1024)}GB"
         
         # ディスクサイズを適切な単位で表示
-        if diskSize < 10*1024:
-            diskStr = f"{int(diskSize)}B"
-        elif diskSize < 10*1024*1024:
-            diskStr = f"{int(diskSize/1024)}KB"
-        elif diskSize < 10*1024*1024*1024:
-            diskStr = f"{int(diskSize/1024/1024)}MB"
+        if storageSize < 10*1024:
+            storageStr = f"{int(storageSize)}B"
+        elif storageSize < 10*1024*1024:
+            storageStr = f"{int(storageSize/1024)}KB"
+        elif storageSize < 10*1024*1024*1024:
+            storageStr = f"{int(storageSize/1024/1024)}MB"
         else:
-            diskStr = f"{int(diskSize/1024/1024/1024)}GB"
+            storageStr = f"{int(storageSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
         if Debug.LEVEL_NONE < Debug.LEVEL:
-            self.usageLabel.config(text=f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveDiskCount:{saveDiskCount} LoadDiskCount: {loadDiskCount} Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} Disk: {diskStr}")
+            self.usageLabel.config(text=f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount} Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} storage: {storageStr}")
         else:
-            self.usageLabel.config(text=f"Node: {flowNodeCount} Cache: {cacheNodeCount} {cacheStr} Disk: {diskStr}")
+            self.usageLabel.config(text=f"Node: {flowNodeCount} Cache: {cacheNodeCount} {cacheStr} storage: {storageStr}")
         
         # 5秒後に再度更新
         self.root.after(5000, self.updateCacheStats)
@@ -812,14 +815,14 @@ class FlowEditor:
         """ガベージコレクションを強制実行"""
         # 実行前のメモリ使用量を取得
         beforeNodeCount = self.getNodeCount()
-        beforeCache, beforeDisk, _, _, _, _ = CacheManager.getCacheStats()
+        beforeCache, beforeStorage, _, _, _, _ = CacheManager.getCacheStats()
         
         # ガベージコレクションを実行
         collected = gc.collect()
         
         # 実行後のメモリ使用量を取得
         afterNodeCount = self.getNodeCount()
-        afterCache, afterDisk, _, _, _, _  = CacheManager.getCacheStats()
+        afterCache, afterStorage, _, _, _, _  = CacheManager.getCacheStats()
         
         # 結果を表示
         freedNodeCount = beforeNodeCount - afterNodeCount
@@ -850,16 +853,15 @@ class FlowEditor:
                 for msg in self._bugReportLog:
                     print(msg)
                 print("========================")
-        y = set()
-        for x in CacheManager._globalBlockCache:
-            y.add(x[0])
-        for x in y:
-            print(x)
 
     def toggleDebugMode(self, event):
         """デバッグモードを切り替える"""
         Debug.LEVEL = Debug.LEVEL_NONE if Debug.LEVEL_NONE != Debug.LEVEL else Debug.LEVEL_ALL
         self.statusLabel.config(text=f"状態: DEBUGモード {'OFF' if Debug.LEVEL == Debug.LEVEL_NONE else 'ON'}")
+
+        for node in self.nodes:
+            node.updateNodeText()
+
         return "break"
     
     def bugReport(self, name, message):

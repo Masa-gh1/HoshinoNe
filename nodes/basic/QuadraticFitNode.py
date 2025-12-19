@@ -1,5 +1,5 @@
 '''
-QuadraticFitNode class
+QuadraticFitNode - 2次関数近似ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.

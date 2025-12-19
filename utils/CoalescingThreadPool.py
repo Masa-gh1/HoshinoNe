@@ -7,6 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import sys
+import traceback
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import Dict, Any, Callable, Tuple
@@ -48,6 +50,8 @@ class CoalescingThreadPool:
                 result = func(*args, **kwargs)
                 future.set_result(result)
             except Exception as e:
+                tb = traceback.format_exc()
+                print(tb,file=sys.stderr)
                 future.set_exception(e)
             finally:
                 self._execute_next_task(obj_key)

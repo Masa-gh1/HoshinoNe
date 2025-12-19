@@ -1,5 +1,5 @@
 '''
-ProductNode - 統合乗算ノード（N→1）
+ProductNode - 総積ノード（N:1）
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.

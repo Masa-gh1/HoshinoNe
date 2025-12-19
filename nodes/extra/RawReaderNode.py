@@ -65,12 +65,12 @@ class RawReaderNode(BaseReaderNode):
     def updateNodeText(self):
         if self.filePaths:
             if len(self.filePaths) == 1:
-                fileName = os.path.basename(self.filePaths[0])
-                displayText = f"RAW読み込み\n{fileName}\nベイヤー変換: {self.demosaicAlgorithm}"
+                displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])}\nベイヤー変換: {self.demosaicAlgorithm}"
             else:
-                displayText = f"RAW読み込み\n{len(self.filePaths)}ファイル\nベイヤー変換: {self.demosaicAlgorithm}"
+                dirname = os.path.dirname(self.filePaths[0])
+                displayText = f"{self.text}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}\nベイヤー変換: {self.demosaicAlgorithm}"
         else:
-            displayText = "RAW読み込み\n未選択"
+            displayText = "{self.text}\n未選択"
         self.editor.updateNodeText(self, displayText)
     
     def store(self, nodeData):

@@ -1,5 +1,5 @@
 '''
-ScaleNode - 乗算ノード
+AbsoluteLowPassFilterNode - 絶対値ローパスフィルターノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -11,13 +11,13 @@ from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, TensorOperationMixin 
 
-class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
+class AbsoluteLowPassFilterNode(LazyNNOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "scale", "乗算")
+        super().__init__(canvas, editor, x, y, "absolute_lowpass_filter", "絶対値(低通)")
         self._combinedTensor = None
     
     def getColor(self):
-        return self._color_op
+        return self._color_func
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
@@ -36,10 +36,10 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
             else:
                 primaryDatas.append(data)
         
-        # auxiliary tensorを事前統合（乗算）
-        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.multiply)
+        # auxiliary tensorを事前統合
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.add)
         
-        # auxiliary matrixを事前統合（最初のもののみ使用）
+        # auxiliary matrixを事前統合
         self._combinedAuxiliaryMatrix = None
         if auxiliaryMatrices:
             self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
@@ -49,57 +49,37 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._scaleOperation)
+        lazyFlowData.addOperation(self._absoluteLowPassFilterOperation)
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _scaleOperation(self, flowData, planeIndex, x, y):
-        """スケール操作（事前統合されたauxiliaryデータを乗算）"""
+    def _absoluteLowPassFilterOperation(self, flowData, planeIndex, x, y):
+        """絶対値低域通過フィルター操作（閾値を超える値をNaNに変換）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
         
         result = block.data.copy()
         
-        # auxiliary tensorを乗算
+        # auxiliary tensorから閾値を取得
         if self._combinedAuxiliaryTensor:
             tensorValues = self.calculateTensorBlock(self._combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
-            result = np.multiply(result, tensorValues)
+            mask = np.abs(result) > tensorValues
+            result = np.where(mask, np.nan, result)
         
-        # auxiliary matrixを乗算
+        # auxiliary matrixから閾値を取得
         if self._combinedAuxiliaryMatrix:
             auxiliaryBlock = self._combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
-                result = np.multiply(result, auxiliaryBlock.data)
+                mask = np.abs(result) > auxiliaryBlock.data
+                result = np.where(mask, np.nan, result)
         
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
     def _computeDisplayLevels(self):
         """display_levelsを計算"""
         def compute(lazyFlowData):
+            # フィルター処理では元の範囲を保持（一部がNaNになるだけ）
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-            if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
-                return None
-                
-            inputMin = inputLevels['min']
-            inputMax = inputLevels['exclusive_upper']
-            
-            if self._combinedAuxiliaryTensor:
-                coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
-                if coeffBlock:
-                    width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
-                    
-                    # 乗算の場合は範囲が複雑になる
-                    products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
-                    
-                    return {
-                        'display_levels': {
-                            'min': min(products),
-                            'exclusive_upper': max(products)
-                        }
-                    }
-            # auxiliary matrixの場合は範囲計算が複雑なので省略
-            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
-            return {'display_levels': inputLevels}
+            return {'display_levels': inputLevels} if inputLevels else None
         return compute

@@ -8,7 +8,7 @@
             "name": "Python デバッガー: エントリーポイント実行",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/FlowEditor.py",
+            "program": "${workspaceFolder}/HoshinoNe.py",
             "console": "integratedTerminal"
         }
     ]

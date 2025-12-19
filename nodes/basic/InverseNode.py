@@ -1,5 +1,5 @@
 '''
-InverseNode class
+InverseNode - 逆数ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.

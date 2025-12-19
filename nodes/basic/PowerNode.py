@@ -1,5 +1,5 @@
 '''
-ScaleNode - 乗算ノード
+PowerNode - 冪算ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -11,9 +11,9 @@ from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, TensorOperationMixin 
 
-class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
+class PowerNode(LazyNNOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "scale", "乗算")
+        super().__init__(canvas, editor, x, y, "power", "冪算")
         self._combinedTensor = None
     
     def getColor(self):
@@ -36,8 +36,8 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
             else:
                 primaryDatas.append(data)
         
-        # auxiliary tensorを事前統合（乗算）
-        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.multiply)
+        # auxiliary tensorを事前統合（加算：指数の加算）
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.add)
         
         # auxiliary matrixを事前統合（最初のもののみ使用）
         self._combinedAuxiliaryMatrix = None
@@ -49,28 +49,31 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._scaleOperation)
+        lazyFlowData.addOperation(self._powerOperation)
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _scaleOperation(self, flowData, planeIndex, x, y):
-        """スケール操作（事前統合されたauxiliaryデータを乗算）"""
+    def _powerOperation(self, flowData, planeIndex, x, y):
+        """冪乗操作（事前統合されたauxiliaryデータを指数として使用）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
         
         result = block.data.copy()
+        is_complex = np.iscomplexobj(result)
         
-        # auxiliary tensorを乗算
+        # auxiliary tensorを指数として冪乗
         if self._combinedAuxiliaryTensor:
             tensorValues = self.calculateTensorBlock(self._combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
-            result = np.multiply(result, tensorValues)
+            power_result = np.power(result, tensorValues)
+            result = power_result if is_complex else np.real(power_result)
         
-        # auxiliary matrixを乗算
+        # auxiliary matrixを指数として冪乗
         if self._combinedAuxiliaryMatrix:
             auxiliaryBlock = self._combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
-                result = np.multiply(result, auxiliaryBlock.data)
+                power_result = np.power(result, auxiliaryBlock.data)
+                result = power_result if is_complex else np.real(power_result)
         
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
@@ -88,18 +91,18 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
                 coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
                 if coeffBlock:
                     width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
+                    expMin, expMax = self.calculateTensorRange(coeffBlock.data, width, height)
                     
-                    # 乗算の場合は範囲が複雑になる
-                    products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
-                    
+                    # 冪乗の範囲計算（実数部のみ）
+                    powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax), 
+                             np.real(inputMax ** expMin), np.real(inputMax ** expMax)]
                     return {
                         'display_levels': {
-                            'min': min(products),
-                            'exclusive_upper': max(products)
+                            'min': min(powers),
+                            'exclusive_upper': max(powers)
                         }
                     }
-            # auxiliary matrixの場合は範囲計算が複雑なので省略
-            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
+            
+            # 複雑な場合は元のdisplay_levelsをそのまま返す
             return {'display_levels': inputLevels}
         return compute

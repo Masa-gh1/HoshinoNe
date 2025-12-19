@@ -1,5 +1,5 @@
 '''
-SumNode - 統合加算ノード（N→1）
+SumNode - 総和ノード（N:1）
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.

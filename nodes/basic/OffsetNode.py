@@ -1,5 +1,5 @@
 '''
-OffsetNode - LazyFlowDataを用いるオフセット加算ノード
+OffsetNode - 加算ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.

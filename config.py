@@ -19,7 +19,7 @@ from version import VERSION_DATE
 VERSION = f"0.1.{VERSION_DATE}"
 
 # ノードの並列処理ワーカー数設定
-MAX_WORKERS = 4
+MAX_WORKERS = 8
 
 # デフォルトのブロックデータタイプ
 DEFAULT_BLOCK_TYPE = np.float64
@@ -29,7 +29,7 @@ DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 BLOCK_SIZE = 256
 
 # ブロックキャッシュサイズ設定
-MAX_BLOCK_CACHE_SIZE = 8000
+MAX_BLOCK_CACHE_SIZE = 16000
 
 # ブロック辺りの推定 byte 数 (画像なら)
 ESTIMATE_SIZE_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
