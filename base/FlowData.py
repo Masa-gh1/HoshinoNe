@@ -20,20 +20,18 @@ except ImportError:
     NUMPY_AVAILABLE = False
 
 class FlowData:
-    def __init__(self, headers=None):
-        # インスタンス識別子
+    def __init__(self, headers={}):
         self.instanceId = str(uuid.uuid4())
         
-        # キャッシュポリシー（元データはPERSISTENT固定）
-        self.cachePolicy = CacheManager.PERSISTENT
-        self.headers = headers if headers is not None else {}
+        self.cachePolicy = CacheManager.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
+        self.headers = headers
         self._dimensions = (0, 0)
         self._blockSize = BLOCK_SIZE
         self._maxValue = None
         self._minValue = None
-        self._percentileCache = {}
+        self._percentileCache = {} # パーセンタイルキャッシュ
         self._histogramCache = {}  # ヒストグラムキャッシュ
-        self._existingBlocks = set()  # 保存済みブロックの記録
+        self._existingBlocks = set()  # 保存済みブロックの記録 上書きチェックなどに使用する
         
         if not NUMPY_AVAILABLE:
             messagebox.showerror("FlowData エラー", "numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
@@ -41,56 +39,34 @@ class FlowData:
     
     def __del__(self):
         try:
-            # 統一キャッシュから自身のエントリを削除
+            # キャッシュから自身のエントリを削除
             CacheManager.clearByInstanceId(self.instanceId)
         except (ImportError, AttributeError):
             pass
-    
-    def _loadBlock(self, planeIndex, blockX, blockY):
-        """指定ブロックを読み込み（統一キャッシュ使用）"""
-        cacheKey = (self.instanceId, planeIndex, blockX, blockY)
-        
-        # 統一キャッシュから取得
-        cachedData = CacheManager.get(cacheKey)
-        if cachedData is not None:
-            return cachedData
-        
-        # ディスクから読み込み
-        return CacheManager.loadFromDisk(cacheKey)
-    
-    def _saveBlock(self, planeIndex, blockX, blockY, blockData):
-        """指定ブロックをキャッシュに保存（統一キャッシュ使用）"""
+
+    def _updateStatistics(self, planeIndex, x, y, blockData):
+        """統計情報を更新"""
         # ブロック上書き検出
-        blockKey = (planeIndex, blockX, blockY)
+        blockKey = (planeIndex, x, y)
         if blockKey in self._existingBlocks:
-            print(f"Warning: Block overwrite detected at plane={planeIndex}, x={blockX}, y={blockY}")
+            if CacheManager.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
+                print(f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
         else:
             self._existingBlocks.add(blockKey)
-        
-        # numpy配列として正規化
-        if isinstance(blockData, list):
-            arr = np.array(blockData, dtype=np.float64)
-        else:
-            arr = blockData
-        
-        # 最大値・最小値を更新し、キャッシュをクリア（NaN除外）
-        if arr.size > 0:
-            blockMax = np.nanmax(arr)
-            blockMin = np.nanmin(arr)
             
-            if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
-                self._maxValue = blockMax
-            if not np.isnan(blockMin) and (self._minValue is None or blockMin < self._minValue):
-                self._minValue = blockMin
-            
-            # データ更新時にキャッシュをクリア
-            self._percentileCache.clear()
-            self._histogramCache.clear()
-        
-        # 統一キャッシュに保存
-        cacheKey = (self.instanceId, planeIndex, blockX, blockY)
-        CacheManager.set(cacheKey, arr, self.cachePolicy)
-    
+            # 最大値・最小値を更新し、キャッシュをクリア
+            if 0 < blockData.size:
+                blockMax = np.nanmax(blockData)
+                blockMin = np.nanmin(blockData)
+                
+                if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
+                    self._maxValue = blockMax
+                if not np.isnan(blockMin) and (self._minValue is None or blockMin < self._minValue):
+                    self._minValue = blockMin
+                
+                # データ更新時にキャッシュをクリア
+                self._percentileCache.clear()
+                self._histogramCache.clear()
     
     def setDimensions(self, width, height):
         """データの次元を設定"""
@@ -140,11 +116,11 @@ class FlowData:
         if planeIndex >= planeCount or x >= width or y >= height:
             return None
         
-        blockX = x // self._blockSize
-        blockY = y // self._blockSize
-        
-        # 遅延ロード用のDataBlockを作成（データはNoneで初期化）
-        return DataBlock(planeIndex, blockX * self._blockSize, blockY * self._blockSize, None, self)
+        # 遅延ロード用のDataBlockを作成
+        block = DataBlock(planeIndex, x, y, None)
+        block.cachePolicy = self.cachePolicy
+        block.blockId = (self.instanceId, planeIndex, x, y)
+        return block
     
     def getBlockCount(self):
         """ブロックの総数を取得"""
@@ -173,13 +149,22 @@ class FlowData:
                         yield block
     
     def setBlock(self, dataBlock):
-        """ブロックデータを直接保存"""
-        blockX = dataBlock.x // self._blockSize
-        blockY = dataBlock.y // self._blockSize
+        """ブロックデータを保存"""
         dataBlock.flowData = self
+        dataBlock.blockId = (self.instanceId, dataBlock.planeIndex, dataBlock.x, dataBlock.y)
+        dataBlock.cachePolicy = self.cachePolicy
         
-        self._saveBlock(dataBlock.planeIndex, blockX, blockY, dataBlock.data)
+        # numpy配列として正規化
+        if isinstance(dataBlock.data, list):
+            arr = np.array(dataBlock.data, dtype=np.float64)
+        else:
+            arr = dataBlock.data
+        
+        dataBlock.data = arr
     
+        # 統計情報更新
+        self._updateStatistics(dataBlock.planeIndex, dataBlock.x, dataBlock.y, arr)
+        
     def getMaxValue(self):
         """データの最大値を取得"""
         return self._maxValue

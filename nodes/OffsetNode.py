@@ -52,9 +52,9 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _offsetOperation(self, flowData, planeIndex, blockX, blockY):
+    def _offsetOperation(self, flowData, planeIndex, x, y):
         """オフセット操作（事前統合されたauxiliaryデータを加算）"""
-        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
         

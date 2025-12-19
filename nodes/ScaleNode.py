@@ -52,9 +52,9 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _scaleOperation(self, flowData, planeIndex, blockX, blockY):
+    def _scaleOperation(self, flowData, planeIndex, x, y):
         """スケール操作（事前統合されたauxiliaryデータを乗算）"""
-        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
         

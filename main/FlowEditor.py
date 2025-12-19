@@ -383,6 +383,7 @@ class FlowEditor:
         thread.start()
     
     def processNodes(self):
+        startTime = time.time()
         try:
             # ステータス表示
             self.root.after(0, lambda: self.statusLabel.config(text="フロー実行中..."))
@@ -397,6 +398,7 @@ class FlowEditor:
                     # 同レベルのノードを並列実行
                     text=""
                     sep="開始: "
+                    
                     futures = []
                     for node in nodes:
                         # 再処理が必要かチェック
@@ -406,7 +408,7 @@ class FlowEditor:
                                 'result_callback': self.showResult,
                                 'progress_callback': lambda msg, current=None, total=None, n=node: self.showProgress(id(n), n.text, msg, current, total)
                             }
-                            future = NodeExecutor.submit(self._executeNodeWithTiming, node, context)
+                            future = NodeExecutor.submit(self._executeNode, node, context)
                             futures.append((node, future))
                             text +=f"{sep}{node.text}"
                             sep=","
@@ -449,6 +451,9 @@ class FlowEditor:
             self.root.after(0, lambda: self.statusLabel.config(text="状態: エラー"))
             self.root.after(0, lambda: self._clearAllProgress())
             self.root.after(0, lambda: self.highlightReprocessingNodes())
+        endTime = time.time()
+        elapsedMs = int((endTime - startTime) * 1000)
+        self.root.after(0, lambda n=node, ms=elapsedMs: self.resultText.insert(tk.END, f"({ms}ms)\n"))
     
     def getProcessLevels(self):
         """ノードを依存レベル別にグループ化"""
@@ -478,9 +483,10 @@ class FlowEditor:
         
         return levels
     
-    def _executeNodeWithTiming(self, node, context):
-        """ノード実行時間を測定"""
+    def _executeNode(self, node, context):
+        """ノード実行"""
         try:
+            # 時間を測定
             startTime = time.time()
             node.process(context)
             # 実行後にハッシュを更新
@@ -760,7 +766,7 @@ class FlowEditor:
         
         cacheNodeCount = f"{self.getNodeCount()}個"
         
-        cacheSize, diskSize = CacheManager.getCacheStats()
+        cacheSize, diskSize, cacheMissCount, purgeCount, saveDiskCount, loadDiskCount = CacheManager.getCacheStats()
         
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 10*1024:
@@ -783,7 +789,10 @@ class FlowEditor:
             diskStr = f"{int(diskSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
-        self.usageLabel.config(text=f"Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} Disk: {diskStr}")
+        if config.DEBUG:
+            self.usageLabel.config(text=f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveDiskCount:{saveDiskCount} LoadDiskCount: {loadDiskCount} Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} Disk: {diskStr}")
+        else:
+            self.usageLabel.config(text=f"Node: {flowNodeCount} Cache: {cacheNodeCount} {cacheStr} Disk: {diskStr}")
         
         # 5秒後に再度更新
         self.root.after(5000, self.updateCacheStats)
@@ -799,14 +808,14 @@ class FlowEditor:
         """ガベージコレクションを強制実行"""
         # 実行前のメモリ使用量を取得
         beforeNodeCount = self.getNodeCount()
-        beforeCache, beforeDisk = CacheManager.getCacheStats()
+        beforeCache, beforeDisk, _, _, _, _ = CacheManager.getCacheStats()
         
         # ガベージコレクションを実行
         collected = gc.collect()
         
         # 実行後のメモリ使用量を取得
         afterNodeCount = self.getNodeCount()
-        afterCache, afterDisk = CacheManager.getCacheStats()
+        afterCache, afterDisk, _, _, _, _  = CacheManager.getCacheStats()
         
         # 結果を表示
         freedNodeCount = beforeNodeCount - afterNodeCount

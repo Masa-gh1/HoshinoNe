@@ -115,18 +115,6 @@ class ResultWindow(tk.Toplevel):
         self._resize_timer = None
         self._last_width = self.winfo_width()
         
-        def on_configure(event):
-            if event.widget == self and not self._resize_timer:
-                current_width = self.winfo_width()
-                if current_width != self._last_width:
-                    self._last_width = current_width
-                    def update():
-                        self._resize_timer = None
-                        self._updateResultWindow()
-                    self._resize_timer = self.node.editor.root.after(300, update)
-        
-        self.bind('<Configure>', on_configure)
-        
         # データ選択コンボボックスを更新
         self._updateDataCombo()
         
@@ -137,6 +125,23 @@ class ResultWindow(tk.Toplevel):
         
         # コントロールフレームの表示状態を更新
         self._updateControlVisibility()
+        
+        def on_configure(event):
+            width = self.winfo_width()
+            if self._resize_timer:
+                pass
+            elif event.widget != self:
+                pass
+            elif self._last_width < 10 or width < 10:
+                self._last_width = width
+            elif self._last_width != width:
+                self._last_width = width
+                def update():
+                    self._resize_timer = None
+                    self._updateResultWindow()
+                self._resize_timer = self.node.editor.root.after(300, update)
+        
+        self.bind('<Configure>', on_configure)
     
     def update(self):
         """結果ウィンドウの内容を更新"""

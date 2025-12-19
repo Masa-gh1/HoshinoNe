@@ -17,9 +17,9 @@ from collections import UserDict
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
     
-    def __init__(self, sourceFlowData, cachePolicy=CacheManager.LIGHT_CALC):
+    def __init__(self, sourceFlowData):
         super().__init__(None)
-        self.cachePolicy = cachePolicy
+        self.cachePolicy = CacheManager.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowData = sourceFlowData
         self.operationChain = []
         self.instanceId = str(uuid.uuid4())
@@ -42,61 +42,38 @@ class LazyFlowData(FlowData):
         return operation
     
     def getBlock(self, planeIndex, x, y):
-        """ブロック取得"""
-        blockX, blockY = x // self._blockSize, y // self._blockSize
-        cacheKey = (self.instanceId, planeIndex, blockX, blockY)
-        
-        cachedData = CacheManager.get(cacheKey)
-        if cachedData is not None:
-            return DataBlock(planeIndex, blockX * self._blockSize, blockY * self._blockSize, cachedData, self)
-        
-        resultBlock = self._executeChain(planeIndex, blockX, blockY)
-        
-        if resultBlock and resultBlock.data is not None:
-            CacheManager.set(cacheKey, resultBlock.data, self.cachePolicy)
-        
-        return resultBlock
+        """指定位置からブロックを取得（遅延評価）"""
+        block = super().getBlock(planeIndex, x, y)
+        if not block:
+            return None
+        elif block.isValid():
+            return block
+        else:
+            # 計算済みの block が無いので遅延評価を開始
+            block = self._executeChain(planeIndex, x, y)
+            self.setBlock(block)
+            return block
     
-    def _executeChain(self, planeIndex, blockX, blockY):
+    def _executeChain(self, planeIndex, x, y):
         """操作チェーン実行"""
-        currentFlowData = self.sourceFlowData
+        curFlowData = self.sourceFlowData
         
-        for operation in self.operationChain:
-            resultBlock = operation(currentFlowData, planeIndex, blockX, blockY)
-            if resultBlock is None:
-                return DataBlock(planeIndex, blockX * self._blockSize, blockY * self._blockSize, 
-                               np.full((self._blockSize, self._blockSize), np.nan), self)
-            
-            if len(self.operationChain) > 1:
-                tempFlowData = FlowData(currentFlowData.headers.copy())
-                tempFlowData.setDimensions(*currentFlowData.getDimensions())
-                tempFlowData.setBlock(resultBlock)
-                currentFlowData = tempFlowData
+        for i,operation in enumerate(self.operationChain):
+            block = operation(curFlowData, planeIndex, x, y)
+            if block is None:
+                block = DataBlock(planeIndex, x, y, np.full((self._blockSize, self._blockSize), np.nan))
+                block.blockId = (self.instanceId, planeIndex, x, y)
+                block.cachePolicy = self.cachePolicy
+                break
+            elif 0 < i and i < len(self.operationChain)-1:
+                tempFlowData = FlowData(curFlowData.headers.copy())
+                tempFlowData.cachePolicy = CacheManager.TEMPORARY
+                tempFlowData.setDimensions(*curFlowData.getDimensions())
+                tempFlowData.setBlock(block)
+                curFlowData = tempFlowData
         
-        if resultBlock:
-            resultBlock.flowData = self
-        return resultBlock
+        return block
     
-    def getMinValue(self):
-        """最小値を取得（遅延評価）"""
-        minValue = None
-        for block in self.iterateBlocks():
-            if block and block.data is not None:
-                blockMin = np.nanmin(block.data)
-                if not np.isnan(blockMin):
-                    minValue = blockMin if minValue is None else min(minValue, blockMin)
-        return minValue
-    
-    def getMaxValue(self):
-        """最大値を取得（遅延評価）"""
-        maxValue = None
-        for block in self.iterateBlocks():
-            if block and block.data is not None:
-                blockMax = np.nanmax(block.data)
-                if not np.isnan(blockMax):
-                    maxValue = blockMax if maxValue is None else max(maxValue, blockMax)
-        return maxValue
-
 class LazyHeadersDict(UserDict):
     """遅延評価対応のheaders辞書"""
     

@@ -25,9 +25,9 @@ class NegateNode(LazyNNOperationNode):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _negateOperation(self, flowData, planeIndex, blockX, blockY):
+    def _negateOperation(self, flowData, planeIndex, x, y):
         """符号反転操作"""
-        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
         

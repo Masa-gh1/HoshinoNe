@@ -324,6 +324,61 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
+    def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
+        """FlowDataから画像配列を構築"""
+        width, height = flowData.getDimensions()
+        
+        if planeIndex is not None:
+            # 特定プレーンのみを使用
+            image = np.zeros((height, width), dtype=np.float32)
+            for block in flowData.iterateBlocks():
+                if block and block.planeIndex == planeIndex:
+                    y1, y2 = block.y, block.y + block.getHeight()
+                    x1, x2 = block.x, block.x + block.getWidth()
+                    if len(block.data.shape) == 3:
+                        image[y1:y2, x1:x2] = block.data[:, :, 0].astype(np.float32)
+                    else:
+                        image[y1:y2, x1:x2] = block.data.astype(np.float32)
+            
+            # 星検出用の正規化処理（統計的手法）
+            if normalize_for_detection:
+                min_val = np.min(image)
+                max_val = np.max(image)
+                margin = (max_val - min_val) * float(self.saturationThreshold) / 100
+                saturation_threshold_l = min_val + margin
+                saturation_threshold_h = max_val - margin
+                valid_mask = (image > saturation_threshold_l) & (image < saturation_threshold_h)
+                valid_pixels = image[valid_mask]
+                if np.any(valid_mask):
+                    mean_val = np.mean(valid_pixels)
+                    std_val = np.std(valid_pixels)
+                else:
+                    mean_val = np.mean(image)
+                    std_val = np.std(image)
+                if std_val > 0:
+                    image = (image - mean_val) / std_val
+                    image = np.clip((image + 3) / 6 * 255, 0, 255)
+                else:
+                    image = np.zeros_like(image)
+                image = image.astype(np.uint8)
+            # それ以外は入力値域を維持
+        else:
+            # 全プレーンを使用（従来の動作）
+            firstBlock = next(flowData.iterateBlocks())
+            if firstBlock and len(firstBlock.data.shape) == 3:
+                channels = firstBlock.data.shape[2]
+                image = np.zeros((height, width, channels), dtype=np.uint8)
+            else:
+                image = np.zeros((height, width), dtype=np.uint8)
+            
+            for block in flowData.iterateBlocks():
+                if block:
+                    y1, y2 = block.y, block.y + block.getHeight()
+                    x1, x2 = block.x, block.x + block.getWidth()
+                    image[y1:y2, x1:x2] = block.data
+        
+        return image
+    
     def _findOffsetByTemplateMatching(self, refImage, targetImage, previous_result=None):
         """テンプレートマッチングでオフセットを検出"""
         if previous_result is None:
@@ -668,144 +723,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         return grid_match_counts
     
-    def _cropToCommonArea(self, flowDatas):
-        """全画像の共通領域を計算してクロップ"""
-        if not flowDatas:
-            return flowDatas
-        
-        # 各画像の有効領域を計算
-        valid_regions = []
-        for flowData in flowDatas:
-            width, height = flowData.getDimensions()
-            # 黒い部分とNaN値（余白）を除いた有効領域を検出
-            image = self._flowDataToImage(flowData, planeIndex=0)
-            mask = (image > 0) & ~np.isnan(image)
-            
-            if np.any(mask):
-                coords = np.where(mask)
-                y_min, y_max = coords[0].min(), coords[0].max()
-                x_min, x_max = coords[1].min(), coords[1].max()
-                valid_regions.append((x_min, y_min, x_max, y_max))
-            else:
-                valid_regions.append((0, 0, width-1, height-1))
-        
-        # 共通領域を計算
-        x_min = max(region[0] for region in valid_regions)
-        y_min = max(region[1] for region in valid_regions)
-        x_max = min(region[2] for region in valid_regions)
-        y_max = min(region[3] for region in valid_regions)
-        
-        if x_min >= x_max or y_min >= y_max:
-            return flowDatas  # 共通領域がない場合はそのまま
-        
-        # 各画像をクロップ
-        cropped_datas = []
-        for flowData in flowDatas:
-            cropped_data = self._cropFlowData(flowData, x_min, y_min, x_max, y_max)
-            cropped_datas.append(cropped_data)
-        
-
-        return cropped_datas
-    
-    def _cropFlowData(self, flowData, x_min, y_min, x_max, y_max):
-        """指定範囲でFlowDataをクロップ"""
-        
-        crop_width = x_max - x_min + 1
-        crop_height = y_max - y_min + 1
-        
-        headers = flowData.headers.copy() if flowData.headers else {}
-        cropped_data = FlowData(headers)
-        cropped_data.setDimensions(crop_width, crop_height)
-        
-        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
-        
-        for planeIndex in range(planeCount):
-            plane_image = self._flowDataToImage(flowData, planeIndex)
-            cropped_plane = plane_image[y_min:y_max+1, x_min:x_max+1]
-            
-            for y in range(0, crop_height, BLOCK_SIZE):
-                for x in range(0, crop_width, BLOCK_SIZE):
-                    blockHeight = min(BLOCK_SIZE, crop_height - y)
-                    blockWidth = min(BLOCK_SIZE, crop_width - x)
-                    
-                    blockData = cropped_plane[y:y+blockHeight, x:x+blockWidth]
-                    block = DataBlock(planeIndex, x, y, blockData)
-                    cropped_data.setBlock(block)
-        
-        return cropped_data
-    
-    def _expandFlowData(self, flowData, offset_x, offset_y, new_width, new_height, context=None, globalProgress=None):
-        """拡張領域にFlowDataを配置"""
-        
-        headers = flowData.headers.copy() if flowData.headers else {}
-        expanded_data = FlowData(headers)
-        expanded_data.setDimensions(new_width, new_height)
-        
-        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
-        
-        for planeIndex in range(planeCount):
-            # 元画像を取得
-            original_image = self._flowDataToImage(flowData, planeIndex)
-            
-            # 拡張領域に配置（余白はNaN）
-            expanded_image = np.full((new_height, new_width), np.nan, dtype=np.float64)
-            h, w = original_image.shape
-            expanded_image[offset_y:offset_y+h, offset_x:offset_x+w] = original_image.astype(np.float64)
-            
-            # ブロック化
-            for y in range(0, new_height, BLOCK_SIZE):
-                for x in range(0, new_width, BLOCK_SIZE):
-                    blockHeight = min(BLOCK_SIZE, new_height - y)
-                    blockWidth = min(BLOCK_SIZE, new_width - x)
-                    
-                    blockData = expanded_image[y:y+blockHeight, x:x+blockWidth]
-                    block = DataBlock(planeIndex, x, y, blockData)
-                    expanded_data.setBlock(block)
-                    
-                    if context and globalProgress:
-                        globalProgress[0] += 1
-                        if globalProgress[0] % 10 == 0:
-                            self.reportProgress(context, "拡張処理中", globalProgress[0], globalProgress[1])
-        
-        return expanded_data
-    
-    def _alignImageWithExpansion(self, flowData, dx, dy, new_width, new_height, context=None, globalProgress=None):
-        """拡張領域で位置合わせを実行"""
-        
-        headers = flowData.headers.copy() if flowData.headers else {}
-        aligned_data = FlowData(headers)
-        aligned_data.setDimensions(new_width, new_height)
-        
-        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
-        
-        for planeIndex in range(planeCount):
-            # 元画像を取得
-            original_image = self._flowDataToImage(flowData, planeIndex)
-            
-            # 平行移動行列を作成
-            M = np.float32([[1, 0, dx], [0, 1, dy]])
-            
-            # 拡張領域で変換（余白はNaN）
-            temp_image = cv2.warpAffine(original_image.astype(np.float64), M, (new_width, new_height))
-            aligned_image = np.where(temp_image == 0, np.nan, temp_image)
-            
-            # ブロック化
-            for y in range(0, new_height, BLOCK_SIZE):
-                for x in range(0, new_width, BLOCK_SIZE):
-                    blockHeight = min(BLOCK_SIZE, new_height - y)
-                    blockWidth = min(BLOCK_SIZE, new_width - x)
-                    
-                    blockData = aligned_image[y:y+blockHeight, x:x+blockWidth]
-                    block = DataBlock(planeIndex, x, y, blockData)
-                    aligned_data.setBlock(block)
-                    
-                    if context and globalProgress:
-                        globalProgress[0] += 1
-                        if globalProgress[0] % 10 == 0:
-                            self.reportProgress(context, "位置合わせ中", globalProgress[0], globalProgress[1])
-        
-        return aligned_data
-    
     def _detectStars(self, image):
         """画像から星点を検出"""
         # ガウシアンブラーでノイズ除去
@@ -932,62 +849,138 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         return distributed_stars[:max_total_stars], grid_selected_counts
     
-    def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
-        """FlowDataから画像配列を構築"""
-        width, height = flowData.getDimensions()
+    def _expandFlowData(self, flowData, offset_x, offset_y, new_width, new_height, context=None, globalProgress=None):
+        """拡張領域にFlowDataを配置"""
         
-        if planeIndex is not None:
-            # 特定プレーンのみを使用
-            print("in"); time = datetime.datetime.now()
-            image = np.zeros((height, width), dtype=np.float32)
-            for block in flowData.iterateBlocks():
-                if block and block.planeIndex == planeIndex:
-                    y1, y2 = block.y, block.y + block.getHeight()
-                    x1, x2 = block.x, block.x + block.getWidth()
-                    if len(block.data.shape) == 3:
-                        image[y1:y2, x1:x2] = block.data[:, :, 0].astype(np.float32)
-                    else:
-                        image[y1:y2, x1:x2] = block.data.astype(np.float32)
-            print(f"out {datetime.datetime.now() - time}")
+        headers = flowData.headers.copy() if flowData.headers else {}
+        expanded_data = FlowData(headers)
+        expanded_data.setDimensions(new_width, new_height)
+        
+        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
+        
+        for planeIndex in range(planeCount):
+            # 元画像を取得
+            original_image = self._flowDataToImage(flowData, planeIndex)
             
-            # 星検出用の正規化処理（統計的手法）
-            if normalize_for_detection:
-                min_val = np.min(image)
-                max_val = np.max(image)
-                margin = (max_val - min_val) * float(self.saturationThreshold) / 100
-                saturation_threshold_l = min_val + margin
-                saturation_threshold_h = max_val - margin
-                valid_mask = (image > saturation_threshold_l) & (image < saturation_threshold_h)
-                valid_pixels = image[valid_mask]
-                if np.any(valid_mask):
-                    mean_val = np.mean(valid_pixels)
-                    std_val = np.std(valid_pixels)
-                else:
-                    mean_val = np.mean(image)
-                    std_val = np.std(image)
-                if std_val > 0:
-                    image = (image - mean_val) / std_val
-                    image = np.clip((image + 3) / 6 * 255, 0, 255)
-                else:
-                    image = np.zeros_like(image)
-                image = image.astype(np.uint8)
-            # それ以外は入力値域を維持
-        else:
-            # 全プレーンを使用（従来の動作）
-            firstBlock = next(flowData.iterateBlocks())
-            if firstBlock and len(firstBlock.data.shape) == 3:
-                channels = firstBlock.data.shape[2]
-                image = np.zeros((height, width, channels), dtype=np.uint8)
+            # 拡張領域に配置（余白はNaN）
+            expanded_image = np.full((new_height, new_width), np.nan, dtype=np.float64)
+            h, w = original_image.shape
+            expanded_image[offset_y:offset_y+h, offset_x:offset_x+w] = original_image.astype(np.float64)
+            
+            # ブロック化
+            for y in range(0, new_height, BLOCK_SIZE):
+                for x in range(0, new_width, BLOCK_SIZE):
+                    blockHeight = min(BLOCK_SIZE, new_height - y)
+                    blockWidth = min(BLOCK_SIZE, new_width - x)
+                    
+                    blockData = expanded_image[y:y+blockHeight, x:x+blockWidth]
+                    block = DataBlock(planeIndex, x, y, blockData)
+                    expanded_data.setBlock(block)
+                    
+                    if context and globalProgress:
+                        globalProgress[0] += 1
+                        if globalProgress[0] % 10 == 0:
+                            self.reportProgress(context, "拡張処理中", globalProgress[0], globalProgress[1])
+        
+        return expanded_data
+    
+    def _alignImageWithExpansion(self, flowData, dx, dy, new_width, new_height, context=None, globalProgress=None):
+        """拡張領域で位置合わせを実行"""
+        
+        headers = flowData.headers.copy() if flowData.headers else {}
+        aligned_data = FlowData(headers)
+        aligned_data.setDimensions(new_width, new_height)
+        
+        planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
+        
+        for planeIndex in range(planeCount):
+            # 元画像を取得
+            original_image = self._flowDataToImage(flowData, planeIndex)
+            
+            # 平行移動行列を作成
+            M = np.float32([[1, 0, dx], [0, 1, dy]])
+            
+            # 拡張領域で変換（余白はNaN）
+            temp_image = cv2.warpAffine(original_image.astype(np.float64), M, (new_width, new_height))
+            aligned_image = np.where(temp_image == 0, np.nan, temp_image)
+            
+            # ブロック化
+            for y in range(0, new_height, BLOCK_SIZE):
+                for x in range(0, new_width, BLOCK_SIZE):
+                    blockHeight = min(BLOCK_SIZE, new_height - y)
+                    blockWidth = min(BLOCK_SIZE, new_width - x)
+                    
+                    blockData = aligned_image[y:y+blockHeight, x:x+blockWidth]
+                    block = DataBlock(planeIndex, x, y, blockData)
+                    aligned_data.setBlock(block)
+                    
+                    if context and globalProgress:
+                        globalProgress[0] += 1
+                        if globalProgress[0] % 10 == 0:
+                            self.reportProgress(context, "位置合わせ中", globalProgress[0], globalProgress[1])
+        
+        return aligned_data
+    
+    def _cropToCommonArea(self, flowDatas):
+        """全画像の共通領域を計算してクロップ"""
+        if not flowDatas:
+            return flowDatas
+        
+        # 各画像の有効領域を計算
+        valid_regions = []
+        for flowData in flowDatas:
+            width, height = flowData.getDimensions()
+            # 黒い部分とNaN値（余白）を除いた有効領域を検出
+            image = self._flowDataToImage(flowData, planeIndex=0)
+            mask = (image > 0) & ~np.isnan(image)
+            
+            if np.any(mask):
+                coords = np.where(mask)
+                y_min, y_max = coords[0].min(), coords[0].max()
+                x_min, x_max = coords[1].min(), coords[1].max()
+                valid_regions.append((x_min, y_min, x_max, y_max))
             else:
-                image = np.zeros((height, width), dtype=np.uint8)
-            
-            for block in flowData.iterateBlocks():
-                if block:
-                    y1, y2 = block.y, block.y + block.getHeight()
-                    x1, x2 = block.x, block.x + block.getWidth()
-                    image[y1:y2, x1:x2] = block.data
+                valid_regions.append((0, 0, width-1, height-1))
         
-        return image
+        # 共通領域を計算
+        x_min = max(region[0] for region in valid_regions)
+        y_min = max(region[1] for region in valid_regions)
+        x_max = min(region[2] for region in valid_regions)
+        y_max = min(region[3] for region in valid_regions)
+        
+        if x_min >= x_max or y_min >= y_max:
+            return flowDatas  # 共通領域がない場合はそのまま
+        
+        # 各画像をクロップ
+        cropped_datas = []
+        for flowData in flowDatas:
+            # 指定範囲でFlowDataをクロップ
+            crop_width = x_max - x_min + 1
+            crop_height = y_max - y_min + 1
+            
+            headers = flowData.headers.copy() if flowData.headers else {}
+            cropped_data = FlowData(headers)
+            cropped_data.setDimensions(crop_width, crop_height)
+            
+            planeCount = flowData.getPlaneCount() if hasattr(flowData, 'getPlaneCount') else 1
+            
+            for planeIndex in range(planeCount):
+                plane_image = self._flowDataToImage(flowData, planeIndex)
+                cropped_plane = plane_image[y_min:y_max+1, x_min:x_max+1]
+                
+                for y in range(0, crop_height, BLOCK_SIZE):
+                    for x in range(0, crop_width, BLOCK_SIZE):
+                        blockHeight = min(BLOCK_SIZE, crop_height - y)
+                        blockWidth = min(BLOCK_SIZE, crop_width - x)
+                        
+                        blockData = cropped_plane[y:y+blockHeight, x:x+blockWidth]
+                        block = DataBlock(planeIndex, x, y, blockData)
+                        cropped_data.setBlock(block)
+            
+            cropped_datas.append(cropped_data)
+        
+
+        return cropped_datas
     
     def onEdit(self):
         return ImageAlignmentSettingsDialog(self.editor.root, self)
