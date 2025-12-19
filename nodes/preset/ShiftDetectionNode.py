@@ -643,7 +643,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
                 if inliers > len(matches) * 0.5 or inliers > 40:  # 50%以上または40個以上のインライア
                     break
         
-        extra_info["ransac_iteration"] = ransac_iteration
+        extra_info["ransac_iteration"] = ransac_iteration + 1
         extra_info["inliers"] = inliers
         extra_info["inliers_min_required"] = 5
         

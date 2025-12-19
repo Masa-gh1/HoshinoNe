@@ -932,18 +932,29 @@ class FlowEditor:
         # 全オブジェクトからflowNodeを探す
         objs = []
         objCount = 0
-        typeCounts = {}
         moduleCounts = {}
+        referrerCounts = {}
         nodeCount = 0
         for obj in gc.get_objects():
             objCount += 1
 
-            t = type(obj)
-            name = t.__name__
-            typeCounts[name] = typeCounts.setdefault(name,0) + 1
+            objType = type(obj).__name__
+            objMod  = getattr(obj, '__module__', getattr(type(obj), '__module__', 'unknown'))
+            objMod  = str(objMod) if objMod else ''
+            objName = getattr(obj, '__name__', objType) if not objMod in 'six' else objType
+            objSym  = f"{objMod}.{objName}" if objMod else f".{objName}"
+            moduleCounts[objSym] = moduleCounts.setdefault(objSym,0) + 1
 
-            name = getattr(obj, '__module__', getattr(t, '__module__', 'unknown'))
-            moduleCounts[name] = moduleCounts.setdefault(name,0) + 1
+            if not objMod in ['builtins']:
+                for ref in gc.get_referents(obj):
+                    refType = type(ref).__name__
+                    refMod  = getattr(ref, '__module__', getattr(type(ref), '__module__', 'unknown'))
+                    refMod  = str(refMod) if refMod else ''
+                    refName = getattr(ref, '__name__', refType) if not refMod in 'six' else refType
+                    fm      = f"{objMod}" if objMod else f".{objName}"
+                    to      = f"{refMod}" if refMod else f".{refName}"
+                    refSym = f"{fm} => {to}"
+                    referrerCounts[refSym] = referrerCounts.setdefault(refSym, 0) + 1
 
             if(  isinstance( obj, FlowNode)
         #      or isinstance( obj, FlowData)
@@ -951,23 +962,36 @@ class FlowEditor:
                 objs.append(obj)
                 nodeCount += 1
         
-        print(f"残存object数: {objCount} ", end="")
+        print(f"残存object数: {len(moduleCounts)} ", end="")
         _y = 0
-        for x,y in sorted(list(typeCounts.items()), key=lambda x:x[1]):
-            if _y != y:
-                print(f"\n  {y}: ", end="")
-            print(x, end=" ")
-            _y = y
-        print()
-
-        print(f"残存object数 module別: {len(moduleCounts)} ", end="")
-        _y = 0
+        _n = 0
         for x,y in sorted(list(moduleCounts.items()), key=lambda x:x[1]):
             if _y != y:
+                if 3<_n:
+                    print(f"... {_n-3}", end="")
+                _n = 0
                 print(f"\n  {y}: ", end="")
-            print(x, end=" ")
+            if _n < 3:
+                print(x, end=" ")
             _y = y
+            _n += 1
         print()
+
+        print(f"残存referrer数", end="")
+        _y = 0
+        _n = 0
+        for x,y in sorted(list(referrerCounts.items()), key=lambda x:x[1]):
+            if _y != y:
+                if 3<_n:
+                    print(f"... {_n-3}", end="")
+                _n = 0
+                print(f"\n  {y}: ", end="")
+            if _n < 3:
+                print(x, end=" ")
+            _y = y
+            _n += 1
+        print()
+
         print(f"残存flowNode数: {nodeCount}")
         
         for i, obj in enumerate(objs):
