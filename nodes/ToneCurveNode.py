@@ -186,9 +186,9 @@ class ToneCurveNode(NNBlockOperationNode):
             self.lastConfigHash = newHash
             self.editor.onNodeConfigChanged(self)
     
-    def getDisplayLevels(self, inputFlowData):
-        """入力データから出力のdisplay_levelsを計算"""
-        return {
+    def setupDisplayLevels(self, outputFlowData, inputFlowData):
+        """出力のdisplay_levelsを設定"""
+        outputFlowData.headers['display_levels'] = {
             'min': self.outputMin,
             'exclusive_upper': self.outputEnd
         }

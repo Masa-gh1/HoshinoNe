@@ -31,9 +31,8 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
         """加算では全入力データを包含するサイズを使用"""
         return self.getUnionDimensions(inputDatas)
     
-    def getDisplayLevels(self, inputDatas):
-        """入力データの加算されたdisplay_levelsを返す"""
-        # 全入力データのdisplay_levelsを収集
+    def setupDisplayLevels(self, outputFlowData, inputDatas):
+        """加算されたdisplay_levelsを設定"""
         allLevels = []
         for data in inputDatas:
             if data.headers and 'display_levels' in data.headers:
@@ -41,13 +40,12 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
                 allLevels.append((levels['min'], levels['exclusive_upper']))
         
         if not allLevels:
-            return None
+            return
         
-        # 加算の場合：全ての範囲の合計
         minSum = sum(level[0] for level in allLevels)
         maxSum = sum(level[1] for level in allLevels)
         
-        return {
+        outputFlowData.headers['display_levels'] = {
             'min': minSum,
             'exclusive_upper': maxSum
         }

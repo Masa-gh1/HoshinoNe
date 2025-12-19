@@ -339,12 +339,13 @@ class ResultWindow:
         displayLevelEnd = displayLevels["exclusive_upper"]
         
         # パーセンタイルベースの適応的スケーリング
-        minValue = flowData.getMinValue()
-        maxValue = flowData.getMaxValue()
-        # 半開区間用の終端値を作成
-        allLevelEnd = createHalfOpenEnd(minValue, maxValue)
         adpLevelMin = flowData.getPercentile(1)
         adpLevelEnd = flowData.getPercentile(99)
+        
+        # All levels
+        minValue = flowData.getMinValue()
+        maxValue = flowData.getMaxValue()
+        allLevelEnd = createHalfOpenEnd(minValue, maxValue) # 半開区間用の終端値を作成
         
         content = []
         

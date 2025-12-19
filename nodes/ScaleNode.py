@@ -34,10 +34,10 @@ class ScaleNode(NNBlockOperationNode, TensorOperationMixin):
         
         return matrixDatas
     
-    def getDisplayLevels(self, inputFlowData):
-        """スケール乗算後のdisplay_levelsを計算"""
+    def setupDisplayLevels(self, outputFlowData, inputFlowData):
+        """スケール乗算後のdisplay_levelsを設定"""
         if not inputFlowData.headers or 'display_levels' not in inputFlowData.headers:
-            return None
+            return
         
         inputLevels = inputFlowData.headers['display_levels']
         inputMin = inputLevels['min']
@@ -49,15 +49,16 @@ class ScaleNode(NNBlockOperationNode, TensorOperationMixin):
                 width, height = inputFlowData.getDimensions()
                 scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
                 
-                # 乗算の場合は範囲が複雑になる
                 products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
                 
-                return {
+                outputFlowData.headers['display_levels'] = {
                     'min': min(products),
                     'exclusive_upper': max(products)
                 }
+                return
         
-        return None
+        # tensorがない場合は入力のまま
+        outputFlowData.headers['display_levels'] = inputLevels
     
     def processBlock(self, block):
         """ブロック処理"""
@@ -65,43 +66,8 @@ class ScaleNode(NNBlockOperationNode, TensorOperationMixin):
             return block
         
         # tensor係数から実際の値を計算
-        tensorValues = self._calculateTensorBlock(self._combinedTensor, block.planeIndex, block.x, block.y, block.data.shape)
+        tensorValues = self.calculateTensorBlock(self._combinedTensor, block.planeIndex, block.x, block.y, block.data.shape, defaultValue=1.0)
         
         # 乗算実行
         result = np.multiply(block.data, tensorValues)
         return DataBlock(block.planeIndex, block.x, block.y, result)
-    
-    def _calculateTensorBlock(self, tensorData, planeIdx, blockX, blockY, blockShape):
-        """テンソルデータからブロック内の各座標に対応する値を計算"""
-        width, height = tensorData.getDimensions()
-        planeCount = tensorData.getPlaneCount()
-        if width < 1 or height < 1 or planeIdx >= planeCount:
-            return np.ones(blockShape)
-        
-        coeffBlock = tensorData.getBlock(planeIdx, 0, 0)
-        if not coeffBlock:
-            return np.ones(blockShape)
-        
-        coeffMatrix = coeffBlock.data
-        maxOrderY, maxOrderX = coeffMatrix.shape
-        
-        blockHeight, blockWidth = blockShape
-        by_coords, bx_coords = np.meshgrid(range(blockHeight), range(blockWidth), indexing='ij')
-        x_coords = blockX + bx_coords
-        y_coords = blockY + by_coords
-        
-        result = np.zeros(blockShape)
-        y_power = np.ones_like(x_coords, dtype=np.float64)
-        for j in range(maxOrderY):
-            x_power = np.ones_like(x_coords, dtype=np.float64)
-            for i in range(maxOrderX):
-                coeff = coeffMatrix[j, i]
-                if coeff != 0:
-                    result += coeff * x_power * y_power
-                x_power *= x_coords
-            y_power *= y_coords
-        
-        return result
-    
-
-    

@@ -30,12 +30,10 @@ class CountNode(N1BlockOperationNode):
         """カウントでは全入力データを包含するサイズを使用"""
         return self.getUnionDimensions(inputDatas)
     
-    def getDisplayLevels(self, inputDatas):
-        """入力データ数に基づくdisplay_levelsを返す"""
-        # 入力データ数をカウント
+    def setupDisplayLevels(self, outputFlowData, inputDatas):
+        """入力データ数に基づくdisplay_levelsを設定"""
         dataCount = len(inputDatas)
-        
-        return {
+        outputFlowData.headers['display_levels'] = {
             'min': 0.0,
             'exclusive_upper': float(dataCount)
         }

@@ -18,8 +18,11 @@ class InverseNode(NNBlockOperationNode):
     def getColor(self):
         return self._color_func
     
-    def getDisplayLevels(self, inputFlowData):
-        """入力データの逆数変換されたdisplay_levelsを返す"""
+    def setupDisplayLevels(self, outputFlowData, inputFlowData):
+        """逆数変換されたdisplay_levelsを設定"""
+        if not inputFlowData.headers or 'display_levels' not in inputFlowData.headers:
+            return
+            
         inputLevels = inputFlowData.headers['display_levels']
         inputMin = inputLevels['min']
         inputMax = inputLevels['exclusive_upper']
@@ -30,11 +33,13 @@ class InverseNode(NNBlockOperationNode):
             outputMin = 1.0 / inputMax
             outputMax = 1.0 / inputMin
             
-            return {
+            outputFlowData.headers['display_levels'] = {
                 'min': outputMin,
                 'exclusive_upper': createHalfOpenEnd(outputMin, outputMax)
             }
-        return None
+        else:
+            # ゼロを含む場合は元の値を保持
+            outputFlowData.headers['display_levels'] = inputLevels
     
     def processBlock(self, block):
         """単一ブロックの逆数処理"""

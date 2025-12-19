@@ -18,17 +18,19 @@ class NegateNode(NNBlockOperationNode):
     def getColor(self):
         return self._color_func
     
-    def getDisplayLevels(self, inputFlowData):
-        """入力データの符号反転されたdisplay_levelsを返す"""
+    def setupDisplayLevels(self, outputFlowData, inputFlowData):
+        """符号反転されたdisplay_levelsを設定"""
+        if not inputFlowData.headers or 'display_levels' not in inputFlowData.headers:
+            return
+            
         inputLevels = inputFlowData.headers['display_levels']
         inputMin = inputLevels['min']
         inputMax = inputLevels['exclusive_upper']
         
-        # 符号反転: [a, b) → (-b, -a] → [-b, -a+ε)
         outputMin = -inputMax
         outputMax = -inputMin
         
-        return {
+        outputFlowData.headers['display_levels'] = {
             'min': outputMin,
             'exclusive_upper': createHalfOpenEnd(outputMin, outputMax)
         }

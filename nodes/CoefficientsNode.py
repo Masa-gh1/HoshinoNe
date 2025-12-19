@@ -102,6 +102,7 @@ class CoefficientsNode(FlowNode):
         lines = [f'y^{j}' for j in range(height)]
         
         headers = {
+            'category': 'auxiliary',
             'type': 'tensor',
             'mode': mode,
             'axes': ['x_order', 'y_order'],

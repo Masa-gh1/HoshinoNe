@@ -42,10 +42,8 @@ class NNBlockOperationNode(FlowNode):
             flowData = FlowData(headers)
             flowData.setDimensions(width, height)
             
-            # display_levelsを計算して設定
-            displayLevels = self.getDisplayLevels(inputData)
-            if displayLevels and flowData.headers:
-                flowData.headers['display_levels'] = displayLevels
+            # display_levelsをheaders経由で計算
+            self.setupDisplayLevels(flowData, inputData)
             
             resultFlowDatas.append(flowData)
             
@@ -77,16 +75,18 @@ class NNBlockOperationNode(FlowNode):
         """
         return inputDatas
     
-    def getDisplayLevels(self, inputFlowData):
-        """入力データから出力のdisplay_levelsを計算（サブクラスでオーバーライド）
+
+    
+    def setupDisplayLevels(self, outputFlowData, inputFlowData):
+        """出力FlowDataのdisplay_levelsを設定（サブクラスでオーバーライド可能）
         
         Args:
+            outputFlowData: 出力FlowData
             inputFlowData: 入力FlowData
-            
-        Returns:
-            display_levelsの辞書、またはNone
         """
-        return None
+        # デフォルトは入力のままコピー
+        if inputFlowData.headers and 'display_levels' in inputFlowData.headers:
+            outputFlowData.headers['display_levels'] = inputFlowData.headers['display_levels']
     
     @abstractmethod
     def processBlock(self, block):

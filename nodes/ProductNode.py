@@ -31,9 +31,8 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
         """乗算では全入力データを包含するサイズを使用"""
         return self.getUnionDimensions(inputDatas)
     
-    def getDisplayLevels(self, inputDatas):
-        """入力データの乗算されたdisplay_levelsを返す"""
-        # 全入力データのdisplay_levelsを収集
+    def setupDisplayLevels(self, outputFlowData, inputDatas):
+        """乗算されたdisplay_levelsを設定"""
         allLevels = []
         for data in inputDatas:
             if data.headers and 'display_levels' in data.headers:
@@ -41,19 +40,17 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
                 allLevels.append((levels['min'], levels['exclusive_upper']))
         
         if not allLevels:
-            return None
+            return
         
-        # 乗算の場合：範囲の積を計算
         minProduct = 1.0
         maxProduct = 1.0
         
         for minVal, maxVal in allLevels:
-            # 範囲の積を計算（符号を考慮）
             products = [minProduct * minVal, minProduct * maxVal, maxProduct * minVal, maxProduct * maxVal]
             minProduct = min(products)
             maxProduct = max(products)
         
-        return {
+        outputFlowData.headers['display_levels'] = {
             'min': minProduct,
             'exclusive_upper': maxProduct
         }

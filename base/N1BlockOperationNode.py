@@ -56,10 +56,8 @@ class N1BlockOperationNode(FlowNode):
             flowData = FlowData(headers)
             flowData.setDimensions(width, height)
             
-            # 入力データからdisplay_levelsを計算して設定
-            displayLevels = self.getDisplayLevels(inputDatas)
-            if displayLevels and flowData.headers:
-                flowData.headers['display_levels'] = displayLevels
+            # display_levelsをheaders経由で設定
+            self.setupDisplayLevels(flowData, inputDatas)
             
             # ブロック単位で並列処理
             futures = []
@@ -81,16 +79,18 @@ class N1BlockOperationNode(FlowNode):
         
         self.reportProgress(context, "完了")
     
-    def getDisplayLevels(self, inputDatas):
-        """入力データから出力のdisplay_levelsを計算（サブクラスでオーバーライド）
+    def setupDisplayLevels(self, outputFlowData, inputDatas):
+        """出力FlowDataのdisplay_levelsを設定（サブクラスでオーバーライド可能）
         
         Args:
+            outputFlowData: 出力FlowData
             inputDatas: 入力FlowDataのリスト
-            
-        Returns:
-            display_levelsの辞書、またはNone
         """
-        return None
+        # デフォルトは基準データのままコピー
+        if self._baseDataIndex is not None and inputDatas:
+            baseData = inputDatas[self._baseDataIndex]
+            if baseData.headers and 'display_levels' in baseData.headers:
+                outputFlowData.headers['display_levels'] = baseData.headers['display_levels']
     
     @abstractmethod
     def processBlock(self, block, inputDatas):

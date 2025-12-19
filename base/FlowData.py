@@ -7,16 +7,11 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import tempfile
-import pickle
+import uuid
 from tkinter import messagebox
-import os
-import shutil
-import time
-import atexit
-import threading
-from config import BLOCK_SIZE, MAX_BLOCK_CACHE_SIZE
+from config import BLOCK_SIZE
 from .DataBlock import DataBlock
+from .CacheManager import CacheManager
 
 try:
     import numpy as np
@@ -25,28 +20,12 @@ except ImportError:
     NUMPY_AVAILABLE = False
 
 class FlowData:
-    _cleanup_registered = False
-    _globalBlockCache = {}
-    _globalTempDir = None
-    _lock = threading.Lock()
-    
     def __init__(self, headers=None):
-        # 初回のみクリーンアップを登録
-        if not FlowData._cleanup_registered:
-            atexit.register(FlowData._cleanupOldTempDirs)
-            FlowData._cleanupOldTempDirs()
-            FlowData._cleanup_registered = True
+        # インスタンス識別子
+        self.instanceId = str(uuid.uuid4())
         
-        # グローバル変数の操作をスレッドセーフに
-        with FlowData._lock:
-            # グローバルなFlowData_*ディレクトリを作成（初回のみ）
-            if FlowData._globalTempDir is None:
-                FlowData._globalTempDir = tempfile.mkdtemp(prefix="FlowData_")
-        
-        # インスタンスごとのdata_*サブディレクトリを作成
-        self.tempDir = tempfile.mkdtemp(prefix=os.path.join(FlowData._globalTempDir, "data_"))
-        
-        os.makedirs(self.tempDir, exist_ok=True)
+        # キャッシュポリシー（元データはPERSISTENT固定）
+        self.cachePolicy = CacheManager.PERSISTENT
         self.headers = headers if headers is not None else {}
         self._dimensions = (0, 0)
         self._blockSize = BLOCK_SIZE
@@ -60,79 +39,27 @@ class FlowData:
             messagebox.showerror("FlowData エラー", "numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
             return
     
-    @staticmethod
-    def _cleanupOldTempDirs():
-        """古いFlowData一時ディレクトリを削除"""
-        try:
-            tempRoot = tempfile.gettempdir()
-            currentTime = time.time()
-            
-            for item in os.listdir(tempRoot):
-                if item.startswith("FlowData_"):
-                    itemPath = os.path.join(tempRoot, item)
-                    if os.path.isdir(itemPath):
-                        # 24時間以上古いディレクトリまたは空のディレクトリを削除
-                        isOld = currentTime - os.path.getmtime(itemPath) > 24*60*60
-                        isEmpty = len(os.listdir(itemPath)) == 0
-                        
-                        if isOld or isEmpty:
-                            shutil.rmtree(itemPath, ignore_errors=True)
-                            # グローバル参照をクリア
-                            if FlowData._globalTempDir == itemPath:
-                                FlowData._globalTempDir = None
-        except (OSError, IOError):
-            pass
-    
     def __del__(self):
         try:
-            if os.path.exists(self.tempDir):
-                # グローバルキャッシュから自身のキャッシュエントリを削除
-                with FlowData._lock:
-                    keysToRemove = [key for key in FlowData._globalBlockCache.keys() if key[0] == self.tempDir]
-                    for key in keysToRemove:
-                        del FlowData._globalBlockCache[key]
-                
-                # 個別のdata_*ディレクトリを削除
-                shutil.rmtree(self.tempDir)
-                
-                # _globalTempDirが空になったらそれも削除
-                with FlowData._lock:
-                    if(   FlowData._globalTempDir
-                      and os.path.exists(FlowData._globalTempDir) 
-                      and len(os.listdir(FlowData._globalTempDir)) == 0
-                      ):
-                        shutil.rmtree(FlowData._globalTempDir)
-                        FlowData._globalTempDir = None
-        except (ImportError, AttributeError, OSError):
+            # 統一キャッシュから自身のエントリを削除
+            CacheManager.clearByPolicy(self.cachePolicy, self.instanceId)
+        except (ImportError, AttributeError):
             pass
     
-    def _getBlockFileName(self, planeIndex, blockX, blockY):
-        """ブロックファイル名を生成"""
-        return os.path.join(self.tempDir, f"block_{planeIndex}_{blockX}_{blockY}.pkl")
-    
     def _loadBlock(self, planeIndex, blockX, blockY):
-        """指定ブロックを読み込み（グローバルキャッシュ付き）"""
-        cacheKey = (self.tempDir, planeIndex, blockX, blockY)
+        """指定ブロックを読み込み（統一キャッシュ使用）"""
+        cacheKey = (self.instanceId, planeIndex, blockX, blockY)
         
-        # グローバルキャッシュから取得
-        with FlowData._lock:
-            if cacheKey in FlowData._globalBlockCache:
-                return FlowData._globalBlockCache[cacheKey]
+        # 統一キャッシュから取得
+        cachedData = CacheManager.get(cacheKey)
+        if cachedData is not None:
+            return cachedData
         
-        # ファイルから読み込み
-        fileName = self._getBlockFileName(planeIndex, blockX, blockY)
-        try:
-            with open(fileName, 'rb') as f:
-                block = pickle.load(f)
-                
-            # グローバルキャッシュに保存
-            FlowData._addToGlobalCache(cacheKey, block, self)
-            return block
-        except (FileNotFoundError, EOFError):
-            return None
+        # ディスクから読み込み
+        return CacheManager.loadFromDisk(cacheKey)
     
     def _saveBlock(self, planeIndex, blockX, blockY, blockData):
-        """指定ブロックをキャッシュに保存"""
+        """指定ブロックをキャッシュに保存（統一キャッシュ使用）"""
         # ブロック上書き検出
         blockKey = (planeIndex, blockX, blockY)
         if blockKey in self._existingBlocks:
@@ -160,9 +87,9 @@ class FlowData:
             self._percentileCache.clear()
             self._histogramCache.clear()
         
-        # グローバルキャッシュに保存
-        cacheKey = (self.tempDir, planeIndex, blockX, blockY)
-        FlowData._addToGlobalCache(cacheKey, arr, self)
+        # 統一キャッシュに保存
+        cacheKey = (self.instanceId, planeIndex, blockX, blockY)
+        CacheManager.set(cacheKey, arr, self.cachePolicy)
     
     
     def setDimensions(self, width, height):
@@ -352,48 +279,10 @@ class FlowData:
         self._histogramCache[cacheKey] = result
         return result
     
-    @classmethod
-    def _addToGlobalCache(cls, cacheKey, block, flowDataInstance):
-        """ブロックをグローバルキャッシュに追加"""
-        with cls._lock:
-            # キャッシュサイズを超えた場合、古いエントリをファイルに書き出し
-            if len(cls._globalBlockCache) >= MAX_BLOCK_CACHE_SIZE:
-                try:
-                    # 最初のキーを取得（FIFO）
-                    oldestKey = next(iter(cls._globalBlockCache))
-                    oldestBlock = cls._globalBlockCache.get(oldestKey)
-                    
-                    if oldestBlock is not None:
-                        # ファイルに書き出し
-                        tempDir, planeIndex, blockX, blockY = oldestKey
-                        try:
-                            fileName = os.path.join(tempDir, f"block_{planeIndex}_{blockX}_{blockY}.pkl")
-                            with open(fileName, 'wb') as f:
-                                pickle.dump(oldestBlock, f)
-                        except (OSError, IOError):
-                            pass  # ファイル書き込みエラーを無視
-                    
-                    # キーが存在する場合のみ削除
-                    if oldestKey in cls._globalBlockCache:
-                        del cls._globalBlockCache[oldestKey]
-                except (StopIteration, KeyError):
-                    pass  # キャッシュが空またはキーが存在しない
-            
-            cls._globalBlockCache[cacheKey] = block
+    # 古いキャッシュ実装を削除（CacheManagerに統合）
     
     @classmethod
     def getCacheStats(cls):
-        """キャッシュ量とディスク使用量を取得"""
-        cacheCount = len(cls._globalBlockCache)
-        cacheSize = cacheCount * BLOCK_SIZE * BLOCK_SIZE * 8  # 1ブロック = BLOCK_SIZE x BLOCK_SIZE x 8バイト(float64)
-        
-        diskSize = 0
-        if cls._globalTempDir and os.path.exists(cls._globalTempDir):
-            try:
-                for root, dirs, files in os.walk(cls._globalTempDir):
-                    for file in files:
-                        diskSize += os.path.getsize(os.path.join(root, file))
-            except (OSError, IOError):
-                pass
-        
-        return cacheSize, diskSize
+        """キャッシュ統計情報を取得（CacheManagerに委謗）"""
+        from .CacheManager import CacheManager
+        return CacheManager.getCacheStats()

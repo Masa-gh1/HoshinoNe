@@ -96,6 +96,7 @@ class QuadraticFitNode(FlowNode):
         
         # テンソル形式でデータを構築 (3x3の係数テンソル)
         headers = {
+            'category': 'auxiliary',
             'type': 'tensor',
             'mode': '2D',
             'axes': ['x_order', 'y_order'],

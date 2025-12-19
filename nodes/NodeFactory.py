@@ -27,9 +27,11 @@ from .WaveletDenoiseNode import WaveletDenoiseNode
 from .ChromaDenoiseNode import ChromaDenoiseNode
 from .ImageAlignmentNode import ImageAlignmentNode
 
+from .LazyOffsetNode import LazyOffsetNode
+
 class NodeFactory:
     nodeClasses = {
-        'offset': OffsetNode,
+        'offset': LazyOffsetNode,
         'scale': ScaleNode,
         'inverse': InverseNode,
         'negate': NegateNode,
