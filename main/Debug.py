@@ -7,4 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-DEBUG = False
+LEVEL_ALL   = 10
+LEVEL_ERROR = 7
+LEVEL_WARN  = 5
+LEVEL_INFO  = 3
+LEVEL_NONE  = 0
+
+LEVEL = LEVEL_NONE
