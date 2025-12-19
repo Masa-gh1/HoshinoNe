@@ -21,8 +21,6 @@ class NNBlockOperationNode(FlowNode):
             inputDatas.extend(node.flowDatas)
         
         if inputDatas:
-            inputDatas.sort(key=lambda data: data.getDiagonal2(), reverse=True)
-            
             # ブロック単位で処理（並列化）
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                 resultFlowDatas = []

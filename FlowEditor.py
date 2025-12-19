@@ -200,10 +200,38 @@ class FlowEditor:
         if requiredWidth != currentWidth or requiredHeight != currentHeight:
             self.canvas.config(scrollregion=(minX, minY, maxX, maxY))
     
+    def _getConnectionPoints(self, fromNode, toNode):
+        """ノード間の接続点を取得する"""
+        #中心間の線とノード境界の交点を計算
+        dx = toNode.x - fromNode.x
+        dy = toNode.y - fromNode.y
+        
+        if dx == 0 and dy == 0:
+            return fromNode.x, fromNode.y, toNode.x, toNode.y
+        
+        # fromNodeからの交点を計算
+        if abs(dx) * 20 > abs(dy) * 50:  # 水平方向が主
+            x1 = fromNode.x + (50 if dx > 0 else -50)
+            y1 = max(-20, min(20, fromNode.y + dy * 50 / abs(dx) - fromNode.y)) + fromNode.y
+        else:  # 垂直方向が主
+            x1 = max(-50, min(50, fromNode.x + dx * 20 / abs(dy) - fromNode.x)) + fromNode.x
+            y1 = fromNode.y + (20 if dy > 0 else -20)
+        
+        # toNodeへの交点を計算
+        if abs(dx) * 20 > abs(dy) * 50:  # 水平方向が主
+            x2 = toNode.x - (50 if dx > 0 else -50)
+            y2 = max(-20, min(20, toNode.y - dy * 50 / abs(dx) - toNode.y)) + toNode.y
+        else:  # 垂直方向が主
+            x2 = max(-50, min(50, toNode.x - dx * 20 / abs(dy) - toNode.x)) + toNode.x
+            y2 = toNode.y - (20 if dy > 0 else -20)
+        
+        return x1, y1, x2, y2
+    
     def updateConnections(self):
         """接続線の位置を更新"""
         for fromNode, toNode, line in self.connectionLines:
-            self.canvas.coords(line, fromNode.x+50, fromNode.y, toNode.x-50, toNode.y)
+            x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
+            self.canvas.coords(line, x1, y1, x2, y2)
     
     def selectNode(self, node):
         self.statusLabel.config(text=f"ノードクリック: {node.text}")
@@ -231,8 +259,8 @@ class FlowEditor:
             else:
                 # 接続を作成
                 self.selectedNode.connections.append(node)
-                line = self.canvas.create_line(self.selectedNode.x+50, self.selectedNode.y, 
-                                             node.x-50, node.y, arrow=tk.LAST, width=2, fill='red')
+                x1, y1, x2, y2 = self._getConnectionPoints(self.selectedNode, node)
+                line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
                 self.connectionLines.append((self.selectedNode, node, line))
                 # 接続情報を表示
                 self.resultText.delete(1.0, tk.END)
@@ -550,8 +578,8 @@ class FlowEditor:
                 fromNode.connections.append(toNode)
                 
                 # 接続線を描画
-                line = self.canvas.create_line(fromNode.x+50, fromNode.y, 
-                                             toNode.x-50, toNode.y, arrow=tk.LAST, width=2, fill='red')
+                x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
+                line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
                 self.connectionLines.append((fromNode, toNode, line))
             
             # canvasサイズを調整

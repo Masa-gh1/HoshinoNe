@@ -13,6 +13,23 @@ BLOCK_SIZE = 256
 # ブロックキャッシュサイズ設定
 MAX_BLOCK_CACHE_SIZE = 2000
 
+HEADERS_EXIF = [
+    # name                tag                        converter
+    ("Make"             , "Make"                   , str),
+    ("Model"            , "Model"                  , str),
+    ("ImageWidth"       , "ImageWidth"             , int),
+    ("ImageWidth"       , "ExifImageWidth"         , int),
+    ("ImageLength"      , "ImageLength"            , int),
+    ("ImageLength"      , "ExifImageHeight"        , int),
+    ("LensModel"        , "LensModel"              , str),
+    ("FocalLength"      , "FocalLength"            , float),
+    ("FNumber"          , "FNumber"                , float),
+    ("ExposureTime"     , "ExposureTime"           , float),
+    ("ISOSpeedRatings"  , "ISO"                    , int),
+    ("ISOSpeedRatings"  , "ISOSpeedRatings"        , int),
+    ("ISOSpeedRatings"  , "PhotographicSensitivity", int),
+]
+
 # RAW読み込み設定 ref https://www.libraw.org/docs/API-datastruct.html
 def configRawParams(params):
     # rawpy 0.25.1 パラメータ

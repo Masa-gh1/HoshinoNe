@@ -10,9 +10,14 @@ import os
 import traceback
 import numpy as np
 from tkinter import filedialog, messagebox
-from PIL import Image
 from base import FlowNode, FlowData
 from config import BLOCK_SIZE
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 class ImageWriterNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -47,6 +52,9 @@ class ImageWriterNode(FlowNode):
             self.updateNodeText()
     
     def process(self, context):
+        if not PIL_AVAILABLE:
+            messagebox.showerror("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+        
         self.reportProgress(context, "開始")
         if not self.outputFilePath:
             messagebox.showerror("エラー", "出力ファイルが設定されていません")

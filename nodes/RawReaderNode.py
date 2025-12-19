@@ -10,6 +10,8 @@ https://www.libraw.org/docs/API-datastruct.html
 '''
 
 import hashlib
+import sys
+import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import numpy as np
@@ -24,19 +26,15 @@ try:
 except ImportError:
     RAWPY_AVAILABLE = False
 
-try:
-    from PIL import Image
-    from PIL.ExifTags import TAGS
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
+from utils.exif_helper import get_exif
 
 class RawReaderNode(FlowNode):
     def __init__(self, canvas, editor, x, y, nonDialog=False, **kwargs):
         super().__init__(canvas, editor, x, y, "raw_reader", "RAW読み込み")
         self.filePaths = []
-        self.fileAttributes = {}
-        self.fileTypes=[
+
+        
+        self.fileTypes = [
                 ("RAW files", "*.cr2 *.cr3 *.nef *.arw *.dng *.raf *.orf *.rw2 *.pef *.srw *.x3f"),
                 ("Canon RAW", "*.cr2 *.cr3"),
                 ("Nikon RAW", "*.nef"),
@@ -55,7 +53,7 @@ class RawReaderNode(FlowNode):
         self.whiteBalance = "daylight"  # camera, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
         self.gammaPower = 1.0  # gamma power
         self.gammaSlope = 1.0  # gamma slope
-                
+        
         if not RAWPY_AVAILABLE:
             messagebox.showerror("エラー", "rawpyライブラリがインストールされていません。\npip install rawpy でインストールしてください。")
             return
@@ -110,89 +108,98 @@ class RawReaderNode(FlowNode):
         if not RAWPY_AVAILABLE:
             raise Exception("rawpyライブラリがインストールされていません\npip install rawpy でインストールしてください。")
         
-        if not self.filePaths:
-            raise Exception("RAWファイルが選択されていません")
+        self.reportProgress(context, "開始")
         
-        self.reportProgress(context, "RAWファイル読み込み中")
+        # RAW現像パラメータ設定
+        params = rawpy.Params()
         
-        self.flowDatas = []
+        configRawParams(params)
+        
+        # デモザイクアルゴリズム
+        if self.demosaicAlgorithm == "none":
+            params.half_size          = True
+            params.four_color_rgb     = False
+        elif self.demosaicAlgorithm == "raw":
+            params.half_size          = True
+            params.four_color_rgb     = True
+        elif self.demosaicAlgorithm == "AHD":
+            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AHD
+        elif self.demosaicAlgorithm == "AAHD":
+            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AAHD
+        elif self.demosaicAlgorithm == "VNG":
+            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.VNG
+        elif self.demosaicAlgorithm == "PPG":
+            params.demosaic_algorithm = rawpy.DemosaicAlgorithm.PPG
+        
+        # 出力色空間
+        if self.outputColorspace == "raw":
+            params.output_color = rawpy.ColorSpace.raw.value
+        elif self.outputColorspace == "sRGB":
+            params.output_color = rawpy.ColorSpace.sRGB.value
+        elif self.outputColorspace == "Adobe RGB":
+            params.output_color = rawpy.ColorSpace.Adobe.value
+        elif self.outputColorspace == "Wide Gamut RGB":
+            params.output_color = rawpy.ColorSpace.Wide.value
+        elif self.outputColorspace == "ProPhoto RGB":
+            params.output_color = rawpy.ColorSpace.ProPhoto.value
+        
+        # ホワイトバランス
+        if self.whiteBalance == "auto":
+            params.use_auto_wb = True
+        elif self.whiteBalance == "camera":
+            params.use_camera_wb = True
+        elif self.whiteBalance == "daylight":
+            params.user_wb = [1.0, 1.0, 1.0, 1.0]  # 昼光の近似値
+        elif self.whiteBalance == "cloudy":
+            params.user_wb = [1.2, 1.0, 0.8, 1.0]  # 曇天の近似値
+        elif self.whiteBalance == "shade":
+            params.user_wb = [1.4, 1.0, 0.7, 1.0]  # 日陰の近似値
+        elif self.whiteBalance == "tungsten":
+            params.user_wb = [0.6, 1.0, 1.8, 1.0]  # タングステンの近似値
+        elif self.whiteBalance == "fluorescent":
+            params.user_wb = [0.8, 1.0, 1.4, 1.0]  # 蛍光灯の近似値
+        elif self.whiteBalance == "flash":
+            params.user_wb = [1.0, 1.0, 1.0, 1.0]  # フラッシュの近似値
+
+        # ガンマ設定
+        params.gamm = (float(self.gammaPower), float(self.gammaSlope))
+        
+        resultFlowDatas = []
         
         self.reportProgress(context, "RAW現像中")
         for fileIndex, filePath in enumerate(self.filePaths):
+            
+            # EXIF情報を取得
+            exif_info = self._getExif(filePath)
+            
+            # DateTimeを文字列化
+            headers_exif = None
+            if exif_info:
+                headers_exif = dict(exif_info)
+                if 'DateTime' in headers_exif:
+                    dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
+                    headers_exif['DateTime'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+            
             try:
                 with rawpy.imread(filePath) as raw:
-                    # RAW現像パラメータ設定
-                    params = rawpy.Params()
-                    
-                    configRawParams(params)
-                    
-                    # デモザイクアルゴリズム
-                    if self.demosaicAlgorithm == "none":
-                        params.half_size          = True
-                        params.four_color_rgb     = False
-                    elif self.demosaicAlgorithm == "raw":
-                        params.half_size          = True
-                        params.four_color_rgb     = True
-                    elif self.demosaicAlgorithm == "AHD":
-                        params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AHD
-                    elif self.demosaicAlgorithm == "VNG":
-                        params.demosaic_algorithm = rawpy.DemosaicAlgorithm.VNG
-                    elif self.demosaicAlgorithm == "PPG":
-                        params.demosaic_algorithm = rawpy.DemosaicAlgorithm.PPG
-                    elif self.demosaicAlgorithm == "AAHD":
-                        params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AAHD
-                    
-                    # 出力色空間
-                    if self.outputColorspace == "raw":
-                        params.output_color = rawpy.ColorSpace.raw.value
-                    elif self.outputColorspace == "sRGB":
-                        params.output_color = rawpy.ColorSpace.sRGB.value
-                    elif self.outputColorspace == "Adobe RGB":
-                        params.output_color = rawpy.ColorSpace.Adobe.value
-                    elif self.outputColorspace == "Wide Gamut RGB":
-                        params.output_color = rawpy.ColorSpace.Wide.value
-                    elif self.outputColorspace == "ProPhoto RGB":
-                        params.output_color = rawpy.ColorSpace.ProPhoto.value
-                    
-                    # ホワイトバランス
-                    if self.whiteBalance == "auto":
-                        params.use_auto_wb = True
-                    elif self.whiteBalance == "camera":
-                        params.use_camera_wb = True
-                    elif self.whiteBalance == "daylight":
-                        params.user_wb = [1.0, 1.0, 1.0, 1.0]  # 昼光の近似値
-                    elif self.whiteBalance == "cloudy":
-                        params.user_wb = [1.2, 1.0, 0.8, 1.0]  # 曇天の近似値
-                    elif self.whiteBalance == "shade":
-                        params.user_wb = [1.4, 1.0, 0.7, 1.0]  # 日陰の近似値
-                    elif self.whiteBalance == "tungsten":
-                        params.user_wb = [0.6, 1.0, 1.8, 1.0]  # タングステンの近似値
-                    elif self.whiteBalance == "fluorescent":
-                        params.user_wb = [0.8, 1.0, 1.4, 1.0]  # 蛍光灯の近似値
-                    elif self.whiteBalance == "flash":
-                        params.user_wb = [1.0, 1.0, 1.0, 1.0]  # フラッシュの近似値
-
-                    # ガンマ設定
-                    params.gamm = (float(self.gammaPower), float(self.gammaSlope))
-                    
                     # RAW現像実行
                     rgb = raw.postprocess(params)
                     
                     # RGB画像をFlowDataに変換
                     height, width, channels = rgb.shape
                     
+                    # mode と plane_names を動的に設定
+                    if self.demosaicAlgorithm == "raw" and channels == 4:
+                        mode = 'RGGB'
+                        plane_names = ['R', 'G1', 'B', 'G2']
+                    else:
+                        mode = 'RGB'
+                        plane_names = ['R', 'G', 'B'][:channels]
+                    
                     # 元RAWファイルのbit深度を使用してdisplay_levelsを設定
                     black_level = min(raw.black_level_per_channel) if raw.black_level_per_channel else 0
                     white_level = raw.white_level
                     display_levels = {'min': black_level, 'max': white_level}
-                    
-                    # plane名を動的に設定
-                    if self.demosaicAlgorithm == "raw" and channels == 4:
-                        plane_names = ['R', 'G1', 'B', 'G2']
-                        mode = 'RGGB'
-                    else:
-                        plane_names = ['R', 'G', 'B'][:channels]
-                        mode = 'RGB'
                     
                     headers = {
                         'type': 'image',
@@ -205,8 +212,10 @@ class RawReaderNode(FlowNode):
                         'source_file': filePath,
                         'demosaic': self.demosaicAlgorithm,
                         'colorspace': self.outputColorspace,
-                        'white_balance': self.whiteBalance
+                        'white_balance': self.whiteBalance,
                     }
+                    if headers_exif:
+                        headers['exif'] = headers_exif
                     
                     outputFlowData = FlowData(headers)
                     outputFlowData.setDimensions(width, height)
@@ -225,20 +234,23 @@ class RawReaderNode(FlowNode):
                                 block = DataBlock(c, x, y, blockData)
                                 outputFlowData.setBlock(block)
                     
-                    self.flowDatas.append(outputFlowData)
-                
+                    resultFlowDatas.append(outputFlowData)
             except Exception as e:
                 raise Exception(f"RAWファイル処理エラー ({filePath}): {str(e)}")
             
             self.reportProgress(context, "RAW現像中", fileIndex + 1, len(self.filePaths))
         
+        self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
     def getConfigHash(self):
-        filePathsStr = "|".join(self.filePaths)
-        config = f"{self.type}_{filePathsStr}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
+        config = f"{self.type}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
         return hashlib.md5(config.encode()).hexdigest()
 
+    def _getExif(self, filepath):
+        """EXIFデータを取得"""
+        return get_exif(filepath)
+    
 class RawSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
@@ -261,11 +273,30 @@ class RawSettingsDialog(tk.Toplevel):
         fileListFrame = tk.Frame(leftFrame)
         fileListFrame.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        self.fileListbox = tk.Listbox(fileListFrame, height=15)
-        fileScrollbar = tk.Scrollbar(fileListFrame, orient=tk.VERTICAL, command=self.fileListbox.yview)
-        self.fileListbox.configure(yscrollcommand=fileScrollbar.set)
+        # Treeviewで列表示
+        columns = ('datetime', 'size', 'exposure', 'fnumber', 'iso')
+        self.fileTreeview = ttk.Treeview(fileListFrame, columns=columns, show='tree headings', height=15)
         
-        self.fileListbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 列ヘッダー設定
+        self.fileTreeview.heading('#0', text='ファイル名')
+        self.fileTreeview.heading('datetime', text='撮影日時')
+        self.fileTreeview.heading('size', text='画像サイズ')
+        self.fileTreeview.heading('exposure', text='露出')
+        self.fileTreeview.heading('fnumber', text='F値')
+        self.fileTreeview.heading('iso', text='ISO')
+        
+        # 列幅設定（ファイル名のみストレッチ）
+        self.fileTreeview.column('#0', width=200, stretch=True)
+        self.fileTreeview.column('datetime', width=150, stretch=False)
+        self.fileTreeview.column('size', width=100, stretch=False, anchor='e')
+        self.fileTreeview.column('exposure', width=80, stretch=False, anchor='e')
+        self.fileTreeview.column('fnumber', width=60, stretch=False, anchor='e')
+        self.fileTreeview.column('iso', width=60, stretch=False, anchor='e')
+        
+        fileScrollbar = ttk.Scrollbar(fileListFrame, orient=tk.VERTICAL, command=self.fileTreeview.yview)
+        self.fileTreeview.configure(yscrollcommand=fileScrollbar.set)
+        
+        self.fileTreeview.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         fileScrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # ファイルリストを更新
@@ -289,12 +320,13 @@ class RawSettingsDialog(tk.Toplevel):
         
         tk.Label(demosaicFrame, text="ベイヤー変換アルゴリズム:").pack(anchor="w")
         self.demosaicVar = tk.StringVar()
-        algoOptions = ["none - ベイヤー変換せずに2x2を1ピクセルにする", 
+        algoOptions = ["none - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
                        "raw - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
                        "AHD - 適応的同質性指向アルゴリズム。高品質だが処理時間が長い", 
-                       "VNG - 可変勾配数アルゴリズム。バランスの取れた品質と速度", 
-                       "PPG - パターン化ピクセルグループ化。高速だが品質は劣る", 
-                       "AAHD - 適応的AHD。AHDの改良版"]
+                       "AAHD - 適応的AHD。AHDの改良版",
+                       "VNG - 可変勾配数アルゴリズム。バランスの取れた品質と速度",
+                       "PPG - パターン化ピクセルグループ化。高速だが品質は劣る",
+                      ]
         # 現在の値に対応する選択肢を設定
         for option in algoOptions:
             if option.startswith(node.demosaicAlgorithm):
@@ -366,25 +398,28 @@ class RawSettingsDialog(tk.Toplevel):
         tk.Button(buttonFrame, text="閉じる", command=self.destroy).pack(side=tk.LEFT, padx=5)
         
         self.protocol("WM_DELETE_WINDOW", self.onClose)
-        
-
     
     def updateFileList(self):
-        self.fileListbox.delete(0, tk.END)
+        # 既存項目をクリア
+        for item in self.fileTreeview.get_children():
+            self.fileTreeview.delete(item)
+        
         filePaths = getattr(self, 'selectedFilePaths', None) or self.node.filePaths
         if filePaths:
             for filePath in filePaths:
-                fileName = filePath.split('/')[-1].split('\\')[-1]
-                timestamp = self._getExifTimestamp(filePath)
-                if timestamp > 0:
-                    dt = datetime.datetime.fromtimestamp(timestamp)
-                    timeStr = dt.strftime("%Y-%m-%d %H:%M:%S")
-                    displayText = f"{fileName} ({timeStr})"
-                else:
-                    displayText = f"{fileName} (時刻不明)"
-                self.fileListbox.insert(tk.END, displayText)
+                fileName = os.path.basename(filePath)
+                
+                # RAW情報を取得
+                info = self._getRawInfo(filePath)
+                datetime_str = info.get('datetime', '時刻不明')
+                size_str = info.get('size', '')
+                exposure_str = info.get('exposure', '')
+                fnumber_str = info.get('fnumber', '')
+                iso_str = info.get('iso', '')
+                
+                self.fileTreeview.insert('', 'end', text=fileName, values=(datetime_str, size_str, exposure_str, fnumber_str, iso_str))
         else:
-            self.fileListbox.insert(tk.END, "未選択")
+            self.fileTreeview.insert('', 'end', text='未選択', values=('', '', '', '', ''))
     
     def addFiles(self):
         filePaths = filedialog.askopenfilenames(parent=self, title="RAWファイルを追加", filetypes=self.node.fileTypes)
@@ -401,24 +436,27 @@ class RawSettingsDialog(tk.Toplevel):
             self.updateFileList()
     
     def removeFiles(self):
-        selected_indices = self.fileListbox.curselection()
-        if not selected_indices:
+        selected_items = self.fileTreeview.selection()
+        if not selected_items:
             return
         
         if not hasattr(self, 'selectedFilePaths'):
             self.selectedFilePaths = list(self.node.filePaths) if self.node.filePaths else []
         
-        # 選択されたインデックスを逆順で削除
-        for index in reversed(selected_indices):
+        # 選択されたアイテムのインデックスを取得
+        indices_to_remove = []
+        for item in selected_items:
+            index = self.fileTreeview.index(item)
+            indices_to_remove.append(index)
+        
+        # 逆順で削除
+        for index in sorted(indices_to_remove, reverse=True):
             if 0 <= index < len(self.selectedFilePaths):
                 del self.selectedFilePaths[index]
         
         self.updateFileList()
     
     def sortByTimestamp(self):
-        if not PIL_AVAILABLE:
-            raise Exception("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
-        
         if not hasattr(self, 'selectedFilePaths'):
             self.selectedFilePaths = list(self.node.filePaths) if self.node.filePaths else []
         
@@ -426,29 +464,10 @@ class RawSettingsDialog(tk.Toplevel):
             return
         
         try:
-            self.selectedFilePaths.sort(key=self._getExifTimestamp)
+            self.selectedFilePaths.sort(key=lambda x: self.node._getExif(x)["DateTime"] if self.node._getExif(x) and "DateTime" in self.node._getExif(x) else 0)
             self.updateFileList()
         except Exception as e:
             messagebox.showerror("エラー", f"ソートに失敗しました: {str(e)}")
-    
-    def _getExifTimestamp(self, filepath):
-        """EXIFデータから撮影時刻を取得"""
-        if filepath not in self.node.fileAttributes:
-            try:
-                with Image.open(filepath) as img:
-                    exifdata = img.getexif()
-                    for tag_id in exifdata:
-                        tag = TAGS.get(tag_id, tag_id)
-                        if tag == "DateTime":
-                            date_str = exifdata.get(tag_id)
-                            dt = datetime.datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
-                            self.node.fileAttributes[filepath] = dt.timestamp()
-                            return self.node.fileAttributes[filepath]
-                self.node.fileAttributes[filepath] = 0
-            except Exception as e:
-                print(f"EXIF timestamp error for {filepath}: {e}")
-                self.node.fileAttributes[filepath] = 0
-        return self.node.fileAttributes[filepath]
     
     def onApply(self):
         # ファイルパスの更新
@@ -466,6 +485,67 @@ class RawSettingsDialog(tk.Toplevel):
         newHash = self.node.getConfigHash()
         if newHash != self.node._lastConfigHash:
             self.node.editor.onNodeConfigChanged(self.node)
+    
+    def _getRawInfo(self, filePath):
+        """指定されたRAWファイルの情報を取得"""
+        try:
+            # EXIF情報を取得
+            exif = self.node._getExif(filePath)
+            
+            # 撮影日時
+            if exif and "DateTime" in exif:
+                dt = datetime.datetime.fromtimestamp(exif["DateTime"])
+                datetime_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                datetime_str = '時刻不明'
+            
+            # 画像サイズ（EXIFから取得）
+            size_str = ''
+            if exif:
+                width = exif.get('ImageWidth')
+                height = exif.get('ImageLength')
+                if width and height:
+                    size_str = f"{width}x{height}"
+            
+            # 露出時間
+            exposure_str = ''
+            if exif and 'ExposureTime' in exif:
+                exposure = exif['ExposureTime']
+                if exposure >= 1:
+                    exposure_str = f"{exposure:.1f}"
+                else:
+                    # 1秒未満の場合は分数表示
+                    exposure_str = f"1/{int(1/exposure)}"
+            
+            # F値
+            fnumber_str = ''
+            if exif and 'FNumber' in exif:
+                fnumber = exif['FNumber']
+                if fnumber >= 1:
+                    fnumber_str = f"{fnumber:.1f}"
+                else:
+                    fnumber_str = f"{fnumber:.2f}"
+            
+            # ISO感度
+            iso_str = ''
+            if exif and 'ISOSpeedRatings' in exif:
+                iso_str = f"{exif['ISOSpeedRatings']}"
+            
+            return {
+                'datetime': datetime_str,
+                'size': size_str,
+                'exposure': exposure_str,
+                'fnumber': fnumber_str,
+                'iso': iso_str
+            }
+        except Exception:
+            return {
+                'datetime': '情報取得失敗',
+                'size': '',
+                'exposure': '',
+                'fnumber': '',
+                'iso': ''
+            }
     
     def onClose(self):
         if hasattr(self.node, '_settings_dialog'):

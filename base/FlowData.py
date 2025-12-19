@@ -198,10 +198,10 @@ class FlowData:
         # フォールバック: 次元数から推定
         return None
     
-    def getDiagonal2(self):
-        """データの対角線の長さを取得"""
+    def getArea(self):
+        """データの面積を取得"""
         width, height = self.getDimensions()
-        return (width*width + height*height)
+        return (width*height)
     
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得"""

@@ -1,0 +1,81 @@
+'''
+CountNode class
+
+@author: Masakazu Inoue
+'''
+
+from base import N1BlockOperationNode, DataBlock
+import numpy as np
+
+class CountNode(N1BlockOperationNode):
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, "count", "カウント")
+    
+    def getBaseDataIndex(self, inputDatas):
+        """カウントではtensorがある場合は最初のmatrixデータを基準とする"""
+        for i, data in enumerate(inputDatas):
+            dataType = data.headers.get('type', 'matrix') if data.headers else 'matrix'
+            if dataType != 'tensor':
+                return i
+        return 0  # tensorのみの場合は最初のtensorを基準とする
+    
+    def getResultDimensions(self, inputDatas):
+        """カウントでは全入力データを包含するサイズを使用"""
+        return self.getUnionDimensions(inputDatas)
+    
+    def processBlock(self, block, inputDatas):
+        """単一ブロックのカウント処理"""
+        planeIdx = block.planeIndex
+        x, y = block.x, block.y
+        
+        # データタイプを分類
+        tensorDatas = []
+        matrixDatas = []
+        
+        for inputData in inputDatas:
+            dataType = inputData.headers.get('type', 'matrix') if inputData.headers else 'matrix'
+            if dataType == 'tensor':
+                tensorDatas.append(inputData)
+            else:
+                matrixDatas.append(inputData)
+        
+        # 全てtensorの場合はtensor数を返す
+        if len(tensorDatas) == len(inputDatas):
+            return self._processTensorCount(block, tensorDatas)
+        else:
+            # matrixとtensorの混在またはmatrixのみの場合
+            resultWidth, resultHeight = self.getResultDimensions(inputDatas)
+            from config import BLOCK_SIZE
+            
+            blockHeight = min(BLOCK_SIZE, resultHeight - y)
+            blockWidth = min(BLOCK_SIZE, resultWidth - x)
+            result = np.zeros((blockHeight, blockWidth), dtype=np.float64)
+            
+            # matrixデータのカウント
+            for inputData in matrixDatas:
+                inputBlock = inputData.getBlock(planeIdx, x, y)
+                if inputBlock:
+                    minH = min(result.shape[0], inputBlock.data.shape[0])
+                    minW = min(result.shape[1], inputBlock.data.shape[1])
+                    result[:minH, :minW] += 1.0  # 存在するピクセルに1を加算
+            
+            # tensorは全領域に影響するので全体にtensor数を加算
+            if tensorDatas:
+                result += len(tensorDatas)
+            
+            return DataBlock(planeIdx, x, y, result)
+    
+    def _processTensorCount(self, block, tensorDatas):
+        """全てtensorの場合のカウント処理"""
+        planeIdx = block.planeIndex
+        
+        # 最初のtensorの係数行列を取得してサイズを決定
+        firstTensor = tensorDatas[0]
+        coeffBlock = firstTensor.getBlock(planeIdx, 0, 0)
+        if not coeffBlock:
+            return None
+        
+        # tensor数で埋めた行列を作成
+        result = np.full_like(coeffBlock.data, len(tensorDatas), dtype=np.float64)
+        
+        return DataBlock(planeIdx, block.x, block.y, result)

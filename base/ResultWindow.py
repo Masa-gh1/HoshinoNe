@@ -9,6 +9,7 @@ import threading
 import traceback
 import io
 import tkinter as tk
+from tkinter import ttk
 
 try:
     import numpy as np
@@ -52,14 +53,26 @@ class ResultWindow:
         # ウィンドウ参照を保存
         self.node._result_window = resultWindow
         
-        # 画像制御フレーム（画像以外では非表示）
+        # 制御フレーム
         control_frame = tk.Frame(resultWindow)
         control_frame.pack(fill=tk.X, padx=10, pady=5)
         self.node._control_frame = control_frame
         
-        # ヒストグラム軸制御
+        # データ選択フレーム（常に表示）
+        data_select_frame = tk.Frame(control_frame)
+        data_select_frame.pack(fill=tk.X)
+        self.node._data_select_frame = data_select_frame
+        
+        tk.Label(data_select_frame, text="表示データ:").pack(side=tk.LEFT)
+        self.node._selected_data_var = tk.StringVar()
+        self.node._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self.node._selected_data_var, state="readonly", width=30)
+        self.node._data_combo.pack(side=tk.LEFT, padx=(5,0))
+        self.node._data_combo.bind('<<ComboboxSelected>>', lambda e: self._updateResultWindow())
+        self.node._data_combo.bind('<Key>', self._onComboKeyPress)
+        
+        # ヒストグラム軸制御（画像データのみ）
         axis_frame = tk.Frame(control_frame)
-        axis_frame.pack(fill=tk.X)
+        axis_frame._is_image_control = True
         
         tk.Label(axis_frame, text="ヒストグラム軸:").pack(side=tk.LEFT)
         
@@ -75,9 +88,9 @@ class ResultWindow:
         tk.Radiobutton(axis_frame, text="Log", variable=self.node._y_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
         tk.Radiobutton(axis_frame, text="Linear", variable=self.node._y_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
         
-        # 2行目：表示レベル制御
+        # 表示レベル制御（画像データのみ）
         level_frame = tk.Frame(control_frame)
-        level_frame.pack(fill=tk.X, pady=(5,0))
+        level_frame._is_image_control = True
         
         tk.Label(level_frame, text="画像表示レベル:").pack(side=tk.LEFT)
         
@@ -112,6 +125,9 @@ class ResultWindow:
         
         resultWindow.protocol("WM_DELETE_WINDOW", on_close)
         
+        # データ選択コンボボックスを更新
+        self._updateDataCombo()
+        
         # 初回表示（別スレッドで実行）
         thread = threading.Thread(target=self._updateResultWindowAsync)
         thread.daemon = True
@@ -142,18 +158,15 @@ class ResultWindow:
         
         self.root.after(0, update_title_loading)
         
-        # データ処理
+        # 選択されたデータのみ処理
         content_parts = []
-        for dataIdx, flowData in enumerate(self.node.flowDatas):
-            if len(self.node.flowDatas) > 1:
-                content_parts.append(f"=== データ {dataIdx + 1} ===\n")
-            
-            result = self._generateFlowDataContent(flowData)
+        selected_data = self._getSelectedFlowData()
+        if selected_data:
+            result = self._generateFlowDataContent(selected_data)
             if isinstance(result, list):
                 content_parts.extend(result)
             else:
                 content_parts.append(result)
-            content_parts.append("\n")
         
         # 結果をメインスレッドで表示
         def display_result():
@@ -179,6 +192,7 @@ class ResultWindow:
         
         # コントロールフレームの表示状態を更新
         self.root.after(0, self._updateControlVisibility)
+        self.root.after(0, self._updateDataCombo)
     
     def _generateFlowDataContent(self, flowData):
         """フローデータの内容を文字列として生成（非同期処理用）"""
@@ -339,8 +353,8 @@ class ResultWindow:
                     xOffset = 0.0
                 
                 for planeIdx, plane_hist in enumerate(histogram_data['planes'][:4]):
-                    bin_counts = plane_hist['counts'][:]
-                    bin_edges = plane_hist['bin_edges'][:]
+                    bin_counts = plane_hist['counts']
+                    bin_edges = plane_hist['bin_edges']
                     total_samples += plane_hist['total_samples']
                     
                     # オフセット適用
@@ -497,16 +511,100 @@ class ResultWindow:
                 print(tb,file=sys.stderr)
                 content.append(f"\n画像表示エラー: {str(e)}\n\n")
         
+        # EXIF情報を表示
+        exif = headers.get('exif', {})
+        if exif:
+            text = f"\nEXIF:\n"
+            for key, value in exif.items():
+                text += f"{key}: {value}\n"
+            content.append(text)
+        
         return content
     
     def _updateControlVisibility(self):
         """コントロールフレームの表示/非表示を制御"""
         if hasattr(self.node, '_control_frame'):
+            # 画像制御部分のみ画像データがある場合に表示
             has_image_data = any(data.headers and data.headers.get('type') == 'image' for data in self.node.flowDatas)
-            if has_image_data:
-                self.node._control_frame.pack(fill=tk.X, padx=10, pady=5, before=self.node._result_text_widget.master)
-            else:
-                self.node._control_frame.pack_forget()
+            
+            # ヒストグラム軸制御と表示レベル制御の表示/非表示
+            for child in self.node._control_frame.winfo_children():
+                if hasattr(child, '_is_image_control'):
+                    if has_image_data:
+                        child.pack(fill=tk.X, pady=(5,0))
+                    else:
+                        child.pack_forget()
+        
+
+    
+    def _updateDataCombo(self):
+        """データ選択コンボボックスを更新"""
+        if not hasattr(self.node, '_data_combo'):
+            return
+        
+        # コンボボックスの選択肢を更新
+        options = []
+        for i, flowData in enumerate(self.node.flowDatas):
+            headers = flowData.headers if flowData.headers else {}
+            data_type = headers.get('type', 'unknown')
+            
+            # EXIF情報からファイル名や時刻を取得
+            display_name = f"データ {i + 1} ({data_type})"
+            if 'exif' in headers:
+                exif = headers['exif']
+                if 'DateTime' in exif:
+                    display_name += f" - {exif['DateTime']}"
+                if 'Model' in exif:
+                    display_name += f" [{exif['Model']}]"
+            
+            options.append(display_name)
+        
+        self.node._data_combo['values'] = options
+        
+        # 初期選択を設定
+        if options and not self.node._selected_data_var.get():
+            self.node._selected_data_var.set(options[0])
+    
+    def _getSelectedFlowData(self):
+        """選択されたフローデータを取得"""
+        if not hasattr(self.node, '_selected_data_var') or not self.node.flowDatas:
+            return self.node.flowDatas[0] if self.node.flowDatas else None
+        
+        selected = self.node._selected_data_var.get()
+        if not selected:
+            return self.node.flowDatas[0] if self.node.flowDatas else None
+        
+        # 選択されたインデックスを取得
+        try:
+            index = int(selected.split('データ ')[1].split(' ')[0]) - 1
+            if 0 <= index < len(self.node.flowDatas):
+                return self.node.flowDatas[index]
+        except (ValueError, IndexError):
+            pass
+        
+        return self.node.flowDatas[0] if self.node.flowDatas else None
+    
+    def _onComboKeyPress(self, event):
+        """コンボボックスのキーイベント処理"""
+        if event.keysym in ['Up', 'Down']:
+            current_values = self.node._data_combo['values']
+            if not current_values:
+                return 'break'
+            
+            current_selection = self.node._selected_data_var.get()
+            try:
+                current_index = list(current_values).index(current_selection)
+            except ValueError:
+                current_index = 0
+            
+            if event.keysym == 'Up':
+                new_index = (current_index - 1) % len(current_values)
+            else:  # Down
+                new_index = (current_index + 1) % len(current_values)
+            
+            self.node._selected_data_var.set(current_values[new_index])
+            self._updateResultWindow()
+            return 'break'  # デフォルト動作を無効化
     
     def _generateGenericContent(self, flowData, headers):
         """一般的なデータの内容を生成"""

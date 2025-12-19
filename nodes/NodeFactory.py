@@ -15,20 +15,24 @@ from .ImageWriterNode import ImageWriterNode
 from .QuadraticFitNode import QuadraticFitNode
 from .CoefficientsNode import CoefficientsNode
 from .RawReaderNode import RawReaderNode
+from .FitsReaderNode import FitsReaderNode
+from .CountNode import CountNode
 
 class NodeFactory:
     nodeClasses = {
-        'file_reader': FileReaderNode,
-        'image_reader': ImageReaderNode,
-        'raw_reader': RawReaderNode,
         'addition': AdditionNode,
         'multiplication': MultiplicationNode,
         'inverse': InverseNode,
         'negate': NegateNode,
+        'count': CountNode,
+        'coefficients': CoefficientsNode,
+        'quadratic_fit': QuadraticFitNode,
+        'file_reader': FileReaderNode,
+        'image_reader': ImageReaderNode,
+        'raw_reader': RawReaderNode,
+        'fits_reader': FitsReaderNode,
         'file_writer': FileWriterNode,
         'image_writer': ImageWriterNode,
-        'quadratic_fit': QuadraticFitNode,
-        'coefficients': CoefficientsNode,
     }
     
     nodeLabels = [
@@ -36,6 +40,7 @@ class NodeFactory:
         ('multiplication', '乗算'),
         ('negate'        , '符号反転'),
         ('inverse'       , '逆数'),
+        ('count'         , 'カウント'),
         ('separator'     , None),
         ('coefficients'  , '係数'),
         ('quadratic_fit' , '2次関数近似'),
@@ -45,6 +50,7 @@ class NodeFactory:
         ('image_reader'  , '画像読み込み'),
         ('image_writer'  , '画像書き出し'),
         ('raw_reader'    , 'RAW読み込み'),
+        ('fits_reader'   , 'FITS読み込み'),
     ]
     
     @classmethod
