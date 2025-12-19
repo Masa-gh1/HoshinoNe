@@ -10,7 +10,7 @@ All rights reserved.
 import atexit
 
 from config import MAX_WORKERS
-from utils.ProcessThreadPool import PerResourceThreadPoolWrapper
+from utils.PerResourceThreadPoolWrapper import PerResourceThreadPoolWrapper
 from utils.CoalescingThreadPool import CoalescingThreadPool
 
 # グローバルスレッドプール

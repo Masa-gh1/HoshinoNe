@@ -39,5 +39,6 @@ class Debug:
 
         if cls.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
             print(f"{t.isoformat()}: {name}: {message}")
-            for s in tb:
-                print(s)
+            if tb:
+                for s in tb:
+                    print(s)

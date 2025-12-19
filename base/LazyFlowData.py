@@ -42,9 +42,6 @@ class LazyFlowData(FlowData):
         self.headers[key] = operation
         return operation
     
-    import threading
-    _lock = threading.Lock()
-
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
         block = super().getBlock(planeIndex, x, y)

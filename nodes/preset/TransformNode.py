@@ -76,12 +76,11 @@ class TransformNode(LazyNNOperationNode):
         
         if transform_params:
             expand_left, expand_top, new_width, new_height = self._extendParams
-            actual_dx = transform_params['dx'] + expand_left
-            actual_dy = transform_params['dy'] + expand_top
+            dx = transform_params['dx'] + expand_left
+            dy = transform_params['dy'] + expand_top
             rotation = transform_params['rotation']
             
-            lazyData.addOperation(LazyTransformOperations.transformAndExpand,
-                                    actual_dx, actual_dy, rotation, new_width, new_height)
+            lazyData.addOperation(self.transformAndExpand, dx, dy, rotation, new_width, new_height)
             lazyData.setDimensions(new_width, new_height)
         
         return lazyData
@@ -198,9 +197,6 @@ class TransformNode(LazyNNOperationNode):
             'rotation': float(row_data[rotation_idx])
         }
         
-class LazyTransformOperations:
-    """位置合わせ専用の遅延操作"""
-    
     @staticmethod
     def transformAndExpand(flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
         """変形 + 拡張を一度に実行"""

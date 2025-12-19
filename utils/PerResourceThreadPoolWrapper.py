@@ -65,7 +65,7 @@ class PerResourceThreadPoolWrapper:
             finally:
                 self._execute_next_task(resourceKey, future)
         
-        self._executor.submit(wrapper)
+        future._future = self._executor.submit(wrapper)
     
     def _execute_next_task(self, resourceKey: Any, future: Future):
         """次の待機タスクを実行"""
@@ -85,3 +85,18 @@ class PerResourceThreadPoolWrapper:
                     if not future.cancelled():
                         self._runningTasks[resourceKey].append(future)
                         self._execute_task(resourceKey, func, args, kwargs, future)
+
+    def shutdown(self, wait=True, cancel_futures=False):
+        """シャットダウン"""
+        if cancel_futures:
+            with self._lock:
+                for futures in self._pendingTasks.values():
+                    for future in futures:
+                        future[3].cancel()
+                for futures in self._runningTasks.values():
+                    for future in futures:
+                        if not future.done():
+                            future.set_exception(Exception("中断されました"))
+                self._pendingTasks.clear()
+                self._runningTasks.clear()
+        self._executor.shutdown(wait=wait,cancel_futures=cancel_futures)

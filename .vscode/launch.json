@@ -4,6 +4,9 @@
     // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
+
+    
     
     
         {
@@ -14,6 +17,7 @@
             "console": "integratedTerminal",
             "env": {
                 "DEBUG_TEST_MODE": "1"
+//                "PYTHONMALLOC":"malloc"
             }
         }
     ]

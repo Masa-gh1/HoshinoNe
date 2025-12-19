@@ -11,6 +11,7 @@ import inspect
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import datetime
+import numpy as np
 import sys
 import os
 import traceback
@@ -49,12 +50,13 @@ class FlowEditor:
         # ツールバー
         toolbar = tk.Frame(self.root)
         toolbar.pack(fill=tk.X, padx=5, pady=5)
-        tk.Button(toolbar, text="ホーム", command=self.goHome, bg='gray', fg='white').pack(side=tk.LEFT, padx=2)
-        tk.Button(toolbar, text="最前面", command=self.bringChildWindowsToFront, bg='gray', fg='white').pack(side=tk.LEFT, padx=2)
-        tk.Button(toolbar, text="読込", command=self.loadFlow, bg='orange', fg='white').pack(side=tk.LEFT, padx=2)
-        tk.Button(toolbar, text="保存", command=self.saveFlow, bg='blue', fg='white').pack(side=tk.LEFT, padx=2)
+        tk.Button(toolbar, text="ホーム", command=self.goHome, bg='lightgray').pack(side=tk.LEFT, padx=2)
+        tk.Button(toolbar, text="最前面", command=self.bringChildWindowsToFront, bg='lightgray').pack(side=tk.LEFT, padx=2)
+        tk.Button(toolbar, text="読込", command=self.loadFlow, bg='orange').pack(side=tk.LEFT, padx=2)
+        tk.Button(toolbar, text="保存", command=self.saveFlow, bg='lightgreen').pack(side=tk.LEFT, padx=2)
         tk.Checkbutton(toolbar, text="自動実行", variable=self.autoExecute).pack(side=tk.RIGHT, padx=2)
-        tk.Button(toolbar, text="実行", command=self.executeFlow, bg='green', fg='white').pack(side=tk.RIGHT, padx=2)
+        tk.Button(toolbar, text="中断", command=self.stopFlow, bg='pink').pack(side=tk.RIGHT, padx=2)
+        tk.Button(toolbar, text="実行", command=self.executeFlow, bg='lightblue').pack(side=tk.RIGHT, padx=2)
         
         # キャンバスフレーム
         canvasFrame = tk.Frame(self.root)
@@ -181,7 +183,7 @@ class FlowEditor:
         if node:
             self.nodes.append(node)
             self._placeItemBeforeConnections(node.view.rect, node.view.label)
-            node.view.updatePositionAndAppearance()
+            node.view.updatePositionAndAppearance(node)
     
     def addTrayAtPosition(self):
         x = self.canvas.canvasx(self.rightClickX)
@@ -511,12 +513,13 @@ class FlowEditor:
             self.resultText.delete(1.0, tk.END)
             self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
         except Exception as e:
-#            tb = traceback.format_exc()
-#            print(tb,file=sys.stderr)
             self.root.after(0, lambda m = str(e): messagebox.showerror("エラー", f"フロー実行エラー: {m}"))
             raise
         finally:
             self.root.after(0, lambda: self._clearAllProgress())
+    
+    def stopFlow(self):
+        self.flowControl.stop()
 
     def saveFlow(self):
         if not self.nodes and not self.trays:
@@ -615,7 +618,7 @@ class FlowEditor:
             # 全アイテムの座標と外観を更新
             for node in self.nodes:
                 # 描画を更新
-                node.view.updatePositionAndAppearance()
+                node.view.updatePositionAndAppearance(node)
             
             for tray in self.trays:
                 # 描画を更新
@@ -889,7 +892,15 @@ class FlowEditor:
                     if tb:
                         print(tb)
                 print("========================")
-            _, _, _, _, _, _, _, _, elapsedHis = CacheManager.getCacheStats()
+            cacheCount, cacheSize, storageCount, storageSize, cacheMissCount, purgeCount, saveCount, loadCount, elapsedHis = CacheManager.getCacheStats()
+            print(f"cacheCount: {cacheCount}")
+            print(f"cacheSize: {cacheSize}")
+            print(f"storageCount: {storageCount}")
+            print(f"storageSize: {storageSize}")
+            print(f"cacheMissCount: {cacheMissCount}")
+            print(f"purgeCount: {purgeCount}")
+            print(f"saveCount: {saveCount}")
+            print(f"loadCount: {loadCount}")
             for name, his in elapsedHis.items():
                 print(name)
                 for ms in sorted(his):
@@ -902,7 +913,7 @@ class FlowEditor:
         self.statusLabel.config(text=f"状態: DEBUGモード {'OFF' if Debug.LEVEL == Debug.LEVEL_NONE else 'ON'}")
 
         for node in self.nodes:
-            node.view.updatePositionAndAppearance()
+            node.view.updatePositionAndAppearance(node)
 
         return "break"
 
@@ -910,16 +921,21 @@ class FlowEditor:
         """ノードの参照状況をデバッグ出力"""
         # 全オブジェクトからflowNodeを探す
         objs = []
+        listCount = 0
         for obj in gc.get_objects():
             if(  isinstance( obj, FlowNode)
         #      or isinstance( obj, FlowData)
               ):
                 objs.append(obj)
+            elif(  isinstance( obj, list)
+                ):
+                listCount += 1
         
+        print(f"残存list数: {listCount}")
         print(f"残存flowNode数: {len(objs)}")
         
         for i, obj in enumerate(objs):
-            print(f"残存ノード{i}: {getattr(obj, 'text', type(obj).__name__)} (id: {id(obj)}) (flowId: {getattr(obj,'_loadIndex',None)})")
+            print(f"残存ノード{i}: {getattr(obj, 'text', type(obj).__name__)} (id: {id(obj)}) (loadIndex: {getattr(obj,'_loadIndex',None)})")
             
             # 参照カウントを取得
             refCount = sys.getrefcount(obj)

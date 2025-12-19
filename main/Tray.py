@@ -30,14 +30,14 @@ class Tray:
         self.updateDepthAppearance()
 
         # イベントバインディング
-        canvas.tag_bind(self.rect , '<Button-1>', self.onMouseDown)
-        canvas.tag_bind(self.label, '<Button-1>', self.onMouseDown)
-        canvas.tag_bind(self.rect , '<B1-Motion>', self.onMouseDrag)
-        canvas.tag_bind(self.label, '<B1-Motion>', self.onMouseDrag)
-        canvas.tag_bind(self.rect , '<ButtonRelease-1>', self.onMouseUp)
-        canvas.tag_bind(self.label, '<ButtonRelease-1>', self.onMouseUp)
-        canvas.tag_bind(self.rect , '<Button-3>', self.onRightClick)
-        canvas.tag_bind(self.label, '<Button-3>', self.onRightClick)
+        canvas.tag_bind(self.rect , '<Button-1>', self.onPress)
+        canvas.tag_bind(self.label, '<Button-1>', self.onPress)
+        canvas.tag_bind(self.rect , '<B1-Motion>', self.onDrag)
+        canvas.tag_bind(self.label, '<B1-Motion>', self.onDrag)
+        canvas.tag_bind(self.rect , '<ButtonRelease-1>', self.onRelease)
+        canvas.tag_bind(self.label, '<ButtonRelease-1>', self.onRelease)
+        canvas.tag_bind(self.rect , '<Button-3>', self.onRightPress)
+        canvas.tag_bind(self.label, '<Button-3>', self.onRightPress)
 
         # 右クリックメニュー
         self.contextMenu = tk.Menu(self.canvas, tearoff=0)
@@ -51,7 +51,7 @@ class Tray:
         self.contextMenu.add_command(label="編集", command=self.editTray)
         self.contextMenu.add_command(label="削除", command=self.deleteTray)
 
-    def onMouseDown(self, event):
+    def onPress(self, event):
         self.dragStartX = event.x
         self.dragStartY = event.y
         canvasX = self.canvas.canvasx(event.x)
@@ -107,7 +107,7 @@ class Tray:
             # ドラッグ開始時に外観を更新
             self.editor.updateAllTrayAppearance()
 
-    def onMouseDrag(self, event):
+    def onDrag(self, event):
         dx = event.x - self.dragStartX
         dy = event.y - self.dragStartY
 
@@ -144,6 +144,9 @@ class Tray:
 
             # 接続線を更新
             self.editor.updateConnections()
+
+            # canvasの自動拡大/縮小
+            self.editor.adjustCanvasSize()
         elif self.isResizing:
             canvasX = self.canvas.canvasx(event.x)
             canvasY = self.canvas.canvasy(event.y)
@@ -189,10 +192,13 @@ class Tray:
             self.canvas.coords(self.label,
                 self.x - self.width//2 + 10, self.y - self.height//2 + 10)
 
+            # canvasの自動拡大/縮小
+            self.editor.adjustCanvasSize()
+
         self.dragStartX = event.x
         self.dragStartY = event.y
 
-    def onMouseUp(self, event):
+    def onRelease(self, event):
         self.isDragging = False
         self.isResizing = False
         self.dragNodes = []  # ドラッグノードリストをクリア
@@ -200,7 +206,7 @@ class Tray:
         # 全トレイの外観を更新
         self.editor.updateAllTrayAppearance()
 
-    def onRightClick(self, event):
+    def onRightPress(self, event):
         self.editor.rightClickX = event.x
         self.editor.rightClickY = event.y
         self.contextMenu.post(event.x_root, event.y_root)

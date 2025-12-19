@@ -120,7 +120,7 @@ class FlowNode(AbstractBaseClass):
         # 初回実行または変更ありの場合は再処理
         return (self._lastInputHash != inputHash
                 or self._lastConfigHash != configHash
-                or 0 == len(self.flowDatas))
+               )
     
     def updateExecutionHashes(self):
         """実行後にハッシュを更新"""
@@ -338,10 +338,10 @@ class FlowNodeView():
         self.canvas.coords(self.rect, *points)
         self.canvas.coords(self.label, self.x, self.y)
 
-    def updatePositionAndAppearance(self):
+    def updatePositionAndAppearance(self,node):
         """位置と外観を更新"""
         self.updatePosition()
-        self.canvas.itemconfig(self.label, text=self.text)
+        self.editor.onNodeConfigChanged(node)
 
     def onNodeConfigChanged(self, node):
         self.text = node.getText()
@@ -381,7 +381,7 @@ class FlowNodeView():
             self.startX = event.x
             self.startY = event.y
             
-            # canvasの自動拡大/縮小をチェック
+            # canvasの自動拡大/縮小
             self.editor.adjustCanvasSize()
             
             self.editor.updateConnections()

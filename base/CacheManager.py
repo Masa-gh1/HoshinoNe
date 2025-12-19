@@ -84,6 +84,10 @@ class CacheManager:
     
     @classmethod
     def get(cls, cacheKey, cachePolicy):
+        return cls.elapsed( cls._get, cacheKey, cachePolicy)
+
+    @classmethod
+    def _get(cls, cacheKey, cachePolicy):
         """キャッシュから取得"""
         with cls._cacheLock:
             cache = cls._globalBlockCache.pop(cacheKey,None)
@@ -106,6 +110,10 @@ class CacheManager:
     
     @classmethod
     def set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
+        return cls.elapsed( cls._set, cacheKey, data, cachePolicy)
+
+    @classmethod
+    def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
         """キャッシュに保存"""
         with cls._cacheLock:
             if MAX_BLOCK_CACHE_SIZE <= len(cls._globalBlockCache):

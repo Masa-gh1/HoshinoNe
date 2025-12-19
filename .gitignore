@@ -1,7 +1,9 @@
 *.bak
-/debug
 /.vscode
 /.settings
+/venv
+__pycache__
 *.CR2
 *.DNG
 *.fits
+/debug
