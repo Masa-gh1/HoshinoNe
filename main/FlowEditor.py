@@ -20,17 +20,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import atexit
 import gc
 
-from config import VERSION, MAX_WORKERS
+from config import VERSION
 from base import FlowNode
 from base import FlowData
+from base import FlowControl
+from base import FlowFile
 from base import CacheManager
 from nodes import NodeFactory
 from main import Tray
 from . import Debug
-from utils.ThreadPool import ProcessExecutor, CoalescingExecutor
-
-# 同時ノード実行数
-MAX_NODE_WORKERS = 4
+from utils.ThreadPool import CoalescingExecutor
 
 class FlowEditor:
     def __init__(self, root, text):
@@ -46,6 +45,7 @@ class FlowEditor:
         self.trays = []
         self.connectionLines = []
         self.currentFlowPath = None
+        self.flowModel = FlowControl()
 
         self.createWidgets()
     
@@ -96,6 +96,7 @@ class FlowEditor:
         
         self.contextMenu.add_separator()
         self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
+        self.contextMenu.add_command(label="別のフローをインポート", command=self.addFlowAtPosition)
         
         # 使い方説明
         infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード/トレイ追加 2.ドラッグで移動 3.クリックで接続 4.実行 5.ダブルクリックで結果表示", bg='lightyellow')
@@ -111,7 +112,7 @@ class FlowEditor:
         
         # MAX_NODE_WORKERS数のプログレスバーを事前作成
         self.progressBars = []
-        for i in range(MAX_NODE_WORKERS):
+        for i in range(self.flowModel.getMaxNodeWorkers()):
             frame = tk.Frame(self.progressFrame)
             frame.pack(fill=tk.X, pady=1)
             
@@ -148,7 +149,7 @@ class FlowEditor:
         """子画面を最前面に持ち上げる"""
         # 各ノードの設定ダイアログをチェック
         for node in self.nodes:
-            node.lift()
+            node.liftWindow()
         
         self.statusLabel.config(text=f"状態: 子画面を最前面に移動")
     
@@ -196,7 +197,16 @@ class FlowEditor:
         self.trays.append(tray)
         self._placeItemBeforeConnections(tray.rect, tray.label)
         self.updateAllTrayAppearance()
-    
+
+    def addFlowAtPosition(self):
+        """右クリック位置にフローをインポート"""
+        # クリック位置をcanvas座標に変換
+        clickX = self.canvas.canvasx(self.rightClickX)
+        clickY = self.canvas.canvasy(self.rightClickY)
+        
+        # 追加モードで読み込み
+        self.loadFlow(targetX=clickX, targetY=clickY, appendMode=True)
+
     def updateAllTrayAppearance(self):
         """全トレイの外観を更新"""
         for tray in self.trays:
@@ -250,8 +260,8 @@ class FlowEditor:
         self.updateAllTrayAppearance()
     
     def updateNodeText(self, node, text):
-        if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadFlowId'):
-            text = f"{node._loadFlowId} {text}"
+        if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadIndex'):
+            text = f"{node._loadIndex} {text}"
         self.canvas.itemconfig(node.label, text=text)
     
     def adjustCanvasSize(self):
@@ -472,129 +482,21 @@ class FlowEditor:
             return
         
         # フロー実行を別スレッドで実行
-        CoalescingExecutor.submit( self, self.processNodes)
+        CoalescingExecutor.submit( self, self.executeFlowAsync)
     
-    def processNodes(self):
-        startTime = time.time()
-        try:
-            with(ThreadPoolExecutor(max_workers=MAX_NODE_WORKERS) as nodeExecutor,
-                 ThreadPoolExecutor(max_workers=MAX_WORKERS)      as processExecutor):
-                
-                ProcessExecutor.setExecutor(processExecutor) # グローバルにスレッドプールを提供
+    def executeFlowAsync(self):
 
-                # ステータス表示
-                self.root.after(0, lambda: self.statusLabel.config(text="フロー実行中..."))
-                self.root.after(0, lambda: self.resultText.delete(1.0, tk.END))
-                self.root.after(0, lambda: self.highlightReprocessingNodes())
-                
-                # トポロジカルソートで処理レベルを決定
-                processLevels = self.getProcessLevels()
-                
-                for level, nodes in enumerate(processLevels):
-                    if nodes:
-                        # 同レベルのノードを並列実行
-                        text=""
-                        sep="開始: "
-                        
-                        futures = []
-                        for node in nodes:
-                            # 再処理が必要かチェック
-                            if node.needsReprocessing():
-                                self.root.after(0, lambda id=id(node), t=node.text: self.showProgress( id, t, "待機中"))
-                                context = {
-                                    'result_callback': self.showResult,
-                                    'progress_callback': lambda msg, current=None, total=None, id=id(node), t=node.text: self.showProgress( id, t, msg, current, total)
-                                }
-                                future = nodeExecutor.submit(self._executeNode, node, context)
-                                futures.append((node, future))
-                                text +=f"{sep}{node.text}"
-                                sep=","
-                            elif not self.autoExecute.get():
-                                # スキップしたノードを表示
-                                self.root.after(0, lambda t=node.text: self.resultText.insert(tk.END, f"スキップ: {t}\n"))
-                                self.root.after(0, lambda: self.resultText.see(tk.END))
-                            
-                        
-                        if 0<len(text):
-                            self.root.after(0, lambda: self.statusLabel.config(text=f"状態: {text}"))
-                        if 0<len(text) and not self.autoExecute.get():
-                            self.root.after(0, lambda text=text: self.resultText.insert(tk.END, text))
-                            self.root.after(0, lambda: self.resultText.insert(tk.END, f"\n"))
-                            self.root.after(0, lambda: self.resultText.see(tk.END))
-                        
-                        # 同レベルの全ノードの完了を待つ
-                        futureToNode = {future: node for node, future in futures}
-                        for future in as_completed([f for n, f in futures]):
-                            node = futureToNode[future]
-                            elapsedMs = future.result()
-                            self.root.after(0, lambda t=node.text, ms=elapsedMs: self.resultText.insert(tk.END, f"完了: {t} ({ms}ms)\n"))
-                            self.root.after(0, lambda: self.resultText.see(tk.END))
-                            self.root.after(0, lambda t=node.text: self.statusLabel.config(text=f"完了: {t}"))
-                            self.root.after(0, lambda: self._clearAllProgress())
-                            self.root.after(0, lambda: self.highlightReprocessingNodes())
-                            self.root.after(0, lambda n=node: n.updateResult())
-                
-                if not self.autoExecute.get():
-                    self.root.after(0, lambda: self.resultText.insert(tk.END, f"実行完了\n"))
-                    self.root.after(0, lambda: self.resultText.see(tk.END))
-                self.root.after(0, lambda: self.statusLabel.config(text="状態: 実行完了"))
-                self.root.after(0, lambda: self._clearAllProgress())
-                self.root.after(0, lambda: self.highlightReprocessingNodes())
+        try:
+            self.flowModel.execute( self.nodes, self.showMessage, self.showProgress)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
+#            tb = traceback.format_exc()
+#            print(tb,file=sys.stderr)
             errorMsg = f"フロー実行エラー: {str(e)}"
             self.root.after(0, lambda: messagebox.showerror("エラー", errorMsg))
-            self.root.after(0, lambda: self.statusLabel.config(text="状態: エラー"))
+            raise
+        finally:
             self.root.after(0, lambda: self._clearAllProgress())
-            self.root.after(0, lambda: self.highlightReprocessingNodes())
 
-        endTime = time.time()
-        elapsedMs = int((endTime - startTime) * 1000)
-        self.root.after(0, lambda ms=elapsedMs: self.resultText.insert(tk.END, f"({ms}ms)\n"))
-    
-    def getProcessLevels(self):
-        """ノードを依存レベル別にグループ化"""
-        # 入次数を計算
-        inDegree = {node: 0 for node in self.nodes}
-        for node in self.nodes:
-            for connectedNode in node.outputNodes:
-                inDegree[connectedNode] += 1
-        
-        levels = []
-        remaining = set(self.nodes)
-        
-        while remaining:
-            # 現在のレベルで実行可能なノードを収集
-            currentLevel = [node for node in remaining if inDegree[node] == 0]
-            if not currentLevel:
-                break
-            
-            levels.append(currentLevel)
-            
-            # 処理したノードを削除し、後続ノードの入次数を更新
-            for node in currentLevel:
-                remaining.remove(node)
-                for connectedNode in node.outputNodes:
-                    if connectedNode in remaining:
-                        inDegree[connectedNode] -= 1
-        
-        return levels
-    
-    def _executeNode(self, node, context):
-        """ノード実行"""
-        try:
-            # 時間を測定
-            startTime = time.time()
-            node.process(context)
-            # 実行後にハッシュを更新
-            node.updateExecutionHashes()
-            endTime = time.time()
-            elapsedMs = int((endTime - startTime) * 1000)
-            return elapsedMs
-        except Exception as e:
-            raise Exception(f"ノード '{node.text}' でエラー") from e
-    
 
     def saveFlow(self):
         if not self.nodes and not self.trays:
@@ -612,57 +514,10 @@ class FlowEditor:
         # 現在のflowファイルパスを保存
         self.currentFlowPath = filePath
         
-        # ノードのIDマッピングを作成
-        nodeIds = {node: i for i, node in enumerate(self.nodes)}
-        
-        flowData = {
-            "nodes": [],
-            "connections": [],
-            "trays": []
-        }
-        
-        # ノード情報を保存
-        for node in self.nodes:
-            # ノードのZ-orderを取得
-            allItems = self.canvas.find_all()
-            nodeZOrder = max(allItems.index(node.rect), allItems.index(node.label))
-            
-            nodeData = {
-                "id": nodeIds[node],
-                "type": node.type,
-                "x": node.x,
-                "y": node.y,
-                "text": node.text,
-                "zOrder": nodeZOrder
-            }
-            
-            # ノード固有のデータを保存
-            if hasattr(node, 'store'):
-                node.store(nodeData)
-            
-            flowData["nodes"].append(nodeData)
-        
-        # トレイ情報を保存
-        for tray in self.trays:
-            # トレイのZ-orderを取得
-            allItems = self.canvas.find_all()
-            trayZOrder = max(allItems.index(tray.rect), allItems.index(tray.label))
-            trayData = tray.toDict()
-            trayData["zOrder"] = trayZOrder
-            flowData["trays"].append(trayData)
-        
-        # 接続情報を保存
-        for node in self.nodes:
-            for outputNode in node.outputNodes:
-                flowData["connections"].append({
-                    "from": nodeIds[node],
-                    "to": nodeIds[outputNode]
-                })
-        
         try:
-            with open(filePath, 'w', encoding='utf-8') as f:
-                json.dump(flowData, f, ensure_ascii=False, indent=2)
-            
+            flowFile = FlowFile()
+            flowFile.save( filePath, self.canvas, self, self.nodes, self.trays)
+        
             # ウィンドウタイトルにファイル名を追記
             fileName = os.path.basename(filePath)
             self.root.title(f"{self.text} - {fileName}")
@@ -671,7 +526,7 @@ class FlowEditor:
             print(tb,file=sys.stderr)
             messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
-    def loadFlow(self):
+    def loadFlow(self, targetX=0, targetY=0, appendMode=False):
         filePath = filedialog.askopenfilename(
             filetypes=[("flow files", "*.flow"), ("All files", "*.*")]
         )
@@ -680,61 +535,63 @@ class FlowEditor:
             return
             
         # 現在のflowファイルパスを保存
-        self.currentFlowPath = filePath
+        if not appendMode:
+            self.currentFlowPath = filePath
         
         try:
-            with open(filePath, 'r', encoding='utf-8') as f:
-                flowData = json.load(f)
-            
             # 自動実行をオフにする
             self.autoExecute.set(False)
             
             # 現在のフローをクリア
-            self.clearFlow()
+            if not appendMode:
+                self.clearFlow()
             
             # zOrder 順を収集
-            zOrderMap = {}
+            flowFile = FlowFile()
+            nodes, trays, connections, zOrderObj = flowFile.load( filePath, self.createObject, self.canvas, self)
 
-            # ノードをファイル順序で作成
-            nodeMap = {}
-            for nodeData in flowData["nodes"]:
-                node = self.createNodeFromData(nodeData)
-                if hasattr(node, 'restore'):
-                    node.restore(nodeData)
-                node._loadFlowId = nodeData["id"]
-                self.nodes.append(node)
-                nodeMap[nodeData["id"]] = node
-                zOrderMap[nodeData["zOrder"]] = node
-            
-            # トレイをファイル順序で作成
-            if "trays" in flowData:
-                for trayData in flowData["trays"]:
-                    tray = Tray(self.canvas, self)
-                    tray.fromDict(trayData)
-                    self.trays.append(tray)
-                    zOrderMap[trayData["zOrder"]] = tray
-            
-            # Z-orderでソートして表示順序を再現
-            zOrderMap =  {key: zOrderMap[key] for key in sorted(zOrderMap)}
-            for obj in zOrderMap.values():
-                if isinstance( obj, FlowNode):
-                    self.canvas.tag_raise(obj.rect)
-                    self.canvas.tag_raise(obj.label)
-                elif isinstance( obj, Tray):
-                    self.canvas.tag_raise(obj.rect)
-                    self.canvas.tag_raise(obj.label)
-            
-            # 接続を作成（双方向）
-            for connection in flowData["connections"]:
-                fromNode = nodeMap[connection["from"]]
-                toNode = nodeMap[connection["to"]]
-                fromNode.outputNodes.append(toNode)
-                toNode.inputNodes.append(fromNode)
+            if (0 != targetX or 0 != targetY) and (nodes or trays):
+                # 座標指定があるので、位置を調整
+                items = [(node.x, node.y) for node in nodes] + [(tray.x, tray.y) for tray in trays]
+                centerX = sum(x for x, y in items) / len(items)
+                centerY = sum(y for x, y in items) / len(items)
                 
-                # 接続線を描画
+                # 目標位置へのオフセット計算
+                offsetX = targetX - centerX
+                offsetY = targetY - centerY
+                    
+                # 全アイテムの座標を調整
+                for node in nodes:
+                    node.x += offsetX
+                    node.y += offsetY
+                
+                for tray in trays:
+                    tray.x += offsetX
+                    tray.y += offsetY
+
+            # 全アイテムの座標を調整
+            for node in nodes:
+                # 描画を更新
+                node.updatePositionAndAppearance()
+            
+            for tray in trays:
+                # 描画を更新
+                tray.updatePositionAndAppearance()
+
+            self.nodes.extend(nodes)
+            self.trays.extend(trays)
+
+            # 接続線を描画
+            for connection in connections:
+                fromNode = connection[0]
+                toNode = connection[1]
                 x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
                 line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
                 self.connectionLines.append((fromNode, toNode, line))
+            
+            # Z-orderで表示順を再現
+            for obj in zOrderObj:
+                obj.lift()
             
             # 接続線を最上位に配置
             for _, _, line in self.connectionLines:
@@ -754,9 +611,12 @@ class FlowEditor:
             print(tb,file=sys.stderr)
             messagebox.showerror("エラー", f"読み込みに失敗しました: {str(e)}")
     
-    def createNodeFromData(self, nodeData):
-        # ダイアログを抑制してノードを作成
-        return NodeFactory.createNode(nodeData["type"], self.canvas, self, nodeData["x"], nodeData["y"], nonDialog=True)
+    def createObject(self, type):
+        # タイプを指定して各種オブジェクトを作成する
+        if "Tray" == type:
+            return Tray( self.canvas, self, nonDialog=True)
+        else:
+            return NodeFactory.createNode( type, self.canvas, self, 0, 0, nonDialog=True)
     
     def clearFlow(self):
         # ノードをクリーンアップ
@@ -824,13 +684,6 @@ class FlowEditor:
         #if self.autoExecute.get():
         #    self.executeFlow()
     
-    def showResult(self, headers, data):
-        self.resultText.delete(1.0, tk.END)
-        self.resultText.insert(tk.END, f"総行数: {len(data)}\n")
-        self.resultText.insert(tk.END, ','.join(headers) + '\n')
-        for row in data[:10]:
-            self.resultText.insert(tk.END, ','.join(row) + '\n')
-    
     def highlightReprocessingNodes(self):
         """再実行されるノードを強調表示"""
         # 既存のハイライトをクリア
@@ -874,6 +727,20 @@ class FlowEditor:
             progressInfo['bar'].config(value=0)
         self.activeProgressBars.clear()
     
+    def showMessage(self,msg):
+        status = msg.split('\n')[0]
+        self.root.after(0, lambda: self.statusLabel.config(text=status))
+
+        def updateResultText(msg):
+            lines = int(self.resultText.index(tk.END).split('.')[0]) # tk.END 位置を取得 "{line}.{row}"
+            if 10000 < lines:
+                self.resultText.delete("1.0", "100.0")
+            self.resultText.insert(tk.END, msg)
+            self.resultText.see(tk.END)
+        self.root.after(0, lambda: updateResultText(msg))
+
+        self.root.after(0, lambda: self.highlightReprocessingNodes())
+
     def showProgress(self, nodeId, nodeName, message, current=None, total=None):
         """処理経過をプログレスバーで表示"""
         self.root.after(0, lambda: self._updateProgress(nodeId, nodeName, message, current, total))
@@ -1030,7 +897,7 @@ class FlowEditor:
         print(f"残存flowNode数: {len(objs)}")
         
         for i, obj in enumerate(objs):
-            print(f"残存ノード{i}: {getattr(obj, 'text', type(obj).__name__)} (id: {id(obj)}) (flowId: {getattr(obj,'_loadFlowId',None)})")
+            print(f"残存ノード{i}: {getattr(obj, 'text', type(obj).__name__)} (id: {id(obj)}) (flowId: {getattr(obj,'_loadIndex',None)})")
             
             # 参照カウントを取得
             refCount = sys.getrefcount(obj)

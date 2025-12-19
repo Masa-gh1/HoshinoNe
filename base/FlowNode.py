@@ -13,8 +13,11 @@ import traceback
 import sys
 import tkinter as tk
 from tkinter import filedialog
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from config import MAX_WORKERS
 from main.ResultWindow import ResultWindow
+from utils.ThreadPool import ProcessExecutor
 
 class FlowNode(AbstractBaseClass):
     def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
@@ -23,11 +26,13 @@ class FlowNode(AbstractBaseClass):
         self._binds = []
         self._window = {}
         self.x, self.y = x, y
+
         self.type = nodeType
         self.text = text
         self.outputNodes = [] # 接続先ノードの一覧
         self.inputNodes = []  # 入力元ノードの一覧
         self.flowDatas = []   # 処理結果データ
+
         self.dragging = False
         self.startX = 0
         self.startY = 0
@@ -35,6 +40,7 @@ class FlowNode(AbstractBaseClass):
         self._lastConfigHash = None
         self.fileTypes = [("CSV files", "*.csv")]
         self.defaultOutputExtension = ".csv"
+
         self.createVisual()
         self.bindEvents()
     
@@ -103,23 +109,23 @@ class FlowNode(AbstractBaseClass):
         """
         pass
     
-    def processPreviewOnly(self):
-        """プレビュー専用処理（自ノードのみ）"""
+    def execute(self, context=None):
+        """ノードの処理を実行"""
+        self.process(context)
+        self.updateExecutionHashes()
+        self.editor.root.after(0,self.updateResult)
+
+    def preview(self):
+        """プレビュー専用処理（ノード個別実行）"""
         if not self.inputNodes or not self.inputNodes[0].flowDatas:
             return
         
         try:
-            context = {}
-            self.process(context)
-            
-            # 開いているResultWindowがあれば直接更新
-            if "result_window" in self._window:
-                try:
-                    if self._window["result_window"].winfo_exists():
-                        self._window["result_window"]._updateResultWindow()
-                except tk.TclError:
-                    # ウィンドウが破棄されている場合は参照を削除
-                    del self._window["result_window"]
+            with(ThreadPoolExecutor(max_workers=MAX_WORKERS) as processExecutor):
+                ProcessExecutor.setExecutor(processExecutor) # グローバルにスレッドプールを提供
+                context = {}
+                self.process(context)
+            self.editor.root.after(0,self.updateResult)
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
@@ -127,7 +133,7 @@ class FlowNode(AbstractBaseClass):
     def needsReprocessing(self):
         """再処理が必要かどうかを判定"""
         # ハッシュを計算
-        inputHash = self.getInputHashe(self.inputNodes)
+        inputHash = self.getInputHashe()
         configHash = self.getConfigHash()
         
         # 初回実行または変更ありの場合は再処理
@@ -138,21 +144,55 @@ class FlowNode(AbstractBaseClass):
     def updateExecutionHashes(self):
         """実行後にハッシュを更新"""
         # ハッシュを更新
-        self._lastInputHash = self.getInputHashe(self.inputNodes)
+        self._lastInputHash = self.getInputHashe()
         self._lastConfigHash = self.getConfigHash()
     
-    def getInputHashe(self, inputNodes):
+    def getInputHashe(self):
         inputHashes = []
-        for node in inputNodes:
+        for node in self.inputNodes:
             inputHashes.append(str(id(node)))
             for flowData in node.flowDatas:
                 inputHashes.append(str(id(flowData)))
-        return hashlib.md5(''.join(inputHashes).encode()).hexdigest()
+        return hashlib.md5(':'.join(inputHashes).encode()).hexdigest()
     
     def getConfigHash(self):
         """ノード固有の設定ハッシュを取得（サブクラスでオーバーライド）"""
         return hashlib.md5(str(self.type).encode()).hexdigest()
     
+    def store(self, nodeData):
+        """ノード固有の設定 nodeData に保存（サブクラスでオーバーライド）
+        
+        Args:
+            nodeData: 保存先
+        """
+        pass
+    
+    def restore(self, nodeData):
+        """ノード固有の設定 nodeData から復元（サブクラスでオーバーライド）
+        
+        Args:
+            nodeData: 復元元
+        """
+        pass
+    
+    def serialize(self):
+        """ノードをシリアライズ"""
+        serial = {
+            "type": self.type,
+            "text": self.text,
+            "x"   : self.x,
+            "y"   : self.y,
+        }
+        self.store(serial)
+        serial["connections"] = [id(node) for node in self.outputNodes]
+        return serial
+    
+    def deserialize(self, serial):
+        """ノードをデシリアライズ"""
+        self.x = serial["x"]
+        self.y = serial["y"]
+        self.restore(serial)
+
     def reportProgress(self, context, message, current=None, total=None):
         """処理経過を報告"""
         if context and 'progress_callback' in context:
@@ -174,6 +214,15 @@ class FlowNode(AbstractBaseClass):
         """ノードのテキストを更新（サブクラスでオーバーライド）"""
         self.editor.updateNodeText(self, self.text)
     
+    def updatePosition(self):
+        self.canvas.coords(self.rect, self.x-50, self.y-20, self.x+50, self.y+20)
+        self.canvas.coords(self.label, self.x, self.y)
+
+    def updatePositionAndAppearance(self):
+        """位置と外観を更新"""
+        self.updatePosition()
+        self.updateNodeText()
+
     def onClick(self, event):
         self.startX = event.x
         self.startY = event.y
@@ -210,7 +259,6 @@ class FlowNode(AbstractBaseClass):
             self.editor.adjustCanvasSize()
             
             self.editor.updateConnections()
-            # ドラッグ中はハイライトを再表示しない
     
     def onRelease(self, event):
         if hasattr(self, 'isDoubleClick') and self.isDoubleClick:
@@ -295,11 +343,15 @@ class FlowNode(AbstractBaseClass):
 
     def updateResult(self):
         if 'result_window' in self._window:
-            self._window["result_window"].update()
+            self._window["result_window"].updateResult()
     
-    def lift(self):
+    def liftWindow(self):
         """ウィンドウを最前面に表示"""
         for window in self._window.values():
             window.lift()
             window.focus_force()
 
+    def lift(self):
+        """ノードを最前面に表示"""
+        self.canvas.tag_raise(self.rect)
+        self.canvas.tag_raise(self.label)

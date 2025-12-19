@@ -3,7 +3,7 @@ import tkinter as tk
 from nodes import NodeFactory
 
 class Tray:
-    def __init__(self, canvas, editor, x=30, y=30, width=200, height=150, title="トレイ"):
+    def __init__(self, canvas, editor, x=30, y=30, width=200, height=150, title="トレイ", **kwargs):
         self.canvas = canvas
         self.editor = editor
         self.x = x
@@ -250,6 +250,20 @@ class Tray:
             fill=f"#{bgGray:02x}{bgGray:02x}{bgGray:02x}",
             stipple=stipplePattern)
 
+    def updatePosition(self):
+        """位置を更新"""
+        self.canvas.coords(self.rect,
+            self.x - self.width//2, self.y - self.height//2,
+            self.x + self.width//2, self.y + self.height//2)
+        self.canvas.coords(self.label,
+            self.x - self.width//2 + 10, self.y - self.height//2 + 10)
+
+    def updatePositionAndAppearance(self):
+        """位置と外観を更新"""
+        self.updatePosition()
+        self.updateDepthAppearance()
+        self.canvas.itemconfig(self.label, text=self.title)
+
     def getVisuallyContainedNodes(self):
         """視覚的にトレイの上にあるノードを取得"""
         contained = []
@@ -290,28 +304,23 @@ class Tray:
                     contained.append(tray)
         return contained
 
-    def toDict(self):
+    def lift(self):
+        """トレイを前面に移動"""
+        self.canvas.tag_raise(self.rect)
+        self.canvas.tag_raise(self.label)
+
+    def serialize(self):
         return {
             'x': self.x,
             'y': self.y,
             'width': self.width,
             'height': self.height,
             'title': self.title,
-            'zOrder': 0  # 保存時に動的に設定
         }
 
-    def fromDict(self, data):
+    def deserialize(self, data):
         self.x = data['x']
         self.y = data['y']
         self.width = data['width']
         self.height = data['height']
         self.title = data['title']
-        # zOrderは読み込み時に動的に設定される
-
-        # 描画要素を更新
-        self.canvas.coords(self.rect,
-            self.x - self.width//2, self.y - self.height//2,
-            self.x + self.width//2, self.y + self.height//2)
-        self.canvas.coords(self.label,
-            self.x - self.width//2 + 10, self.y - self.height//2 + 10)
-        self.canvas.itemconfig(self.label, text=self.title)

@@ -10,6 +10,8 @@ All rights reserved.
 from .DataBlock import DataBlock
 from .FlowData import FlowData
 from .FlowNode import FlowNode
+from .FlowControl import FlowControl
+from .FlowFile import FlowFile
 from .FlowDataWrapper import FlowDataWrapper
 from .LazyFlowData import LazyFlowData
 from .Constants import CachePolicy
@@ -19,6 +21,8 @@ __all__ = [
     'DataBlock',
     'FlowData',
     'FlowNode',
+    'FlowControl',
+    'FlowFile',
     'FlowDataWrapper',
     'LazyFlowData',
     'CachePolicy',

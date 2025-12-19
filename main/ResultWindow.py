@@ -60,7 +60,7 @@ class ResultWindow(tk.Toplevel):
         self._selected_data_var = tk.StringVar()
         self._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self._selected_data_var, state="readonly", width=30)
         self._data_combo.pack(side=tk.LEFT, padx=(5,0))
-        self._data_combo.bind('<<ComboboxSelected>>', lambda e: self._updateResultWindow())
+        self._data_combo.bind('<<ComboboxSelected>>', lambda e: self.updateResult())
         self._data_combo.bind('<Key>', self._onComboKeyPress)
         
         # ヒストグラム軸制御（画像データのみ）
@@ -72,14 +72,14 @@ class ResultWindow(tk.Toplevel):
         # X軸制御
         self._x_scale_var = tk.StringVar(value="log")
         tk.Label(axis_frame, text="X軸:").pack(side=tk.LEFT, padx=(10,0))
-        tk.Radiobutton(axis_frame, text="Log", variable=self._x_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(axis_frame, text="Linear", variable=self._x_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Log", variable=self._x_scale_var, value="log", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Linear", variable=self._x_scale_var, value="linear", command=self.updateResult).pack(side=tk.LEFT)
         
         # Y軸制御
         self._y_scale_var = tk.StringVar(value="log")
         tk.Label(axis_frame, text="Y軸:").pack(side=tk.LEFT, padx=(10,0))
-        tk.Radiobutton(axis_frame, text="Log", variable=self._y_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(axis_frame, text="Linear", variable=self._y_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Log", variable=self._y_scale_var, value="log", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Linear", variable=self._y_scale_var, value="linear", command=self.updateResult).pack(side=tk.LEFT)
         
         # 表示レベル制御（画像データのみ）
         level_frame = tk.Frame(control_frame)
@@ -88,9 +88,9 @@ class ResultWindow(tk.Toplevel):
         tk.Label(level_frame, text="画像表示レベル:").pack(side=tk.LEFT)
         
         self._display_levels_var = tk.StringVar(value="display")
-        tk.Radiobutton(level_frame, text="display", variable=self._display_levels_var, value="display", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(level_frame, text="adaptive", variable=self._display_levels_var, value="adaptive", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(level_frame, text="all", variable=self._display_levels_var, value="all", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="display", variable=self._display_levels_var, value="display", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="adaptive", variable=self._display_levels_var, value="adaptive", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="all", variable=self._display_levels_var, value="all", command=self.updateResult).pack(side=tk.LEFT)
         
         # スクロールバー付きテキストエリア
         frame = tk.Frame(self)
@@ -137,16 +137,12 @@ class ResultWindow(tk.Toplevel):
                 self._last_width = width
                 def update():
                     self._resize_timer = None
-                    self._updateResultWindow()
+                    self.updateResult()
                 self._resize_timer = self.node.editor.root.after(300, update)
         
         self.bind('<Configure>', on_configure)
     
-    def update(self):
-        """結果ウィンドウの内容を更新"""
-        self._updateResultWindow()
-    
-    def _updateResultWindow(self):
+    def updateResult(self):
         """結果ウィンドウの内容を更新（別スレッドで実行）"""
         CoalescingExecutor.submit(self, self._updateResultWindowAsync)
     
@@ -655,7 +651,7 @@ class ResultWindow(tk.Toplevel):
                 new_index = (current_index + 1) % len(current_values)
             
             self._selected_data_var.set(current_values[new_index])
-            self._updateResultWindow()
+            self.updateResult()
             return 'break'  # デフォルト動作を無効化
     
     def _generateGenericContent(self, flowData):

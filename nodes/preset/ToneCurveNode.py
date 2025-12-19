@@ -211,8 +211,8 @@ class ToneCurveDialog(tk.Toplevel):
         
         # プレビュー用 元の設定を保存
         self.originalSettings = {
-            'inputMin': self.node.displayMin,
-            'inputEnd': self.node.displayEnd,
+            'displayMin': self.node.displayMin,
+            'displayEnd': self.node.displayEnd,
             'outputMin': self.node.outputMin,
             'outputEnd': self.node.outputEnd,
             'controlPoints': self.node.controlPoints.copy(),
@@ -655,7 +655,7 @@ class ToneCurveDialog(tk.Toplevel):
             # プレビュー無効：確定値を適用して実行
             self.restoreConfirmedSettings()
         
-        CoalescingExecutor.submit( self, self.node.processPreviewOnly)
+        CoalescingExecutor.submit( self, self.node.preview)
     
     def restoreTemporarySettings(self):
         # 一時保存値をノードに適用
@@ -672,8 +672,8 @@ class ToneCurveDialog(tk.Toplevel):
     def restoreConfirmedSettings(self):
         # 確定値をノードに適用
         if self.originalSettings:
-            self.node.displayMin = self.originalSettings['inputMin']
-            self.node.displayEnd = self.originalSettings['inputEnd'] 
+            self.node.displayMin = self.originalSettings['displayMin']
+            self.node.displayEnd = self.originalSettings['displayEnd'] 
             self.node.outputMin = self.originalSettings['outputMin']
             self.node.outputEnd = self.originalSettings['outputEnd'] 
             self.node.controlPoints = self.originalSettings['controlPoints'] 
@@ -683,7 +683,7 @@ class ToneCurveDialog(tk.Toplevel):
         if self.previewVariable.get():
             # プレビュー有効：一時保存値を適用
             self.restoreTemporarySettings()
-            CoalescingExecutor.submit( self, self.node.processPreviewOnly)
+            CoalescingExecutor.submit( self, self.node.preview)
     
     def fitDisplayToInput(self):
         # 入力データから最大最小値を取得してUIに設定
@@ -813,6 +813,6 @@ class ToneCurveDialog(tk.Toplevel):
         # プレビュー表示を解除して閉じる
         if self.previewVariable.get():
             self.restoreConfirmedSettings()
-            CoalescingExecutor.submit( self, self.node.processPreviewOnly)
+            CoalescingExecutor.submit( self, self.node.preview)
         
         self.destroy()

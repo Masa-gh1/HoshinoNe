@@ -1,0 +1,68 @@
+{
+  "version": "0.1.20251129",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 3,
+      "x": 113.0,
+      "y": 262.0,
+      "type": "scale",
+      "text": "乗算",
+      "connections": []
+    },
+    {
+      "index": 1,
+      "zOrder": 5,
+      "x": 58.0,
+      "y": 316.0,
+      "type": "sum",
+      "text": "総和",
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 9,
+      "x": 168.0,
+      "y": 317.0,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 11,
+      "x": 168.0,
+      "y": 367.0,
+      "type": "inverse",
+      "text": "逆数",
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 7,
+      "x": 58.0,
+      "y": 369.0,
+      "type": "count",
+      "text": "カウント",
+      "connections": [
+        3
+      ]
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 112,
+      "y": 318,
+      "width": 226,
+      "height": 177,
+      "title": "平均"
+    }
+  ]
+}
