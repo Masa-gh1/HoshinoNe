@@ -385,7 +385,7 @@ class ToneCurveDialog(tk.Toplevel):
             
             # 全プレーンのヒストグラムを重ねて表示
             for planeIdx, planeHist in enumerate(histogramData['planes']):
-                binCounts = planeHist['counts']
+                binCounts = planeHist['bin_counts']
                 binEdges = planeHist['bin_edges']
                 
                 # ビン中心を計算
@@ -699,7 +699,7 @@ class ToneCurveDialog(tk.Toplevel):
                 allCounts = []
                 
                 for planeHist in histogramData['planes']:
-                    binCounts = planeHist['counts']
+                    binCounts = planeHist['bin_counts']
                     binEdges = planeHist['bin_edges']
                     
                     # ビン中心を計算

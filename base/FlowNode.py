@@ -20,11 +20,13 @@ from main.ResultWindow import ResultWindow
 from utils.ThreadPool import ProcessExecutorInNode
 
 # 定数
-_MAJOR_TYPE_FUNC  = 'func'      # 関数系
-_MAJOR_TYPE_OP    = 'operation' # 演算系
-_MAJOR_TYPE_IO    = 'in/out'    # 入出系
-_MAJOR_TYPE_CONST = 'constant'  # 定数系
-_MAJOR_TYPE_UTIL  = 'utility'   # ユーティリティ
+_MAJOR_TYPE_FUNC  = 'func'             # 関数系
+_MAJOR_TYPE_U_OP  = 'unary operation'  # 単項演算系
+_MAJOR_TYPE_B_OP  = 'binary operation' # 演算系
+_MAJOR_TYPE_AGG   = 'aggregate'        # 集計系
+_MAJOR_TYPE_IO    = 'in/out'           # 入出系
+_MAJOR_TYPE_CONST = 'constant'         # 定数系
+_MAJOR_TYPE_UTIL  = 'utility'          # ユーティリティ
 
 _IO_TYPE_0N = '0:N' # ファイル読み込みなど
 _IO_TYPE_N0 = 'N:0' # ファイル書き込みなど(実行レポートなどの出力が在るノードはこちら)
@@ -48,7 +50,7 @@ class FlowNode(AbstractBaseClass):
     outputCat = _OUT_CAT_PRI
 
     def __init__(self, canvas, editor, x, y, **kwargs):
-        self.view = FlowNodeView( self.majorType, self.name, canvas, editor, x, y, **kwargs)
+        self.view = FlowNodeView( self.majorType, self.ioType, self.outputCat, self.name, canvas, editor, x, y, **kwargs)
 
         self.outputNodes = [] # 接続先ノードの一覧
         self.inputNodes  = []  # 入力元ノードの一覧
@@ -174,14 +176,20 @@ class FlowNode(AbstractBaseClass):
         pass
     
 class FlowNodeView():
-    def __init__(self, majorType, text, canvas, editor, x, y, **kwargs):
+    def __init__(self, majorType, ioType, outputCat, text, canvas, editor, x, y, **kwargs):
         self.majorType = majorType
-        self.canvas = canvas
-        self.editor = editor
-        self._binds = []
+        self.ioType    = ioType
+        self.outputCat = outputCat
+        self.text      = text
+
+        self.canvas  = canvas
+        self.editor  = editor
+        self._binds  = []
         self._window = {}
-        self.text = text
         self.x, self.y = x, y
+        
+        # 形状の頂点座標を保持 (中心座標からの相対座標)
+        self.shapePoints = self._getShapePoints()
 
         self.isDoubleClick = False
         self.dragging = False
@@ -189,8 +197,10 @@ class FlowNodeView():
         self.startY = 0
 
         # 描画要素を作成
-        color = self.getColor()
-        self.rect = self.canvas.create_rectangle(self.x-50, self.y-20, self.x+50, self.y+20, fill=color, outline='black')
+        points = []
+        for dx, dy in self.shapePoints:
+            points.extend([self.x + dx, self.y + dy])
+        self.rect = self.canvas.create_polygon(*points, fill=self._getColor(), outline='black')
         self.label = self.canvas.create_text(self.x, self.y, text=self.text, font=('Arial', 8))
 
         # イベントバインディング
@@ -220,10 +230,42 @@ class FlowNodeView():
 
         self.editor = None
     
-    def getColor(self):
+    def _getShapePoints(self):
+        """形状の頂点座標を返す (中心からの相対座標)"""
+        if   _MAJOR_TYPE_U_OP == self.majorType and _IO_TYPE_NN == self.ioType:
+            # 菱形
+            return [(  0, -25), (25,   0), ( 0, 25), (-25,  0)]
+        elif _MAJOR_TYPE_B_OP == self.majorType and _IO_TYPE_NN == self.ioType:
+            # 正方形
+            return [(-20, -20), (20, -20), (20, 20), (-20, 20)]
+        elif _MAJOR_TYPE_AGG == self.majorType and _IO_TYPE_N1 == self.ioType:
+            # 六角形
+            return [(-30, -20), (-40, 0), (-30, 20), (30, 20), (40, 0), (30, -20)]
+        elif _MAJOR_TYPE_UTIL == self.majorType:
+            # 小さい長方形
+            return [(-25, -15), (25, -15), (25, 15), (-25, 15)]
+        elif _IO_TYPE_0N == self.ioType:
+            # 左が尖った五角形
+            return [(-40, -20), (-50, 0), (-40, 20), (50, 20), (50, -20)]
+        elif _IO_TYPE_N0 == self.ioType:
+            # 右が尖った五角形
+            return [(-50, -20), (-50, 20), (40, 20), (50, 0), (40, -20)]
+        elif _IO_TYPE_NN == self.ioType:
+            # 長方形
+            return [(-50, -20), (50, -20), (50, 20), (-50, 20)]
+        elif _IO_TYPE_N1 == self.ioType:
+            # 長い六角形
+            return [(-40, -20), (-50, 0), (-40, 20), (40, 20), (50, 0), (40, -20)]
+        else:  # default
+            # 長方形
+            return [(-50, -20), (50, -20), (50, 20), (-50, 20)]
+    
+    def _getColor(self):
         colorMap = {
             _MAJOR_TYPE_FUNC : 'plum'       , # 関数系 magenta
-            _MAJOR_TYPE_OP   : 'pink'       , # 演算系 red
+            _MAJOR_TYPE_U_OP : 'lightgrey'  , # 単項演算系 grey
+            _MAJOR_TYPE_B_OP : 'pink'       , # 二項演算系 red
+            _MAJOR_TYPE_AGG  : 'pink'       , # 集計系 red
             _MAJOR_TYPE_IO   : 'lightyellow', # 入出系 yellow
                              # 'lightgreen'   # 予約 green
             _MAJOR_TYPE_CONST: 'lightcyan'  , # 定数系 blue
@@ -232,6 +274,57 @@ class FlowNodeView():
         }
         return colorMap.get(self.majorType, 'lightgreen')
     
+    def getShapeBounds(self):
+        """形状の境界を返す (ハイライト用)"""
+        xs = [self.x + dx for dx, dy in self.shapePoints]
+        ys = [self.y + dy for dx, dy in self.shapePoints]
+        margin = 5
+        return (min(xs)-margin, min(ys)-margin, max(xs)+margin, max(ys)+margin)
+    
+    def getConnectionPoint(self, dx, dy):
+        """接続点を返す (dx, dy: 接続先への方向ベクトル)"""
+        if dx == 0 and dy == 0:
+            return (self.x, self.y)
+        
+        import math
+        
+        # 正規化
+        length = math.sqrt(dx*dx + dy*dy)
+        ndx, ndy = dx/length, dy/length
+        
+        # 各辺との交点を計算
+        bestDist = 0
+        bestPoint = (self.x, self.y)
+        
+        n = len(self.shapePoints)
+        for i in range(n):
+            p1x, p1y = self.shapePoints[i]
+            p2x, p2y = self.shapePoints[(i+1) % n]
+            
+            # 線分 (0,0)-(ndx*1000, ndy*1000) と (p1x,p1y)-(p2x,p2y) の交点
+            point = self._lineIntersection(0, 0, ndx*1000, ndy*1000, p1x, p1y, p2x, p2y)
+            if point:
+                px, py = point
+                dist = px*ndx + py*ndy  # 方向ベクトル方向の距離
+                if dist > bestDist:
+                    bestDist = dist
+                    bestPoint = (self.x + px, self.y + py)
+        
+        return bestPoint
+    
+    def _lineIntersection(self, x1, y1, x2, y2, x3, y3, x4, y4):
+        """2線分の交点を計算"""
+        denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
+        if abs(denom) < 1e-10:
+            return None
+        
+        t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / denom
+        u = -((x1-x2)*(y1-y3) - (y1-y2)*(x1-x3)) / denom
+        
+        if 0 <= t <= 1 and 0 <= u <= 1:
+            return (x1 + t*(x2-x1), y1 + t*(y2-y1))
+        return None
+    
     def canvasBind(self, sequence, callback):
         fid1 = self.canvas.tag_bind( self.rect , sequence, callback)
         fid2 = self.canvas.tag_bind( self.label, sequence, callback)
@@ -239,7 +332,10 @@ class FlowNodeView():
         self._binds.append((sequence,fid2))
     
     def updatePosition(self):
-        self.canvas.coords(self.rect, self.x-50, self.y-20, self.x+50, self.y+20)
+        points = []
+        for dx, dy in self.shapePoints:
+            points.extend([self.x + dx, self.y + dy])
+        self.canvas.coords(self.rect, *points)
         self.canvas.coords(self.label, self.x, self.y)
 
     def updatePositionAndAppearance(self):
@@ -338,8 +434,9 @@ class FlowNodeView():
     def liftWindow(self):
         """ウィンドウを最前面に表示"""
         for window in self._window.values():
-            window.lift()
-            window.focus_force()
+            if window.winfo_exists():
+                window.lift()
+                window.focus_force()
 
     def lift(self):
         """ノードを最前面に表示"""

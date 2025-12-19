@@ -294,28 +294,11 @@ class FlowEditor:
     
     def _getConnectionPoints(self, fromNode, toNode):
         """ノード間の接続点を取得する"""
-        # 中心間の線とノード境界の交点を計算
         dx = toNode.view.x - fromNode.view.x
         dy = toNode.view.y - fromNode.view.y
         
-        if dx == 0 and dy == 0:
-            return fromNode.view.x, fromNode.view.y, toNode.view.x, toNode.view.y
-        
-        # fromNodeからの交点を計算
-        if abs(dx) * 20 > abs(dy) * 50:  # 水平方向が主
-            x1 = fromNode.view.x + (50 if dx > 0 else -50)
-            y1 = max(-20, min(20, fromNode.view.y + dy * 50 / abs(dx) - fromNode.view.y)) + fromNode.view.y
-        else:  # 垂直方向が主
-            x1 = max(-50, min(50, fromNode.view.x + dx * 20 / abs(dy) - fromNode.view.x)) + fromNode.view.x
-            y1 = fromNode.view.y + (20 if dy > 0 else -20)
-        
-        # toNodeへの交点を計算
-        if abs(dx) * 20 > abs(dy) * 50:  # 水平方向が主
-            x2 = toNode.view.x - (50 if dx > 0 else -50)
-            y2 = max(-20, min(20, toNode.view.y - dy * 50 / abs(dx) - toNode.view.y)) + toNode.view.y
-        else:  # 垂直方向が主
-            x2 = max(-50, min(50, toNode.view.x - dx * 20 / abs(dy) - toNode.view.x)) + toNode.view.x
-            y2 = toNode.view.y - (20 if dy > 0 else -20)
+        x1, y1 = fromNode.view.getConnectionPoint(dx, dy)
+        x2, y2 = toNode.view.getConnectionPoint(-dx, -dy)
         
         return x1, y1, x2, y2
     
@@ -388,8 +371,9 @@ class FlowEditor:
             # ノードを選択
             self.selectedNode = node
             # 選択状態を表示
+            x1, y1, x2, y2 = node.view.getShapeBounds()
             self.selectedHighlight = self.canvas.create_rectangle(
-                node.view.x-55, node.view.y-25, node.view.x+55, node.view.y+25,
+                x1, y1, x2, y2,
                 outline='red', width=3, fill=''
             )
             self.resultText.delete(1.0, tk.END)
@@ -723,8 +707,9 @@ class FlowEditor:
         # 再実行が必要なノードを特定してハイライト
         for node in self.nodes:
             if self._needsReprocessingRecursive(node):
+                x1, y1, x2, y2 = node.view.getShapeBounds()
                 highlight = self.canvas.create_rectangle(
-                    node.view.x-55, node.view.y-25, node.view.x+55, node.view.y+25,
+                    x1, y1, x2, y2,
                     outline='orange', width=4, fill='', dash=(5, 5)
                 )
                 self.reprocessingHighlights.append(highlight)
@@ -917,7 +902,7 @@ class FlowEditor:
         self.statusLabel.config(text=f"状態: DEBUGモード {'OFF' if Debug.LEVEL == Debug.LEVEL_NONE else 'ON'}")
 
         for node in self.nodes:
-            node.updateNodeText()
+            node.view.updatePositionAndAppearance()
 
         return "break"
 

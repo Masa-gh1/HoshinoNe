@@ -253,7 +253,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         return np.where(edge_mask, image, filtered)
     
     def _rgb_to_lab(self, rgb):
-        """RGB to Lab変換（簡易版）"""
+        """RGB to Lab 変換（簡易 Lab 白色点正規化なし）"""
         # 入力は既に0.0-1.0に正規化済み
         rgb_norm = rgb
         
@@ -272,7 +272,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         return lab
     
     def _lab_to_rgb(self, lab):
-        """Lab to RGB変換（簡易版）"""
+        """Lab to RGB 変換（簡易 Lab 白色点正規化なし）"""
         # Lab to XYZ
         xyz = np.zeros_like(lab)
         fy = (lab[:,:,0] + 16) / 116

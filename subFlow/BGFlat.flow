@@ -1,11 +1,11 @@
 {
-  "version": "0.1.20251130",
+  "version": "0.1.20251208",
   "nodes": [
     {
       "index": 0,
-      "zOrder": 9,
-      "x": -565,
-      "y": 70,
+      "zOrder": 7,
+      "x": -591,
+      "y": 69,
       "type": "negate",
       "text": "符号反転",
       "connections": [
@@ -14,9 +14,9 @@
     },
     {
       "index": 1,
-      "zOrder": 5,
-      "x": -629.0,
-      "y": 13.0,
+      "zOrder": 9,
+      "x": -656.0,
+      "y": 14.0,
       "type": "offset",
       "text": "加算",
       "connections": [
@@ -25,7 +25,7 @@
     },
     {
       "index": 2,
-      "zOrder": 11,
+      "zOrder": 5,
       "x": -687,
       "y": 68,
       "type": "quadratic_fit",
@@ -48,9 +48,9 @@
     },
     {
       "index": 4,
-      "zOrder": 7,
-      "x": -516.0,
-      "y": 13.0,
+      "zOrder": 11,
+      "x": -571.0,
+      "y": 11.0,
       "type": "pass",
       "text": "通点",
       "connections": []
@@ -59,9 +59,9 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -629,
+      "x": -659,
       "y": 29,
-      "width": 274,
+      "width": 214,
       "height": 162,
       "title": "背景フラット"
     }

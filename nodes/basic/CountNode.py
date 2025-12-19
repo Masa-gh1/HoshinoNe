@@ -17,7 +17,7 @@ from utils import numpy_helpers as nh
 
 class CountNode(N1BlockOperationNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_AGG
     minorType = 'count'
     # ノード名
     name      = 'カウント'

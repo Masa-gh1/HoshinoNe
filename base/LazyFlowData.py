@@ -27,7 +27,7 @@ class LazyFlowData(FlowData):
         self.operation = None
         self.instanceId = str(uuid.uuid4())
         self._headerComputeFuncs = {}
-        self.headers = LazyHeadersDict(self, sourceFlowData.headers)
+        self.headers = LazyHeadersDict(self)
         self.setDimensions(*sourceFlowData.getDimensions())
     
     def addOperation(self, func, *args, **kwargs):
@@ -39,9 +39,7 @@ class LazyFlowData(FlowData):
     def addHeaderOperation(self, key, func, *args, **kwargs):
         """header操作関数を追加"""
         operation = LazyHeaderOperation(func, *args, **kwargs)
-        self._headerComputeFuncs[key] = operation
-        if key in self.headers:
-            del self.headers[key]
+        self.headers[key] = operation
         return operation
     
     import threading
@@ -63,44 +61,19 @@ class LazyFlowData(FlowData):
 class LazyHeadersDict(UserDict):
     """遅延評価対応のheaders辞書"""
     
-    def __init__(self, lazyFlowData, initialHeaders=None):
-        super().__init__(initialHeaders or {})
+    def __init__(self, lazyFlowData):
+        super().__init__(lazyFlowData.sourceFlowData.headers)
         self._lazyFlowData = lazyFlowData
     
     def __getitem__(self, key):
         if key in self.data:
-            return self.data[key]
-        
-        if key in self._lazyFlowData._headerComputeFuncs:
-            operation = self._lazyFlowData._headerComputeFuncs[key]
-            result = operation(self._lazyFlowData)
-            
-            if isinstance(result, dict):
-                self.data.update(result)
-                return self.data.get(key)
-            else:
-                self.data[key] = result
-                return result
-        else:
-            # sourceFlowDataのheadersから取得を試行
-            return self._lazyFlowData.sourceFlowData.headers[key]
+            value = self.data[key]
+            if isinstance(value, LazyHeaderOperation):
+                lazyResult = value(self._lazyFlowData)
+                self.data.update(lazyResult)
+                value = self.data[key]
+            return value
     
-    def __contains__(self, key):
-        return(  key in self.data
-              or key in self._lazyFlowData._headerComputeFuncs
-              or(   self._lazyFlowData.sourceFlowData.headers
-                and key in self._lazyFlowData.sourceFlowData.headers
-                )
-              )
-    
-    def __delitem__(self, key):
-        if key in self.data:
-            del self.data[key]
-        elif key in self._lazyFlowData._headerComputeFuncs:
-            del self._lazyFlowData._headerComputeFuncs[key]
-        else:
-            raise KeyError(key)
-
 class LazyOperation:
     """遅延実行される単一操作"""
     def __init__(self, func, *args, **kwargs):
@@ -121,6 +94,7 @@ class LazyHeaderOperation:
     def __call__(self, lazyFlowData):
         return self.func(*self.args, **self.kwargs)(lazyFlowData)
 
+##### 以下サンプル実装
 class LazyOperations:
     """遅延操作関数群"""
     

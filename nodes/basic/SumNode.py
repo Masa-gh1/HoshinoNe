@@ -17,7 +17,7 @@ from utils import numpy_helpers as nh
 
 class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_AGG
     minorType = 'sum'
     # ノード名
     name      = '総和'
@@ -81,7 +81,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         maxSum = sum(level[1] for level in allLevels)
         
         outputFlowData.headers['display_levels'] = {
-            'min': minSum,
+            'min'            : minSum,
             'exclusive_upper': maxSum
         }
     

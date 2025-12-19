@@ -131,7 +131,7 @@ class FlowData:
         """ブロックの総数を取得"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
-        if planeCount == 0:
+        if 0 == planeCount:
             return 0
         
         blocksX = (width + BLOCK_SIZE - 1) // BLOCK_SIZE
@@ -214,7 +214,6 @@ class FlowData:
                 if len(sortedData) <= 0:
                     planeHistograms.append(None)
                 else:
-                    #min_val, max_val = np.min(validData), np.max(validData)
                     min_val = sortedData[0]
                     max_val = sortedData[-1]
                     min2_val = min_val
@@ -357,10 +356,26 @@ class FlowData:
         
         planeHistograms = []
         for planeIdx in range(planeCount):
-            if(   planeIdx < len(planeHighResHists)
-              and planeHighResHists[planeIdx] is not None
-              and planeHighResHists[planeIdx]['min'] < planeHighResHists[planeIdx]['max']
+            if(  len(planeHighResHists) <= planeIdx
+              or planeHighResHists[planeIdx] is None
               ):
+                planeHistograms.append({
+                    'bin_counts': [0] * bins,
+                    'bin_edges': nh.array([float(x)/bins for x in range(bins)]+[1.0]),
+                    'total_samples': 0,
+                })
+            elif(  planeHighResHists[planeIdx]['max'] <= planeHighResHists[planeIdx]['min']
+                or len(planeHighResHists[planeIdx]['edges']) <= 2
+                ):
+                min = planeHighResHists[planeIdx]['max'] # 大小が逆かも知れないので入れ替え
+                max = planeHighResHists[planeIdx]['min'] # 大小が逆かも知れないので入れ替え
+                sum = planeHighResHists[planeIdx]['total_samples']
+                planeHistograms.append({
+                    'bin_counts': nh.array(([0]*(bins//2))+[sum]+([0]*(bins//2-1))),
+                    'bin_edges': nh.array(([min]*(bins//2+1))+([max]*(bins//2))),
+                    'total_samples': sum,
+                })
+            else:
                 hist_data = planeHighResHists[planeIdx]
                 
                 range_min = hist_data['edges'][1]  # 両端に count 1 の集約があるので捨てる
@@ -383,15 +398,9 @@ class FlowData:
                 np.add.at(resampled_hist, bin_indices, source_counts)
                 
                 planeHistograms.append({
-                    'counts': resampled_hist.astype(int),
+                    'bin_counts': resampled_hist.astype(int),
                     'bin_edges': bin_edges,
                     'total_samples': hist_data['total_samples']
-                })
-            else:
-                planeHistograms.append({
-                    'counts': [0] * bins,
-                    'bin_edges': nh.array(range(bins + 1)),
-                    'total_samples': 0
                 })
         
         result = {'planes': planeHistograms}

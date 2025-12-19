@@ -1,11 +1,11 @@
 {
-  "version": "0.1.20251130",
+  "version": "0.1.20251208",
   "nodes": [
     {
       "index": 0,
-      "zOrder": 19,
-      "x": 285,
-      "y": 496,
+      "zOrder": 11,
+      "x": 200,
+      "y": 411,
       "type": "sum",
       "text": "総和",
       "connections": [
@@ -14,9 +14,9 @@
     },
     {
       "index": 1,
-      "zOrder": 15,
-      "x": 175.0,
-      "y": 495.0,
+      "zOrder": 9,
+      "x": 109.0,
+      "y": 413.0,
       "type": "count",
       "text": "カウント",
       "connections": [
@@ -25,9 +25,9 @@
     },
     {
       "index": 2,
-      "zOrder": 13,
-      "x": 174.0,
-      "y": 549.0,
+      "zOrder": 7,
+      "x": 108.0,
+      "y": 467.0,
       "type": "inverse",
       "text": "逆数",
       "connections": [
@@ -36,9 +36,9 @@
     },
     {
       "index": 3,
-      "zOrder": 9,
-      "x": 405.0,
-      "y": 516.0,
+      "zOrder": 15,
+      "x": 290.0,
+      "y": 433.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -47,9 +47,9 @@
     },
     {
       "index": 4,
-      "zOrder": 11,
-      "x": 284.0,
-      "y": 548.0,
+      "zOrder": 13,
+      "x": 200.0,
+      "y": 464.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -59,9 +59,9 @@
     },
     {
       "index": 5,
-      "zOrder": 31,
-      "x": 510.0,
-      "y": 330.0,
+      "zOrder": 29,
+      "x": 362.0,
+      "y": 277.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -70,9 +70,9 @@
     },
     {
       "index": 6,
-      "zOrder": 25,
-      "x": 510.0,
-      "y": 385.0,
+      "zOrder": 31,
+      "x": 362.0,
+      "y": 337.0,
       "type": "negate",
       "text": "符号反転",
       "connections": [
@@ -81,9 +81,9 @@
     },
     {
       "index": 7,
-      "zOrder": 33,
-      "x": 509.0,
-      "y": 274.0,
+      "zOrder": 27,
+      "x": 365.0,
+      "y": 224.0,
       "type": "offset",
       "text": "加算",
       "connections": [
@@ -92,9 +92,9 @@
     },
     {
       "index": 8,
-      "zOrder": 27,
-      "x": 372.0,
-      "y": 385.0,
+      "zOrder": 23,
+      "x": 262.0,
+      "y": 325.0,
       "type": "power",
       "text": "冪算",
       "connections": [
@@ -103,9 +103,9 @@
     },
     {
       "index": 9,
-      "zOrder": 29,
-      "x": 369.0,
-      "y": 317.0,
+      "zOrder": 25,
+      "x": 263.0,
+      "y": 259.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 4,
@@ -129,9 +129,9 @@
     },
     {
       "index": 10,
-      "zOrder": 21,
-      "x": 283.0,
-      "y": 599.0,
+      "zOrder": 17,
+      "x": 198.0,
+      "y": 512.0,
       "type": "sum",
       "text": "総和",
       "connections": [
@@ -140,9 +140,9 @@
     },
     {
       "index": 11,
-      "zOrder": 17,
-      "x": 405.0,
-      "y": 581.0,
+      "zOrder": 19,
+      "x": 291.0,
+      "y": 498.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -151,9 +151,9 @@
     },
     {
       "index": 12,
-      "zOrder": 5,
-      "x": 522.0,
-      "y": 584.0,
+      "zOrder": 33,
+      "x": 374.0,
+      "y": 475.0,
       "type": "power",
       "text": "冪算",
       "connections": [
@@ -162,9 +162,9 @@
     },
     {
       "index": 13,
-      "zOrder": 3,
-      "x": 522.0,
-      "y": 649.0,
+      "zOrder": 21,
+      "x": 399.0,
+      "y": 531.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 4,
@@ -189,17 +189,17 @@
     {
       "index": 14,
       "zOrder": 35,
-      "x": 558.0,
-      "y": 514.0,
+      "x": 442.0,
+      "y": 450.0,
       "type": "pass",
       "text": "通点",
       "connections": []
     },
     {
       "index": 15,
-      "zOrder": 23,
-      "x": 137.0,
-      "y": 274.0,
+      "zOrder": 3,
+      "x": 48.0,
+      "y": 223.0,
       "type": "pass",
       "text": "通点",
       "connections": [
@@ -211,19 +211,19 @@
   ],
   "trays": [
     {
-      "zOrder": 7,
-      "x": 287,
-      "y": 541,
-      "width": 350,
-      "height": 187,
+      "zOrder": 5,
+      "x": 189,
+      "y": 451,
+      "width": 286,
+      "height": 190,
       "title": "平均 2つ"
     },
     {
       "zOrder": 1,
-      "x": 344,
-      "y": 453,
-      "width": 474,
-      "height": 463,
+      "x": 249,
+      "y": 368,
+      "width": 420,
+      "height": 384,
       "title": "標準偏差"
     }
   ]

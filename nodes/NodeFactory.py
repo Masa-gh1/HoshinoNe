@@ -35,6 +35,8 @@ from .preset.TransformNode import TransformNode
 from .preset.ToneCurveNode import ToneCurveNode
 from .preset.BayerUnpackSparseNode import BayerUnpackSparseNode
 from .preset.BayerUnpackDenseNode import BayerUnpackDenseNode
+from .preset.LabConverterNode import LabConverterNode
+from .preset.RGBConverterNode import RGBConverterNode
 
 from .extra.FileReaderNode import FileReaderNode
 from .extra.FileWriterNode import FileWriterNode
@@ -71,6 +73,8 @@ class NodeFactory:
         ToneCurveNode            .minorType: ToneCurveNode            ,
         BayerUnpackSparseNode    .minorType: BayerUnpackSparseNode    ,
         BayerUnpackDenseNode     .minorType: BayerUnpackDenseNode     ,
+        LabConverterNode         .minorType: LabConverterNode         ,
+        RGBConverterNode         .minorType: RGBConverterNode         ,
         ###############################################################
         ImageAlignmentNode       .minorType: ImageAlignmentNode       , # 廃止 ShiftDetectionNode, TransformNode に分割
         ShiftDetectionNode       .minorType: ShiftDetectionNode       ,
@@ -115,6 +119,8 @@ class NodeFactory:
         (ToneCurveNode            .minorType, 'トーンカーブ(N:N)'),
         (BayerUnpackSparseNode    .minorType, 'ベイヤー分離(疎)(N:N)'),
         (BayerUnpackDenseNode     .minorType, 'ベイヤー分離(密)(N:N)'),
+        (LabConverterNode         .minorType, 'Lab変換(正規化なし)(N:N)'),
+        (RGBConverterNode         .minorType, 'RGB変換(正規化なし)(N:N)'),
         ('separator'                        , None),
         (ShiftDetectionNode       .minorType, 'ズレ検出(N:1)'),
         (TransformNode            .minorType, '変形(N:N)'),

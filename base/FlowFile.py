@@ -28,14 +28,14 @@ class FlowFile:
         for node in nodes:
             # ノードのZ-orderを取得
             allItems = canvas.find_all()
-            nodeZOrder = max(allItems.index(node.rect), allItems.index(node.label))
+            nodeZOrder = max(allItems.index(node.view.rect), allItems.index(node.view.label))
             
             # データを保存
             nodeSerial = {
                 "index" : nodeIdxs[id(node)],
                 "zOrder": nodeZOrder,
-                "x"     : node.x,
-                "y"     : node.y,
+                "x"     : node.view.x,
+                "y"     : node.view.y,
             }
             nodeSerial.update(node.serialize())
             serial["nodes"].append(nodeSerial)

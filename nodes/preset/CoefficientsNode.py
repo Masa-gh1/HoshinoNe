@@ -14,6 +14,7 @@ from tkinter import simpledialog
 from base.FlowNode_CONST import *
 from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
+from utils import string_helper as sh
 from utils.interval_helper import createHalfOpenEnd
 
 class CoefficientsNode(FlowNode,ConfigurableNode):
@@ -39,14 +40,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         constVal = ""
         for planeIndex in range(self.planeCount):
             value = self.coefficients.get(f"{planeIndex},0,0", 0)
-            if     -1 < value < 1:
-                constVal += f" {value:.3f}"
-            elif  -10 < value < 10:
-                constVal += f" {value:.2f}"
-            elif -100 < value < 100:
-                constVal += f" {value:.1f}"
-            else:
-                constVal += f" {value:.0f}"
+            constVal += f" {sh.dispS(value)}"
         displayText = f"{self.name}\nP:{self.planeCount} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
         return displayText
     

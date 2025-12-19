@@ -16,7 +16,7 @@ from nodes import LazyNNOperationNode
 
 class InverseNode(LazyNNOperationNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_U_OP
     minorType = 'inverse'
     # ノード名
     name      = '逆数'

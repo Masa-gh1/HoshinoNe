@@ -15,7 +15,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 
 class MaxNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_B_OP
     minorType = 'max'
     # ノード名
     name      = '比較大'

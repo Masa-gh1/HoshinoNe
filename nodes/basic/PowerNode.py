@@ -15,7 +15,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 
 class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_B_OP
     minorType = 'power'
     # ノード名
     name      = '冪算'

@@ -17,7 +17,7 @@ from utils import numpy_helpers as nh
 
 class AutoLevelsNode(FlowNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_UTIL
+    majorType = _MAJOR_TYPE_FUNC
     minorType = 'auto_levels'
     # ノード名
     name      = '自動レベル'

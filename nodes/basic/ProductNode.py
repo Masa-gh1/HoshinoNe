@@ -17,7 +17,7 @@ from utils import numpy_helpers as nh
 
 class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_AGG
     minorType = 'product'
     # ノード名
     name      = '総積'
@@ -86,7 +86,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
             maxProduct = max(products)
         
         outputFlowData.headers['display_levels'] = {
-            'min': minProduct,
+            'min'            : minProduct,
             'exclusive_upper': maxProduct
         }
     

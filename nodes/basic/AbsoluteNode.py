@@ -16,7 +16,7 @@ from nodes import LazyNNOperationNode
 
 class AbsoluteNode(LazyNNOperationNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_U_OP
     minorType = 'absolute'
     # ノード名
     name      = '絶対値'

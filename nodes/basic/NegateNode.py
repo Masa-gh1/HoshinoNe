@@ -16,7 +16,7 @@ from nodes import LazyNNOperationNode
 
 class NegateNode(LazyNNOperationNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_U_OP
     minorType = 'negate'
     # ノード名
     name      = '符号反転'

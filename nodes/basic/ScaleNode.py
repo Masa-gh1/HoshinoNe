@@ -15,7 +15,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 
 class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_B_OP
     minorType = 'scale'
     # ノード名
     name      = '乗算'
@@ -57,7 +57,7 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
         lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         return lazyFlowData
     
     @classmethod
@@ -83,7 +83,7 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
         return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
@@ -94,21 +94,27 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
             inputMax = inputLevels['exclusive_upper']
             
             if combinedAuxiliaryPolynomial:
-                polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
-                if polynomial:
+                mixs = []
+                for planeIndex in range(combinedAuxiliaryPolynomial.getPlaneCount()):
+                    polynomial = combinedAuxiliaryPolynomial.getBlock(planeIndex, 0, 0)
                     width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    scaleMin, scaleMax = cls.calculatePolynomialRange(polynomial.data, width, height)
-                    
-                    # 乗算の場合は範囲が複雑になる
-                    products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
-                    
-                    return {
-                        'display_levels': {
-                            'min': min(products),
-                            'exclusive_upper': max(products)
-                        }
-                    }
-            # auxiliary tableの場合は範囲計算が複雑なので省略
-            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
-            return {'display_levels': inputLevels}
+                    minValue, maxValue = cls.calculatePolynomialRange(polynomial.data, width, height)
+                    mixs.extend([inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue])
+                inputMin = min(mixs)
+                inputMax = max(mixs)
+            
+            if combinedAuxiliaryTable:
+                mixs = []
+                minValue = combinedAuxiliaryTable.getMinValue()
+                maxValue = combinedAuxiliaryTable.getMaxValue()
+                mixs = [inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue]
+                inputMin = min(mixs)
+                inputMax = max(mixs)
+            
+            return {
+                'display_levels': {
+                    'min'            : inputMin,
+                    'exclusive_upper': inputMax,
+                }
+            }
         return compute

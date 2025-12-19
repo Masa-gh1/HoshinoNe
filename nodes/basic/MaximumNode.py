@@ -17,7 +17,7 @@ from utils import numpy_helpers as nh
 
 class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_AGG
     minorType = 'maximum'
     # ノード名
     name      = '最大'

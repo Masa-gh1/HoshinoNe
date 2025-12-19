@@ -40,7 +40,7 @@ class AlignmentResult:
 
 class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_FUNC
     minorType = 'image_alignment'
     # ノード名
     name      = '画像位置合わせ'

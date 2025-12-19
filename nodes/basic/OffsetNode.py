@@ -15,7 +15,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 
 class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_OP
+    majorType = _MAJOR_TYPE_B_OP
     minorType = 'offset'
     # ノード名
     name      = '加算'
@@ -95,18 +95,26 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
             inputMax = inputLevels['exclusive_upper']
             
             if combinedAuxiliaryPolynomial:
-                polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
-                if polynomial:
+                mixs = []
+                for planeIndex in range(combinedAuxiliaryPolynomial.getPlaneCount()):
+                    polynomial = combinedAuxiliaryPolynomial.getBlock(planeIndex, 0, 0)
                     width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    offsetMin, offsetMax = cls.calculatePolynomialRange(polynomial.data, width, height)
-                    return {
-                        'display_levels': {
-                            'min': inputMin + offsetMin,
-                            'exclusive_upper': inputMax + offsetMax
-                        }
-                    }
-            # auxiliary tableの場合は範囲計算が複雑なので省略
-            # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
-            return {'display_levels': inputLevels}
+                    minValue, maxValue = cls.calculatePolynomialRange(polynomial.data, width, height)
+                    mixs.extend([inputMin + minValue, inputMax + maxValue])
+                inputMin = min(mixs)
+                inputMax = max(mixs)
+
+            if combinedAuxiliaryTable:
+                minValue = combinedAuxiliaryTable.getMinValue()
+                maxValue = combinedAuxiliaryTable.getMaxValue()
+                inputMin += minValue
+                inputMax += maxValue
+            
+            return {
+                'display_levels': {
+                    'min'            : inputMin,
+                    'exclusive_upper': inputMax,
+                }
+            }
         return compute
     

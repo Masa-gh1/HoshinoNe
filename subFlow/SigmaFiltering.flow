@@ -1,11 +1,11 @@
 {
-  "version": "0.1.20251130",
+  "version": "0.1.20251208",
   "nodes": [
     {
       "index": 0,
-      "zOrder": 21,
-      "x": 287,
-      "y": 503,
+      "zOrder": 13,
+      "x": 267,
+      "y": 465,
       "type": "sum",
       "text": "総和",
       "connections": [
@@ -14,9 +14,9 @@
     },
     {
       "index": 1,
-      "zOrder": 17,
-      "x": 177.0,
-      "y": 502.0,
+      "zOrder": 11,
+      "x": 176.0,
+      "y": 467.0,
       "type": "count",
       "text": "カウント",
       "connections": [
@@ -25,9 +25,9 @@
     },
     {
       "index": 2,
-      "zOrder": 15,
-      "x": 176.0,
-      "y": 556.0,
+      "zOrder": 9,
+      "x": 175.0,
+      "y": 521.0,
       "type": "inverse",
       "text": "逆数",
       "connections": [
@@ -36,9 +36,9 @@
     },
     {
       "index": 3,
-      "zOrder": 11,
-      "x": 407.0,
-      "y": 523.0,
+      "zOrder": 17,
+      "x": 357.0,
+      "y": 487.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -48,9 +48,9 @@
     },
     {
       "index": 4,
-      "zOrder": 13,
-      "x": 286.0,
-      "y": 555.0,
+      "zOrder": 15,
+      "x": 267.0,
+      "y": 518.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -60,9 +60,9 @@
     },
     {
       "index": 5,
-      "zOrder": 33,
-      "x": 512.0,
-      "y": 337.0,
+      "zOrder": 31,
+      "x": 429.0,
+      "y": 331.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -71,9 +71,9 @@
     },
     {
       "index": 6,
-      "zOrder": 27,
-      "x": 512.0,
-      "y": 392.0,
+      "zOrder": 33,
+      "x": 429.0,
+      "y": 391.0,
       "type": "negate",
       "text": "符号反転",
       "connections": [
@@ -82,9 +82,9 @@
     },
     {
       "index": 7,
-      "zOrder": 35,
-      "x": 511.0,
-      "y": 281.0,
+      "zOrder": 29,
+      "x": 432.0,
+      "y": 278.0,
       "type": "offset",
       "text": "加算",
       "connections": [
@@ -94,9 +94,9 @@
     },
     {
       "index": 8,
-      "zOrder": 29,
-      "x": 374.0,
-      "y": 392.0,
+      "zOrder": 25,
+      "x": 329.0,
+      "y": 379.0,
       "type": "power",
       "text": "冪算",
       "connections": [
@@ -105,9 +105,9 @@
     },
     {
       "index": 9,
-      "zOrder": 31,
-      "x": 371.0,
-      "y": 324.0,
+      "zOrder": 27,
+      "x": 330.0,
+      "y": 313.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 4,
@@ -131,9 +131,9 @@
     },
     {
       "index": 10,
-      "zOrder": 23,
-      "x": 285.0,
-      "y": 606.0,
+      "zOrder": 19,
+      "x": 265.0,
+      "y": 566.0,
       "type": "sum",
       "text": "総和",
       "connections": [
@@ -142,9 +142,9 @@
     },
     {
       "index": 11,
-      "zOrder": 19,
-      "x": 407.0,
-      "y": 588.0,
+      "zOrder": 21,
+      "x": 358.0,
+      "y": 552.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -153,9 +153,9 @@
     },
     {
       "index": 12,
-      "zOrder": 7,
-      "x": 524.0,
-      "y": 591.0,
+      "zOrder": 35,
+      "x": 441.0,
+      "y": 529.0,
       "type": "power",
       "text": "冪算",
       "connections": [
@@ -164,9 +164,9 @@
     },
     {
       "index": 13,
-      "zOrder": 5,
-      "x": 524.0,
-      "y": 656.0,
+      "zOrder": 23,
+      "x": 466.0,
+      "y": 585.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 4,
@@ -190,9 +190,9 @@
     },
     {
       "index": 14,
-      "zOrder": 41,
-      "x": 639.0,
-      "y": 277.0,
+      "zOrder": 39,
+      "x": 597.0,
+      "y": 278.0,
       "type": "absolute_lowpass_filter",
       "text": "絶対値(低通)",
       "connections": [
@@ -201,9 +201,9 @@
     },
     {
       "index": 15,
-      "zOrder": 37,
-      "x": 640.0,
-      "y": 335.0,
+      "zOrder": 41,
+      "x": 594.0,
+      "y": 337.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -213,8 +213,8 @@
     {
       "index": 16,
       "zOrder": 45,
-      "x": 759.0,
-      "y": 276.0,
+      "x": 687.0,
+      "y": 277.0,
       "type": "offset",
       "text": "加算",
       "connections": [
@@ -223,9 +223,9 @@
     },
     {
       "index": 17,
-      "zOrder": 39,
-      "x": 758.0,
-      "y": 337.0,
+      "zOrder": 49,
+      "x": 687.0,
+      "y": 338.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -234,9 +234,9 @@
     },
     {
       "index": 18,
-      "zOrder": 47,
-      "x": 640.0,
-      "y": 456.0,
+      "zOrder": 43,
+      "x": 593.0,
+      "y": 477.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -245,9 +245,9 @@
     },
     {
       "index": 19,
-      "zOrder": 49,
-      "x": 757.0,
-      "y": 455.0,
+      "zOrder": 51,
+      "x": 690.0,
+      "y": 451.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 4,
@@ -271,9 +271,9 @@
     },
     {
       "index": 20,
-      "zOrder": 51,
-      "x": 560.0,
-      "y": 521.0,
+      "zOrder": 37,
+      "x": 509.0,
+      "y": 504.0,
       "type": "pass",
       "text": "通点",
       "connections": [
@@ -282,9 +282,9 @@
     },
     {
       "index": 21,
-      "zOrder": 25,
-      "x": 139.0,
-      "y": 281.0,
+      "zOrder": 5,
+      "x": 115.0,
+      "y": 277.0,
       "type": "pass",
       "text": "通点",
       "connections": [
@@ -295,8 +295,8 @@
     },
     {
       "index": 22,
-      "zOrder": 43,
-      "x": 872.0,
+      "zOrder": 47,
+      "x": 752.0,
       "y": 276.0,
       "type": "pass",
       "text": "通点",
@@ -305,27 +305,27 @@
   ],
   "trays": [
     {
-      "zOrder": 9,
-      "x": 289,
-      "y": 548,
-      "width": 350,
-      "height": 187,
+      "zOrder": 7,
+      "x": 256,
+      "y": 505,
+      "width": 286,
+      "height": 190,
       "title": "平均 2つ"
     },
     {
       "zOrder": 3,
-      "x": 346,
-      "y": 463,
-      "width": 474,
-      "height": 468,
+      "x": 316,
+      "y": 422,
+      "width": 420,
+      "height": 384,
       "title": "標準偏差"
     },
     {
       "zOrder": 1,
-      "x": 499,
-      "y": 452,
-      "width": 794,
-      "height": 517,
+      "x": 433,
+      "y": 411,
+      "width": 668,
+      "height": 424,
       "title": "σフィルタリング"
     }
   ]

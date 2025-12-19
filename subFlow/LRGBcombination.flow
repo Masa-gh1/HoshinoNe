@@ -1,0 +1,124 @@
+{
+  "version": "0.1.20251208",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 3,
+      "x": 31.0,
+      "y": 62.0,
+      "type": "Lab_converter",
+      "text": "Lab変換",
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 13,
+      "x": 315.0,
+      "y": 88.0,
+      "type": "Lab_to_rgb_converter",
+      "text": "RGB変換",
+      "connections": []
+    },
+    {
+      "index": 2,
+      "zOrder": 7,
+      "x": 121.0,
+      "y": 57.0,
+      "type": "scale",
+      "text": "乗算",
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 17,
+      "x": 204.0,
+      "y": 35.0,
+      "type": "coefficients",
+      "text": "係数",
+      "planeCount": 3,
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": 1.0
+      },
+      "planeNames": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2"
+      ],
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 9,
+      "x": 123.0,
+      "y": 112.0,
+      "type": "scale",
+      "text": "乗算",
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 15,
+      "x": 203.0,
+      "y": 142.0,
+      "type": "coefficients",
+      "text": "係数",
+      "planeCount": 3,
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "1,0,0": 1.0,
+        "2,0,0": 1.0
+      },
+      "planeNames": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2"
+      ],
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 11,
+      "x": 205.0,
+      "y": 89.0,
+      "type": "sum",
+      "text": "総和",
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 5,
+      "x": 30.0,
+      "y": 115.0,
+      "type": "Lab_converter",
+      "text": "Lab変換",
+      "connections": [
+        4
+      ]
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 176,
+      "y": 88,
+      "width": 350,
+      "height": 172,
+      "title": "L+ab合成"
+    }
+  ]
+}

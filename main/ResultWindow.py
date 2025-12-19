@@ -464,7 +464,7 @@ class ResultWindow(tk.Toplevel):
                         xOffset = 0.0
                     
                     for planeIdx, plane_hist in enumerate(histogram_data['planes'][:4]):
-                        bin_counts = plane_hist['counts']
+                        bin_counts = plane_hist['bin_counts']
                         bin_edges = plane_hist['bin_edges']
                         total_samples += plane_hist['total_samples']
                         
@@ -497,8 +497,8 @@ class ResultWindow(tk.Toplevel):
                     plt.rcParams['path.simplify_threshold'] = 0.1
                     plt.savefig(buf, format='png', dpi=90)
 
-                    # 画像を2倍に拡大
                     img = Image.open(buf)
+                    # 画像を拡大
                     #enlarged_img = img.resize((int(img.width * 1.5), int(img.height * 1.5)), Image.Resampling.LANCZOS)
                     histogram_image = ImageTk.PhotoImage(img)
 
@@ -629,8 +629,7 @@ class ResultWindow(tk.Toplevel):
                 photo = ImageTk.PhotoImage(img)
                 content.append(photo)
             except Exception as e:
-                tb = traceback.format_exc()
-                print(tb,file=sys.stderr)
+                Debug.log( type(self).__name__, "画像表示エラー", e)
                 content.append(f"\n画像表示エラー: {str(e)}\n\n")
         
         # EXIF情報を表示
