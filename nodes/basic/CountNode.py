@@ -21,9 +21,9 @@ class CountNode(N1BlockOperationNode):
         return self._color_func
     
     def getBaseDataIndex(self, inputDatas):
-        """カウントではpolynomialがある場合は最初のmatrixデータを基準とする"""
+        """カウントではpolynomialがある場合は最初のtableデータを基準とする"""
         for i, data in enumerate(inputDatas):
-            dataType = data.headers.get('type', 'matrix') if data.headers else 'matrix'
+            dataType = data.headers.get('type', 'table') if data.headers else 'table'
             if dataType != 'polynomial':
                 return i
         return 0  # polynomialのみの場合は最初のpolynomialを基準とする
@@ -47,28 +47,28 @@ class CountNode(N1BlockOperationNode):
         
         # データタイプを分類
         polynomialDatas = []
-        matrixDatas = []
+        tableDatas = []
         
         for inputData in inputDatas:
-            dataType = inputData.headers.get('type', 'matrix') if inputData.headers else 'matrix'
+            dataType = inputData.headers.get('type', 'table') if inputData.headers else 'table'
             if dataType == 'polynomial':
                 polynomialDatas.append(inputData)
             else:
-                matrixDatas.append(inputData)
+                tableDatas.append(inputData)
         
         # 全てpolynomialの場合はpolynomial数を返す
         if len(polynomialDatas) == len(inputDatas):
             return self._processPolynomialCount(block, polynomialDatas)
         else:
-            # matrixとpolynomialの混在またはmatrixのみの場合
+            # table と polynomial の混在または table のみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
             blockWidth = min(BLOCK_SIZE, resultWidth - x)
             result = nh.zeros((blockHeight, blockWidth))
             
-            # matrixデータのカウント（NaN対応）
-            for inputData in matrixDatas:
+            # table データのカウント（NaN対応）
+            for inputData in tableDatas:
                 inputBlock = inputData.getBlock(planeIdx, x, y)
                 if inputBlock:
                     minH = min(blockHeight, inputBlock.data.shape[0])

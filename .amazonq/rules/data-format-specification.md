@@ -4,7 +4,7 @@
 
 ### 基本ヘッダー（全データ共通）
 - `category`: データ分類 ('primary' | 'auxiliary')
-- `type`: データ種別 ('image' | 'matrix' | 'polynomial' | 'tensor')
+- `type`: データ種別 ('image' | 'table' | 'polynomial' | 'tensor')
 - `mode`: データモード
 - `planes`: プレーン名リスト
 - `width`: データ幅
@@ -32,15 +32,15 @@
 - `white_balance`: ホワイトバランス設定
 - `raw`: RAW固有情報辞書
 
-### Matrix データ (type: 'matrix')
+### Table データ (type: 'table')
 #### mode 値
 - `2D`: 2次元行列データ
 
-#### Matrix 固有ヘッダー
+#### Table 固有ヘッダー
 - `columns`: 列名リスト
 - `lines`: 行名リスト
 
-#### ShiftDetectionNode 出力の Matrix 固有ヘッダー 
+#### ShiftDetectionNode 出力の Table 固有ヘッダー 
 - `columns`: 列名リスト (['dx', 'dy', 'rotation', 'confidence', 'time'])
 - `lines`: 行名リスト (ファイル名)
 
@@ -104,7 +104,7 @@
 - 疑似EXIF: FITS情報をEXIF形式に変換して格納
 
 #### FileReader
-- `type`: 'matrix'
+- `type`: 'table'
 - `mode`: '2D'
 - `columns`: 列名リスト
 - `lines`: 行名リスト

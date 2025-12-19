@@ -27,7 +27,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         polynomials = []
         
         for data in inputDatas:
-            dataType = data.headers.get('type', 'matrix')
+            dataType = data.headers.get('type', 'table')
             if   dataType == 'tensor':
                 tensors.append(data)
             elif dataType == 'polynomial':
@@ -88,7 +88,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         blockWidth = min(BLOCK_SIZE, resultWidth - x)
         result = None
         
-        # matrixデータの加算（NaN対応）
+        # tableデータの加算（NaN対応）
         for inputData in inputDatas:
             inputBlock = inputData.getBlock(planeIdx, x, y)
             if inputBlock:
@@ -111,7 +111,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                         )
                     )
         
-        # matrixデータがない場合の初期化
+        # tableデータがない場合の初期化
         if result is None:
             result = nh.nans((blockHeight, blockWidth))
         

@@ -16,13 +16,18 @@ class PolynomialOperationMixin:
     
     @classmethod
     def computeCombinedPolynomial(cls, polynomialDatas, operation):
-        """複数polynomialを事前に統合計算"""
+        """複数 polynomial を統合計算
+        
+        Args:
+            polynomialDatas: polynomial データのリスト
+            operation: 係数演算関数 (加算・減算用)
+        """
         if not polynomialDatas:
             return None
         if len(polynomialDatas) == 1:
             return polynomialDatas[0]
         
-        # 最初のpolynomialをベースとしてコピー
+        # 最初の polynomial をベースとしてコピー
         result = FlowData(polynomialDatas[0].headers.copy())
 
         # 出力の範囲を縦横最大にする
@@ -33,23 +38,44 @@ class PolynomialOperationMixin:
             height = max(height, h)
         result.setDimensions(width, height)
         
-        # 最初のpolynomialのデータをコピー
-        for block in polynomialDatas[0].iterateBlocks():
-            newBlock = DataBlock(block.data.copy(), block.planeIndex, block.x, block.y)
-            result.setBlock(newBlock)
+        # operation から関数を判定
+        if   np.add      == operation:
+            combineFunc       = cls._addPolynomialPlane
+            updateHeadersFunc = None
+        elif np.multiply == operation:
+            combineFunc       = cls._multiplyPolynomialPlane
+            updateHeadersFunc = cls._updateHeaders
+        else:
+            combineFunc       = None
+            updateHeadersFunc = cls._updateHeaders
         
-        # 残りのpolynomialを順次適用
-        for polynomialData in polynomialDatas[1:]:
-            for block in result.iterateBlocks():
-                otherBlock = polynomialData.getBlock(block.planeIndex, block.x, block.y)
-                if otherBlock is not None:
-                    block.data = operation(block.data, otherBlock.data)
+        # 各プレーン毎に計算
+        planeCount = polynomialDatas[0].getPlaneCount()
+        if combineFunc:
+            for planeIdx in range(planeCount):
+                resultBlock = combineFunc(planeIdx, polynomialDatas)
+                result.setBlock(resultBlock)
+        else:
+            for planeIdx in range(planeCount):
+                # 最初の polynomial の係数行列を取得
+                coeffBlock = polynomialDatas[0].getBlock(planeIdx, 0, 0)
+                data = coeffBlock.data.copy()
+
+                # 残りの polynomial を順次適用
+                for polynomialData in polynomialDatas[1:]:
+                    otherBlock = polynomialData.getBlock(planeIdx, 0, 0)
+                    data = operation(data, otherBlock.data)
+                    result.setBlock(DataBlock(data, planeIdx, 0, 0))
+        
+        # headers 更新
+        if updateHeadersFunc:
+            updateHeadersFunc(result)
         
         return result
     
     @classmethod
     def calculatePolynomialRange(cls, polynomial, width, height):
-        """多項式polynomialの範囲を計算（四隅と中央で評価）"""
+        """多項式 polynomial の範囲を計算（四隅と中央で評価）"""
         def evalPoly(x, y):
             value = 0.0
             y_power = 1.0
@@ -72,7 +98,7 @@ class PolynomialOperationMixin:
     
     @classmethod
     def calculatePolynomialBlock(cls, polynomialData, planeIdx, x, y, blockShape, defaultValue=0.0):
-        """Polynomialデータからブロック内の各座標に対応する値を計算"""
+        """Polynomial データからブロック内の各座標に対応する値を計算"""
         width, height = polynomialData.getDimensions()
         planeCount = polynomialData.getPlaneCount()
         if width < 1 or height < 1 or planeIdx >= planeCount:
@@ -103,7 +129,7 @@ class PolynomialOperationMixin:
         y_coords = y + np.broadcast_to(y_indices, (blockHeight, blockWidth))
         x_coords = x + np.broadcast_to(x_indices, (blockHeight, blockWidth))
         
-        # numpy配列演算で多項式計算
+        # numpy 配列演算で多項式計算
         result = nh.zeros(blockShape)
         y_power = nh.ones(x_coords.shape)
         for j in range(maxOrderY):
@@ -116,3 +142,60 @@ class PolynomialOperationMixin:
             y_power *= y_coords
         
         return result
+    
+    @classmethod
+    def _addPolynomialPlane(cls, planeIdx, polynomialDatas):
+        """polynomial の加算処理"""
+        # 最初の polynomial の係数行列を取得
+        coeffBlock = polynomialDatas[0].getBlock(planeIdx, 0, 0)
+        data = coeffBlock.data.copy()
+
+        # 残りの polynomial を順次適用
+        for polynomialData in polynomialDatas[1:]:
+            otherBlock = polynomialData.getBlock(planeIdx, 0, 0)
+            data = np.add(data, otherBlock.data)
+        
+        return DataBlock(data, planeIdx, 0, 0)
+
+    @classmethod
+    def _multiplyPolynomialPlane(cls, planeIdx, polynomialDatas):
+        """polynomial の乗算処理（係数の畳み込み）"""
+        # 最初の polynomial の係数行列を取得
+        coeffBlock = polynomialDatas[0].getBlock(planeIdx, 0, 0)
+        data = coeffBlock.data.copy()
+        
+        # 他の polynomial と畳み込み乗算
+        for polynomialData in polynomialDatas[1:]:
+            coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
+            if coeffBlock:
+                data = cls._convolvePolynomialCoeffs(data, coeffBlock.data)
+        
+        return DataBlock(data, planeIdx, 0, 0)
+    
+    @classmethod
+    def _convolvePolynomialCoeffs(cls, coeffs1, coeffs2):
+        """係数行列の畳み込み乗算"""
+        h1, w1 = coeffs1.shape
+        h2, w2 = coeffs2.shape
+        
+        resultH = h1 + h2 - 1
+        resultW = w1 + w2 - 1
+        result = nh.zeros((resultH, resultW))
+        
+        # numpy のブロードキャストを活用した効率的な実装
+        for i in range(h2):
+            for j in range(w2):
+                if coeffs2[i, j] != 0:
+                    result[i:i+h1, j:j+w1] += coeffs1 * coeffs2[i, j]
+        
+        return result
+    
+    @classmethod
+    def _updateHeaders(cls, flowData):
+        """乗算後の headers を更新"""
+        if 'max_orders' in flowData.headers:
+            # 最初のブロックから次数を取得
+            block = flowData.getBlock(0, 0, 0)
+            if block:
+                h, w = block.data.shape
+                flowData.headers['max_orders'] = [w - 1, h - 1]

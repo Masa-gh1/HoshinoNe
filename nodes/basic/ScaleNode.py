@@ -22,38 +22,38 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
         auxiliaryPolynomials = []
-        auxiliaryMatrices = []
+        auxiliaryTables = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'matrix')
+                dataType = data.headers.get('type', 'table')
                 if dataType == 'polynomial':
                     auxiliaryPolynomials.append(data)
                 else:
-                    auxiliaryMatrices.append(data)
+                    auxiliaryTables.append(data)
             else:
                 primaryDatas.append(data)
         
         # auxiliary polynomialを事前統合（乗算）
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.multiply)
         
-        # auxiliary matrixを事前統合（最初のもののみ使用）
-        self._combinedAuxiliaryMatrix = None
-        if auxiliaryMatrices:
-            self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
+        # auxiliary tableを事前統合（最初のもののみ使用）
+        self._combinedAuxiliaryTable = None
+        if auxiliaryTables:
+            self._combinedAuxiliaryTable = auxiliaryTables[0]
         
         return primaryDatas
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
         return lazyFlowData
     
     @classmethod
-    def _scaleOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
+    def _scaleOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """スケール操作（事前統合されたauxiliaryデータを乗算）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -66,9 +66,9 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
             polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             result = np.multiply(result, polynomialValues)
         
-        # auxiliary matrixを乗算
-        if combinedAuxiliaryMatrix:
-            auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+        # auxiliary tableを乗算
+        if combinedAuxiliaryTable:
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 result = np.multiply(result, auxiliaryBlock.data)
         
@@ -100,7 +100,7 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
                             'exclusive_upper': max(products)
                         }
                     }
-            # auxiliary matrixの場合は範囲計算が複雑なので省略
+            # auxiliary tableの場合は範囲計算が複雑なので省略
             # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
             return {'display_levels': inputLevels}
         return compute

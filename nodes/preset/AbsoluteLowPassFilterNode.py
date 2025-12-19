@@ -23,38 +23,38 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
         auxiliaryPolynomials = []
-        auxiliaryMatrices = []
+        auxiliaryTables = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'matrix')
+                dataType = data.headers.get('type', 'table')
                 if dataType == 'polynomial':
                     auxiliaryPolynomials.append(data)
                 else:
-                    auxiliaryMatrices.append(data)
+                    auxiliaryTables.append(data)
             else:
                 primaryDatas.append(data)
         
         # auxiliary polynomialを事前統合
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
         
-        # auxiliary matrixを事前統合
-        self._combinedAuxiliaryMatrix = None
-        if auxiliaryMatrices:
-            self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
+        # auxiliary tableを事前統合
+        self._combinedAuxiliaryTable = None
+        if auxiliaryTables:
+            self._combinedAuxiliaryTable = auxiliaryTables[0]
         
         return primaryDatas
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._absoluteLowPassFilterOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addOperation(self._absoluteLowPassFilterOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         return lazyFlowData
     
     @classmethod
-    def _absoluteLowPassFilterOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
+    def _absoluteLowPassFilterOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """絶対値低域通過フィルター操作（閾値を超える値をNaNに変換）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -68,9 +68,9 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
             mask = np.abs(result) > polynomialValues
             result = np.where(mask, np.nan, result)
         
-        # auxiliary matrixから閾値を取得
-        if combinedAuxiliaryMatrix:
-            auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+        # auxiliary tableから閾値を取得
+        if combinedAuxiliaryTable:
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 mask = np.abs(result) > auxiliaryBlock.data
                 result = np.where(mask, np.nan, result)

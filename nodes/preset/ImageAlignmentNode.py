@@ -275,7 +275,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         if rotation != 0:
             center = (width / 2, height / 2)
-            M = cv2.getRotationMatrix2D(center, rotation, 1.0)
+            M = cv2.getRotationTable2D(center, rotation, 1.0)
             M[0, 2] += dx
             M[1, 2] += dy
             transformed = cv2.transform(corners.reshape(-1, 1, 2), M).reshape(-1, 2)
@@ -911,7 +911,7 @@ class LazyAlignmentOperations:
         if rotation != 0:
             # 回転ありの場合は逆変換行列で計算
             center = (orig_width / 2, orig_height / 2)
-            M_inv = cv2.getRotationMatrix2D(center, -rotation, 1.0)
+            M_inv = cv2.getRotationTable2D(center, -rotation, 1.0)
             M_inv[0, 2] -= dx
             M_inv[1, 2] -= dy
             source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
@@ -966,7 +966,7 @@ class LazyAlignmentOperations:
                 # 元画像の中心を部分画像座標系に変換
                 orig_center_x = orig_width  / 2 - min_block_x
                 orig_center_y = orig_height / 2 - min_block_y
-                M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), rotation, 1.0)
+                M = cv2.getRotationTable2D((orig_center_x, orig_center_y), rotation, 1.0)
                 M[0, 2] += dx
                 M[1, 2] += dy
             else:

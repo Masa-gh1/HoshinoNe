@@ -67,7 +67,7 @@ class ImageWriterNode(BaseWriterNode):
             offset = 0.0
 
         if(  type == 'image'  and mode == 'RGB' and 3 <= planeCount
-            or type == 'matrix' and mode == '2D'  and 3 <= planeCount
+            or type == 'table' and mode == '2D'  and 3 <= planeCount
             ):
             # RGBカラー画像
             imgMode = 'RGB'
@@ -102,7 +102,7 @@ class ImageWriterNode(BaseWriterNode):
                     self.reportBlockProgress(context)
             
         elif(  type == 'image'  and mode == 'RGBG' and 4 <= planeCount
-            or type == 'matrix' and mode == '2D'   and 4 <= planeCount
+            or type == 'table' and mode == '2D'   and 4 <= planeCount
             ):
             # RGBG 4チャンネル画像をRGBに変換
             imgMode = 'RGB'
@@ -142,7 +142,7 @@ class ImageWriterNode(BaseWriterNode):
                     self.reportBlockProgress(context)
             
         elif(  type == 'image'  and mode == 'L'  and 1 <= planeCount
-            or type == 'matrix' and mode == '2D' and 1 <= planeCount
+            or type == 'table' and mode == '2D' and 1 <= planeCount
             ):
             # グレースケール画像
             imgMode = 'L'

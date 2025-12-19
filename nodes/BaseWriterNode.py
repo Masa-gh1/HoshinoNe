@@ -110,7 +110,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         fileNames = [os.path.basename(path) for path, _, _, _, _ in fileInfos]
         
         headers = {
-            'type': 'matrix',
+            'type': 'table',
             'mode': '2D',
             'columns': ['size', 'planeCount', 'width', 'height'],
             'lines': fileNames,

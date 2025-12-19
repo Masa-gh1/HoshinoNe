@@ -23,38 +23,38 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
         auxiliaryPolynomials = []
-        auxiliaryMatrices = []
+        auxiliaryTables = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'matrix')
+                dataType = data.headers.get('type', 'table')
                 if dataType == 'polynomial':
                     auxiliaryPolynomials.append(data)
                 else:
-                    auxiliaryMatrices.append(data)
+                    auxiliaryTables.append(data)
             else:
                 primaryDatas.append(data)
         
         # auxiliary polynomialを事前統合（加算：指数の加算）
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
         
-        # auxiliary matrixを事前統合（最初のもののみ使用）
-        self._combinedAuxiliaryMatrix = None
-        if auxiliaryMatrices:
-            self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
+        # auxiliary tableを事前統合（最初のもののみ使用）
+        self._combinedAuxiliaryTable = None
+        if auxiliaryTables:
+            self._combinedAuxiliaryTable = auxiliaryTables[0]
         
         return primaryDatas
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._powerOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addOperation(self._powerOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         return lazyFlowData
     
     @classmethod
-    def _powerOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
+    def _powerOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """冪乗操作（事前統合されたauxiliaryデータを指数として使用）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -69,9 +69,9 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
             power_result = np.power(result, polynomialValues)
             result = power_result if is_complex else np.real(power_result)
         
-        # auxiliary matrixを指数として冪乗
-        if combinedAuxiliaryMatrix:
-            auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+        # auxiliary tableを指数として冪乗
+        if combinedAuxiliaryTable:
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 power_result = np.power(result, auxiliaryBlock.data)
                 result = power_result if is_complex else np.real(power_result)
@@ -79,7 +79,7 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
         return DataBlock( result, block.planeIndex, block.x, block.y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']

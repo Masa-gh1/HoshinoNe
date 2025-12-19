@@ -42,7 +42,7 @@ class FileWriterNode(BaseWriterNode):
                 
                 # ヘッダー行を書き込み
                 if flowData.headers and 'columns' in flowData.headers:
-                    headerRow = [flowData.headers.get('type', 'matrix')]
+                    headerRow = [flowData.headers.get('type', 'table')]
                     headerRow.extend(flowData.headers['columns'])
                     writer.writerow(headerRow)
                 

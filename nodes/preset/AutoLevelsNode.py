@@ -31,7 +31,7 @@ class AutoLevelsNode(FlowNode):
         
         # 各入力データのdisplay_levelsを1%と99%のパーセンタイルで設定
         for inputData in inputDatas:
-            if inputData.headers and inputData.headers.get('type') in ('image','matrix'):
+            if inputData.headers and inputData.headers.get('type') in ('image','table'):
                 width, height = inputData.getDimensions()
                 planeCount = inputData.getPlaneCount()
                 

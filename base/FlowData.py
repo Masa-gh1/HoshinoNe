@@ -81,7 +81,7 @@ class FlowData:
         """型を取得"""
         if 'type' in self.headers:
             return self.headers['type']
-        return 'matrix'
+        return 'table'
     
     def getMode(self):
         """モードを取得"""
@@ -204,24 +204,53 @@ class FlowData:
             else:
                 planeData = np.concatenate(blockArrays)
                 validData = planeData[~np.isnan(planeData)]
+                sortedData = np.sort(validData)
 
-                if len(validData) <= 0:
+                if len(sortedData) <= 0:
                     planeHistograms.append(None)
                 else:
-                    min_val, max_val = np.min(validData), np.max(validData)
+                    #min_val, max_val = np.min(validData), np.max(validData)
+                    min_val = sortedData[0]
+                    max_val = sortedData[-1]
+                    min2_val = min_val
+                    max2_val = max_val
                     
-                    # linear bins
-                    linear_edges = np.linspace(min_val, max_val, 1025)  # 1024ビン
-                    
-                    # log bins (getHistogram と同じ正規化をする)
-                    log_edges = np.logspace(np.log10(0.1), np.log10(1.0), 1025)  # 1024ビン
-                    scale = 0.9 / (max_val - min_val)
-                    offset = -min_val + 0.1 / scale
-                    log_edges = log_edges / scale - offset
-                    
+                    while True:
+                        # linear bins
+                        linear_edges = np.linspace(min2_val, max2_val, 1024+1)
+                        
+                        # log bins (getHistogram と同じ正規化をする)
+                        log_edges = np.logspace(np.log10(0.1), np.log10(1.0), 1024+1)
+                        scale = 0.9 / (max2_val - min2_val)
+                        offset = -min2_val + 0.1 / scale
+                        log_edges = log_edges / scale - offset
+                        
+                        min2_val_new = min2_val
+                        max2_val_new = max2_val
+                        
+                        # log_edges の先頭から連続する空ビンの最後を探す
+                        log_indices = np.searchsorted(sortedData, log_edges)
+                        log_diffs = np.diff(log_indices)
+                        non_empty = np.where(log_diffs > 1)[0]
+                        if 0 < len(non_empty) and 0 < non_empty[0]:
+                            min2_val_new = log_edges[non_empty[0]]
+                        
+                        # linear_edges の末尾から連続する空ビンの最初を探す
+                        linear_indices = np.searchsorted(sortedData, linear_edges)
+                        linear_diffs = np.diff(linear_indices)
+                        non_empty = np.where(linear_diffs > 1)[0]
+                        if 0 < len(non_empty) and non_empty[-1] < len(linear_diffs) - 1:
+                            max2_val_new = linear_edges[non_empty[-1] + 1]
+                        
+                        if min2_val < min2_val_new or max2_val_new < max2_val:
+                            min2_val = min2_val_new
+                            max2_val = max2_val_new
+                        else:
+                            break
+
                     # マージして重複除去
-                    merged_edges = np.unique(np.concatenate([linear_edges, log_edges]))
-                    
+                    merged_edges = np.unique(np.concatenate([[min_val,max_val], linear_edges, log_edges]))
+
                     # histogram計算はこの一回だけ
                     hist, _ = np.histogram(validData, bins=merged_edges)
                     
@@ -235,6 +264,27 @@ class FlowData:
         
         self._highResHistCache = planeHistograms
         return planeHistograms
+    
+    def getModeValue(self):
+        """最頻値を取得（全プレーン統合）"""
+        planeHistograms = self._getHighResHistograms()
+        
+        if not planeHistograms or not any(hist is not None for hist in planeHistograms):
+            return 0.0
+        
+        # 全プレーンで最大カウントのビンを探す
+        max_count = 0
+        mode_value = 0.0
+        
+        for hist_data in planeHistograms:
+            if hist_data is not None:
+                max_idx = np.argmax(hist_data['hist'])
+                if hist_data['hist'][max_idx] > max_count:
+                    max_count = hist_data['hist'][max_idx]
+                    # ビンの中央値を最頻値とする
+                    mode_value = (hist_data['edges'][max_idx] + hist_data['edges'][max_idx + 1]) / 2
+        
+        return mode_value
     
     def getPercentile(self, percentile):
         """指定したパーセンタイル値を取得（キャッシュ付き）"""
@@ -298,8 +348,8 @@ class FlowData:
               ):
                 hist_data = planeHighResHists[planeIdx]
                 
-                range_min = hist_data['min']
-                range_max = hist_data['max']
+                range_min = hist_data['edges'][1]  # 両端に count 1 の集約があるので捨てる
+                range_max = hist_data['edges'][-2] # 両端に count 1 の集約があるので捨てる
                 
                 # 目標ビンエッジを作成
                 if log_scale:
@@ -311,8 +361,8 @@ class FlowData:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 
                 # 高解像度ヒストグラムを目標解像度にリサンプリング(近似)
-                source_edges = hist_data['edges']
-                source_counts = hist_data['hist']
+                source_edges = hist_data['edges'][1:-2] # 両端に count 1 の集約があるので捨てる
+                source_counts = hist_data['hist'][1:-2] # 両端に count 1 の集約があるので捨てる
                 bin_indices = np.searchsorted(bin_edges[1:], source_edges[:-1])
                 resampled_hist = np.zeros(len(bin_edges) - 1, dtype=int)
                 np.add.at(resampled_hist, bin_indices, source_counts)

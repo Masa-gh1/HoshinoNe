@@ -25,7 +25,6 @@ class TensorOperationMixin:
         # 最初の tensor をベースとしてコピー
         result = FlowData(tensorDatas[0].headers.copy())
 
-        # 最初の tensor のデータをコピー
         for planeIndex in range(tensorDatas[0].getPlaneCount()):
             block = tensorDatas[0].getBlock(planeIndex,0,0)
             data = block.data.copy()

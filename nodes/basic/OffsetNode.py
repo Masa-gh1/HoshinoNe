@@ -23,38 +23,38 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         primaryDatas = []
         auxiliaryPolynomials = []
-        auxiliaryMatrices = []
+        auxiliaryTables = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'matrix')
+                dataType = data.headers.get('type', 'table')
                 if dataType == 'polynomial':
                     auxiliaryPolynomials.append(data)
                 else:
-                    auxiliaryMatrices.append(data)
+                    auxiliaryTables.append(data)
             else:
                 primaryDatas.append(data)
         
         # auxiliary polynomialを事前統合
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
         
-        # auxiliary matrixを事前統合（最初のものをベースに加算）
-        self._combinedAuxiliaryMatrix = None
-        if auxiliaryMatrices:
-            self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
+        # auxiliary tableを事前統合（最初のものをベースに加算）
+        self._combinedAuxiliaryTable = None
+        if auxiliaryTables:
+            self._combinedAuxiliaryTable = auxiliaryTables[0]
         
         return primaryDatas
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._offsetOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addOperation(self._offsetOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         return lazyFlowData
     
     @classmethod
-    def _offsetOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
+    def _offsetOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """オフセット操作（事前統合されたauxiliaryデータを加算）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -67,16 +67,16 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
             polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape)
             result = np.add(result, polynomialValues)
         
-        # auxiliary matrixを加算
-        if combinedAuxiliaryMatrix:
-            auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+        # auxiliary tableを加算
+        if combinedAuxiliaryTable:
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 result = np.add(result, auxiliaryBlock.data)
         
         return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
-    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryMatrix):
+    def _computeDisplayLevels(cls, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
@@ -97,7 +97,7 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
                             'exclusive_upper': inputMax + offsetMax
                         }
                     }
-            # auxiliary matrixの場合は範囲計算が複雑なので省略
+            # auxiliary tableの場合は範囲計算が複雑なので省略
             # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
             return {'display_levels': inputLevels}
         return compute

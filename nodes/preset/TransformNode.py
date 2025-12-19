@@ -27,7 +27,7 @@ class TransformNode(LazyNNOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, "transform", "変形")
         
-        self._matrixData   = None
+        self._tableData   = None
         self._extendParams = None
 
         if not CV2_AVAILABLE:
@@ -52,21 +52,21 @@ class TransformNode(LazyNNOperationNode):
             else:
                 primaryDatas.append(data)
         
-        # matrix形式データを読み込み
-        self._matrixData = self._loadMatrixData(auxiliaryDatas)
+        # table 形式データを読み込み
+        self._tableData = self._loadTableData(auxiliaryDatas)
         # 画像拡張を計算
-        self._extendParams = self._calculateExpand(primaryDatas, self._matrixData)
+        self._extendParams = self._calculateExpand(primaryDatas, self._tableData)
         
         return primaryDatas
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
-        if not self._matrixData or not self._extendParams:
+        if not self._tableData or not self._extendParams:
             return inputData  # パラメータ未設定時はそのまま
         
         image_id = self._generateImageId(inputData)
-        transform_params = self._getTransformParams(image_id, self._matrixData)
+        transform_params = self._getTransformParams(image_id, self._tableData)
         
         lazyData = LazyFlowData(inputData)
         
@@ -82,50 +82,50 @@ class TransformNode(LazyNNOperationNode):
         
         return lazyData
         
-    def _loadMatrixData(self, auxiliaryDatas):
-        """matrix形式データを読み込み"""
-        # 複数のauxiliaryデータからmatrix形式を探す
+    def _loadTableData(self, auxiliaryDatas):
+        """table 形式データを読み込み"""
+        # 複数の auxiliary データから table 形式を探す
         lines   = []
         columns = None
-        matrixdatas = []
-        for matrixFlowData in auxiliaryDatas:
-            if matrixFlowData.headers.get('type') == 'matrix':
-                lines.extend(matrixFlowData.headers.get('lines', []))
-                columnCur = matrixFlowData.headers.get('columns', [])
+        tabledatas = []
+        for tableFlowData in auxiliaryDatas:
+            if tableFlowData.headers.get('type') == 'table':
+                lines.extend(tableFlowData.headers.get('lines', []))
+                columnCur = tableFlowData.headers.get('columns', [])
                 
                 # 縦1列のブロックのみを結合
-                for block in matrixFlowData.iterateBlocks():
+                for block in tableFlowData.iterateBlocks():
                     if not block or block.data is None or 0 != block.x:
                         pass
                     elif not columns:
                         columns = columnCur
-                        matrixdatas.append(block.data)
+                        tabledatas.append(block.data)
                     elif columns == columnCur:
-                        matrixdatas.append(block.data)
+                        tabledatas.append(block.data)
         
-        if not matrixdatas:
+        if not tabledatas:
             raise ValueError("変形パラメータが必要です")
         
-        matrixdata = np.vstack(matrixdatas)
+        tabledata = np.vstack(tabledatas)
         
         return {
             'columns': columns,
             'lines': lines,
-            'data': matrixdata
+            'data': tabledata
         }
     
-    def _calculateExpand(self, inputDatas, matrix_data):
+    def _calculateExpand(self, inputDatas, tableData):
         """拡張領域計算"""
-        if not inputDatas or not matrix_data:
+        if not inputDatas or not tableData:
             return None
         
         width, height = inputDatas[0].getDimensions()
         all_corners = []
         
-        # matrixデータから各画像の変換パラメータを取得
+        # table データから各画像の変換パラメータを取得
         for inputData in inputDatas:
             image_id = self._generateImageId(inputData)
-            transform_params = self._getTransformParams(image_id, matrix_data)
+            transform_params = self._getTransformParams(image_id, tableData)
             
             if transform_params:
                 corners = self._calculateTransformedCorners(width, height, 
@@ -175,11 +175,11 @@ class TransformNode(LazyNNOperationNode):
         data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
         return f"hash_{data_hash}"
     
-    def _getTransformParams(self, image_id, matrix_data):
+    def _getTransformParams(self, image_id, tableData):
         """画像識別子から変換パラメータを取得"""
-        lines = matrix_data['lines']
-        columns = matrix_data['columns']
-        data = matrix_data['data']
+        lines = tableData['lines']
+        columns = tableData['columns']
+        data = tableData['data']
         
         row_index = lines.index(image_id)
         row_data = data[row_index]

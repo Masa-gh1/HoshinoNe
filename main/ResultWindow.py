@@ -223,7 +223,7 @@ class ResultWindow(tk.Toplevel):
         content.append(text)
         
         if   dataType == 'polynomial': result = self._generatePolynomialContent(flowData)
-        elif dataType == 'matrix': result = self._generateMatrixContent(flowData)
+        elif dataType == 'table': result = self._generateTableContent(flowData)
         elif dataType == 'image' : result = self._generateImageContent(flowData)
         else:                      result = self._generateGenericContent(flowData)
         
@@ -315,7 +315,7 @@ class ResultWindow(tk.Toplevel):
         
         return content
     
-    def _generateMatrixContent(self, flowData):
+    def _generateTableContent(self, flowData):
         """マトリックスデータの内容を生成"""
         headers = flowData.headers
         content = "\n"
@@ -367,7 +367,9 @@ class ResultWindow(tk.Toplevel):
         displayLevels = headers['display_levels']
         displayLevelMin = displayLevels["min"]
         displayLevelEnd = displayLevels["exclusive_upper"]
-        
+
+        modeValue = flowData.getModeValue() # 最頻値
+
         # パーセンタイルベースの適応的スケーリング
         adpLevelMin = flowData.getPercentile(1)
         adpLevelEnd = flowData.getPercentile(99)
@@ -387,6 +389,7 @@ class ResultWindow(tk.Toplevel):
             text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
             text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
             text += f"All levels: {minValue:.3f} - {endValue:.3f}\n"
+            text += f"Mode (Peak): {modeValue:.3f}\n"
             
             if 'reference_image_movement' in headers:
                 movement = headers['reference_image_movement']
@@ -430,12 +433,18 @@ class ResultWindow(tk.Toplevel):
                     ax_yScale = self._y_scale_var.get()
                     
                     histogram_data = flowData.getHistogram(log_scale=("log"==ax_xScale))
+                    edgeMin = histogram_data['planes'][0]['bin_edges'][0]
+                    edgeMax = histogram_data['planes'][0]['bin_edges'][-1]
+                    for data in histogram_data['planes']:
+                        edgeMin = min(edgeMin, data['bin_edges'][0])
+                        edgeMax = max(edgeMax, data['bin_edges'][-1])
+
                     total_samples = 0
                     
                     if "log" == ax_xScale and adpLevelEnd > adpLevelMin:
                         # 正規化パラメータ
-                        xScale = 0.9 / (maxValue - minValue)
-                        xOffset = -minValue + 0.1 / xScale
+                        xScale = 0.9 / (edgeMax - edgeMin)
+                        xOffset = -edgeMin + 0.1 / xScale
                     else:
                         # 無変換
                         xScale = 1.0
@@ -467,7 +476,7 @@ class ResultWindow(tk.Toplevel):
                         custom_ticks = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.0]
                         ax.set_xticks(custom_ticks)
                         custom_ticks = [0.10, 0.15, 0.20, None, 0.30, None, None, None, 0.50, None, None, None, 0.70, None, None, None, None, None, 1.0]
-                        ax.set_xticklabels([f'{tick / xScale - xOffset:.0f}' if None!=tick else '' for tick in custom_ticks])
+                        ax.set_xticklabels([sh.dispS(tick / xScale - xOffset) if None!=tick else '' for tick in custom_ticks])
                     
                     # グラフを画像に変換
                     buf = io.BytesIO()

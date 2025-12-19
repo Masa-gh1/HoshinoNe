@@ -21,6 +21,8 @@ from .basic.MinNode import MinNode
 from .basic.SumNode import SumNode
 from .basic.ProductNode import ProductNode
 from .basic.CountNode import CountNode
+from .basic.MaximumNode import MaximumNode
+from .basic.MinimumNode import MinimumNode
 from .basic.QuadraticFitNode import QuadraticFitNode
 
 from .preset.AutoLevelsNode import AutoLevelsNode
@@ -56,6 +58,8 @@ class NodeFactory:
         'sum'                    : SumNode,
         'product'                : ProductNode,
         'count'                  : CountNode,
+        'maximum'                : MaximumNode,
+        'minimum'                : MinimumNode,
         #####
         'tensor'                 : TensorNode,
         'coefficients'           : CoefficientsNode,
@@ -98,6 +102,8 @@ class NodeFactory:
         ('sum'                    , '総和(N:1)'),
         ('product'                , '総積(N:1)'),
         ('count'                  , 'カウント(N:1)'),
+        ('maximum'                , '最大(N:1)'),
+        ('minimum'                , '最小(N:1)'),
         ('separator'              , None),
         ('tensor'                 , '数列'),
         ('coefficients'           , '係数'),

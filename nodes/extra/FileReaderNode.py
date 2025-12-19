@@ -44,9 +44,12 @@ class FileReaderNode(BaseReaderNode):
             currentPlane = 0
             planeNames = []
             planeData = []
-            dataType = 'matrix'
+            dataType = 'table'
             headers = []
             
+            fileData = []
+            rowHeaders = []
+
             for row in reader:
                 if not row:
                     continue
@@ -54,7 +57,8 @@ class FileReaderNode(BaseReaderNode):
                 # プレーンマーカーをチェック
                 if row[0].startswith('#'):
                     planeName = row[0][1:].strip()  # '#'を除去
-                    planeNames.append(planeName)
+                    planeN
+                    ames.append(planeName)
                     if currentPlane > 0:  # 2枚目以降のプレーン
                         planeData.append(fileData)
                     fileData = []
@@ -71,7 +75,7 @@ class FileReaderNode(BaseReaderNode):
                     except ValueError:
                         # 数値でない場合はヘッダー行
                         if not headers:  # 最初のヘッダーのみ保存
-                            dataType = row[0] if row[0] else 'matrix'
+                            dataType = row[0] if row[0] else 'table'
                             headers = row[1:]
                         continue
                 

@@ -27,7 +27,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         polynomials = []
         
         for data in inputDatas:
-            dataType = data.headers.get('type', 'matrix')
+            dataType = data.headers.get('type', 'table')
             if   dataType == 'tensor':
                 tensors.append(data)
             elif dataType == 'polynomial':
@@ -93,7 +93,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         blockWidth = min(BLOCK_SIZE, resultWidth - x)
         result = None
         
-        # matrixデータの乗算（NaN対応）
+        # tableデータの乗算（NaN対応）
         for inputData in inputDatas:
             inputBlock = inputData.getBlock(planeIdx, x, y)
             if inputBlock:
@@ -116,7 +116,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                         )
                     )
             
-        # matrixデータがない場合の初期化
+        # tableデータがない場合の初期化
         if result is None:
             result = nh.nans((blockHeight, blockWidth))
         
@@ -133,41 +133,3 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 result = result * polynomialValues
         
         return DataBlock(result, planeIdx, x, y)
-    
-    def _processPolynomialMultiplication(self, block, polynomialDatas):
-        """全てpolynomialの場合の乗算処理（係数の畳み込み）"""
-        planeIdx = block.planeIndex
-        
-        # 最初のpolynomialの係数行列を取得
-        firstPolynomial = polynomialDatas[0]
-        coeffBlock = firstPolynomial.getBlock(planeIdx, 0, 0)
-        if not coeffBlock:
-            return None
-        
-        result = coeffBlock.data.copy()
-        
-        # 他のpolynomialと畳み込み乗算
-        for polynomialData in polynomialDatas[1:]:
-            coeffBlock = polynomialData.getBlock(planeIdx, 0, 0)
-            if coeffBlock:
-                result = self._convolvePolynomialCoeffs(result, coeffBlock.data)
-        
-        return DataBlock(result, planeIdx, block.x, block.y)
-    
-    def _convolvePolynomialCoeffs(self, coeffs1, coeffs2):
-        """係数行列の畳み込み乗算"""
-        # numpyで2次元畳み込みを実装
-        h1, w1 = coeffs1.shape
-        h2, w2 = coeffs2.shape
-        
-        resultH = h1 + h2 - 1
-        resultW = w1 + w2 - 1
-        result = nh.zeros((resultH, resultW))
-        
-        # numpyのブロードキャストを活用した効率的な実装
-        for i in range(h2):
-            for j in range(w2):
-                if coeffs2[i, j] != 0:
-                    result[i:i+h1, j:j+w1] += coeffs1 * coeffs2[i, j]
-        
-        return result

@@ -187,8 +187,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         # シフト検出を実行
         results = self._calculateShifts(self._referenceData, primaryDatas, context)
         
-        # matrix形式でFlowDataを生成
-        self.flowDatas = [self._createMatrixOutput(primaryDatas, results)]
+        # table形式でFlowDataを生成
+        self.flowDatas = [self._createTableOutput(primaryDatas, results)]
         
         self.reportProgress(context, "完了")
     
@@ -289,12 +289,12 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
             return f"hash_{data_hash}"
     
-    def _createMatrixOutput(self, inputDatas, results):
-        """matrix形式のFlowDataを生成"""
+    def _createTableOutput(self, inputDatas, results):
+        """table形式のFlowDataを生成"""
         from config import BLOCK_SIZE
         
         # データ行を作成
-        matrix_data = []
+        table_data = []
         lines = []
         
         for result_data in results:
@@ -303,29 +303,29 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
 
             # データ行: [dx, dy, rotation, confidence, time]
             row = [result.dx, result.dy, result.rotation, result.confidence, result.time]
-            matrix_data.append(row)
+            table_data.append(row)
             lines.append(imageId)
         
         # numpy配列に変換
-        if matrix_data:
-            matrix_array = nh.array(matrix_data)
+        if table_data:
+            table_array = nh.array(table_data)
         else:
-            matrix_array = nh.zeros((0, 5))
+            table_array = nh.zeros((0, 5))
         
         # FlowDataを作成
         flowData = FlowData()
         
         # 複数ブロックに対応
-        rows, cols = matrix_array.shape
+        rows, cols = table_array.shape
         for y in range(0, rows, BLOCK_SIZE):
             block_height = min(BLOCK_SIZE, rows - y)
-            block_data = matrix_array[y:y+block_height, :]
+            block_data = table_array[y:y+block_height, :]
             flowData.setBlock(DataBlock(block_data, 0, 0, y))
         
         # ヘッダー情報を設定
         flowData.headers.update({
             'category': 'auxiliary',
-            'type'    : 'matrix',
+            'type'    : 'table',
             'mode'    : '2D',
             'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
             'lines'   : lines,
