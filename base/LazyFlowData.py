@@ -11,9 +11,10 @@ import numpy as np
 import uuid
 from collections import UserDict
 
-from . import FlowData
-from . import DataBlock
-from main import CacheManager
+from config import BLOCK_SIZE
+from .Constants import CachePolicy
+from .FlowData import FlowData
+from .DataBlock import DataBlock
 from utils import numpy_helpers as nh
 
 class LazyFlowData(FlowData):
@@ -21,9 +22,9 @@ class LazyFlowData(FlowData):
     
     def __init__(self, sourceFlowData):
         super().__init__(None)
-        self.cachePolicy = CacheManager.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
+        self.cachePolicy = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowData = sourceFlowData
-        self.operationChain = []
+        self.operation = None
         self.instanceId = str(uuid.uuid4())
         self._headerComputeFuncs = {}
         self.headers = LazyHeadersDict(self, sourceFlowData.headers)
@@ -32,7 +33,7 @@ class LazyFlowData(FlowData):
     def addOperation(self, func, *args, **kwargs):
         """新しい操作を追加"""
         operation = LazyOperation(func, *args, **kwargs)
-        self.operationChain.append(operation)
+        self.operation = operation
         return operation
     
     def addHeaderOperation(self, key, func, *args, **kwargs):
@@ -43,6 +44,9 @@ class LazyFlowData(FlowData):
             del self.headers[key]
         return operation
     
+    import threading
+    _lock = threading.Lock()
+
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
         block = super().getBlock(planeIndex, x, y)
@@ -52,29 +56,9 @@ class LazyFlowData(FlowData):
             return block
         else:
             # 計算済みの block が無いので遅延評価を開始
-            block = self._executeChain(planeIndex, x, y)
+            block = self.operation( self.sourceFlowData, planeIndex, x, y)
             self.setBlock(block)
             return block
-    
-    def _executeChain(self, planeIndex, x, y):
-        """操作チェーン実行"""
-        curFlowData = self.sourceFlowData
-        
-        for i,operation in enumerate(self.operationChain):
-            block = operation(curFlowData, planeIndex, x, y)
-            if block is None:
-                block = DataBlock(planeIndex, x, y, nh.nans((self._blockSize, self._blockSize)))
-                block.blockId = (self.instanceId, planeIndex, x, y)
-                block.cachePolicy = self.cachePolicy
-                break
-            elif 0 < i and i < len(self.operationChain)-1:
-                tempFlowData = FlowData(curFlowData.headers.copy())
-                tempFlowData.cachePolicy = CacheManager.TEMPORARY
-                tempFlowData.setDimensions(*curFlowData.getDimensions())
-                tempFlowData.setBlock(block)
-                curFlowData = tempFlowData
-        
-        return block
     
 class LazyHeadersDict(UserDict):
     """遅延評価対応のheaders辞書"""
@@ -185,11 +169,9 @@ class LazyOperations:
         """アフィン変換"""
         import cv2
         
-        blockSize = flowData._blockSize
-        
         # 出力ブロックの中心位置
-        outputCenterX = blockX * blockSize + blockSize // 2
-        outputCenterY = blockY * blockSize + blockSize // 2
+        outputCenterX = blockX * BLOCK_SIZE + BLOCK_SIZE // 2
+        outputCenterY = blockY * BLOCK_SIZE + BLOCK_SIZE // 2
         
         # 逆変換行列で入力位置を計算
         matrix2x3 = transformMatrix[:2, :] if transformMatrix.shape == (3, 3) else transformMatrix
@@ -200,8 +182,8 @@ class LazyOperations:
         inputCenterX, inputCenterY = int(inputCenter[0]), int(inputCenter[1])
         
         # 入力中心位置からブロック座標を計算
-        inputBlockX = inputCenterX // blockSize
-        inputBlockY = inputCenterY // blockSize
+        inputBlockX = inputCenterX // BLOCK_SIZE
+        inputBlockY = inputCenterY // BLOCK_SIZE
         
         # 入力位置を中心とした拡張データを取得
         extended_data = LazyOperations._getExtendedBlockData(flowData, planeIndex, inputBlockX, inputBlockY)
@@ -214,34 +196,33 @@ class LazyOperations:
         )
         
         # 出力ブロックサイズに切り出し
-        margin = (extended_data.shape[0] - blockSize) // 2
-        result = transformed_extended[margin:margin+blockSize, margin:margin+blockSize]
+        margin = (extended_data.shape[0] - BLOCK_SIZE) // 2
+        result = transformed_extended[margin:margin+BLOCK_SIZE, margin:margin+BLOCK_SIZE]
         
-        return DataBlock(planeIndex, blockX * blockSize, blockY * blockSize, result)
+        return DataBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, result)
     
     @staticmethod
     def _getExtendedBlockData(flowData, planeIndex, x, y, margin=64):
         """隣接ブロックを含む拡張データを取得"""
-        blockSize = flowData._blockSize
-        blockX = x // blockSize
-        blockY = y // blockSize
-        extendedSize = blockSize + 2 * margin
+        blockX = x // BLOCK_SIZE
+        blockY = y // BLOCK_SIZE
+        extendedSize = BLOCK_SIZE + 2 * margin
         extended_data = nh.nans((extendedSize, extendedSize))
         
         # 3x3の隣接ブロックを取得
         for dy in [-1, 0, 1]:
             for dx in [-1, 0, 1]:
-                neighborX = (blockX + dx) * blockSize
-                neighborY = (blockY + dy) * blockSize
+                neighborX = (blockX + dx) * BLOCK_SIZE
+                neighborY = (blockY + dy) * BLOCK_SIZE
                 
                 try:
                     neighborBlock = flowData.getBlock(planeIndex, neighborX, neighborY)
                     if neighborBlock and neighborBlock.data is not None:
                         # 隣接ブロックを適切な位置に配置
-                        startY = margin + dy * blockSize
-                        endY = startY + blockSize
-                        startX = margin + dx * blockSize
-                        endX = startX + blockSize
+                        startY = margin + dy * BLOCK_SIZE
+                        endY = startY + BLOCK_SIZE
+                        startX = margin + dx * BLOCK_SIZE
+                        endX = startX + BLOCK_SIZE
                         
                         if 0 <= startY < extendedSize and 0 <= startX < extendedSize:
                             extended_data[max(0, startY):min(extendedSize, endY),
@@ -254,15 +235,15 @@ class LazyOperations:
     @staticmethod
     def scale(flowData, planeIndex, blockX, blockY, scaleValue):
         """スケール変換"""
-        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        block = flowData.getBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE)
         if not block or block.data is None:
             return None
-        return DataBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize, block.data * scaleValue)
+        return DataBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, block.data * scaleValue)
     
     @staticmethod
     def offset(flowData, planeIndex, blockX, blockY, offsetValue):
         """オフセット加算"""
-        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        block = flowData.getBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE)
         if not block or block.data is None:
             return None
-        return DataBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize, block.data + offsetValue)
+        return DataBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, block.data + offsetValue)

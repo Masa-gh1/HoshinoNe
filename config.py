@@ -51,6 +51,30 @@ HEADERS_EXIF = [
     ("ISOSpeedRatings"  , "ISOSpeedRatings"        , int),
     ("ISOSpeedRatings"  , "PhotographicSensitivity", int),
 ]
+HEADERS_EXIF_OPT = [
+    # 位置情報
+    ("GPSLatitude"      , "GPSLatitude"            , float),
+    ("GPSLongitude"     , "GPSLongitude"           , float),
+    ("GPSAltitude"      , "GPSAltitude"            , float),
+    # 著作権情報
+    ("Artist"           , "Artist"                 , str),
+    ("Copyright"        , "Copyright"              , str),
+    # カメラ設定
+    ("Flash"            , "Flash"                  , str),
+    ("MeteringMode"     , "MeteringMode"           , str),
+    ("ExposureMode"     , "ExposureMode"           , str),
+    ("WhiteBalance"     , "WhiteBalance"           , str),
+    # レンズ情報
+    ("LensSerialNumber" , "LensSerialNumber"       , str),
+    ("LensMake"         , "LensMake"               , str),
+    # 色空間・解像度
+    ("ColorSpace"       , "ColorSpace"             , str),
+    ("WhitePoint"       , "WhitePoint"             , str),
+    ("Orientation"      , "Orientation"            , int),
+    ("XResolution"      , "XResolution"            , float),
+    ("YResolution"      , "YResolution"            , float),
+    ("ResolutionUnit"   , "ResolutionUnit"         , int),
+]
 
 # RAW読み込み設定 ref https://www.libraw.org/docs/API-datastruct.html
 def configRawParams(params):

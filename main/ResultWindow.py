@@ -13,6 +13,7 @@ import io
 import tkinter as tk
 from tkinter import ttk
 
+from config import BLOCK_SIZE
 from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
 from . import Debug
@@ -378,7 +379,10 @@ class ResultWindow(tk.Toplevel):
                 try:
                     # FlowData.getHistogramを使用してプレーン別ヒストグラムを取得
                     fig, ax = plt.subplots(figsize=(6, 3))
-                    colors = ['red', 'green', 'blue', 'cyan']
+                    if planeCount <= 1:
+                        colors = ['black']
+                    else:
+                        colors = ['red', 'green', 'blue', 'darkcyan']
                     
                     # 軸スケール設定を取得
                     ax_xScale = self._x_scale_var.get()
@@ -419,9 +423,10 @@ class ResultWindow(tk.Toplevel):
                     
                     if "log"==ax_xScale:
                         # log用カスタム目盛り
-                        custom_ticks = [0.1, 0.2, 0.3, 0.6, 1.0]
+                        custom_ticks = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.0]
                         ax.set_xticks(custom_ticks)
-                        ax.set_xticklabels([f'{tick / xScale - xOffset:.0f}' for tick in custom_ticks])
+                        custom_ticks = [0.10, 0.15, 0.20, None, 0.30, None, None, None, 0.50, None, None, None, 0.70, None, None, None, None, None, 1.0]
+                        ax.set_xticklabels([f'{tick / xScale - xOffset:.0f}' if None!=tick else '' for tick in custom_ticks])
                     
                     # グラフを画像に変換
                     buf = io.BytesIO()
@@ -461,37 +466,37 @@ class ResultWindow(tk.Toplevel):
                     offset = 0.0
                 
                 # 画像データを再構成
-                if mode == 'RGB' and planeCount >= 3:
+                if 'RGB' == mode and 4 <= planeCount:
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
                     
                     for planeIdx in range(3):
-                        for blockY in range(0, height, 256):
-                            for blockX in range(0, width, 256):
-                                block = flowData.getBlock(planeIdx, blockX, blockY)
+                        for y in range(0, height, BLOCK_SIZE):
+                            for x in range(0, width, BLOCK_SIZE):
+                                block = flowData.getBlock(planeIdx, x, y)
                                 if block and block.data is not None:
                                     try:
-                                        blockHeight = min(256, height - blockY)
-                                        blockWidth = min(256, width - blockX)
-                                        endY = blockY + blockHeight
-                                        endX = blockX + blockWidth
+                                        blockHeight = min(block.getHeight(), height - y)
+                                        blockWidth = min(block.getWidth(), width - x)
+                                        endY = y + blockHeight
+                                        endX = x + blockWidth
                                         
                                         # レベル調整を適用（NaNは0に変換）
                                         data = block.data[:blockHeight, :blockWidth]
                                         normalized = np.nan_to_num((data - offset) * scale, nan=0.0)
-                                        imgArray[blockY:endY, blockX:endX, planeIdx] = np.clip(normalized, 0, 255).astype(np.uint8)
+                                        imgArray[y:endY, x:endX, planeIdx] = np.clip(normalized, 0, 255).astype(np.uint8)
                                     except (IndexError, TypeError, ValueError):
                                         pass
                     
                     img = Image.fromarray(imgArray, 'RGB')
-                elif mode == 'RGGB' and planeCount >= 4:
+                elif 'RGBG' == mode and 4 <= planeCount:
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
                     
-                    for blockY in range(0, height, 256):
-                        for blockX in range(0, width, 256):
-                            r_block = flowData.getBlock(0, blockX, blockY)
-                            g1_block = flowData.getBlock(1, blockX, blockY)
-                            b_block = flowData.getBlock(2, blockX, blockY)
-                            g2_block = flowData.getBlock(3, blockX, blockY)
+                    for y in range(0, height, BLOCK_SIZE):
+                        for x in range(0, width, BLOCK_SIZE):
+                            r_block = flowData.getBlock(0, x, y)
+                            g1_block = flowData.getBlock(1, x, y)
+                            b_block = flowData.getBlock(2, x, y)
+                            g2_block = flowData.getBlock(3, x, y)
                             
                             if r_block and g1_block and b_block and g2_block:
                                 if (   r_block.data is not None
@@ -500,10 +505,10 @@ class ResultWindow(tk.Toplevel):
                                    and g2_block.data is not None
                                    ):
                                     try:
-                                        blockHeight = min(256, height - blockY)
-                                        blockWidth = min(256, width - blockX)
-                                        endY = blockY + blockHeight
-                                        endX = blockX + blockWidth
+                                        blockHeight = min(r_block.getHeight(), height - y)
+                                        blockWidth = min(r_block.getWidth(), width - x)
+                                        endY = y + blockHeight
+                                        endX = x + blockWidth
                                         
                                         g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
                                         
@@ -512,35 +517,37 @@ class ResultWindow(tk.Toplevel):
                                         g_norm = np.nan_to_num((g_avg - offset) * scale, nan=0.0)
                                         b_norm = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                                         
-                                        imgArray[blockY:endY, blockX:endX, 0] = np.clip(r_norm, 0, 255).astype(np.uint8)
-                                        imgArray[blockY:endY, blockX:endX, 1] = np.clip(g_norm, 0, 255).astype(np.uint8)
-                                        imgArray[blockY:endY, blockX:endX, 2] = np.clip(b_norm, 0, 255).astype(np.uint8)
+                                        imgArray[y:endY, x:endX, 0] = np.clip(r_norm, 0, 255).astype(np.uint8)
+                                        imgArray[y:endY, x:endX, 1] = np.clip(g_norm, 0, 255).astype(np.uint8)
+                                        imgArray[y:endY, x:endX, 2] = np.clip(b_norm, 0, 255).astype(np.uint8)
                                     except (IndexError, TypeError, ValueError):
                                         pass
                     
                     img = Image.fromarray(imgArray, 'RGB')
-                elif mode == 'L' and planeCount >= 1:
+                elif(  'L'     == mode and 1 <= planeCount
+                    or 'BAYER' == mode and 1 <= planeCount
+                    ):
                     imgArray = np.zeros((height, width), dtype=np.uint8)
                     
-                    for blockY in range(0, height, 256):
-                        for blockX in range(0, width, 256):
-                            block = flowData.getBlock(0, blockX, blockY)
+                    for y in range(0, height, BLOCK_SIZE):
+                        for x in range(0, width, BLOCK_SIZE):
+                            block = flowData.getBlock(0, x, y)
                             if block and block.data is not None:
                                 try:
-                                    blockHeight = min(256, height - blockY)
-                                    blockWidth = min(256, width - blockX)
-                                    endY = blockY + blockHeight
-                                    endX = blockX + blockWidth
+                                    blockHeight = min(block.getHeight(), height - y)
+                                    blockWidth = min(block.getWidth(), width - x)
+                                    endY = y + blockHeight
+                                    endX = x + blockWidth
                                     
-                                        # レベル調整を適用（NaNは0に変換）
+                                    # レベル調整を適用（NaNは0に変換）
                                     normalized = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                                    imgArray[blockY:endY, blockX:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
+                                    imgArray[y:endY, x:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
                                 except (IndexError, TypeError, ValueError):
                                     pass
                     
                     img = Image.fromarray(imgArray, 'L')
                 else:
-                    return content.append(f"サポートされていないモード: {mode}\n")
+                    raise ValueError(f"サポートされていないモード: {mode}")
                 
                 window_width = self.winfo_width()
                 max_width = window_width - 40  # 最小余白

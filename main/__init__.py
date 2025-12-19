@@ -7,12 +7,12 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-from .CacheManager import CacheManager
+from .Tray import Tray
 from .ResultWindow import ResultWindow
 from .FlowEditor import FlowEditor
 
 __all__ = [
-    'CacheManager',
+    'Tray',
     'ResultWindow',
     'FlowEditor',
 ]

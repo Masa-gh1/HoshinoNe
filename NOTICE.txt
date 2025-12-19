@@ -57,6 +57,12 @@ License: Apache 2.0 License
 Website: https://opencv.org/
 
 ================================================================================
+tifffile (2025.10.16)
+Copyright (c) 2008-2025 Christoph Gohlke
+License: BSD 3-Clause License
+Website: https://github.com/cgohlke/tifffile
+
+================================================================================
 ExifRead (3.5.1)
 Copyright (c) 2002-2023 Gene Cash, Ianaré Sévi
 License: BSD 2-Clause License

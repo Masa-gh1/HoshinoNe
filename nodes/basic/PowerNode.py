@@ -49,11 +49,12 @@ class PowerNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._powerOperation)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
+        lazyFlowData.addOperation(self._powerOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
         return lazyFlowData
     
-    def _powerOperation(self, flowData, planeIndex, x, y):
+    @classmethod
+    def _powerOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
         """冪乗操作（事前統合されたauxiliaryデータを指数として使用）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -63,21 +64,22 @@ class PowerNode(LazyNNOperationNode, TensorOperationMixin):
         is_complex = np.iscomplexobj(result)
         
         # auxiliary tensorを指数として冪乗
-        if self._combinedAuxiliaryTensor:
-            tensorValues = self.calculateTensorBlock(self._combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+        if combinedAuxiliaryTensor:
+            tensorValues = cls.calculateTensorBlock(combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             power_result = np.power(result, tensorValues)
             result = power_result if is_complex else np.real(power_result)
         
         # auxiliary matrixを指数として冪乗
-        if self._combinedAuxiliaryMatrix:
-            auxiliaryBlock = self._combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+        if combinedAuxiliaryMatrix:
+            auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 power_result = np.power(result, auxiliaryBlock.data)
                 result = power_result if is_complex else np.real(power_result)
         
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
-    def _computeDisplayLevels(self):
+    @classmethod
+    def _computeDisplayLevels(cls, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
@@ -87,11 +89,11 @@ class PowerNode(LazyNNOperationNode, TensorOperationMixin):
             inputMin = inputLevels['min']
             inputMax = inputLevels['exclusive_upper']
             
-            if self._combinedAuxiliaryTensor:
-                coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
+            if combinedAuxiliaryTensor:
+                coeffBlock = combinedAuxiliaryTensor.getBlock(0, 0, 0)
                 if coeffBlock:
                     width, height = lazyFlowData.sourceFlowData.getDimensions()
-                    expMin, expMax = self.calculateTensorRange(coeffBlock.data, width, height)
+                    expMin, expMax = cls.calculateTensorRange(coeffBlock.data, width, height)
                     
                     # 冪乗の範囲計算（実数部のみ）
                     powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax), 

@@ -12,11 +12,15 @@ from .FlowData import FlowData
 from .FlowNode import FlowNode
 from .FlowDataWrapper import FlowDataWrapper
 from .LazyFlowData import LazyFlowData
+from .Constants import CachePolicy
+from .CacheManager import CacheManager
 
 __all__ = [
     'DataBlock',
     'FlowData',
     'FlowNode',
     'FlowDataWrapper',
-    'LazyFlowData'
+    'LazyFlowData',
+    'CachePolicy',
+    'CacheManager',
 ]

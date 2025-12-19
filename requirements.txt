@@ -10,6 +10,7 @@ scipy==1.16.3  # 科学計算・補間・スプライン（ToneCurveNode, Chroma
 PyWavelets==1.9.0  # ウェーブレット変換（WaveletDenoiseNode）
 scikit-image==0.25.2  # 画像処理・モルフォロジー（WaveletDenoiseNode）
 opencv-python==4.11.0.86  # 画像処理・位置合わせ（ImageAlignmentNode）
+tifffile==2025.10.16  # TIFF画像書き出し（ImageWriterNode）
 ExifRead==3.5.1  # EXIF情報読み込み補完（utils/exif_helper.py）
 pyinstaller==6.16.0 # 実行ファイル作成
 
@@ -28,4 +29,3 @@ pyparsing==3.2.5
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
 six==1.17.0
-tifffile==2025.10.16

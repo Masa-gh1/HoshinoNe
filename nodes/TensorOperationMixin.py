@@ -14,7 +14,8 @@ import utils.numpy_helpers as nh
 class TensorOperationMixin:
     """tensor操作の共通機能を提供するMixin"""
     
-    def computeCombinedTensor(self, tensorDatas, operation):
+    @classmethod
+    def computeCombinedTensor(cls, tensorDatas, operation):
         """複数tensorを事前に統合計算"""
         if not tensorDatas:
             return None
@@ -39,7 +40,8 @@ class TensorOperationMixin:
         
         return result
     
-    def calculateTensorRange(self, coeffMatrix, width, height):
+    @classmethod
+    def calculateTensorRange(cls, coeffMatrix, width, height):
         """多項式tensorの範囲を計算（四隅と中央で評価）"""
         def evalPoly(x, y):
             value = 0.0
@@ -61,7 +63,8 @@ class TensorOperationMixin:
         
         return min(v1, v2, v3, v4, v5), max(v1, v2, v3, v4, v5)
     
-    def calculateTensorBlock(self, tensorData, planeIdx, blockX, blockY, blockShape, defaultValue=0.0):
+    @classmethod
+    def calculateTensorBlock(cls, tensorData, planeIdx, blockX, blockY, blockShape, defaultValue=0.0):
         """テンソルデータからブロック内の各座標に対応する値を計算"""
         width, height = tensorData.getDimensions()
         planeCount = tensorData.getPlaneCount()

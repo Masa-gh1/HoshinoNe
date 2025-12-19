@@ -27,7 +27,6 @@ class FlowDataWrapper(FlowData):
         self.instanceId = orgFlowData.instanceId
         self.cachePolicy = orgFlowData.cachePolicy
         self._dimensions = orgFlowData._dimensions
-        self._blockSize = orgFlowData._blockSize
         self._maxValue = orgFlowData._maxValue
         self._minValue = orgFlowData._minValue
         self._percentileCache = orgFlowData._percentileCache

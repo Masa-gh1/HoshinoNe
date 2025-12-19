@@ -26,7 +26,8 @@ class InverseNode(LazyNNOperationNode):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _inverseOperation(self, flowData, planeIndex, x, y):
+    @classmethod
+    def _inverseOperation(cls, flowData, planeIndex, x, y):
         """逆数操作"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -38,7 +39,8 @@ class InverseNode(LazyNNOperationNode):
         
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
-    def _computeDisplayLevels(self):
+    @classmethod
+    def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             try:

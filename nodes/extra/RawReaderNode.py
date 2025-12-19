@@ -109,8 +109,13 @@ class RawReaderNode(BaseReaderNode):
                 blocksX = (width + BLOCK_SIZE - 1) // BLOCK_SIZE
                 
                 # チャンネル数を考慮
-                channels = 4 if self.demosaicAlgorithm == "raw" else 3
-                return blocksY * blocksX * channels
+                if self.demosaicAlgorithm == "bayer":
+                    planeCount = 1
+                elif self.demosaicAlgorithm == "none":
+                    planeCount = 4
+                else:
+                    planeCount = 3
+                return blocksY * blocksX * planeCount
         except:
             return 1
     
@@ -129,10 +134,10 @@ class RawReaderNode(BaseReaderNode):
         # デモザイクアルゴリズム
         if self.demosaicAlgorithm == "none":
             params.half_size          = True
-            params.four_color_rgb     = False
+            params.four_color_rgb     = True
         elif self.demosaicAlgorithm == "raw":
             params.half_size          = True
-            params.four_color_rgb     = True
+            params.four_color_rgb     = False
         elif self.demosaicAlgorithm == "AHD":
             params.demosaic_algorithm = rawpy.DemosaicAlgorithm.AHD
         elif self.demosaicAlgorithm == "AAHD":
@@ -186,76 +191,107 @@ class RawReaderNode(BaseReaderNode):
                 dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
                 headers_exif['DateTime'] = dt.strftime("%Y-%m-%d %H:%M:%S")
         
-        try:
-            with rawpy.imread(filePath) as raw:
-                # RAW現像実行
+        with rawpy.imread(filePath) as raw:
+            # ベイヤーパターン情報を取得
+            raw_pattern = raw.raw_pattern
+            color_desc = raw.color_desc
+            if raw_pattern is None or color_desc is None:
+                bayer_pattern = "<unkown>"
+            else:
+                colorDesc = color_desc.decode('ascii')
+                bayer_pattern = ""
+                for x in raw_pattern.flatten():
+                    bayer_pattern += colorDesc[x]
+            
+            # raw情報を構築
+            raw_headers = {
+                'raw_pattern'     : raw_pattern.tolist(),
+                'color_desc'      : color_desc.decode('ascii'),
+                'bayer_pattern'   : bayer_pattern,
+                'crop_left_margin': raw.sizes.crop_left_margin,
+                'crop_top_margin' : raw.sizes.crop_top_margin,
+                'crop_width'      : raw.sizes.crop_width,
+                'crop_height'     : raw.sizes.crop_height,
+                'raw_height'      : raw.sizes.raw_height,
+                'raw_width'       : raw.sizes.raw_width,
+            }
+
+            # 元RAWファイルのbit深度を使用してdisplay_levelsを設定
+            black_level = min(raw.black_level_per_channel) if raw.black_level_per_channel else 0
+            white_level = raw.white_level
+            # 半開区間 [black_level, white_level) で量子化範囲を設定
+            display_levels = {'min': black_level, 'exclusive_upper': white_level}
+            
+            # ベイヤー配列の生データを取得
+            if self.demosaicAlgorithm == "bayer":
+                # ベイヤー配列のまま1プレーンで取得
+                bayer_data = raw.raw_image  # クロップされた可視領域のみを得る場合は raw_image_visible
+                height, width = bayer_data.shape
+                planeCount = 1
+                mode = 'BAYER'
+                plane_names = ['Bayer']
+                rgb = bayer_data.reshape(height, width, 1)  # 3次元配列に変換
+            else:
+                # 従来のRAW現像処理
                 rgb = raw.postprocess(params)
-                
-                # RGB画像をFlowDataに変換
-                height, width, channels = rgb.shape
+                height, width, planeCount = rgb.shape
                 
                 # mode と plane_names を動的に設定
-                if self.demosaicAlgorithm == "raw" and channels == 4:
-                    mode = 'RGGB'
+                if self.demosaicAlgorithm == "none" and planeCount == 4:
+                    mode = 'RGBG'
                     plane_names = ['R', 'G1', 'B', 'G2']
                 else:
                     mode = 'RGB'
-                    plane_names = ['R', 'G', 'B'][:channels]
+                    plane_names = ['R', 'G', 'B'][:planeCount]
+            
+            headers = {
+                'type': 'image',
+                'mode': mode,
+                'width': width,
+                'height': height,
+                'planes': plane_names,
+                'display_levels': display_levels,
+                'source_file': filePath,
+                'demosaic': self.demosaicAlgorithm,
+                'colorspace': self.outputColorspace,
+                'white_balance': self.whiteBalance,
+            }
+            
+            if raw_headers:
+                headers['raw'] = raw_headers
+            if headers_exif:
+                headers['exif'] = headers_exif
+            
+            outputFlowData = FlowData(headers)
+            outputFlowData.setDimensions(width, height)
+            
+            # RGB各チャンネルをBLOCK_SIZEで分割してDataBlockとして設定
+            futures = []
+            
+            # ブロック単位で並列処理
+            for c in range(planeCount):
+                channelData = rgb[:, :, c]
                 
-                # 元RAWファイルのbit深度を使用してdisplay_levelsを設定
-                black_level = min(raw.black_level_per_channel) if raw.black_level_per_channel else 0
-                white_level = raw.white_level
-                # 半開区間 [black_level, white_level) で量子化範囲を設定
-                display_levels = {'min': black_level, 'exclusive_upper': white_level}
-                
-                headers = {
-                    'type': 'image',
-                    'mode': mode,
-                    'width': width,
-                    'height': height,
-                    'channels': channels,
-                    'planes': plane_names,
-                    'display_levels': display_levels,
-                    'source_file': filePath,
-                    'demosaic': self.demosaicAlgorithm,
-                    'colorspace': self.outputColorspace,
-                    'white_balance': self.whiteBalance,
-                }
-                if headers_exif:
-                    headers['exif'] = headers_exif
-                
-                outputFlowData = FlowData(headers)
-                outputFlowData.setDimensions(width, height)
-                
-                # RGB各チャンネルをBLOCK_SIZEで分割してDataBlockとして設定
-                futures = []
-                
-                # ブロック単位で並列処理
-                for c in range(channels):
-                    channelData = rgb[:, :, c]
-                    
-                    for y in range(0, height, BLOCK_SIZE):
-                        for x in range(0, width, BLOCK_SIZE):
-                            future = ProcessExecutor.submit(self._processBlock, channelData, c, x, y, height, width)
-                            futures.append(future)
-                
-                # 全ブロックの処理完了を待ちながら進捗報告
-                for future in as_completed(futures):
-                    block = future.result()
-                    if block:
-                        outputFlowData.setBlock(block)
-                    self.reportBlockProgress(context)
-                
-                return outputFlowData
-        except Exception as e:
-            raise Exception(f"RAWファイル処理エラー ({filePath}): {str(e)}")
+                for y in range(0, height, BLOCK_SIZE):
+                    for x in range(0, width, BLOCK_SIZE):
+                        future = ProcessExecutor.submit(self._processBlock, channelData, c, x, y, height, width)
+                        futures.append(future)
+            
+            # 全ブロックの処理完了を待ちながら進捗報告
+            for future in as_completed(futures):
+                block = future.result()
+                if block:
+                    outputFlowData.setBlock(block)
+                self.reportBlockProgress(context)
+            
+            return outputFlowData
     
     def _processBlock(self, channelData, c, x, y, height, width):
         """単一ブロックの処理"""
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         
-        blockData = channelData[y:endY, x:endX].tolist()
+        blockData = channelData[y:endY, x:endX]
         return DataBlock(c, x, y, blockData)
     
     def getFileInfo(self, filePath):
@@ -329,8 +365,9 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         
         tk.Label(demosaicFrame, text="ベイヤー変換アルゴリズム:").pack(anchor="w")
         self.demosaicVar = tk.StringVar()
-        algoOptions = ["none - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
-                       "raw - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
+        algoOptions = ["bayer - ベイヤー配列の生データを1プレーンで取得(以下の後処理設定も無効)",
+                       "none - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
+                       "raw - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
                        "AHD - 適応的同質性指向アルゴリズム。高品質だが処理時間が長い", 
                        "AAHD - 適応的AHD。AHDの改良版",
                        "VNG - 可変勾配数アルゴリズム。バランスの取れた品質と速度",

@@ -10,8 +10,8 @@ All rights reserved.
 import os
 import sys
 import datetime
-from config import HEADERS_EXIF
-from main.Debug import LEVEL
+from config import HEADERS_EXIF, HEADERS_EXIF_OPT
+from main import Debug
 
 # グローバルキャッシュ
 _exif_cache = {}
@@ -43,7 +43,7 @@ def getExif(filepath):
         print(f"PILライブラリがインストールされていません\npip install pillow でインストールしてください。", file=sys.stderr)
         pil_exif = {}
     
-    expected_tags = ["DateTime"] + [name for name, _, _ in HEADERS_EXIF]
+    expected_tags = ["DateTime"] + [name for name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)]
     missing_tags = [tag for tag in expected_tags if tag not in attr]
     
     if not missing_tags:
@@ -55,9 +55,10 @@ def getExif(filepath):
         print(f"exifread ライブラリがインストールされていません\npip install ExifRead でインストールしてください。", file=sys.stderr)
         exifread_tags = {}
     
+    expected_tags = ["DateTime"] + [name for name, _, _ in HEADERS_EXIF]
     missing_tags = [tag for tag in expected_tags if tag not in attr]
     
-    if LEVEL and missing_tags:
+    if Debug.LEVEL_NONE < Debug.LEVEL and missing_tags:
         # デバッグ出力
         _debug_missing_tags(filepath, missing_tags, pil_exif, exifread_tags)
     
@@ -92,7 +93,7 @@ def _get_pil_exif(filepath, attr):
                                     continue
                         # HEADERS_EXIFによる一般化処理
                         else:
-                            for name, tag_name, converter in HEADERS_EXIF:
+                            for name, tag_name, converter in (HEADERS_EXIF + HEADERS_EXIF_OPT):
                                 if(  (name not in attr)
                                   and(tag == tag_name)
                                   ):
@@ -130,7 +131,7 @@ def _get_exifread_exif(filepath, attr):
                                 continue
                     # HEADERS_EXIFによる一般化処理
                     else:
-                        for name, tag_name, converter in HEADERS_EXIF:
+                        for name, tag_name, converter in (HEADERS_EXIF + HEADERS_EXIF_OPT):
                             if(  (name not in attr)
                               and(tag_name in tag.split(' '))
                               ):
@@ -148,7 +149,8 @@ def _get_exifread_exif(filepath, attr):
                                 else:
                                     attr[name] = converter(val_str)
                                 break
-                except (ValueError, ZeroDivisionError):
+                except (ValueError, ZeroDivisionError) as e:
+                    print(f"exifread error for {tag} = {value} : {e}", file=sys.stderr)
                     continue
     except Exception as e:
         print(f"exifread error for {filepath}: {e}", file=sys.stderr)

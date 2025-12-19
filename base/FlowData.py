@@ -12,8 +12,9 @@ import sys
 from tkinter import messagebox
 
 from config import BLOCK_SIZE
-from . import DataBlock
-from main import CacheManager
+from .Constants import CachePolicy
+from .DataBlock import DataBlock
+from .CacheManager import CacheManager
 from utils import numpy_helpers as nh
 
 try:
@@ -26,10 +27,9 @@ class FlowData:
     def __init__(self, headers={}):
         self.instanceId = str(uuid.uuid4())
         
-        self.cachePolicy = CacheManager.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
+        self.cachePolicy = CachePolicy.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
         self.headers = headers
         self._dimensions = (0, 0)
-        self._blockSize = BLOCK_SIZE
         self._maxValue = None
         self._minValue = None
         self._percentileCache = {} # パーセンタイルキャッシュ
@@ -45,15 +45,15 @@ class FlowData:
         try:
             # キャッシュから自身のエントリを削除
             CacheManager.clearByInstanceId(self.instanceId)
-        except (ImportError, AttributeError):
-            pass
+        except (ImportError, AttributeError) as e:
+            print(f"Warning cleanup: {e}", file=sys.stderr)
 
     def _updateStatistics(self, planeIndex, x, y, blockData):
         """統計情報を更新"""
         # ブロック上書き検出
         blockKey = (planeIndex, x, y)
         if blockKey in self._existingBlocks:
-            if CacheManager.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
+            if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
                 print(f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}", file=sys.stderr)
         else:
             self._existingBlocks.add(blockKey)
@@ -92,7 +92,7 @@ class FlowData:
         if planeCount == 3:
             return 'RGB'
         elif planeCount == 4:
-            return 'RGGB'
+            return 'RGBG'
         elif planeCount == 1:
             return 'L'
         else:
@@ -134,8 +134,8 @@ class FlowData:
         if planeCount == 0:
             return 0
         
-        blocksX = (width + self._blockSize - 1) // self._blockSize
-        blocksY = (height + self._blockSize - 1) // self._blockSize
+        blocksX = (width + BLOCK_SIZE - 1) // BLOCK_SIZE
+        blocksY = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
         
         return planeCount * blocksX * blocksY
     
@@ -147,8 +147,8 @@ class FlowData:
             return
         
         for planeIdx in range(planeCount):
-            for y in range(0, height, self._blockSize):
-                for x in range(0, width, self._blockSize):
+            for y in range(0, height, BLOCK_SIZE):
+                for x in range(0, width, BLOCK_SIZE):
                     block = self.getBlock(planeIdx, x, y)
                     if block:
                         yield block
@@ -196,8 +196,8 @@ class FlowData:
         planeHistograms = []
         for planeIndex in range(min(planeCount, maxPlanes)):
             blockArrays = []
-            for y in range(0, height, self._blockSize):
-                for x in range(0, width, self._blockSize):
+            for y in range(0, height, BLOCK_SIZE):
+                for x in range(0, width, BLOCK_SIZE):
                     block = self.getBlock(planeIndex, x, y)
                     if block and block.data is not None:
                         blockArrays.append(block.data.flatten())
@@ -318,8 +318,8 @@ class FlowData:
                 resampled_hist = np.interp(target_centers, source_centers, hist_data['hist'])
                 
                 planeHistograms.append({
-                    'counts': resampled_hist.astype(int).tolist(),
-                    'bin_edges': bin_edges.tolist(),
+                    'counts': resampled_hist.astype(int),
+                    'bin_edges': bin_edges,
                     'total_samples': hist_data['total_samples']
                 })
             else:

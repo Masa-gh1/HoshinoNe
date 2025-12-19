@@ -49,11 +49,12 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, TensorOperationMixin):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._absoluteLowPassFilterOperation)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
+        lazyFlowData.addOperation(self._absoluteLowPassFilterOperation, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryTensor, self._combinedAuxiliaryMatrix)
         return lazyFlowData
     
-    def _absoluteLowPassFilterOperation(self, flowData, planeIndex, x, y):
+    @classmethod
+    def _absoluteLowPassFilterOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):
         """絶対値低域通過フィルター操作（閾値を超える値をNaNに変換）"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -62,21 +63,22 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, TensorOperationMixin):
         result = block.data.copy()
         
         # auxiliary tensorから閾値を取得
-        if self._combinedAuxiliaryTensor:
-            tensorValues = self.calculateTensorBlock(self._combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+        if combinedAuxiliaryTensor:
+            tensorValues = cls.calculateTensorBlock(combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             mask = np.abs(result) > tensorValues
             result = np.where(mask, np.nan, result)
         
         # auxiliary matrixから閾値を取得
-        if self._combinedAuxiliaryMatrix:
-            auxiliaryBlock = self._combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+        if combinedAuxiliaryMatrix:
+            auxiliaryBlock = combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 mask = np.abs(result) > auxiliaryBlock.data
                 result = np.where(mask, np.nan, result)
         
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
-    def _computeDisplayLevels(self):
+    @classmethod
+    def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             # フィルター処理では元の範囲を保持（一部がNaNになるだけ）

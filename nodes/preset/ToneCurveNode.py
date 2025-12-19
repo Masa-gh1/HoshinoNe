@@ -104,7 +104,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         nan_mask = np.isnan(data)
         if np.all(nan_mask):
             # 全てNaNの場合はそのまま返す
-            return DataBlock(block.planeIndex, block.x, block.y, data.tolist())
+            return DataBlock(block.planeIndex, block.x, block.y, data)
         
         # トーンカーブ関数を作成
         sortedPoints = sorted(self.controlPoints, key=lambda p: p[0])
@@ -158,7 +158,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         resultData[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
-        return DataBlock(block.planeIndex, block.x, block.y, resultData.tolist())
+        return DataBlock(block.planeIndex, block.x, block.y, resultData)
     
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):
         self.displayMin = inputMin

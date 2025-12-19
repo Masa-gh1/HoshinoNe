@@ -12,6 +12,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from config import BLOCK_SIZE
 from base import FlowData
 from base import LazyFlowData
 from base import DataBlock
@@ -287,7 +288,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         else:
             transformed = corners + np.array([dx, dy])
         
-        return transformed.tolist()
+        return transformed
     
     def _createLazyOutputs(self, inputDatas, metadata):
         """LazyFlowDataを生成"""
@@ -775,7 +776,10 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         except (cv2.error, SystemError):
             # OpenCV 4.5.5以降のバグ対応
             self.editor.bugReport(type(self).__name__,"Retry cv2.findContours")
-            contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            try:
+                contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            except (cv2.error, SystemError):
+                contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         min_area = np.pi * (self.star.minDiameter / 2) ** 2
         max_area = np.pi * (self.star.maxDiameter / 2) ** 2
@@ -892,11 +896,10 @@ class LazyAlignmentOperations:
     def alignAndExpand(flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
         """位置合わせ + 拡張を一度に実行"""
         
-        blockSize = flowData._blockSize
         orig_width, orig_height = flowData.getDimensions()
         
         # 出力ブロックの4隅を逆変換して必要な入力範囲を計算
-        corners = np.array([[x, y], [x+blockSize, y], [x+blockSize, y+blockSize], [x, y+blockSize]], dtype=np.float64)
+        corners = np.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]], dtype=np.float64)
         
         if rotation != 0:
             # 回転ありの場合は逆変換行列で計算
@@ -916,10 +919,10 @@ class LazyAlignmentOperations:
         max_y = int(np.ceil(np.max(source_corners[:, 1])))
         
         # ブロック境界に拡張
-        min_block_x = (min_x // blockSize) * blockSize
-        max_block_x = (max_x // blockSize) * blockSize + blockSize
-        min_block_y = (min_y // blockSize) * blockSize
-        max_block_y = (max_y // blockSize) * blockSize + blockSize
+        min_block_x = (min_x // BLOCK_SIZE) * BLOCK_SIZE
+        max_block_x = (max_x // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
+        min_block_y = (min_y // BLOCK_SIZE) * BLOCK_SIZE
+        max_block_y = (max_y // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
         
         min_block_x = max(min_block_x, 0)
         max_block_x = min(max_block_x, orig_width)
@@ -932,8 +935,8 @@ class LazyAlignmentOperations:
         region_image = nh.nans((region_height, region_width))
         
         # 必要なブロックを取得して部分画像に配置
-        for by in range(min_block_y, max_block_y, blockSize):
-            for bx in range(min_block_x, max_block_x, blockSize):
+        for by in range(min_block_y, max_block_y, BLOCK_SIZE):
+            for bx in range(min_block_x, max_block_x, BLOCK_SIZE):
                 block = flowData.getBlock(planeIndex, bx, by)
                 if block and block.data is not None:
                     if len(block.data.shape) == 3:
@@ -973,8 +976,8 @@ class LazyAlignmentOperations:
         output_y_in_region = y - min_block_y
         
         # 画面端での適切なブロックサイズを計算
-        actual_block_width = min(blockSize, new_width - x)
-        actual_block_height = min(blockSize, new_height - y)
+        actual_block_width = min(BLOCK_SIZE, new_width - x)
+        actual_block_height = min(BLOCK_SIZE, new_height - y)
         
         # 出力ブロック部分を切り出し
         end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])

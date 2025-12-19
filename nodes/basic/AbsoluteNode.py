@@ -26,7 +26,8 @@ class AbsoluteNode(LazyNNOperationNode):
         lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
         return lazyFlowData
     
-    def _absoluteOperation(self, flowData, planeIndex, x, y):
+    @classmethod
+    def _absoluteOperation(cls, flowData, planeIndex, x, y):
         """絶対値操作"""
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
@@ -36,7 +37,8 @@ class AbsoluteNode(LazyNNOperationNode):
         
         return DataBlock(block.planeIndex, block.x, block.y, result)
     
-    def _computeDisplayLevels(self):
+    @classmethod
+    def _computeDisplayLevels(cls):
         """display_levelsを計算"""
         def compute(lazyFlowData):
             try:

@@ -4,12 +4,16 @@
     // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+    
         {
             "name": "Python デバッガー: エントリーポイント実行",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/HoshinoNe.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "FLOWEDITOR_TEST_MODE": "1"
+            }
         }
     ]
 }

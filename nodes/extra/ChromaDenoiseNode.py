@@ -12,6 +12,7 @@ import hashlib
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+from config import BLOCK_SIZE
 from base import FlowNode, DataBlock, FlowData
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
@@ -115,15 +116,38 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         """FlowDataからRGB画像を再構築"""
         rgb_image = nh.zeros((height, width, 3))
         
-        from config import BLOCK_SIZE
-        for blockY in range(0, height, BLOCK_SIZE):
-            for blockX in range(0, width, BLOCK_SIZE):
-                for c in range(3):
-                    block = flowData.getBlock(c, blockX, blockY)
-                    if block:
-                        endY = min(blockY + block.getHeight(), height)
-                        endX = min(blockX + block.getWidth(), width)
-                        rgb_image[blockY:endY, blockX:endX, c] = block.data[:endY-blockY, :endX-blockX]
+        if 4 <= flowData.getPlaneCount():
+            for y in range(0, height, BLOCK_SIZE):
+                for x in range(0, width, BLOCK_SIZE):
+                    r_block  = flowData.getBlock(0, x, y)
+                    g1_block = flowData.getBlock(1, x, y)
+                    b_block  = flowData.getBlock(2, x, y)
+                    g2_block = flowData.getBlock(3, x, y)
+                    if r_block and g1_block and b_block and g2_block:
+                        blockHeight = min(r_block.getHeight(), height - y)
+                        blockWidth = min(r_block.getWidth(), width - x)
+                        endY = y + blockHeight
+                        endX = x + blockWidth
+                        
+                        # G1とG2の平均をGチャンネルとして使用
+                        g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
+                        
+                        # 指定bit深度に変換
+                        rgb_image[y:endY, x:endX, 0] = r_block.data[:blockHeight, :blockWidth]
+                        rgb_image[y:endY, x:endX, 1] = g_avg
+                        rgb_image[y:endY, x:endX, 2] = b_block.data[:blockHeight, :blockWidth]
+        else:
+            for c in range(3):
+                for y in range(0, height, BLOCK_SIZE):
+                    for x in range(0, width, BLOCK_SIZE):
+                        block = flowData.getBlock(c, x, y)
+                        if block:
+                            blockHeight = min(block.getHeight(), height - y)
+                            blockWidth = min(block.getWidth(), width - x)
+                            endY = y + blockHeight
+                            endX = x + blockWidth
+                            rgb_image[y:endY, x:endX, c] = block.data[:blockHeight, :blockWidth]
+
         
         return rgb_image
     
@@ -197,17 +221,14 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     def _create_edge_mask(self, luma):
         """エッジマスクを作成"""
         # Sobelフィルタでエッジ検出
-        if SCIPY_AVAILABLE:
-            grad_x = sobel(luma, axis=1)
-            grad_y = sobel(luma, axis=0)
-            gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-            # 正規化（最小値と最大値を使用）
-            min_val = gradient_magnitude.min()
-            max_val = gradient_magnitude.max()
-            if max_val > min_val:
-                gradient_magnitude = (gradient_magnitude - min_val) / (max_val - min_val)
-        else:
-            gradient_magnitude = np.zeros_like(luma)
+        grad_x = sobel(luma, axis=1)
+        grad_y = sobel(luma, axis=0)
+        gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+        # 正規化（最小値と最大値を使用）
+        min_val = gradient_magnitude.min()
+        max_val = gradient_magnitude.max()
+        if max_val > min_val:
+            gradient_magnitude = (gradient_magnitude - min_val) / (max_val - min_val)
         
         # 閾値でエッジマスクを作成
         edge_mask = gradient_magnitude > self.edge_threshold
@@ -220,7 +241,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
             return image
         
         result = image.copy()
-        if SCIPY_AVAILABLE and np.any(~nan_mask):
+        if np.any(~nan_mask):
             # NaN以外の部分のみフィルタ適用
             temp_image = np.where(nan_mask, 0, image)
             filtered = gaussian_filter(temp_image, sigma)
@@ -367,19 +388,22 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         headers = original_flowdata.headers.copy()
         result_flowdata = FlowData(headers)
         
+        if 4 <= original_flowdata.getPlaneCount():
+            headers['mode'] = 'RGB'
+            headers['planes'] = ['R', 'G', 'B']
+
         width, height = original_flowdata.getDimensions()
         result_flowdata.setDimensions(width, height)
         
         # ブロック単位で結果を設定
-        from config import BLOCK_SIZE
-        for blockY in range(0, height, BLOCK_SIZE):
-            for blockX in range(0, width, BLOCK_SIZE):
-                endY = min(blockY + BLOCK_SIZE, height)
-                endX = min(blockX + BLOCK_SIZE, width)
+        for y in range(0, height, BLOCK_SIZE):
+            for x in range(0, width, BLOCK_SIZE):
+                endY = min(y + BLOCK_SIZE, height)
+                endX = min(x + BLOCK_SIZE, width)
                 
                 for c in range(3):
-                    block_data = denoised_rgb[blockY:endY, blockX:endX, c]
-                    block = DataBlock(c, blockX, blockY, block_data)
+                    block_data = denoised_rgb[y:endY, x:endX, c]
+                    block = DataBlock(c, x, y, block_data)
                     result_flowdata.setBlock(block)
         
         return result_flowdata
