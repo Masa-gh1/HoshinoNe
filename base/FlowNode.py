@@ -14,7 +14,7 @@ import sys
 import tkinter as tk
 from tkinter import filedialog
 
-from main import ResultWindow
+from main.ResultWindow import ResultWindow
 
 class FlowNode(AbstractBaseClass):
     def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):

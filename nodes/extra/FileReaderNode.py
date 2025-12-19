@@ -118,7 +118,7 @@ class FileReaderNode(BaseReaderNode):
                                     block.append(blockRow)
                             
                             if block:
-                                dataBlock = DataBlock(planeIdx, x, y, block)
+                                dataBlock = DataBlock(block, planeIdx, x, y)
                                 flowData.setBlock(dataBlock)
                                 self.reportBlockProgress(context)
                 return flowData

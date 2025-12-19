@@ -131,7 +131,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
                     key = f"{planeIdx},{i},{j}"
                     row.append(self.coefficients.get(key, 0))
                 tensorData.append(row)
-            dataBlock = DataBlock(planeIdx, 0, 0, tensorData)
+            dataBlock = DataBlock(tensorData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
         
         self.flowDatas = [outputFlowData]

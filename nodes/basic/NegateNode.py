@@ -34,7 +34,7 @@ class NegateNode(LazyNNOperationNode):
             return block
         
         result = -block.data
-        return DataBlock(block.planeIndex, block.x, block.y, result)
+        return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
     def _computeDisplayLevels(cls):

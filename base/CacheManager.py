@@ -86,12 +86,13 @@ class CacheManager:
     def get(cls, cacheKey, cachePolicy):
         """キャッシュから取得"""
         with cls._cacheLock:
-            cache = cls._globalBlockCache.get(cacheKey)
+            cache = cls._globalBlockCache.pop(cacheKey,None)
         if cache is None:
             data = None
         else:
+            cls._globalBlockCache[cacheKey] = cache # 最後尾に再追加(LRU)
             _, data = cache
-        6
+        
         if data is not None:
             return data
         elif CachePolicy.PERSISTENT == cachePolicy:
@@ -108,8 +109,8 @@ class CacheManager:
         """キャッシュに保存"""
         with cls._cacheLock:
             if MAX_BLOCK_CACHE_SIZE <= len(cls._globalBlockCache):
-                # 優先順位が低く古いデータから削除
-                oldestKey = list(cls._globalBlockCache.keys())[0]
+                # 古いデータから削除(LRU)
+                oldestKey = next(iter(cls._globalBlockCache))
                 oldPolicy, oldData = cls._globalBlockCache[oldestKey]
                 
                 if oldPolicy != CachePolicy.PERSISTENT:

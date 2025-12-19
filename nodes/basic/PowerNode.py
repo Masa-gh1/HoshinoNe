@@ -76,7 +76,7 @@ class PowerNode(LazyNNOperationNode, TensorOperationMixin):
                 power_result = np.power(result, auxiliaryBlock.data)
                 result = power_result if is_complex else np.real(power_result)
         
-        return DataBlock(block.planeIndex, block.x, block.y, result)
+        return DataBlock( result, block.planeIndex, block.x, block.y)
     
     @classmethod
     def _computeDisplayLevels(cls, combinedAuxiliaryTensor, combinedAuxiliaryMatrix):

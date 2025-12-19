@@ -104,7 +104,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         nan_mask = np.isnan(data)
         if np.all(nan_mask):
             # 全てNaNの場合はそのまま返す
-            return DataBlock(block.planeIndex, block.x, block.y, data)
+            return DataBlock(data, block.planeIndex, block.x, block.y)
         
         # トーンカーブ関数を作成
         sortedPoints = sorted(self.controlPoints, key=lambda p: p[0])
@@ -158,7 +158,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         resultData[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
-        return DataBlock(block.planeIndex, block.x, block.y, resultData)
+        return DataBlock(resultData, block.planeIndex, block.x, block.y)
     
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):
         self.displayMin = inputMin
@@ -376,40 +376,36 @@ class ToneCurveDialog(tk.Toplevel):
             else:
                 self.histAxes.set_yscale('linear')
             
+            # UI入力値を取得
+            try:
+                displayMin = float(self.displayMinEntry.get())
+                displayEnd = float(self.displayEndEntry.get())
+            except ValueError:
+                displayMin = self.node.displayMin
+                displayEnd = self.node.displayEnd
+            
             # 全プレーンのヒストグラムを重ねて表示
             for planeIdx, planeHist in enumerate(histogramData['planes']):
                 binCounts = planeHist['counts']
                 binEdges = planeHist['bin_edges']
                 
                 # ビン中心を計算
-                binCenters = [(binEdges[i] + binEdges[i+1]) / 2 for i in range(len(binCounts))]
-                
-                # UI入力値を取得
-                try:
-                    displayMin = float(self.displayMinEntry.get())
-                    displayEnd = float(self.displayEndEntry.get())
-                except ValueError:
-                    displayMin = self.node.displayMin
-                    displayEnd = self.node.displayEnd
-                
+                binCenters = (binEdges[:-1] + binEdges[1:]) / 2
+
                 # 入力範囲内のビンのみをフィルタリング
-                filteredCenters = []
-                filteredCounts = []
-                for i, center in enumerate(binCenters):
-                    if displayMin <= center <= displayEnd:
-                        filteredCenters.append(center)
-                        filteredCounts.append(binCounts[i])
-                
-                if filteredCounts:
+                mask = (binCenters >= displayMin) & (binCenters <= displayEnd)
+                filteredCenters = binCenters[mask]
+                filteredCounts = np.array(binCounts)[mask]
+
+                if filteredCounts.any():
                     # Y軸がログスケールの場合は1を加算
                     if yScale == "log":
                         filteredCounts = np.array(filteredCounts) + 1
                     
                     # プレーン別の色で表示
                     color = colors[planeIdx % len(colors)]
-                    self.histAxes.step(filteredCenters, filteredCounts, where='mid', 
-                                     alpha=0.4, color=color, linewidth=1)
-            
+                    self.histAxes.plot(filteredCenters, filteredCounts, alpha=0.4, color=color, linewidth=1)
+
             self.histAxes.set_xlim(displayMin, displayEnd)
             
             # ログスケール時は下限のみ1に固定
@@ -440,8 +436,7 @@ class ToneCurveDialog(tk.Toplevel):
                 if len(xNormalized) >= 2:
                     # 制御点数に応じて補間方法を選択
                     if len(xNormalized) < 3:
-                        curveFunction = interp1d(xNormalized, yValues, kind='linear', 
-                                            bounds_error=False, fill_value='extrapolate')
+                        curveFunction = interp1d(xNormalized, yValues, kind='linear', bounds_error=False, fill_value='extrapolate')
                     else:
                         # 選択された境界条件でスプライン
                         curveFunction = CubicSpline(xNormalized, yValues, bc_type=boundaryCondition, extrapolate=True)

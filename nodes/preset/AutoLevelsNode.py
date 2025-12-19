@@ -39,13 +39,15 @@ class AutoLevelsNode(FlowNode):
                 imageData = nh.zeros((height, width))
                 
                 for planeIndex in range(planeCount):
-                    for blockY in range(0, height, BLOCK_SIZE):
-                        for blockX in range(0, width, BLOCK_SIZE):
-                            block = inputData.getBlock(planeIndex, blockX, blockY)
+                    for y in range(0, height, BLOCK_SIZE):
+                        for x in range(0, width, BLOCK_SIZE):
+                            block = inputData.getBlock(planeIndex, x, y)
                             if block:
-                                endY = min(blockY + block.getHeight(), height)
-                                endX = min(blockX + block.getWidth(), width)
-                                imageData[blockY:endY, blockX:endX] = block.data[:endY-blockY, :endX-blockX]
+                                blockHeight = min(block.getHeight(), height - y)
+                                blockWidth = min(block.getWidth(), width - x)
+                                endY = y + blockHeight
+                                endX = x + blockWidth
+                                imageData[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
                 
                 # NaN値を除外して1%と99%のパーセンタイルを計算
                 validData = imageData[~np.isnan(imageData)]

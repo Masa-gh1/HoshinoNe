@@ -8,14 +8,12 @@ All rights reserved.
 '''
 
 import atexit
-from concurrent.futures import ThreadPoolExecutor
 
 from config import MAX_WORKERS
+from utils.ProcessThreadPool import ProcessThreadPool
 from utils.CoalescingThreadPool import CoalescingThreadPool
 
 # グローバルスレッドプール
-ProcessExecutor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
-atexit.register(ProcessExecutor.shutdown)
-
+ProcessExecutor = ProcessThreadPool()
 CoalescingExecutor = CoalescingThreadPool(max_workers=MAX_WORKERS)
 atexit.register(CoalescingExecutor.shutdown)

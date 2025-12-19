@@ -12,7 +12,7 @@ from base import FlowDataWrapper
 
 class CategoryAuxiliaryNode(FlowNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "category_auxiliary", "補正用")
+        super().__init__(canvas, editor, x, y, "category_auxiliary", "補正値")
     
     def getColor(self):
         return self._color_util

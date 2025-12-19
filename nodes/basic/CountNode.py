@@ -81,7 +81,7 @@ class CountNode(N1BlockOperationNode):
             if tensorDatas:
                 result += len(tensorDatas)
             
-            return DataBlock(planeIdx, x, y, result)
+            return DataBlock(result, planeIdx, x, y)
     
     def _processTensorCount(self, block, tensorDatas):
         """全てtensorの場合のカウント処理"""
@@ -96,4 +96,4 @@ class CountNode(N1BlockOperationNode):
         # tensor数で埋めた行列を作成
         result = np.full_like(coeffBlock.data, len(tensorDatas))
         
-        return DataBlock(planeIdx, block.x, block.y, result)
+        return DataBlock(result, planeIdx, block.x, block.y)

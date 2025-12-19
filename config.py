@@ -22,7 +22,7 @@ VERSION = f"0.1.{VERSION_DATE}"
 MAX_WORKERS = 8
 
 # デフォルトのブロックデータタイプ
-DEFAULT_BLOCK_TYPE = np.float64
+DEFAULT_BLOCK_TYPE = np.float32
 DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 
 # ブロックサイズ設定

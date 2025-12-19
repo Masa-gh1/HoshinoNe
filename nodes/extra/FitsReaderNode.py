@@ -160,9 +160,9 @@ class FitsReaderNode(BaseReaderNode):
                 resultFlowDatas.append(flowData)
                 
                 # ブロック単位で並列処理
-                for blockY in range(0, height, BLOCK_SIZE):
-                    for blockX in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutor.submit(self._processBlock, data, channels, width, height, blockX, blockY)
+                for y in range(0, height, BLOCK_SIZE):
+                    for x in range(0, width, BLOCK_SIZE):
+                        future = ProcessExecutor.submit(self._processBlock, data, x, y, channels, width, height)
                         futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待ちながら進捗報告
@@ -238,18 +238,20 @@ class FitsReaderNode(BaseReaderNode):
         config = f"{self.type}_{"|".join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
-    def _processBlock(self, data, channels, width, height, blockX, blockY):
+    def _processBlock(self, data, x, y, channels, width, height):
         """FITSデータブロックの処理"""
-        endY = min(blockY + BLOCK_SIZE, height)
-        endX = min(blockX + BLOCK_SIZE, width)
+        endY = min(y + BLOCK_SIZE, height)
+        endX = min(x + BLOCK_SIZE, width)
         
         blocks = []
-        for c in range(channels):
-            if channels == 1:
-                blockData = data[blockY:endY, blockX:endX]
-            else:
-                blockData = data[c, blockY:endY, blockX:endX]
-            blocks.append(DataBlock(c, blockX, blockY, blockData))
+        if channels == 1:
+            for planeIndex in range(channels):
+                blockData = data[y:endY, x:endX]
+                blocks.append(DataBlock(blockData, planeIndex, x, y))
+        else:
+            for planeIndex in range(channels):
+                blockData = data[planeIndex, y:endY, x:endX]
+                blocks.append(DataBlock(blockData, planeIndex, x, y))
         
         return blocks
 

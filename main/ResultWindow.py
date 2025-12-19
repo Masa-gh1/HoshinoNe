@@ -259,20 +259,17 @@ class ResultWindow(tk.Toplevel):
             
             # データ行
             width, height = flowData.getDimensions()
+            block = flowData.getBlock(planeIdx, 0, 0)
             for y in range(height):
                 lineLabel = lines[y] if y < len(lines) else f"row_{y}"
                 content += f"{lineLabel}\t"
                 
                 row_data = []
                 for x in range(width):
-                    block = flowData.getBlock(planeIdx, x, y)
-                    if block and hasattr(block, 'data') and block.data is not None:
-                        try:
-                            value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
-                            row_data.append(f"{value:.6f}")
-                        except (IndexError, TypeError):
-                            row_data.append("0.000000")
-                    else:
+                    try:
+                        value = block.data[y][x] if len(block.data) > y and len(block.data[y]) > x else 0
+                        row_data.append(f"{value:.6f}")
+                    except (IndexError, TypeError):
                         row_data.append("0.000000")
                 
                 content += "\t".join(row_data) + "\n"
@@ -406,11 +403,11 @@ class ResultWindow(tk.Toplevel):
                         total_samples += plane_hist['total_samples']
                         
                         # オフセット適用
-                        bin_centers = [((bin_edges[i] + bin_edges[i+1]) / 2 + xOffset) * xScale for i in range(len(bin_counts))]
-                        
-                        # ステップグラフで表示
+                        bin_centers = ((bin_edges[:-1] + bin_edges[1:]) / 2 + xOffset) * xScale
+
+                        # グラフ表示
                         plane_name = planes[planeIdx] if planeIdx < len(planes) else f'Plane{planeIdx}'
-                        ax.step(bin_centers, np.array(bin_counts) + 1, where='mid', color=colors[planeIdx], label=plane_name, linewidth=1.5)
+                        ax.plot(bin_centers, np.array(bin_counts) + 1, color=colors[planeIdx], label=plane_name, linewidth=1)
                     
                     content += f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
                     ax.set_xlabel(f'Value ({ax_xScale})' if "log" == ax_xScale else f'Value ({ax_xScale}, normalized adjusted)')
@@ -430,12 +427,14 @@ class ResultWindow(tk.Toplevel):
                     
                     # グラフを画像に変換
                     buf = io.BytesIO()
-                    plt.savefig(buf, format='png', dpi=60)
+                    plt.rcParams['path.simplify'] = True
+                    plt.rcParams['path.simplify_threshold'] = 0.1
+                    plt.savefig(buf, format='png', dpi=90)
 
                     # 画像を2倍に拡大
                     img = Image.open(buf)
-                    enlarged_img = img.resize((int(img.width * 1.5), int(img.height * 1.5)), Image.Resampling.LANCZOS)
-                    histogram_image = ImageTk.PhotoImage(enlarged_img)
+                    #enlarged_img = img.resize((int(img.width * 1.5), int(img.height * 1.5)), Image.Resampling.LANCZOS)
+                    histogram_image = ImageTk.PhotoImage(img)
 
                     self._histogramImagesCahace[histogramImageKey] = histogram_image
                     content.append(histogram_image)
@@ -466,7 +465,7 @@ class ResultWindow(tk.Toplevel):
                     offset = 0.0
                 
                 # 画像データを再構成
-                if 'RGB' == mode and 4 <= planeCount:
+                if 'RGB' == mode and 3 <= planeCount:
                     imgArray = np.zeros((height, width, 3), dtype=np.uint8)
                     
                     for planeIdx in range(3):

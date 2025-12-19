@@ -73,7 +73,7 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
             if auxiliaryBlock:
                 result = np.multiply(result, auxiliaryBlock.data)
         
-        return DataBlock(block.planeIndex, block.x, block.y, result)
+        return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
     def _computeDisplayLevels(cls, combinedAuxiliaryTensor):

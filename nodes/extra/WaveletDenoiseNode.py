@@ -157,7 +157,7 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
             # 有効値のみ結果に反映
             result = np.where(nan_mask, data, denoised)
         
-        return DataBlock(block.planeIndex, block.x, block.y, result)
+        return DataBlock(result, block.planeIndex, block.x, block.y)
     
     def _calculate_max_levels(self, shape):
         """データサイズに基づいて適切な最大分解レベルを計算"""

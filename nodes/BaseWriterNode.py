@@ -120,7 +120,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         resultFlowData = FlowData(headers)
         resultFlowData.setDimensions(4, len(fileInfos))
         data = [[size, planeCount, width, height] for _, size, planeCount, width, height in fileInfos]
-        block = DataBlock(0, 0, 0, data)
+        block = DataBlock(data, 0, 0, 0)
         resultFlowData.setBlock(block)
         
         self.flowDatas = [resultFlowData]

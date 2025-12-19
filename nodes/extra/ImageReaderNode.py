@@ -111,9 +111,9 @@ class ImageReaderNode(BaseReaderNode):
         
         futureToDatas = {}
         # ブロック単位で並列処理
-        for blockY in range(0, height, BLOCK_SIZE):
-            for blockX in range(0, width, BLOCK_SIZE):
-                future = ProcessExecutor.submit(self._processBlock, pixels, len(plane_names), width, height, blockX, blockY)
+        for y in range(0, height, BLOCK_SIZE):
+            for x in range(0, width, BLOCK_SIZE):
+                future = ProcessExecutor.submit(self._processBlock, pixels, x, y, len(plane_names), width, height)
                 futureToDatas[future] = flowData
 
         # 全ブロックの処理完了を待ちながら進捗報告
@@ -153,13 +153,12 @@ class ImageReaderNode(BaseReaderNode):
         config = f"{self.type}_{'|'.join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
-    def _processBlock(self, pixels, planeCount, width, height, blockX, blockY):
+    def _processBlock(self, pixels, x, y, planeCount, width, height):
         """プレーン毎ブロックの処理"""
-        endY = min(blockY + BLOCK_SIZE, height)
-        endX = min(blockX + BLOCK_SIZE, width)
-        
-        blockWidth = endX - blockX
-        blockHeight = endY - blockY
+        endY = min(y + BLOCK_SIZE, height)
+        endX = min(x + BLOCK_SIZE, width)
+        blockWidth = endX - x
+        blockHeight = endY - y
         
         # 各プレーンのブロックをnumpy配列で作成
         blocks = []
@@ -167,22 +166,25 @@ class ImageReaderNode(BaseReaderNode):
             plane_block = nh.nans((blockHeight, blockWidth))
             blocks.append(plane_block)
         
-        for y in range(blockHeight):
-            for x in range(blockWidth):
-                pixelIdx = (blockY + y) * width + (blockX + x)
-                pixel = pixels[pixelIdx]
-                
-                if planeCount == 1:
-                    # グレースケールなど単一値の処理
-                    blocks[0][y, x] = float(pixel)
-                else:
+        if 1 == planeCount:
+            # グレースケールなど単一値の処理
+            for dy in range(blockHeight):
+                for dx in range(blockWidth):
+                    pixelIdx = (y + dy) * width + (x + dx)
+                    pixel = pixels[pixelIdx]
+                    blocks[0][dy, dx] = float(pixel)
+        else:
+            for dy in range(blockHeight):
+                for dx in range(blockWidth):
+                    pixelIdx = (y + dy) * width + (x + dx)
+                    pixel = pixels[pixelIdx]
                     for planeIdx in range(planeCount):
-                        blocks[planeIdx][y, x] = float(pixel[planeIdx])
+                        blocks[planeIdx][dy, dx] = float(pixel[planeIdx])
         
         # 各プレーンのブロック情報を返す
         dataBlocks = []
         for planeIdx, block in enumerate(blocks):
-            dataBlocks.append(DataBlock(planeIdx, blockX, blockY, block))
+            dataBlocks.append(DataBlock(block, planeIdx, x, y))
         return dataBlocks
     
 class ImageSettingsDialog(BaseReaderSettingsDialog):

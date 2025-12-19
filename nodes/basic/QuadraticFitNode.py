@@ -45,14 +45,16 @@ class QuadraticFitNode(FlowNode):
                 
         self.reportProgress(context, "データ読み込み中")
         
-        for blockY in range(0, height, BLOCK_SIZE):
-            for blockX in range(0, width, BLOCK_SIZE):
+        for y in range(0, height, BLOCK_SIZE):
+            for x in range(0, width, BLOCK_SIZE):
                 for planeIdx in range(actualPlaneCount):
-                    block = flowData.getBlock(planeIdx, blockX, blockY)
+                    block = flowData.getBlock(planeIdx, x, y)
                     if block:
-                        endY = min(blockY + block.getHeight(), height)
-                        endX = min(blockX + block.getWidth(), width)
-                        planeData[planeIdx][blockY:endY, blockX:endX] = block.data[:endY-blockY, :endX-blockX]
+                        blockHeight = min(block.getHeight(), height - y)
+                        blockWidth = min(block.getWidth(), width - x)
+                        endY = y + blockHeight
+                        endX = x + blockWidth
+                        planeData[planeIdx][y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
         
         # 各プレーン毎に2次関数フィッティング
         coefficients = {}
@@ -122,7 +124,7 @@ class QuadraticFitNode(FlowNode):
                 [c1_y, c2_xy, 0],       # y^1: y, xy, 0
                 [c2_y2, 0,    0]        # y^2: y², 0, 0
             ]
-            dataBlock = DataBlock(planeIdx, 0, 0, tensorData)
+            dataBlock = DataBlock(tensorData, planeIdx, 0, 0)
             outputFlowData.setBlock(dataBlock)
 
         

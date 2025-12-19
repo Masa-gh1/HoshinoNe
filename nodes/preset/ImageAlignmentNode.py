@@ -156,7 +156,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         if 0 == len(auxiliaryDatas):
             # 基準画像（auxiliary）が必要
-            messagebox.showerror("エラー", "基準画像（補正用）が必要です")
+            messagebox.showerror("エラー", "基準画像（補正値）が必要です")
             self._referenceData = None
         else:
             # 複数ある場合は最初のものを採用
@@ -992,7 +992,7 @@ class LazyAlignmentOperations:
             padded_block[:h, :w] = output_block
             output_block = padded_block
         
-        return DataBlock(planeIndex, x, y, output_block)
+        return DataBlock(output_block, planeIndex, x, y)
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):

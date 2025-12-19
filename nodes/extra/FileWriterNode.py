@@ -48,15 +48,15 @@ class FileWriterNode(BaseWriterNode):
                 
                 # ブロック単位でデータを読み取り、CSVに書き込み
                 currentRow = 0
-                for blockY in range(0, height, BLOCK_SIZE):
-                    for blockX in range(0, width, BLOCK_SIZE):
-                        block = flowData.getBlock(planeIdx, blockX, blockY)
+                for y in range(0, height, BLOCK_SIZE):
+                    for x in range(0, width, BLOCK_SIZE):
+                        block = flowData.getBlock(planeIdx, x, y)
                         
                         if block:
                             blockHeight = block.getHeight()
                             blockWidth = block.getWidth()
                             
-                            for y in range(blockHeight):
+                            for dy in range(blockHeight):
                                 row = []
                                 # 1列目に行ヘッダーを追加
                                 if currentRow < len(lineHeaders):
@@ -65,8 +65,8 @@ class FileWriterNode(BaseWriterNode):
                                     row.append(f'row_{currentRow}')
                                 
                                 # データを追加
-                                for x in range(blockWidth):
-                                    value = block.data[y][x]
+                                for dx in range(blockWidth):
+                                    value = block.data[dy][dx]
                                     if value is None:
                                         row.append('')
                                     else:

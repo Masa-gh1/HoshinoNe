@@ -78,7 +78,7 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
             if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
                 self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.multiply)
             tensorBlock = self._combinedTensor.getBlock(block.planeIndex, block.x, block.y)
-            return tensorBlock if tensorBlock else DataBlock(block.planeIndex, block.x, block.y, np.ones((1, 1)))
+            return tensorBlock if tensorBlock else DataBlock(np.ones((1, 1)), block.planeIndex, block.x, block.y)
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -126,7 +126,7 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
                         result * tensorValues
                     )
             
-            return DataBlock(planeIdx, x, y, result)
+            return DataBlock(result, planeIdx, x, y)
     
     def _processTensorMultiplication(self, block, tensorDatas):
         """全てtensorの場合の乗算処理（係数の畳み込み）"""
@@ -146,7 +146,7 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
             if coeffBlock:
                 result = self._convolveTensorCoeffs(result, coeffBlock.data)
         
-        return DataBlock(planeIdx, block.x, block.y, result)
+        return DataBlock(result, planeIdx, block.x, block.y)
     
     def _convolveTensorCoeffs(self, coeffs1, coeffs2):
         """係数行列の畳み込み乗算"""

@@ -13,7 +13,7 @@ from .Constants import CachePolicy
 from .CacheManager import CacheManager
 
 class DataBlock:
-    def __init__(self, planeIndex, x, y, data):
+    def __init__(self, data, planeIndex=None, x=None, y=None):
         self.blockId = None # 再現性と他の DataBlock との衝突を回避する為の ID を入れる
         self.cachePolicy = CachePolicy.CALCULABLE  # デフォルト
 

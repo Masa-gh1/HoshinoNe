@@ -73,7 +73,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
             if self._combinedTensor is None:
                 self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
             tensorBlock = self._combinedTensor.getBlock(block.planeIndex, block.x, block.y)
-            return tensorBlock if tensorBlock else DataBlock(block.planeIndex, block.x, block.y, np.zeros((1, 1)))
+            return tensorBlock if tensorBlock else DataBlock(np.zeros((1, 1)), block.planeIndex, block.x, block.y)
         else:
             # matrixとtensorの混在またはmatrixのみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -121,7 +121,7 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
                         result + tensorValues
                     )
             
-            return DataBlock(planeIdx, x, y, result)
+            return DataBlock(result, planeIdx, x, y)
     
     def _processTensorAddition(self, block, tensorDatas):
         """全てtensorの場合の加算処理"""
@@ -144,5 +144,5 @@ class SumNode(N1BlockOperationNode, TensorOperationMixin):
                 minW = min(result.shape[1], coeffBlock.data.shape[1])
                 result[:minH, :minW] += coeffBlock.data[:minH, :minW]
         
-        return DataBlock(planeIdx, block.x, block.y, result)
+        return DataBlock(result, planeIdx, block.x, block.y)
     

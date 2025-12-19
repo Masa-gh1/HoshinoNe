@@ -35,7 +35,7 @@ class AbsoluteNode(LazyNNOperationNode):
         
         result = np.abs(block.data)
         
-        return DataBlock(block.planeIndex, block.x, block.y, result)
+        return DataBlock(result, block.planeIndex, block.x, block.y)
     
     @classmethod
     def _computeDisplayLevels(cls):

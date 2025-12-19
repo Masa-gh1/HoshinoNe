@@ -122,7 +122,7 @@ class FlowData:
             return None
         
         # 遅延ロード用のDataBlockを作成
-        block = DataBlock(planeIndex, x, y, None)
+        block = DataBlock(None, planeIndex, x, y)
         block.cachePolicy = self.cachePolicy
         block.blockId = (self.instanceId, planeIndex, x, y)
         return block
@@ -312,10 +312,12 @@ class FlowData:
                 else:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 
-                # 高解像度ヒストグラムを目標解像度にリサンプリング
-                source_centers = (hist_data['edges'][:-1] + hist_data['edges'][1:]) / 2
-                target_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-                resampled_hist = np.interp(target_centers, source_centers, hist_data['hist'])
+                # 高解像度ヒストグラムを目標解像度にリサンプリング(近似)
+                source_edges = hist_data['edges']
+                source_counts = hist_data['hist']
+                bin_indices = np.searchsorted(bin_edges[1:], source_edges[:-1])
+                resampled_hist = np.zeros(len(bin_edges) - 1, dtype=int)
+                np.add.at(resampled_hist, bin_indices, source_counts)
                 
                 planeHistograms.append({
                     'counts': resampled_hist.astype(int),

@@ -401,9 +401,9 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
                 endY = min(y + BLOCK_SIZE, height)
                 endX = min(x + BLOCK_SIZE, width)
                 
-                for c in range(3):
-                    block_data = denoised_rgb[y:endY, x:endX, c]
-                    block = DataBlock(c, x, y, block_data)
+                for planeIndex in range(3):
+                    block_data = denoised_rgb[y:endY, x:endX, planeIndex]
+                    block = DataBlock(block_data, planeIndex, x, y)
                     result_flowdata.setBlock(block)
         
         return result_flowdata

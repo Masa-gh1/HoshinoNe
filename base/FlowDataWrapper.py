@@ -34,11 +34,11 @@ class FlowDataWrapper(FlowData):
         self._existingBlocks = orgFlowData._existingBlocks
     
     # 以下のメソッドは元データに委譲
-    def _loadBlock(self, planeIndex, blockX, blockY):
-        return self.orgFlowData._loadBlock(planeIndex, blockX, blockY)
+    def _loadBlock(self, planeIndex, x, y):
+        return self.orgFlowData._loadBlock(planeIndex, x, y)
     
-    def _saveBlock(self, planeIndex, blockX, blockY, blockData):
-        return self.orgFlowData._saveBlock(planeIndex, blockX, blockY, blockData)
+    def _saveBlock(self, planeIndex, x, y, blockData):
+        return self.orgFlowData._saveBlock(planeIndex, x, y, blockData)
     
     def setDimensions(self, width, height):
         return self.orgFlowData.setDimensions(width, height)

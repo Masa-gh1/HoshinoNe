@@ -8,6 +8,8 @@ All rights reserved.
 '''
 
 from .basic.CategoryAuxiliaryNode import CategoryAuxiliaryNode
+from .basic.PassNode import PassNode
+
 from .basic.OffsetNode import OffsetNode
 from .basic.ScaleNode import ScaleNode
 from .basic.PowerNode import PowerNode
@@ -49,8 +51,6 @@ class NodeFactory:
         'coefficients': CoefficientsNode,
         'quadratic_fit': QuadraticFitNode,
         #####
-        'category_auxiliary': CategoryAuxiliaryNode,
-        #####
         'absolute_lowpass_filter': AbsoluteLowPassFilterNode,
         'auto_levels': AutoLevelsNode,
         'tone_curve': ToneCurveNode,
@@ -58,6 +58,9 @@ class NodeFactory:
         'chroma_denoise': ChromaDenoiseNode,
         'wavelet_denoise': WaveletDenoiseNode,
         'image_alignment': ImageAlignmentNode,
+        #####
+        'category_auxiliary': CategoryAuxiliaryNode,
+        'pass': PassNode,
         #####
         'file_reader': FileReaderNode,
         'file_writer': FileWriterNode,
@@ -81,8 +84,6 @@ class NodeFactory:
         ('coefficients'           , '係数'),
         ('quadratic_fit'          , '2次関数近似'),
         ('separator'              , None),
-        ('category_auxiliary'     , '補正用に変換'),
-        ('separator'              , None),
         ('absolute_lowpass_filter', '絶対値(低通)(N:N)'),
         ('auto_levels'            , '自動レベル(N:N)'),
         ('tone_curve'             , 'トーンカーブ(N:N)'),
@@ -90,6 +91,9 @@ class NodeFactory:
         ('chroma_denoise'         , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
         ('wavelet_denoise'        , 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),
         ('image_alignment'        , '画像位置合わせ(N:N)'),
+        ('separator'              , None),
+        ('category_auxiliary'     , '補正値として使う'),
+        ('pass'                   , '通点'),
         ('separator'              , None),
         ('file_reader'            , 'ファイル読み込み(0:N)'),
         ('file_writer'            , 'ファイル書き出し(N:0)'),

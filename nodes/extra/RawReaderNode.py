@@ -269,12 +269,12 @@ class RawReaderNode(BaseReaderNode):
             futures = []
             
             # ブロック単位で並列処理
-            for c in range(planeCount):
-                channelData = rgb[:, :, c]
+            for planeIndex in range(planeCount):
+                channelData = rgb[:, :, planeIndex]
                 
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutor.submit(self._processBlock, channelData, c, x, y, height, width)
+                        future = ProcessExecutor.submit(self._processBlock, channelData, planeIndex, x, y, height, width)
                         futures.append(future)
             
             # 全ブロックの処理完了を待ちながら進捗報告
@@ -286,13 +286,13 @@ class RawReaderNode(BaseReaderNode):
             
             return outputFlowData
     
-    def _processBlock(self, channelData, c, x, y, height, width):
+    def _processBlock(self, channelData, planeIndex, x, y, height, width):
         """単一ブロックの処理"""
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         
         blockData = channelData[y:endY, x:endX]
-        return DataBlock(c, x, y, blockData)
+        return DataBlock(blockData, planeIndex, x, y)
     
     def getFileInfo(self, filePath):
         """RAWファイルの情報を取得（生データ）"""

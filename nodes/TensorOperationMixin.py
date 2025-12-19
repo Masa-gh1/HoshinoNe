@@ -28,7 +28,7 @@ class TensorOperationMixin:
         
         # 最初のtensorのデータをコピー
         for block in tensorDatas[0].iterateBlocks():
-            newBlock = DataBlock(block.planeIndex, block.x, block.y, block.data.copy())
+            newBlock = DataBlock(block.data.copy(), block.planeIndex, block.x, block.y)
             result.setBlock(newBlock)
         
         # 残りのtensorを順次適用
@@ -64,7 +64,7 @@ class TensorOperationMixin:
         return min(v1, v2, v3, v4, v5), max(v1, v2, v3, v4, v5)
     
     @classmethod
-    def calculateTensorBlock(cls, tensorData, planeIdx, blockX, blockY, blockShape, defaultValue=0.0):
+    def calculateTensorBlock(cls, tensorData, planeIdx, x, y, blockShape, defaultValue=0.0):
         """テンソルデータからブロック内の各座標に対応する値を計算"""
         width, height = tensorData.getDimensions()
         planeCount = tensorData.getPlaneCount()
@@ -93,8 +93,8 @@ class TensorOperationMixin:
         blockHeight, blockWidth = blockShape
         y_indices = nh.arange(blockHeight).reshape(-1, 1)
         x_indices = nh.arange(blockWidth)
-        y_coords = blockY + np.broadcast_to(y_indices, (blockHeight, blockWidth))
-        x_coords = blockX + np.broadcast_to(x_indices, (blockHeight, blockWidth))
+        y_coords = y + np.broadcast_to(y_indices, (blockHeight, blockWidth))
+        x_coords = x + np.broadcast_to(x_indices, (blockHeight, blockWidth))
         
         # numpy配列演算で多項式計算
         result = nh.zeros(blockShape)

@@ -165,13 +165,13 @@ class LazyOperations:
         }
     
     @staticmethod
-    def transform(flowData, planeIndex, blockX, blockY, transformMatrix):
+    def transform(flowData, planeIndex, x, y, transformMatrix):
         """アフィン変換"""
         import cv2
         
         # 出力ブロックの中心位置
-        outputCenterX = blockX * BLOCK_SIZE + BLOCK_SIZE // 2
-        outputCenterY = blockY * BLOCK_SIZE + BLOCK_SIZE // 2
+        outputCenterX = x + BLOCK_SIZE // 2
+        outputCenterY = y + BLOCK_SIZE // 2
         
         # 逆変換行列で入力位置を計算
         matrix2x3 = transformMatrix[:2, :] if transformMatrix.shape == (3, 3) else transformMatrix
@@ -199,7 +199,7 @@ class LazyOperations:
         margin = (extended_data.shape[0] - BLOCK_SIZE) // 2
         result = transformed_extended[margin:margin+BLOCK_SIZE, margin:margin+BLOCK_SIZE]
         
-        return DataBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, result)
+        return DataBlock(result, planeIndex, x, y)
     
     @staticmethod
     def _getExtendedBlockData(flowData, planeIndex, x, y, margin=64):
@@ -233,17 +233,17 @@ class LazyOperations:
         return extended_data
     
     @staticmethod
-    def scale(flowData, planeIndex, blockX, blockY, scaleValue):
+    def scale(flowData, planeIndex, x, y, scaleValue):
         """スケール変換"""
-        block = flowData.getBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE)
+        block = flowData.getBlock(planeIndex, x, y)
         if not block or block.data is None:
             return None
-        return DataBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, block.data * scaleValue)
+        return DataBlock(block.data * scaleValue, planeIndex, x, y)
     
     @staticmethod
-    def offset(flowData, planeIndex, blockX, blockY, offsetValue):
+    def offset(flowData, planeIndex, x, y, offsetValue):
         """オフセット加算"""
-        block = flowData.getBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE)
+        block = flowData.getBlock(planeIndex, x, y)
         if not block or block.data is None:
             return None
-        return DataBlock(planeIndex, blockX * BLOCK_SIZE, blockY * BLOCK_SIZE, block.data + offsetValue)
+        return DataBlock(block.data + offsetValue, planeIndex, x, y)
