@@ -4,9 +4,9 @@ powershell -command "exit [DateTime]::Today.ToString('yyyyMMdd')"
 set VERSION_DATE=%ERRORLEVEL%
 echo VERSION_DATE = %VERSION_DATE% > version.py
 
-pyinstaller --onefile --windowed FlowEditor.py
+pyinstaller --onefile --windowed HoshinoNe.py
 
-rename dist\FlowEditor.exe FlowEditor_%VERSION_DATE%.exe
+rename dist\HoshinoNe.exe HoshinoNe_%VERSION_DATE%.exe
 
 copy LICENSE          dist\
 copy NOTICE.txt       dist\

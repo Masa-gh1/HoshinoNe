@@ -11,6 +11,7 @@ PyWavelets==1.9.0  # ウェーブレット変換（WaveletDenoiseNode）
 scikit-image==0.25.2  # 画像処理・モルフォロジー（WaveletDenoiseNode）
 opencv-python==4.11.0.86  # 画像処理・位置合わせ（ImageAlignmentNode）
 ExifRead==3.5.1  # EXIF情報読み込み補完（utils/exif_helper.py）
+pyinstaller==6.16.0 # 実行ファイル作成
 
 # 依存によるインストール
 astropy-iers-data==0.2025.10.27.0.39.10

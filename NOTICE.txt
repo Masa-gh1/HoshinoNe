@@ -1,4 +1,4 @@
-FlowEditor - Third-Party Software Notices
+ほしのね - Third-Party Software Notices
 
 This software includes the following third-party components:
 
@@ -61,5 +61,11 @@ ExifRead (3.5.1)
 Copyright (c) 2002-2023 Gene Cash, Ianaré Sévi
 License: BSD 2-Clause License
 Website: https://github.com/ianare/exif-py
+
+================================================================================
+PyInstaller (6.16.0)
+Copyright (c) 2005-2023 PyInstaller Development Team
+License: GPL 2.0 License with exception
+Website: https://pyinstaller.org/
 
 For complete license texts, see the respective project websites.

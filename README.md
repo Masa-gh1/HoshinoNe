@@ -1,4 +1,4 @@
-# FlowEditor
+# ほしのね
 
 Visual Flow-based Image Processing Tool
 

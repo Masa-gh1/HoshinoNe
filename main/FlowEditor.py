@@ -35,9 +35,10 @@ NodeExecutor = ThreadPoolExecutor(max_workers=MAX_NODE_WORKERS)
 atexit.register(NodeExecutor.shutdown)
 
 class FlowEditor:
-    def __init__(self, root):
+    def __init__(self, root, text):
         self.root = root
-        self.root.title("Flow Editor - " + VERSION)
+        self.text = text
+        self.root.title(f"{self.text} - {VERSION}")
         self.nodes = []
         self.reprocessingHighlights = []
         self.selectedNode = None
@@ -555,7 +556,7 @@ class FlowEditor:
             
             # ウィンドウタイトルにファイル名を追記
             fileName = os.path.basename(filePath)
-            self.root.title(f"Flow Editor - {fileName}")
+            self.root.title(f"{self.text} - {fileName}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
@@ -611,7 +612,7 @@ class FlowEditor:
             
             # ウィンドウタイトルにファイル名を追記
             fileName = os.path.basename(filePath)
-            self.root.title(f"Flow Editor - {fileName}")
+            self.root.title(f"{self.text} - {fileName}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
