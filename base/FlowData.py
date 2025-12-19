@@ -34,7 +34,7 @@ class FlowData:
         self._minValue = None
         self._percentileCache = {} # パーセンタイルキャッシュ
         self._histogramCache = {}  # ヒストグラムキャッシュ
-        self._highResHistCache = {}  # 高解像度ヒストグラムキャッシュ
+        self._highResHistCache = None  # 高解像度ヒストグラムキャッシュ
         self._existingBlocks = set()  # 保存済みブロックの記録 上書きチェックなどに使用する
         
         if not NUMPY_AVAILABLE:
@@ -71,7 +71,7 @@ class FlowData:
                 # データ更新時にキャッシュをクリア
                 self._percentileCache.clear()
                 self._histogramCache.clear()
-                self._highResHistCache.clear()
+                self._highResHistCache = None
     
     def setDimensions(self, width, height):
         """次元を設定"""
@@ -182,19 +182,16 @@ class FlowData:
         """最小値を取得"""
         return self._minValue
     
-    def _getHighResHistograms(self, maxPlanes=None):
+    def _getHighResHistograms(self):
         """高解像度ヒストグラムを取得（中間生成物キャッシュ）"""
-        if maxPlanes in self._highResHistCache:
-            return self._highResHistCache[maxPlanes]
+        if self._highResHistCache:
+            return self._highResHistCache
         
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         
-        if maxPlanes is None:
-            maxPlanes = planeCount
-        
         planeHistograms = []
-        for planeIndex in range(min(planeCount, maxPlanes)):
+        for planeIndex in range(planeCount):
             blockArrays = []
             for y in range(0, height, BLOCK_SIZE):
                 for x in range(0, width, BLOCK_SIZE):
@@ -202,10 +199,15 @@ class FlowData:
                     if block and block.data is not None:
                         blockArrays.append(block.data.flatten())
             
-            if blockArrays:
+            if not blockArrays:
+                planeHistograms.append(None)
+            else:
                 planeData = np.concatenate(blockArrays)
                 validData = planeData[~np.isnan(planeData)]
-                if len(validData) > 0:
+
+                if len(validData) <= 0:
+                    planeHistograms.append(None)
+                else:
                     min_val, max_val = np.min(validData), np.max(validData)
                     
                     # linear bins
@@ -230,12 +232,8 @@ class FlowData:
                         'hist': hist,
                         'edges': merged_edges
                     })
-                else:
-                    planeHistograms.append(None)
-            else:
-                planeHistograms.append(None)
         
-        self._highResHistCache[maxPlanes] = planeHistograms
+        self._highResHistCache = planeHistograms
         return planeHistograms
     
     def getPercentile(self, percentile):
@@ -245,7 +243,7 @@ class FlowData:
         
         # 高解像度ヒストグラムで全プレーンを取得
         planeCount = self.getPlaneCount()
-        planeHistograms = self._getHighResHistograms(planeCount)
+        planeHistograms = self._getHighResHistograms()
         
         if planeHistograms and any(hist is not None for hist in planeHistograms):
             # 全プレーンのビン中央値を収集
@@ -290,7 +288,7 @@ class FlowData:
         planeCount = self.getPlaneCount()
         
         # 高解像度ヒストグラムでプレーン別ヒストグラムを計算
-        planeHighResHists = self._getHighResHistograms(planeCount)
+        planeHighResHists = self._getHighResHistograms()
         
         planeHistograms = []
         for planeIdx in range(planeCount):

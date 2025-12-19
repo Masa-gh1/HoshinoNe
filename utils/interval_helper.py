@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import numpy as np
+from config import DEFAULT_BLOCK_TYPE
+
 def createHalfOpenEnd(minValue, maxValue):
     """
     半開区間 [min_value, end) の終端値を作成
@@ -18,9 +21,11 @@ def createHalfOpenEnd(minValue, maxValue):
     Returns:
         半開区間の終端値（排他的上限）
     """
-    if maxValue == int(maxValue) and minValue == int(minValue):
-        # 整数値の場合は +1（オーバーフロー対策）
+    if maxValue is None:
+        return None
+    elif maxValue == int(maxValue) and minValue == int(minValue):
+        # 整数値と判断できる場合は +1
         return float(maxValue) + 1.0
     else:
         # 浮動小数点値の場合は微小値を加算
-        return float(maxValue) + (maxValue - minValue) * 0.001
+        return float(maxValue) + maxValue * np.finfo(DEFAULT_BLOCK_TYPE).eps

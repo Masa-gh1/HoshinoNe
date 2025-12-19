@@ -247,18 +247,18 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         tk.Label(frame, text="分解レベル:").pack(anchor="w", pady=(10,0))
         self.levelsVar = tk.IntVar(value=self.node.levels)
         # 推奨最大レベルを計算（一般的な画像サイズを想定）
-        max_level = min(6, int(np.log2(512 // 8)))
+        max_level = min(8, int(np.log2(4096 // 8)))
         self.levelsScale = tk.Scale(frame, from_=1, to=max_level, orient=tk.HORIZONTAL, variable=self.levelsVar)
         self.levelsScale.pack(fill=tk.X)
         
         # レベル情報ラベル
-        self.levelInfoLabel = tk.Label(frame, text=f"推奨最大: {max_level} (実際の画像サイズに依存)", font=("Arial", 8), fg="gray")
+        self.levelInfoLabel = tk.Label(frame, text=f"推奨: 512x512:3-4, 1024x1024:4-5, 4096x4096:5-6", font=("Arial", 8), fg="gray")
         self.levelInfoLabel.pack(anchor="w")
         
         # ノイズ除去強度
         tk.Label(frame, text="ノイズ除去強度:").pack(anchor="w", pady=(10,0))
         self.sigmaVar = tk.DoubleVar(value=self.node.sigma)
-        tk.Scale(frame, from_=0.01, to=5.0, resolution=0.01, orient=tk.HORIZONTAL, variable=self.sigmaVar).pack(fill=tk.X)
+        tk.Scale(frame, from_=0.01, to=10.0, resolution=0.01, orient=tk.HORIZONTAL, variable=self.sigmaVar).pack(fill=tk.X)
         
         # 星保護設定
         tk.Label(frame, text="星保護設定:", font=("Arial", 10, "bold")).pack(anchor="w", pady=(20,5))
@@ -268,7 +268,7 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         
         tk.Label(frame, text="星検出閾値 (パーセンタイル):").pack(anchor="w", pady=(10,0))
         self.thresholdVar = tk.DoubleVar(value=self.node.star_threshold)
-        tk.Scale(frame, from_=90.0, to=99.9, resolution=0.1, orient=tk.HORIZONTAL, variable=self.thresholdVar).pack(fill=tk.X)
+        tk.Scale(frame, from_=80.0, to=99.9, resolution=0.1, orient=tk.HORIZONTAL, variable=self.thresholdVar).pack(fill=tk.X)
         
         tk.Label(frame, text="保護半径 (ピクセル):").pack(anchor="w", pady=(10,0))
         self.radiusVar = tk.IntVar(value=self.node.protection_radius)

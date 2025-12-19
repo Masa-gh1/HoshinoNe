@@ -90,18 +90,26 @@ class ImageReaderNode(BaseReaderNode):
         
         # DateTimeを文字列化
         headers_exif = None
+        orgDateTime = None
         if exif_info:
             headers_exif = dict(exif_info)
             if 'DateTime' in headers_exif:
                 dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
-                headers_exif['DateTime'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+                orgDateTime = dt.strftime("%Y-%m-%d %H:%M:%S")
+                headers_exif['DateTime'] = orgDateTime
         
         headers = {
             'type': 'image',
             'mode': img.mode,
+            'width': width,
+            'height': height,
             'planes': plane_names,
+            'datetime': orgDateTime,
             'display_levels': display_levels,
+            'source_file': filePath,
         }
+
+        # EXIF 追加
         if headers_exif:
             headers['exif'] = headers_exif
         

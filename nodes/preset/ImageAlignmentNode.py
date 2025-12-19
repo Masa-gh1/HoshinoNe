@@ -929,70 +929,74 @@ class LazyAlignmentOperations:
         min_block_y = max(min_block_y, 0)
         max_block_y = min(max_block_y, orig_height)
 
-        # 必要な範囲の部分画像を構築
-        region_width  = max_block_x - min_block_x
-        region_height = max_block_y - min_block_y
-        region_image = nh.nans((region_height, region_width))
-        
-        # 必要なブロックを取得して部分画像に配置
-        for by in range(min_block_y, max_block_y, BLOCK_SIZE):
-            for bx in range(min_block_x, max_block_x, BLOCK_SIZE):
-                block = flowData.getBlock(planeIndex, bx, by)
-                if block and block.data is not None:
-                    if len(block.data.shape) == 3:
-                        block_data = block.data[:, :, 0]
-                    else:
-                        block_data = block.data
-                    
-                    # 部分画像内の位置に配置
-                    rel_x = bx - min_block_x
-                    rel_y = by - min_block_y
-                    h, w = block_data.shape
-                    region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
-        
-        # 変換行列を作成（部分画像座標系）
-        if rotation != 0:
-            # 元画像の中心を部分画像座標系に変換
-            orig_center_x = orig_width  / 2 - min_block_x
-            orig_center_y = orig_height / 2 - min_block_y
-            M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), rotation, 1.0)
-            M[0, 2] += dx
-            M[1, 2] += dy
+        if max_block_x <= min_block_x or max_block_y <= min_block_y:
+            # 移動元が画像外なので NaN を返す
+            return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
         else:
-            M = np.float64([[1, 0, dx], [0, 1, dy]])
-        
-        # 変換後に必要なサイズを計算
-        transform_output_width = min(region_width, new_width - (x - min_block_x))
-        transform_output_height = min(region_height, new_height - (y - min_block_y))
-        
-        # 部分画像を変換
-        transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
-                                          flags=cv2.INTER_LINEAR,
-                                          borderMode=cv2.BORDER_CONSTANT,
-                                          borderValue=np.nan)
-        
-        # 出力ブロック位置を部分画像座標系に変換
-        output_x_in_region = x - min_block_x
-        output_y_in_region = y - min_block_y
-        
-        # 画面端での適切なブロックサイズを計算
-        actual_block_width = min(BLOCK_SIZE, new_width - x)
-        actual_block_height = min(BLOCK_SIZE, new_height - y)
-        
-        # 出力ブロック部分を切り出し
-        end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
-        end_x = min(output_x_in_region + actual_block_width, transformed_region.shape[1])
-        
-        output_block = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
-        
-        # サイズが足りない場合はNaNでパディング
-        if output_block.shape != (actual_block_height, actual_block_width):
-            padded_block = nh.nans((actual_block_height, actual_block_width))
-            h, w = output_block.shape
-            padded_block[:h, :w] = output_block
-            output_block = padded_block
-        
-        return DataBlock(output_block, planeIndex, x, y)
+            # 移動に必要な範囲の部分画像を構築
+            region_width  = max(x+BLOCK_SIZE, max_block_x) - min(x, min_block_x)
+            region_height = max(y+BLOCK_SIZE, max_block_y) - min(y, min_block_y)
+            region_image = nh.nans((region_height, region_width))
+            
+            # 必要なブロックを取得して部分画像に配置
+            for by in range(min_block_y, max_block_y, BLOCK_SIZE):
+                for bx in range(min_block_x, max_block_x, BLOCK_SIZE):
+                    block = flowData.getBlock(planeIndex, bx, by)
+                    if block and block.data is not None:
+                        if len(block.data.shape) == 3:
+                            block_data = block.data[:, :, 0]
+                        else:
+                            block_data = block.data
+                        
+                        # 部分画像内の位置に配置
+                        rel_x = bx - min_block_x
+                        rel_y = by - min_block_y
+                        h, w = block_data.shape
+                        region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
+            
+            # 変換行列を作成（部分画像座標系）
+            if rotation != 0:
+                # 元画像の中心を部分画像座標系に変換
+                orig_center_x = orig_width  / 2 - min_block_x
+                orig_center_y = orig_height / 2 - min_block_y
+                M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), rotation, 1.0)
+                M[0, 2] += dx
+                M[1, 2] += dy
+            else:
+                M = np.float64([[1, 0, dx], [0, 1, dy]])
+            
+            # 変換後に必要なサイズを計算
+            transform_output_width = min(region_width, new_width - (x - min_block_x))
+            transform_output_height = min(region_height, new_height - (y - min_block_y))
+            
+            # 部分画像を変換
+            transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
+                                            flags=cv2.INTER_LINEAR,
+                                            borderMode=cv2.BORDER_CONSTANT,
+                                            borderValue=np.nan)
+            
+            # 出力ブロック位置を部分画像座標系に変換
+            output_x_in_region = x - min_block_x
+            output_y_in_region = y - min_block_y
+            
+            # 画面端での適切なブロックサイズを計算
+            actual_block_width = min(BLOCK_SIZE, new_width - x)
+            actual_block_height = min(BLOCK_SIZE, new_height - y)
+            
+            # 出力ブロック部分を切り出し
+            end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
+            end_x = min(output_x_in_region + actual_block_width, transformed_region.shape[1])
+            
+            output_block = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
+            
+            # サイズが足りない場合はNaNでパディング
+            if output_block.shape != (actual_block_height, actual_block_width):
+                padded_block = nh.nans((actual_block_height, actual_block_width))
+                h, w = output_block.shape
+                padded_block[:h, :w] = output_block
+                output_block = padded_block
+            
+            return DataBlock(output_block, planeIndex, x, y)
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):

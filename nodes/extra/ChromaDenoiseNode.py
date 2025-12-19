@@ -30,9 +30,9 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         # デフォルト設定
         self.colorspace = "Lab"  # Lab, YUV, HSV
         self.chroma_strength = 2.0  # 色成分のノイズ除去強度
-        self.luma_strength = 0.5    # 輝度成分のノイズ除去強度
+        self.luma_strength = 0.2    # 輝度成分のノイズ除去強度
         self.preserve_edges = True  # エッジ保護
-        self.edge_threshold = 0.00001   # エッジ検出閾値
+        self.edge_threshold = 0.01  # エッジ検出閾値
         
         self.lastConfigHash = None
 
@@ -64,9 +64,9 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     def restore(self, nodeData):
         self.colorspace = nodeData.get("colorspace", "Lab")
         self.chroma_strength = nodeData.get("chroma_strength", 2.0)
-        self.luma_strength = nodeData.get("luma_strength", 0.5)
+        self.luma_strength = nodeData.get("luma_strength", 0.2)
         self.preserve_edges = nodeData.get("preserve_edges", True)
-        self.edge_threshold = nodeData.get("edge_threshold", 0.00001)
+        self.edge_threshold = nodeData.get("edge_threshold", 0.1)
         self.updateNodeText()
     
     def getColor(self):
@@ -225,8 +225,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         grad_y = sobel(luma, axis=0)
         gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
         # 正規化（最小値と最大値を使用）
-        min_val = gradient_magnitude.min()
-        max_val = gradient_magnitude.max()
+        min_val = np.nanmin(gradient_magnitude)
+        max_val = np.nanmax(gradient_magnitude)
         if max_val > min_val:
             gradient_magnitude = (gradient_magnitude - min_val) / (max_val - min_val)
         

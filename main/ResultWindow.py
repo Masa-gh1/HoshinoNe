@@ -337,25 +337,31 @@ class ResultWindow(tk.Toplevel):
         # All levels
         minValue = flowData.getMinValue()
         maxValue = flowData.getMaxValue()
-        allLevelEnd = createHalfOpenEnd(minValue, maxValue) # 半開区間用の終端値を作成
+        endValue = createHalfOpenEnd(minValue, maxValue) # 半開区間用の終端値を作成
         
         content = []
         
-        text = "\n"
-        text += f"Mode: {mode}\n"
-        text += f"Planes: {', '.join(planes)}\n"
-        text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
-        text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
-        text += f"All levels: {minValue:.3f} - {allLevelEnd:.3f}\n"
-        
-        if 'reference_image_movement' in headers:
-            movement = headers['reference_image_movement']
-            movement_dx = movement["dx"]
-            movement_dy = movement["dy"]
-            movement_rot = movement["rotation"]
-            text += f"ref image movement: {movement_dx:.1f} px, {movement_dy:.1f} px, {movement_rot:.3f} degree\n"
-        
-        content.append(text)
+        # ヘッダ情報を作成
+        try:
+            text = "\n"
+            text += f"Mode: {mode}\n"
+            text += f"Planes: {', '.join(planes)}\n"
+            text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
+            text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
+            text += f"All levels: {minValue:.3f} - {endValue:.3f}\n"
+            
+            if 'reference_image_movement' in headers:
+                movement = headers['reference_image_movement']
+                movement_dx = movement["dx"]
+                movement_dy = movement["dy"]
+                movement_rot = movement["rotation"]
+                text += f"ref image movement: {movement_dx:.1f} px, {movement_dy:.1f} px, {movement_rot:.3f} degree\n"
+            
+            content.append(text)
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(tb,file=sys.stderr)
+            content.append(text + f"\nerror: {str(e)}\n")
         
         # ヒストグラムグラフを作成
         histogramImageKey = (flowData, self._x_scale_var.get(), self._y_scale_var.get())

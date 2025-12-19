@@ -26,6 +26,8 @@ from .preset.CoefficientsNode import CoefficientsNode
 from .basic.AbsoluteLowPassFilterNode import AbsoluteLowPassFilterNode
 from .preset.ImageAlignmentNode import ImageAlignmentNode
 from .preset.ToneCurveNode import ToneCurveNode
+from .preset.BayerUnpackSparseNode import BayerUnpackSparseNode
+from .preset.BayerUnpackDenseNode import BayerUnpackDenseNode
 
 from .extra.FileReaderNode import FileReaderNode
 from .extra.FileWriterNode import FileWriterNode
@@ -54,6 +56,8 @@ class NodeFactory:
         'absolute_lowpass_filter': AbsoluteLowPassFilterNode,
         'auto_levels': AutoLevelsNode,
         'tone_curve': ToneCurveNode,
+        'bayer_unpack_sparse': BayerUnpackSparseNode,
+        'bayer_unpack_dense': BayerUnpackDenseNode,
         #####
         'chroma_denoise': ChromaDenoiseNode,
         'wavelet_denoise': WaveletDenoiseNode,
@@ -87,6 +91,8 @@ class NodeFactory:
         ('absolute_lowpass_filter', '絶対値(低通)(N:N)'),
         ('auto_levels'            , '自動レベル(N:N)'),
         ('tone_curve'             , 'トーンカーブ(N:N)'),
+        ('bayer_unpack_sparse'    , 'ベイヤー分離(疎)(N:N)'),
+        ('bayer_unpack_dense'     , 'ベイヤー分離(密)(N:N)'),
         ('separator'              , None),
         ('chroma_denoise'         , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
         ('wavelet_denoise'        , 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),

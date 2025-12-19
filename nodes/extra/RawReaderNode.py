@@ -180,17 +180,6 @@ class RawReaderNode(BaseReaderNode):
         # ガンマ設定
         params.gamm = (float(self.gammaPower), float(self.gammaSlope))
         
-        # EXIF情報を取得
-        exif_info = getExif(filePath)
-        
-        # DateTimeを文字列化
-        headers_exif = None
-        if exif_info:
-            headers_exif = dict(exif_info)
-            if 'DateTime' in headers_exif:
-                dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
-                headers_exif['DateTime'] = dt.strftime("%Y-%m-%d %H:%M:%S")
-        
         with rawpy.imread(filePath) as raw:
             # ベイヤーパターン情報を取得
             raw_pattern = raw.raw_pattern
@@ -203,7 +192,7 @@ class RawReaderNode(BaseReaderNode):
                 for x in raw_pattern.flatten():
                     bayer_pattern += colorDesc[x]
             
-            # raw情報を構築
+            # raw情報を構築(raw.postprocess 後だと値が変化物がある)
             raw_headers = {
                 'raw_pattern'     : raw_pattern.tolist(),
                 'color_desc'      : color_desc.decode('ascii'),
@@ -232,9 +221,10 @@ class RawReaderNode(BaseReaderNode):
                 plane_names = ['Bayer']
                 rgb = bayer_data.reshape(height, width, 1)  # 3次元配列に変換
             else:
-                # 従来のRAW現像処理
+                # RAW現像処理
                 rgb = raw.postprocess(params)
                 height, width, planeCount = rgb.shape
+                bayer_pattern = None
                 
                 # mode と plane_names を動的に設定
                 if self.demosaicAlgorithm == "none" and planeCount == 4:
@@ -244,12 +234,26 @@ class RawReaderNode(BaseReaderNode):
                     mode = 'RGB'
                     plane_names = ['R', 'G', 'B'][:planeCount]
             
+            # EXIF情報を取得
+            exif_info = getExif(filePath)
+            
+            # DateTimeを文字列化
+            headers_exif = None
+            orgDateTime = None
+            if exif_info:
+                headers_exif = dict(exif_info)
+                if 'DateTime' in headers_exif:
+                    dt = datetime.datetime.fromtimestamp(headers_exif['DateTime'])
+                    orgDateTime = dt.strftime("%Y-%m-%d %H:%M:%S")
+                    headers_exif['DateTime'] = orgDateTime
+            
             headers = {
                 'type': 'image',
                 'mode': mode,
                 'width': width,
                 'height': height,
                 'planes': plane_names,
+                'datetime': orgDateTime,
                 'display_levels': display_levels,
                 'source_file': filePath,
                 'demosaic': self.demosaicAlgorithm,
@@ -257,8 +261,15 @@ class RawReaderNode(BaseReaderNode):
                 'white_balance': self.whiteBalance,
             }
             
-            if raw_headers:
-                headers['raw'] = raw_headers
+            # bayer 情報を追加
+            if bayer_pattern:
+                headers['bayer_pattern'] = bayer_pattern
+                headers['is_bayer'] = True
+            
+            # raw 情報追加
+            headers['raw'] = raw_headers
+            
+            # EXIF 追加
             if headers_exif:
                 headers['exif'] = headers_exif
             
@@ -513,5 +524,3 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
             self.updateFileList()
         except Exception as e:
             messagebox.showerror(f"{self.node.text} エラー", f"ソートに失敗しました: {str(e)}")
-
-

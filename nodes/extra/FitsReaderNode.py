@@ -20,6 +20,7 @@ from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
 from utils.ThreadPool import ProcessExecutor
+from utils.interval_helper import createHalfOpenEnd
 
 try:
     from astropy.io import fits
@@ -73,7 +74,7 @@ class FitsReaderNode(BaseReaderNode):
             # 各HDUを個別のFlowDataとして処理
             for hduIndex, hdu in enumerate(hdul):
                 data = hdu.data
-                header = hdu.header
+                hduHeader = hdu.header
                 
                 # データがないHDUはスキップ
                 if data is None:
@@ -83,30 +84,60 @@ class FitsReaderNode(BaseReaderNode):
                 if len(data.shape) < 2:
                     continue
             
+                # ベイヤー配列の判別
+                bayer_pattern = None
+                
+                # FITSヘッダーからベイヤー情報を取得
+                if 'BAYERPAT' in hduHeader:
+                    bayer_pattern = str(hduHeader['BAYERPAT']).upper()
+                elif 'COLORTYP' in hduHeader:
+                    colortyp = str(hduHeader['COLORTYP']).upper()
+                    if colortyp in ['RGGB', 'GRBG', 'GBRG', 'BGGR']:
+                        bayer_pattern = colortyp
+                    elif 'BAYER' in colortyp:
+                        # ベイヤーパターンを推定
+                        if 'PATTERN' in hduHeader:
+                            bayer_pattern = str(hduHeader['PATTERN']).upper()
+                        elif 'CFATYPE' in hduHeader:
+                            bayer_pattern = str(hduHeader['CFATYPE']).upper()
+                        elif 'XBAYROFF' in hduHeader and 'YBAYROFF' in hduHeader:
+                            x_off = int(hduHeader['XBAYROFF'])
+                            y_off = int(hduHeader['YBAYROFF'])
+                            patterns = {(0,0): 'RGGB', (1,0): 'GRBG', (0,1): 'GBRG', (1,1): 'BGGR'}
+                            bayer_pattern = patterns.get((x_off, y_off), 'RGGB')
+                        else:
+                            bayer_pattern = 'RGGB'  # デフォルト
+                
                 # 2D/3D画像データに対応
                 if len(data.shape) == 2:
-                    # グレースケール画像
                     height, width = data.shape
-                    channels = 1
-                    plane_names = ['L']
-                    mode = 'L'
+                    planeCount = 1
+                    
+                    if bayer_pattern:
+                        # ベイヤー配列データ
+                        plane_names = ['Bayer']
+                        mode = 'BAYER'
+                    else:
+                        # モノクロ画像
+                        plane_names = ['L']
+                        mode = 'L'
                 elif len(data.shape) == 3:
                     # カラー画像 (channels, height, width) または (height, width, channels)
                     if data.shape[0] <= 4:  # (channels, height, width)
-                        channels, height, width = data.shape
+                        planeCount, height, width = data.shape
                     else:  # (height, width, channels)
-                        height, width, channels = data.shape
+                        height, width, planeCount = data.shape
                         data = np.transpose(data, (2, 0, 1))  # (height, width, channels) -> (channels, height, width)
                     
-                    if channels == 3:
+                    if planeCount == 3:
                         plane_names = ['R', 'G', 'B']
                         mode = 'RGB'
-                    elif channels == 4:
+                    elif planeCount == 4:
                         plane_names = ['R', 'G', 'B', 'A']
                         mode = 'RGBA'
                     else:
-                        plane_names = [f'C{i}' for i in range(channels)]
-                        mode = f'FITS_{channels}C'
+                        plane_names = [f'C{i}' for i in range(planeCount)]
+                        mode = f'FITS_{planeCount}C'
                 else:
                     raise Exception(f"2D/3D画像データのみ対応しています (現在: {len(data.shape)}D)")
                 
@@ -118,24 +149,24 @@ class FitsReaderNode(BaseReaderNode):
                 elif data.dtype == np.int16:
                     display_levels = {'min': -32768, 'exclusive_upper': 32768}
                 elif data.dtype == np.int32:
-                    display_levels = {'min': int(data.min()), 'exclusive_upper': int(data.max()) + 1}
+                    display_levels = {'min': int(np.nanmin(data)), 'exclusive_upper': int(createHalfOpenEnd(np.nanmin(data),np.nanmax(data)))}
                 elif data.dtype in [np.float32, np.float64]:
-                    display_levels = {'min': float(data.min()), 'exclusive_upper': float(data.max())}
+                    display_levels = {'min': float(np.nanmin(data)), 'exclusive_upper': float(createHalfOpenEnd(np.nanmin(data),np.nanmax(data)))}
                 else:
-                    display_levels = {'min': float(data.min()), 'exclusive_upper': float(data.max())}
+                    display_levels = {'min': float(np.nanmin(data)), 'exclusive_upper': float(createHalfOpenEnd(np.nanmin(data),np.nanmax(data)))}
                 
                 # FITSヘッダー情報を抽出
                 fits_header = {}
-                for key, value in header.items():
+                for key, value in hduHeader.items():
                     if key and value is not None:
                         fits_header[key] = str(value)
                 
                 # 観測日時を取得
-                obs_date = None
+                date_obs = None
                 for date_key in ['DATE-OBS', 'DATE', 'DATEOBS']:
-                    if date_key in header:
+                    if date_key in hduHeader:
                         try:
-                            obs_date = str(header[date_key])
+                            date_obs = str(hduHeader[date_key])
                             break
                         except:
                             continue
@@ -143,17 +174,36 @@ class FitsReaderNode(BaseReaderNode):
                 headers = {
                     'type': 'image',
                     'mode': mode,
+                    'width': width,
+                    'height': height,
                     'planes': plane_names,
+                    'datetime': date_obs,
                     'display_levels': display_levels,
                     'source_file': filePath,
-                    'hdu_index': hduIndex,
-                    'data_type': str(data.dtype),
-                    'channels': channels,
-                    'fits_header': fits_header,
+                    'context_index': hduIndex,
                 }
+
+                # bayer 情報を追加
+                if bayer_pattern:
+                    headers['bayer_pattern'] = bayer_pattern
+                    headers['is_bayer'] = True
                 
-                if obs_date:
-                    headers['obs_date'] = obs_date
+                # FITS 情報追加
+                headers['fits'] = fits_header
+
+                # EXIF 追加
+                headers['exif'] = {
+                    'Make': str(hduHeader.get('ORIGIN', '')),
+                    'Model': str(hduHeader.get('TELESCOP', '')),
+                    'ImageWidth': int(hduHeader.get('NAXIS1', 0)),
+                    'ImageLength': int(hduHeader.get('NAXIS2', 0)),
+                    'LensModel': str(hduHeader.get('CAMERA', '')),
+                    'FocalLength': float(hduHeader.get('FOCALLEN', 0)),
+                    'FNumber': 0,
+                    'ExposureTime': float(hduHeader.get('EXPTIME', 0)),
+                    'ISOSpeedRatings': 0,
+                    'DateTime': str(hduHeader.get('DATE-OBS', ''))
+                }
                 
                 flowData = FlowData(headers)
                 flowData.setDimensions(width, height)
@@ -162,7 +212,7 @@ class FitsReaderNode(BaseReaderNode):
                 # ブロック単位で並列処理
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutor.submit(self._processBlock, data, x, y, channels, width, height)
+                        future = ProcessExecutor.submit(self._processBlock, data, x, y, planeCount, width, height)
                         futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待ちながら進捗報告
