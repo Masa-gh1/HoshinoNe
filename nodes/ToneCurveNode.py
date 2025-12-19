@@ -88,6 +88,13 @@ class ToneCurveNode(NNBlockOperationNode):
         # DataBlockから実際のデータを取得
         data = np.array(block.data, dtype=np.float64)
         
+        # NaN値を事前に検出・分離
+        nan_mask = np.isnan(data)
+        if np.all(nan_mask):
+            # 全てNaNの場合はそのまま返す
+            from base.DataBlock import DataBlock
+            return DataBlock(block.planeIndex, block.x, block.y, data.tolist())
+        
         # トーンカーブ関数を作成
         sortedPoints = sorted(self.controlPoints, key=lambda p: p[0])
         xValues = [p[0] for p in sortedPoints]
@@ -104,37 +111,47 @@ class ToneCurveNode(NNBlockOperationNode):
             # 選択された境界条件でスプライン
             curveFunction = CubicSpline(normalizedX, yValues, bc_type=self.boundaryCondition, extrapolate=True)
         
-        # 入力範囲 [inputMin, inputEnd) を [0.0, 1.0) に正規化
-        normalizedData = (data - self.inputMin) / (self.inputEnd - self.inputMin)
+        # 結果データを初期化（NaN値を保持）
+        resultData = data.copy()
         
-        # 始点・終点の外側をクランプ
-        sortedPoints = sorted(self.controlPoints, key=lambda p: p[0])
-        startPoint = sortedPoints[0]
-        endPoint = sortedPoints[-1]
-        
-        # 範囲外の処理
-        mask_below = data < startPoint[0]
-        mask_above = data > endPoint[0]
-        mask_inside = ~(mask_below | mask_above)
-        
-        # 結果データを初期化
-        adjustedData = np.zeros_like(normalizedData)
-        
-        # 範囲内のデータにトーンカーブを適用
-        if np.any(mask_inside):
-            adjustedData[mask_inside] = curveFunction(normalizedData[mask_inside])
-        
-        # 範囲外のデータを始点・終点の値に設定
-        if np.any(mask_below):
-            adjustedData[mask_below] = startPoint[1]
-        if np.any(mask_above):
-            adjustedData[mask_above] = endPoint[1]
-        
-        # [0.0, 1.0) から出力範囲 [outputMin, outputEnd) に変換
-        resultData = adjustedData * (self.outputEnd - self.outputMin) + self.outputMin
-        
-        # 出力範囲内にクリップ
-        resultData = np.clip(resultData, self.outputMin, self.outputEnd)
+        # 有効値（NaN以外）のみ処理
+        valid_mask = ~nan_mask
+        if np.any(valid_mask):
+            valid_data = data[valid_mask]
+            
+            # 入力範囲 [inputMin, inputEnd) を [0.0, 1.0) に正規化
+            normalizedData = (valid_data - self.inputMin) / (self.inputEnd - self.inputMin)
+            
+            # 始点・終点の外側をクランプ
+            startPoint = sortedPoints[0]
+            endPoint = sortedPoints[-1]
+            
+            # 範囲外の処理
+            mask_below = valid_data < startPoint[0]
+            mask_above = valid_data > endPoint[0]
+            mask_inside = ~(mask_below | mask_above)
+            
+            # 結果データを初期化
+            adjustedData = np.zeros_like(normalizedData)
+            
+            # 範囲内のデータにトーンカーブを適用
+            if np.any(mask_inside):
+                adjustedData[mask_inside] = curveFunction(normalizedData[mask_inside])
+            
+            # 範囲外のデータを始点・終点の値に設定
+            if np.any(mask_below):
+                adjustedData[mask_below] = startPoint[1]
+            if np.any(mask_above):
+                adjustedData[mask_above] = endPoint[1]
+            
+            # [0.0, 1.0) から出力範囲 [outputMin, outputEnd) に変換
+            processedData = adjustedData * (self.outputEnd - self.outputMin) + self.outputMin
+            
+            # 出力範囲内にクリップ
+            processedData = np.clip(processedData, self.outputMin, self.outputEnd)
+            
+            # 有効値のみ結果に反映
+            resultData[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
         from base.DataBlock import DataBlock

@@ -65,11 +65,14 @@ class ImageWriterNode(BaseWriterNode):
                             min_val = display_levels.get('min', 0.0)
                             max_val = display_levels.get('exclusive_upper', 1.0)
                             
-                            # 入力範囲から[0, 255]へのスケーリング
+                            # 入力範囲から[0, 255]へのスケーリング（NaNは0に変換）
                             scale = 255.0 / (max_val - min_val) if max_val != min_val else 255.0
-                            imgArray[blockY:endY, blockX:endX, 0] = np.clip(np.round((r_block.data[:endY-blockY, :endX-blockX] - min_val) * scale), 0, 255).astype(np.uint8)
-                            imgArray[blockY:endY, blockX:endX, 1] = np.clip(np.round((g_block.data[:endY-blockY, :endX-blockX] - min_val) * scale), 0, 255).astype(np.uint8)
-                            imgArray[blockY:endY, blockX:endX, 2] = np.clip(np.round((b_block.data[:endY-blockY, :endX-blockX] - min_val) * scale), 0, 255).astype(np.uint8)
+                            r_data = np.nan_to_num((r_block.data[:endY-blockY, :endX-blockX] - min_val) * scale, nan=0.0)
+                            g_data = np.nan_to_num((g_block.data[:endY-blockY, :endX-blockX] - min_val) * scale, nan=0.0)
+                            b_data = np.nan_to_num((b_block.data[:endY-blockY, :endX-blockX] - min_val) * scale, nan=0.0)
+                            imgArray[blockY:endY, blockX:endX, 0] = np.clip(np.round(r_data), 0, 255).astype(np.uint8)
+                            imgArray[blockY:endY, blockX:endX, 1] = np.clip(np.round(g_data), 0, 255).astype(np.uint8)
+                            imgArray[blockY:endY, blockX:endX, 2] = np.clip(np.round(b_data), 0, 255).astype(np.uint8)
                         
                         self.reportBlockProgress(context)
                 
@@ -103,11 +106,14 @@ class ImageWriterNode(BaseWriterNode):
                             min_val = display_levels.get('min', 0.0)
                             max_val = display_levels.get('exclusive_upper', 1.0)
                             
-                            # 入力範囲から[0, 255]へのスケーリング
+                            # 入力範囲から[0, 255]へのスケーリング（NaNは0に変換）
                             scale = 255.0 / (max_val - min_val) if max_val != min_val else 255.0
-                            imgArray[blockY:endY, blockX:endX, 0] = np.clip(np.round((r_block.data[:endY-blockY, :endX-blockX] - min_val) * scale), 0, 255).astype(np.uint8)
-                            imgArray[blockY:endY, blockX:endX, 1] = np.clip(np.round((g_avg - min_val) * scale), 0, 255).astype(np.uint8)
-                            imgArray[blockY:endY, blockX:endX, 2] = np.clip(np.round((b_block.data[:endY-blockY, :endX-blockX] - min_val) * scale), 0, 255).astype(np.uint8)
+                            r_data = np.nan_to_num((r_block.data[:endY-blockY, :endX-blockX] - min_val) * scale, nan=0.0)
+                            g_data = np.nan_to_num((g_avg - min_val) * scale, nan=0.0)
+                            b_data = np.nan_to_num((b_block.data[:endY-blockY, :endX-blockX] - min_val) * scale, nan=0.0)
+                            imgArray[blockY:endY, blockX:endX, 0] = np.clip(np.round(r_data), 0, 255).astype(np.uint8)
+                            imgArray[blockY:endY, blockX:endX, 1] = np.clip(np.round(g_data), 0, 255).astype(np.uint8)
+                            imgArray[blockY:endY, blockX:endX, 2] = np.clip(np.round(b_data), 0, 255).astype(np.uint8)
                         
                         self.reportBlockProgress(context)
                 
@@ -134,9 +140,10 @@ class ImageWriterNode(BaseWriterNode):
                             min_val = display_levels.get('min', 0.0)
                             max_val = display_levels.get('exclusive_upper', 1.0)
                             
-                            # 入力範囲から[0, 255]へのスケーリング
+                            # 入力範囲から[0, 255]へのスケーリング（NaNは0に変換）
                             scale = 255.0 / (max_val - min_val) if max_val != min_val else 255.0
-                            imgArray[blockY:endY, blockX:endX] = np.clip(np.round((block.data[:endY-blockY, :endX-blockX] - min_val) * scale), 0, 255).astype(np.uint8)
+                            data = np.nan_to_num((block.data[:endY-blockY, :endX-blockX] - min_val) * scale, nan=0.0)
+                            imgArray[blockY:endY, blockX:endX] = np.clip(np.round(data), 0, 255).astype(np.uint8)
                         
                         self.reportBlockProgress(context)
                 

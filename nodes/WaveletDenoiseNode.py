@@ -101,44 +101,60 @@ class WaveletDenoiseNode(NNBlockOperationNode):
         
         data = np.array(block.data, dtype=np.float64)
         
-        # 星マスクを作成（星保護が有効な場合）
-        star_mask = None
-        if self.star_protection:
-            star_mask = self._create_star_mask(data)
+        # NaN値を事前に検出
+        nan_mask = np.isnan(data)
+        if np.all(nan_mask):
+            return block  # 全てNaNの場合はそのまま返す
         
-        # 適切な分解レベルを計算
-        max_levels = self._calculate_max_levels(data.shape)
-        actual_levels = min(self.levels, max_levels)
+        # 結果を初期化（NaN値を保持）
+        result = data.copy()
         
-        # ウェーブレット変換
-        coeffs = pywt.wavedec2(data, self.wavelet, level=actual_levels)
-        
-        # ノイズ除去（詳細係数のみ）
-        denoised_coeffs = list(coeffs)
-        for i in range(1, len(coeffs)):
-            # 各レベルの詳細係数 (cH, cV, cD)
-            cH, cV, cD = coeffs[i]
+        # 有効値（NaN以外）のみ処理
+        if np.any(~nan_mask):
+            # NaNを一時的に0で置換して処理
+            temp_data = np.where(nan_mask, 0, data)
             
-            # ソフト閾値処理
-            threshold = self.sigma * np.sqrt(2 * np.log(cH.size))
-            denoised_coeffs[i] = (
-                pywt.threshold(cH, threshold, mode='soft'),
-                pywt.threshold(cV, threshold, mode='soft'),
-                pywt.threshold(cD, threshold, mode='soft')
-            )
+            # 星マスクを作成（星保護が有効な場合）
+            star_mask = None
+            if self.star_protection:
+                star_mask = self._create_star_mask(data)
+            
+            # 適切な分解レベルを計算
+            max_levels = self._calculate_max_levels(temp_data.shape)
+            actual_levels = min(self.levels, max_levels)
+            
+            # ウェーブレット変換
+            coeffs = pywt.wavedec2(temp_data, self.wavelet, level=actual_levels)
+            
+            # ノイズ除去（詳細係数のみ）
+            denoised_coeffs = list(coeffs)
+            for i in range(1, len(coeffs)):
+                # 各レベルの詳細係数 (cH, cV, cD)
+                cH, cV, cD = coeffs[i]
+                
+                # ソフト閾値処理
+                threshold = self.sigma * np.sqrt(2 * np.log(cH.size))
+                denoised_coeffs[i] = (
+                    pywt.threshold(cH, threshold, mode='soft'),
+                    pywt.threshold(cV, threshold, mode='soft'),
+                    pywt.threshold(cD, threshold, mode='soft')
+                )
+            
+            # 逆ウェーブレット変換
+            denoised = pywt.waverec2(denoised_coeffs, self.wavelet)
+            
+            # サイズを元データに合わせる
+            if denoised.shape != data.shape:
+                denoised = denoised[:data.shape[0], :data.shape[1]]
+            
+            # 星保護：マスク領域は元データを保持
+            if star_mask is not None:
+                denoised = np.where(star_mask, data, denoised)
+            
+            # 有効値のみ結果に反映
+            result = np.where(nan_mask, data, denoised)
         
-        # 逆ウェーブレット変換
-        denoised = pywt.waverec2(denoised_coeffs, self.wavelet)
-        
-        # サイズを元データに合わせる
-        if denoised.shape != data.shape:
-            denoised = denoised[:data.shape[0], :data.shape[1]]
-        
-        # 星保護：マスク領域は元データを保持
-        if star_mask is not None:
-            denoised = np.where(star_mask, data, denoised)
-        
-        return DataBlock(block.planeIndex, block.x, block.y, denoised)
+        return DataBlock(block.planeIndex, block.x, block.y, result)
     
     def _calculate_max_levels(self, shape):
         """データサイズに基づいて適切な最大分解レベルを計算"""
@@ -155,7 +171,7 @@ class WaveletDenoiseNode(NNBlockOperationNode):
         
         for threshold in thresholds:
             if threshold > 0:
-                star_level = np.percentile(data, threshold)
+                star_level = np.nanpercentile(data, threshold)
                 mask = data > star_level
                 
                 # 小さなノイズを除去

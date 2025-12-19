@@ -468,9 +468,9 @@ class ResultWindow:
                                         endY = blockY + blockHeight
                                         endX = blockX + blockWidth
                                         
-                                        # 適応的スケーリングで補正
+                                        # 適応的スケーリングで補正（NaNは0に変換）
                                         data = block.data[:blockHeight, :blockWidth]
-                                        normalized = (data - offset) * scale
+                                        normalized = np.nan_to_num((data - offset) * scale, nan=0.0)
                                         imgArray[blockY:endY, blockX:endX, planeIdx] = np.clip(normalized, 0, 255).astype(np.uint8)
                                     except (IndexError, TypeError, ValueError):
                                         pass
@@ -499,10 +499,10 @@ class ResultWindow:
                                         
                                         g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
                                         
-                                        # 適応的スケーリングで補正
-                                        r_norm = (r_block.data[:blockHeight, :blockWidth] - offset) * scale
-                                        g_norm = (g_avg - offset) * scale
-                                        b_norm = (b_block.data[:blockHeight, :blockWidth] - offset) * scale
+                                        # 適応的スケーリングで補正（NaNは0に変換）
+                                        r_norm = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                                        g_norm = np.nan_to_num((g_avg - offset) * scale, nan=0.0)
+                                        b_norm = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                                         
                                         imgArray[blockY:endY, blockX:endX, 0] = np.clip(r_norm, 0, 255).astype(np.uint8)
                                         imgArray[blockY:endY, blockX:endX, 1] = np.clip(g_norm, 0, 255).astype(np.uint8)
@@ -524,8 +524,8 @@ class ResultWindow:
                                     endY = blockY + blockHeight
                                     endX = blockX + blockWidth
                                     
-                                    # 適応的スケーリングで補正
-                                    normalized = (block.data[:blockHeight, :blockWidth] - offset) * scale
+                                    # 適応的スケーリングで補正（NaNは0に変換）
+                                    normalized = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                                     imgArray[blockY:endY, blockX:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
                                 except (IndexError, TypeError, ValueError):
                                     pass

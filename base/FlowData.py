@@ -143,14 +143,14 @@ class FlowData:
         else:
             arr = blockData
         
-        # 最大値・最小値を更新し、キャッシュをクリア
+        # 最大値・最小値を更新し、キャッシュをクリア（NaN除外）
         if arr.size > 0:
-            blockMax = np.max(arr)
-            blockMin = np.min(arr)
+            blockMax = np.nanmax(arr)
+            blockMin = np.nanmin(arr)
             
-            if self._maxValue is None or blockMax > self._maxValue:
+            if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
                 self._maxValue = blockMax
-            if self._minValue is None or blockMin < self._minValue:
+            if not np.isnan(blockMin) and (self._minValue is None or blockMin < self._minValue):
                 self._minValue = blockMin
             
             # データ更新時にキャッシュをクリア
@@ -277,11 +277,14 @@ class FlowData:
                         allValues.extend(block.data.flatten())
         
         if allValues:
-            result = np.percentile(allValues, percentile)
-            self._percentileCache[percentile] = result
-            return result
-        else:
-            return 0.0
+            # NaN値を除外してパーセンタイル計算
+            validValues = np.array(allValues)
+            validValues = validValues[~np.isnan(validValues)]
+            if len(validValues) > 0:
+                result = np.percentile(validValues, percentile)
+                self._percentileCache[percentile] = result
+                return result
+        return 0.0
     
     def getHistogram(self, bins=256, range_min=None, range_max=None, log_scale=False):
         """プレーン別ヒストグラムを取得（キャッシュ付き）"""
@@ -304,10 +307,16 @@ class FlowData:
             
             if planeValues:
                 planeValues = np.array(planeValues)
-                if range_min is None:
-                    range_min = np.min(planeValues)
-                if range_max is None:
-                    range_max = np.max(planeValues)
+                # NaN値を除外して範囲計算
+                validValues = planeValues[~np.isnan(planeValues)]
+                if len(validValues) > 0:
+                    if range_min is None:
+                        range_min = np.min(validValues)
+                    if range_max is None:
+                        range_max = np.max(validValues)
+                    planeValues = validValues
+                else:
+                    planeValues = []
                 
                 # 等比数列のビンを作成
                 if log_scale:
@@ -320,7 +329,10 @@ class FlowData:
                 else:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 
-                hist, _ = np.histogram(planeValues, bins=bin_edges)
+                if len(planeValues) > 0:
+                    hist, _ = np.histogram(planeValues, bins=bin_edges)
+                else:
+                    hist = np.zeros(bins, dtype=int)
                 planeHistograms.append({
                     'counts': hist.tolist(),
                     'bin_edges': bin_edges.tolist(),

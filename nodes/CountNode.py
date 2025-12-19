@@ -64,13 +64,15 @@ class CountNode(N1BlockOperationNode):
             blockWidth = min(BLOCK_SIZE, resultWidth - x)
             result = np.zeros((blockHeight, blockWidth), dtype=np.float64)
             
-            # matrixデータのカウント
+            # matrixデータのカウント（NaN対応）
             for inputData in matrixDatas:
                 inputBlock = inputData.getBlock(planeIdx, x, y)
                 if inputBlock:
-                    minH = min(result.shape[0], inputBlock.data.shape[0])
-                    minW = min(result.shape[1], inputBlock.data.shape[1])
-                    result[:minH, :minW] += 1.0  # 存在するピクセルに1を加算
+                    minH = min(blockHeight, inputBlock.data.shape[0])
+                    minW = min(blockWidth, inputBlock.data.shape[1])
+                    # NaNでない有効なピクセルのみカウント
+                    valid_mask = ~np.isnan(inputBlock.data[:minH, :minW])
+                    result[:minH, :minW] += valid_mask.astype(np.float64)
             
             # tensorは全領域に影響するので全体にtensor数を加算
             if tensorDatas:

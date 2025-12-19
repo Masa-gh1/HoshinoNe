@@ -126,10 +126,15 @@ class ChromaDenoiseNode(FlowNode):
         return rgb_image
     
     def _denoise_color_image(self, rgb_image):
-        """色ノイズ除去処理"""
-        # 入力範囲を検出して0.0-1.0に正規化
-        input_min = rgb_image.min()
-        input_max = rgb_image.max()
+        """色ノイズ除去処理（NaN対応）"""
+        # NaN値を事前に検出
+        nan_mask = np.isnan(rgb_image)
+        if np.all(nan_mask):
+            return rgb_image  # 全てNaNの場合はそのまま返す
+        
+        # 入力範囲を検出して0.0-1.0に正規化（NaN除外）
+        input_min = np.nanmin(rgb_image)
+        input_max = np.nanmax(rgb_image)
         
         if input_max > input_min:
             rgb_normalized = (rgb_image - input_min) / (input_max - input_min)
@@ -151,27 +156,25 @@ class ChromaDenoiseNode(FlowNode):
         if self.preserve_edges:
             edge_mask = self._create_edge_mask(converted[:,:,0])  # 輝度成分でエッジ検出
         
-        # 各チャンネルにノイズ除去を適用
+        # 各チャンネルにノイズ除去を適用（NaN値は保持）
         denoised = converted.copy()
         
         # 輝度成分（L, Y, V）
         if self.luma_strength > 0:
             sigma = self.luma_strength
             if edge_mask is not None:
-                denoised[:,:,0] = self._edge_preserving_filter(converted[:,:,0], sigma, edge_mask)
+                denoised[:,:,0] = self._edge_preserving_filter_nan(converted[:,:,0], sigma, edge_mask)
             else:
-                if SCIPY_AVAILABLE:
-                    denoised[:,:,0] = gaussian_filter(converted[:,:,0], sigma)
+                denoised[:,:,0] = self._gaussian_filter_nan(converted[:,:,0], sigma)
         
         # 色成分（a,b / U,V / H,S）のノイズ除去
         if self.chroma_strength > 0:
             sigma = self.chroma_strength
             for c in range(1, 3):
                 if edge_mask is not None:
-                    denoised[:,:,c] = self._edge_preserving_filter(converted[:,:,c], sigma, edge_mask)
+                    denoised[:,:,c] = self._edge_preserving_filter_nan(converted[:,:,c], sigma, edge_mask)
                 else:
-                    if SCIPY_AVAILABLE:
-                        denoised[:,:,c] = gaussian_filter(converted[:,:,c], sigma)
+                    denoised[:,:,c] = self._gaussian_filter_nan(converted[:,:,c], sigma)
         
         # RGB色空間に戻す
         if self.colorspace == "Lab":
@@ -208,12 +211,24 @@ class ChromaDenoiseNode(FlowNode):
         edge_mask = gradient_magnitude > self.edge_threshold
         return edge_mask
     
-    def _edge_preserving_filter(self, image, sigma, edge_mask):
-        """エッジ保護ガウシアンフィルタ"""
-        if SCIPY_AVAILABLE:
-            filtered = gaussian_filter(image, sigma)
-        else:
-            filtered = image
+    def _gaussian_filter_nan(self, image, sigma):
+        """ガウシアンフィルタ（NaN対応）"""
+        nan_mask = np.isnan(image)
+        if np.all(nan_mask):
+            return image
+        
+        result = image.copy()
+        if SCIPY_AVAILABLE and np.any(~nan_mask):
+            # NaN以外の部分のみフィルタ適用
+            temp_image = np.where(nan_mask, 0, image)
+            filtered = gaussian_filter(temp_image, sigma)
+            result = np.where(nan_mask, image, filtered)
+        
+        return result
+    
+    def _edge_preserving_filter_nan(self, image, sigma, edge_mask):
+        """エッジ保護ガウシアンフィルタ（NaN対応）"""
+        filtered = self._gaussian_filter_nan(image, sigma)
         # エッジ部分は元画像を保持
         return np.where(edge_mask, image, filtered)
     

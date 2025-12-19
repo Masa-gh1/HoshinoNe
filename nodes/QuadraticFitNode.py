@@ -64,18 +64,28 @@ class QuadraticFitNode(FlowNode):
             y_flat = y_coords.flatten()
             z_flat = planeData[planeIdx].flatten()
             
-            # 2次関数の係数行列を構築 (次数の少ない順)
-            A = np.column_stack([
-                np.ones(len(x_flat)),  # 0次: 1
-                x_flat,                # 1次: x
-                y_flat,                # 1次: y
-                x_flat**2,             # 2次: x²
-                x_flat*y_flat,         # 2次: xy
-                y_flat**2              # 2次: y²
-            ])
-            
-            # 最小二乗法で係数を求める
-            coeffs, _, _, _ = np.linalg.lstsq(A, z_flat, rcond=None)
+            # NaN値を除外して有効なピクセルのみ使用
+            valid_mask = ~np.isnan(z_flat)
+            if not np.any(valid_mask):
+                # 全てNaNの場合はゼロ係数
+                coeffs = np.zeros(6)
+            else:
+                x_valid = x_flat[valid_mask]
+                y_valid = y_flat[valid_mask]
+                z_valid = z_flat[valid_mask]
+                
+                # 2次関数の係数行列を構築 (次数の少ない順)
+                A = np.column_stack([
+                    np.ones(len(x_valid)),  # 0次: 1
+                    x_valid,                # 1次: x
+                    y_valid,                # 1次: y
+                    x_valid**2,             # 2次: x²
+                    x_valid*y_valid,        # 2次: xy
+                    y_valid**2              # 2次: y²
+                ])
+                
+                # 最小二乗法で係数を求める
+                coeffs, _, _, _ = np.linalg.lstsq(A, z_valid, rcond=None)
             c0, c1_x, c1_y, c2_x2, c2_xy, c2_y2 = coeffs
             
             coefficients[planeName] = [c0, c1_x, c1_y, c2_x2, c2_xy, c2_y2]

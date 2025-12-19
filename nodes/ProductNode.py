@@ -83,23 +83,46 @@ class ProductNode(N1BlockOperationNode, TensorOperationMixin):
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
             blockWidth = min(BLOCK_SIZE, resultWidth - x)
-            result = np.ones((blockHeight, blockWidth), dtype=np.float64)
+            result = None
             
-            # matrixデータの乗算
+            # matrixデータの乗算（NaN対応）
             for inputData in matrixDatas:
                 inputBlock = inputData.getBlock(planeIdx, x, y)
                 if inputBlock:
-                    minH = min(result.shape[0], inputBlock.data.shape[0])
-                    minW = min(result.shape[1], inputBlock.data.shape[1])
-                    result[:minH, :minW] *= inputBlock.data[:minH, :minW]
+                    minH = min(blockHeight, inputBlock.data.shape[0])
+                    minW = min(blockWidth, inputBlock.data.shape[1])
+                    
+                    if result is None:
+                        # 最初のブロックで初期化
+                        result = np.full((blockHeight, blockWidth), np.nan, dtype=np.float64)
+                        result[:minH, :minW] = inputBlock.data[:minH, :minW]
+                    else:
+                        # NaN対応乗算（効率的な順序）
+                        result[:minH, :minW] = np.where(
+                            ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
+                            result[:minH, :minW] * inputBlock.data[:minH, :minW],
+                            np.where(
+                                np.isnan(result[:minH, :minW]),
+                                inputBlock.data[:minH, :minW],
+                                result[:minH, :minW]
+                            )
+                        )
             
-            # tensorデータの乗算
+            # matrixデータがない場合の初期化
+            if result is None:
+                result = np.full((blockHeight, blockWidth), np.nan, dtype=np.float64)
+            
+            # tensorデータの乗算（NaN対応）
             if tensorDatas:
                 if not hasattr(self, '_combinedTensor') or self._combinedTensor is None:
                     self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.multiply)
                 if self._combinedTensor:
                     tensorValues = self.calculateTensorBlock(self._combinedTensor, planeIdx, x, y, result.shape, defaultValue=1.0)
-                    result *= tensorValues
+                    result = np.where(
+                        np.isnan(result),
+                        tensorValues,
+                        result * tensorValues
+                    )
             
             return DataBlock(planeIdx, x, y, result)
     
