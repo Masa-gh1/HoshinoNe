@@ -8,17 +8,25 @@ All rights reserved.
 '''
 
 import numpy as np
+
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import DataBlock
 from nodes import N1BlockOperationNode
 from utils import numpy_helpers as nh
 
 class CountNode(N1BlockOperationNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'count'
+    # ノード名
+    name      = 'カウント'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "count", "カウント")
-    
-    def getColor(self):
-        return self._color_func
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def getBaseDataIndex(self, inputDatas):
         """カウントではpolynomialがある場合は最初のtableデータを基準とする"""

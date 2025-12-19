@@ -10,16 +10,23 @@ All rights reserved.
 import numpy as np
 
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import FlowNode
 from base import FlowDataWrapper
 from utils import numpy_helpers as nh
 
 class AutoLevelsNode(FlowNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_UTIL
+    minorType = 'auto_levels'
+    # ノード名
+    name      = '自動レベル'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_NN
+    outputCat = _OUT_CAT_PAS
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "auto_levels", "自動レベル")
-    
-    def getColor(self):
-        return self._color_util
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
         self.reportProgress(context, "開始")

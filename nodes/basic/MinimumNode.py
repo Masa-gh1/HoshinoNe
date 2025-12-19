@@ -8,17 +8,25 @@ All rights reserved.
 '''
 
 import numpy as np
+
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import DataBlock
 from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
 from utils import numpy_helpers as nh
 
 class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_OP
+    minorType = 'minimum'
+    # ノード名
+    name      = '最小'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "minimum", "最小")
-    
-    def getColor(self):
-        return self._color_op
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
@@ -38,11 +46,11 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         if datas:
             return datas
         elif self._combinedTensor:
-            datas = [self._combinedTensor] 
+            datas = [self._combinedTensor]
             self._combinedTensor = None
             return datas
         elif self._combinedPolynomials:
-            datas = [self._combinedPolynomials[0]] 
+            datas = [self._combinedPolynomials[0]]
             del self._combinedPolynomials[0]
             return datas
         else:

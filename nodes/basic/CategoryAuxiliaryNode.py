@@ -7,15 +7,22 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from base.FlowNode_CONST import *
 from base import FlowNode
 from base import FlowDataWrapper
 
 class CategoryAuxiliaryNode(FlowNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_UTIL
+    minorType = 'category_auxiliary'
+    # ノード名
+    name      = "補正値"
+    # 入出力タイプ
+    ioType    = _IO_TYPE_NN
+    outputCat = _OUT_CAT_AUX
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "category_auxiliary", "補正値")
-    
-    def getColor(self):
-        return self._color_util
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
         self.reportProgress(context, "開始")

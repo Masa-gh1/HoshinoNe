@@ -7,16 +7,24 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
 class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'min'
+    # ノード名
+    name      = '比較小'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "min", "比較小")
-    
-    def getColor(self):
-        return self._color_func
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""

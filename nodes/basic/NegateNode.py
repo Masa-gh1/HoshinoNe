@@ -8,16 +8,24 @@ All rights reserved.
 '''
 
 import numpy as np
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode
 
 class NegateNode(LazyNNOperationNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'negate'
+    # ノード名
+    name      = '符号反転'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "negate", "符号反転")
-    
-    def getColor(self):
-        return self._color_func
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""

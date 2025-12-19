@@ -10,12 +10,21 @@ All rights reserved.
 from abc import abstractmethod
 from concurrent.futures import as_completed
 
+from base.FlowNode_CONST import *
 from base import FlowData
 from base import FlowNode
-from utils.ThreadPool import ProcessExecutorInNode 
+from utils.ThreadPool import ProcessExecutorInNode
 
 class NNBlockOperationNode(FlowNode):
     """データ入出力 N:N のブロック単位計算ノードの基底クラス"""
+    # ノードタイプ
+    majorType = 'NN_block_operation'
+    minorType = 'NN_block_operation'
+    # ノード名
+    name      = 'NNBlockOperationNode'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_NN
+    outputCat = _OUT_CAT_PAS
 
     def process(self, context=None):
         self.reportProgress(context, "開始")

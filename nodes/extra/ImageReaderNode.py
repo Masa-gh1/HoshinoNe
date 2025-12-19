@@ -30,12 +30,22 @@ except ImportError:
     PIL_AVAILABLE = False
 
 class ImageReaderNode(BaseReaderNode):
+    # ノードタイプ
+    #majorType = スーパークラスを継承
+    minorType = 'image_reader'
+    # ノード名
+    name      = '画像読み込み'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "image_reader", "画像読み込み")
+        super().__init__(canvas, editor, x, y, **kwargs)
+
         self.fileTypes = [("Image files", "*.jpg *.jpeg *.png *.bmp *.gif")]
         
         if not PIL_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
             return
     
     def countFileBlocks(self, filePath):
@@ -51,8 +61,8 @@ class ImageReaderNode(BaseReaderNode):
         except:
             return 0
     
-    def onEdit(self):
-        return ImageSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return ImageSettingsDialog(self.view.editor.root, self)
         
     def processFile(self, filePath, context=None):
         if not PIL_AVAILABLE:
@@ -78,7 +88,7 @@ class ImageReaderNode(BaseReaderNode):
         else                    : plane_names = [f'{img.mode}_{i}' for i in range(len(img.getbands()))]
         
         # bit深度を検出してdisplay_levelsを設定 - 半開区間 [min, exclusive_upper)
-        if   img.mode in ['L', 'LA', 'RGB', 'RGBA', 'P', 'CMYK', 'YCbCr', 'HSV', 'LAB']: 
+        if   img.mode in ['L', 'LA', 'RGB', 'RGBA', 'P', 'CMYK', 'YCbCr', 'HSV', 'LAB']:
                                             display_levels = {'min': 0,   'exclusive_upper':        256}  # 8bit
         elif img.mode in ['I;16', 'I;16B']: display_levels = {'min': 0,   'exclusive_upper':      65536}  # 16bit
         elif 'F' == img.mode              : display_levels = {'min': 0.0, 'exclusive_upper':        1.0}  # 浮動小数点
@@ -157,7 +167,7 @@ class ImageReaderNode(BaseReaderNode):
             }
     
     def getConfigHash(self):
-        config = f"{self.type}_{'|'.join(self.filePaths)}"
+        config = f"{self.minorType}_{'|'.join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def _processBlock(self, pixels, x, y, planeCount, width, height):
@@ -227,8 +237,7 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
         
         # 撮影日時
         if fileInfo.get('datetime'):
-            dt = datetime.datetime.fromtimestamp(fileInfo['datetime'])
-            datetime_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+            datetime_str = fileInfo['datetime']
         else:
             datetime_str = '時刻不明'
         
@@ -272,4 +281,20 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
             'fnumber': fnumber_str,
             'iso': iso_str
         }
-
+    
+    def sortByTimestamp(self):
+        if len(self.selectedFilePaths) <= 1:
+            return
+        
+        try:
+            def get_timestamp(filePath):
+                fileInfo = self.node.getFileInfo(filePath)
+                if fileInfo and fileInfo.get('datetime'):
+                    dt = datetime.datetime.fromisoformat(fileInfo['datetime'])
+                    return dt.timestamp()
+                return 0
+            
+            self.selectedFilePaths.sort(key=get_timestamp)
+            self.updateFileList()
+        except Exception as e:
+            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")

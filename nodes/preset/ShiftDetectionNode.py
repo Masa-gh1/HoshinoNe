@@ -13,6 +13,7 @@ import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from base.FlowNode_CONST import *
 from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
@@ -36,8 +37,17 @@ class AlignmentResult:
         self.extra_info = extra_info
 
 class ShiftDetectionNode(FlowNode, ConfigurableNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'shift_detection'
+    # ノード名
+    name      = 'ズレ検出'
+    # 入出力タイプ
+    ioType    =_IO_TYPE_N1
+    outputCat = _OUT_CAT_AUX
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "shift_detection", "ズレ検出")
+        super().__init__(canvas, editor, x, y, **kwargs)
         
         # 設定パラメータ
         # 基準画像選択（auxiliaryでマークされた画像を使用）
@@ -66,25 +76,15 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         # オフセット計算 優先順位3: テンプレートマッチング法
         self.template = SimpleNamespace()
         self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
-        
-        self.lastConfigHash = None
-        
+
         if not CV2_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
-    def getColor(self):
-        return self._color_func
-    
-    def updateNodeText(self):
-        displayText = f"{self.text}\nG:{self.star.grid.cols}x{self.star.grid.rows} S:{self.star.ransac.sampleRadius}"
-        self.editor.updateNodeText(self, displayText)
-        
-        newHash = self.getConfigHash()
-        if newHash != self.lastConfigHash:
-            self.lastConfigHash = newHash
-            if hasattr(self.editor, 'onNodeConfigChanged'):
-                self.editor.onNodeConfigChanged(self)
+    def getText(self):
+        """ノードのテキストを取得"""
+        displayText = f"{self.name}\nG:{self.star.grid.cols}x{self.star.grid.rows} S:{self.star.ransac.sampleRadius}"
+        return displayText
     
     def store(self, nodeData):
         nodeData["usePreviousOffset"] = self.usePreviousOffset
@@ -137,7 +137,6 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             self.phase.maxOffset = nodeData["phaseMaxOffset"]
         if "templateSearchRange" in nodeData:
             self.template.searchRange = nodeData["templateSearchRange"]
-        self.updateNodeText()
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類"""
@@ -702,7 +701,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         target_centered = target_pts - image_center
         
         # 中心座標系でアフィン変換を計算
-        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC, 
+        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC,
                                         ransacReprojThreshold=2.0)[0]
         
         if M is not None:
@@ -904,8 +903,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         return distributed_stars[:max_total_stars], grid_selected_counts
     
-    def onEdit(self):
-        return ShiftDetectionSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return ShiftDetectionSettingsDialog(self.view.editor.root, self)
     
     def getConfigHash(self):
         config = f"{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
@@ -916,7 +915,7 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("450x700")
         
         self.createWidgets()
@@ -1089,13 +1088,7 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
             self.node.star.useSaturationMask = self.useSaturationMaskVar.get()
             self.node.star.maxAspectRatio = max(1.0, float(self.aspectRatioEntry.get()))
             
-            self.node.updateNodeText()
-            
-            newHash = self.node.getConfigHash()
-            if newHash != self.node.lastConfigHash:
-                self.node.lastConfigHash = newHash
-                if hasattr(self.node.editor, 'onNodeConfigChanged'):
-                    self.node.editor.onNodeConfigChanged(self.node)
+            self.node.view.onNodeConfigChanged(self.node)
                 
         except ValueError:
             messagebox.showerror("エラー", "数値の入力が正しくありません")

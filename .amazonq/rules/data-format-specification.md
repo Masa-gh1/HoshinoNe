@@ -40,7 +40,7 @@
 - `columns`: 列名リスト
 - `lines`: 行名リスト
 
-#### ShiftDetectionNode 出力の Table 固有ヘッダー 
+#### ShiftDetectionNode 出力の Table 固有ヘッダー
 - `columns`: 列名リスト (['dx', 'dy', 'rotation', 'confidence', 'time'])
 - `lines`: 行名リスト (ファイル名)
 

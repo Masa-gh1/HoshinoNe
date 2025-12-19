@@ -8,11 +8,18 @@ All rights reserved.
 '''
 
 from abc import abstractmethod
-from base import FlowNode
+from base.FlowNode_CONST import *
 from base import LazyFlowData
+from base import FlowNode
 
 class LazyNNOperationNode(FlowNode):
     """LazyFlowDataを用いるN:N処理ノードの基底クラス"""
+    # ノードタイプ
+    majorType = 'Lazy_NN_block_operation'
+    minorType = 'Lazy_NN_block_operation'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_NN
+    outputCat = _OUT_CAT_PAS
 
     def process(self, context=None):
         self.reportProgress(context, "開始")

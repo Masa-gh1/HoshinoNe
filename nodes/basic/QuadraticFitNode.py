@@ -8,16 +8,24 @@ All rights reserved.
 '''
 
 import numpy as np
-from base import FlowNode, FlowData, DataBlock
+
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
+from base import FlowNode, FlowData, DataBlock
 from utils import numpy_helpers as nh
 
 class QuadraticFitNode(FlowNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'quadratic_fit'
+    # ノード名
+    name      = '2次関数近似'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "quadratic_fit", "2次関数近似")
-    
-    def getColor(self):
-        return self._color_func
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
         self.reportProgress(context, "開始")

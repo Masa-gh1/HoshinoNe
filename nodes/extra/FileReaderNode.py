@@ -18,8 +18,18 @@ from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
 
 class FileReaderNode(BaseReaderNode):
+    # ノードタイプ
+    #majorType = スーパークラスを継承
+    minorType = 'file_reader'
+    # ノード名
+    name      = 'ファイル読み込み'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "file_reader", "ファイル読み込み")
+        super().__init__(canvas, editor, x, y, **kwargs)
+
         self.fileTypes = [("CSV files", "*.csv")]
     
     def countFileBlocks(self, filePath):
@@ -32,8 +42,8 @@ class FileReaderNode(BaseReaderNode):
         except:
             return 1
     
-    def onEdit(self):
-        return FileReaderSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return FileReaderSettingsDialog(self.view.editor.root, self)
     
     def processFile(self, filePath, context=None):
         """単一CSVファイルの処理"""
@@ -57,8 +67,7 @@ class FileReaderNode(BaseReaderNode):
                 # プレーンマーカーをチェック
                 if row[0].startswith('#'):
                     planeName = row[0][1:].strip()  # '#'を除去
-                    planeN
-                    ames.append(planeName)
+                    planeNames.append(planeName)
                     if currentPlane > 0:  # 2枚目以降のプレーン
                         planeData.append(fileData)
                     fileData = []
@@ -147,4 +156,4 @@ class FileReaderSettingsDialog(BaseReaderSettingsDialog):
             self.selectedFilePaths.sort(key=lambda x: os.path.getmtime(x))
             self.updateFileList()
         except Exception as e:
-            messagebox.showerror(f"{self.node.text} エラー", f"ソートに失敗しました: {str(e)}")
+            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")

@@ -36,8 +36,17 @@ except ImportError:
     RAWPY_AVAILABLE = False
 
 class RawReaderNode(BaseReaderNode):
+    # ノードタイプ
+    #majorType = スーパークラスを継承
+    minorType = 'raw_reader'
+    # ノード名
+    name      = 'RAW読み込み'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "raw_reader", "RAW読み込み")
+        super().__init__(canvas, editor, x, y, **kwargs)
         
         self.fileTypes = [
                 ("RAW files", "*.cr2 *.cr3 *.nef *.arw *.dng *.raf *.orf *.rw2 *.pef *.srw *.x3f"),
@@ -60,19 +69,20 @@ class RawReaderNode(BaseReaderNode):
         self.gammaSlope = 1.0  # gamma slope
         
         if not RAWPY_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "rawpyライブラリがインストールされていません。\npip install rawpy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "rawpyライブラリがインストールされていません。\npip install rawpy でインストールしてください。")
             return
     
-    def updateNodeText(self):
+    def getText(self):
+        """ノードのテキストを取得"""
         if self.filePaths:
             if len(self.filePaths) == 1:
-                displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])}\nproc: {self.demosaicAlgorithm}"
+                displayText = f"{self.name}\n{os.path.basename(self.filePaths[0])}\nproc: {self.demosaicAlgorithm}"
             else:
                 dirname = os.path.dirname(self.filePaths[0])
-                displayText = f"{self.text}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}\nproc: {self.demosaicAlgorithm}"
+                displayText = f"{self.name}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}\nproc: {self.demosaicAlgorithm}"
         else:
-            displayText = "{self.text}\n未選択"
-        self.editor.updateNodeText(self, displayText)
+            displayText = "{self.name}\n未選択"
+        return displayText
     
     def store(self, nodeData):
         super().store(nodeData)
@@ -94,7 +104,6 @@ class RawReaderNode(BaseReaderNode):
             self.gammaPower = nodeData["gammaPower"]
         if "gammaSlope" in nodeData:
             self.gammaSlope = nodeData["gammaSlope"]
-        self.updateNodeText()
     
     def countFileBlocks(self, filePath):
         """RAWファイルのブロック数を事前計算"""
@@ -120,8 +129,8 @@ class RawReaderNode(BaseReaderNode):
         except:
             return 1
     
-    def onEdit(self):
-        return RawSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return RawSettingsDialog(self.view.editor.root, self)
     
     def processFile(self, filePath, context=None):
         """単一RAWファイルの処理"""
@@ -358,7 +367,7 @@ class RawReaderNode(BaseReaderNode):
             }
     
     def getConfigHash(self):
-        config = f"{self.type}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
+        config = f"{self.minorType}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
         return hashlib.md5(config.encode()).hexdigest()
     
 class RawSettingsDialog(BaseReaderSettingsDialog):
@@ -406,7 +415,7 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         self.demosaicVar = tk.StringVar()
         algoOptions = ["bayer - ベイヤー配列の生データを1プレーンで取得(以下の後処理設定も無効)",
                        "bayer crop - ベイヤー配列の生データを1プレーンで取得(クロップのみ実施)",
-                       "unpack - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)", 
+                       "unpack - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)",
                        "raw - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
                       ]
         for name,text in RAW_DEMOSAIC_ALGORITHMS.items():
@@ -426,10 +435,10 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         
         tk.Label(colorspaceFrame, text="出力色空間:").pack(anchor="w")
         self.colorspaceVar = tk.StringVar()
-        csOptions = ["raw - 変換しない", 
-                     "sRGB - 標準的なモニター用色空間。最も一般的", 
-                     "Adobe RGB - より幅広い色域を持つ印刷用色空間", 
-                     "Wide Gamut RGB - さらに幅広い色域を持つ色空間", 
+        csOptions = ["raw - 変換しない",
+                     "sRGB - 標準的なモニター用色空間。最も一般的",
+                     "Adobe RGB - より幅広い色域を持つ印刷用色空間",
+                     "Wide Gamut RGB - さらに幅広い色域を持つ色空間",
                      "ProPhoto RGB - 最も幅広い色域を持つプロ用色空間"]
         # 現在の値に対応する選択肢を設定
         for option in csOptions:
@@ -445,13 +454,13 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         
         tk.Label(wbFrame, text="ホワイトバランス:").pack(anchor="w")
         self.wbVar = tk.StringVar()
-        wbOptions = ["camera - カメラが記録した設定を使用", 
-                     "auto - 自動ホワイトバランス", 
-                     "daylight - 昼光（5500K) (1.0, 1.0, 1.0）", 
-                     "cloudy - 曇天（6500K) (1.2, 1.0, 0.8）", 
-                     "shade - 日陰（7500K) (1.4, 1.0, 0.7）", 
-                     "tungsten - タングステン電球（3200K) (0.6, 1.0, 1.8）", 
-                     "fluorescent - 蛍光灯（4000K) (0.8, 1.0, 1.4）", 
+        wbOptions = ["camera - カメラが記録した設定を使用",
+                     "auto - 自動ホワイトバランス",
+                     "daylight - 昼光（5500K) (1.0, 1.0, 1.0）",
+                     "cloudy - 曇天（6500K) (1.2, 1.0, 0.8）",
+                     "shade - 日陰（7500K) (1.4, 1.0, 0.7）",
+                     "tungsten - タングステン電球（3200K) (0.6, 1.0, 1.8）",
+                     "fluorescent - 蛍光灯（4000K) (0.8, 1.0, 1.4）",
                      "flash - フラッシュ（5500K) (1.0, 1.0, 1.0）"]
         # 現在の値に対応する選択肢を設定
         for option in wbOptions:
@@ -491,8 +500,7 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         
         # 撮影日時
         if fileInfo.get('datetime'):
-            dt = datetime.datetime.fromtimestamp(fileInfo['datetime'])
-            datetime_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+            datetime_str = fileInfo['datetime']
         else:
             datetime_str = '時刻不明'
         
@@ -545,10 +553,11 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
             def get_timestamp(filePath):
                 fileInfo = self.node.getFileInfo(filePath)
                 if fileInfo and fileInfo.get('datetime'):
-                    return fileInfo['datetime']
+                    dt = datetime.datetime.fromisoformat(fileInfo['datetime'])
+                    return dt.timestamp()
                 return 0
             
             self.selectedFilePaths.sort(key=get_timestamp)
             self.updateFileList()
         except Exception as e:
-            messagebox.showerror(f"{self.node.text} エラー", f"ソートに失敗しました: {str(e)}")
+            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")

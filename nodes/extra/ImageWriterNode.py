@@ -28,8 +28,18 @@ except ImportError:
     TIFFFILE_AVAILABLE = False
 
 class ImageWriterNode(BaseWriterNode):
+    # ノードタイプ
+    #majorType = スーパークラスを継承
+    minorType = 'image_writer'
+    # ノード名
+    name      = '画像書き出し'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "image_writer", "画像書き出し", **kwargs)
+        super().__init__(canvas, editor, x, y, **kwargs)
+
         self.outputFileTypes = [("JPEG files", "*.jpg"), ("PNG files", "*.png"), ("TIFF files", "*.tiff"), ("All files", "*.*")]
         self.defaultOutputExtension = ".jpg"
     

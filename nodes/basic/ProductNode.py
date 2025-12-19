@@ -8,18 +8,26 @@ All rights reserved.
 '''
 
 import numpy as np
+
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import DataBlock
 from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
 from utils import numpy_helpers as nh
 
 class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "product", "総積")
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_OP
+    minorType = 'product'
+    # ノード名
+    name      = '総積'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
 
-    def getColor(self):
-        return self._color_op
-    
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, **kwargs)
+
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
         datas = []
@@ -44,11 +52,11 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         if datas:
             return datas
         elif self._combinedTensor:
-            datas = [self._combinedTensor] 
+            datas = [self._combinedTensor]
             self._combinedTensor = None
             return datas
         elif self._combinedPolynomial:
-            datas = [self._combinedPolynomial] 
+            datas = [self._combinedPolynomial]
             self._combinedPolynomial = None
             return datas
         else:

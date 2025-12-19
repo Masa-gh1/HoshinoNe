@@ -100,7 +100,7 @@ class Tray:
             # ドラッグ開始時にトレイと含まれるアイテムを前面に
             groupItems = [self.rect, self.label]
             for node in self.dragNodes:
-                groupItems.extend([node.rect, node.label])
+                groupItems.extend([node.view.rect, node.view.label])
             for tray in self.dragTrays:
                 groupItems.extend([tray.rect, tray.label])
             self.editor._placeItemBeforeConnections(*groupItems)
@@ -120,10 +120,10 @@ class Tray:
 
             # ドラッグ開始時に固定したノードを一緒に移動
             for node in self.dragNodes:
-                node.x += dx
-                node.y += dy
-                self.canvas.move(node.rect, dx, dy)
-                self.canvas.move(node.label, dx, dy)
+                node.view.x += dx
+                node.view.y += dy
+                self.canvas.move(node.view.rect, dx, dy)
+                self.canvas.move(node.view.label, dx, dy)
 
             # ドラッグ開始時に固定したトレイを一緒に移動
             for tray in self.dragTrays:
@@ -135,7 +135,7 @@ class Tray:
             # ドラッグ中はグループ全体を順序を維持して前面に保持
             groupItems = [self.rect, self.label]
             for node in self.dragNodes:
-                groupItems.extend([node.rect, node.label])
+                groupItems.extend([node.view.rect, node.view.label])
             for tray in self.dragTrays:
                 groupItems.extend([tray.rect, tray.label])
             self.editor._placeItemBeforeConnections(*groupItems)
@@ -268,10 +268,10 @@ class Tray:
         """視覚的にトレイの上にあるノードを取得"""
         contained = []
         for node in self.editor.nodes:
-            if (self.x - self.width//2 <= node.x <= self.x + self.width//2 and
-                self.y - self.height//2 <= node.y <= self.y + self.height//2):
+            if (self.x - self.width//2 <= node.view.x <= self.x + self.width//2 and
+                self.y - self.height//2 <= node.view.y <= self.y + self.height//2):
                 # ノードがトレイより前面にあるかチェック
-                nodeItems = [node.rect, node.label]
+                nodeItems = [node.view.rect, node.view.label]
                 trayItems = [self.rect, self.label]
 
                 # キャンバスのアイテム順序で比較

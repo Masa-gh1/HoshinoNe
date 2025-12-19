@@ -7,17 +7,25 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
 class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_OP
+    minorType = 'offset'
+    # ノード名
+    name      = '加算'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "offset", "加算")
+        super().__init__(canvas, editor, x, y, **kwargs)
         self._combinedPolynomial = None
-    
-    def getColor(self):
-        return self._color_op
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""

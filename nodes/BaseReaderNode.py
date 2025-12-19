@@ -14,33 +14,41 @@ import os
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
+
+from base.FlowNode_CONST import *
 from base import FlowNode
 from nodes import ConfigurableNode
 
 class BaseReaderNode(FlowNode,ConfigurableNode):
     """ファイル読み込みノードの基底クラス"""
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_IO
+    minorType = 'base_reader'
+    # ノード名
+    name      = 'BaseReaderNode'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_0N
+    outputCat = _OUT_CAT_PRI
     
-    def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
-        super().__init__(canvas, editor, x, y, nodeType, text, **kwargs)
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, **kwargs)
         self.filePaths = []
         self.fileTypes = [("files", "*.*")]
-    
-    def getColor(self):
-        return self._color_io
+
+    def getText(self):
+        """ノードのテキストを取得"""
+        if self.filePaths:
+            if len(self.filePaths) == 1:
+                displayText = f"{self.name}\n{os.path.basename(self.filePaths[0])}"
+            else:
+                dirname = os.path.dirname(self.filePaths[0])
+                displayText = f"{self.name}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}"
+        else:
+            displayText = f"{self.name}\n未選択"
+        return displayText
     
     def setFilePaths(self, filePaths):
         self.filePaths = filePaths
-    
-    def updateNodeText(self):
-        if self.filePaths:
-            if len(self.filePaths) == 1:
-                displayText = f"{self.text}\n{os.path.basename(self.filePaths[0])}"
-            else:
-                dirname = os.path.dirname(self.filePaths[0])
-                displayText = f"{self.text}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}"
-        else:
-            displayText = f"{self.text}\n未選択"
-        self.editor.updateNodeText(self, displayText)
     
     def store(self, nodeData):
         """ノード固有の設定 nodeData に保存"""
@@ -65,27 +73,26 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
                     filepaths.append(filepath)
 
             self.filePaths = filepaths
-        self.updateNodeText()
     
     def getRelativePath(self, filePath):
         """相対パスを取得"""
-        if hasattr(self.editor, 'currentFlowPath') and self.editor.currentFlowPath:
-            flowDir = os.path.dirname(self.editor.currentFlowPath)
+        if hasattr(self.view.editor, 'currentFlowPath') and self.view.editor.currentFlowPath:
+            flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.relpath(filePath, flowDir)
         else:
             return None
     
     def getAbsolutePath(self, filePath):
         """絶対パスを取得"""
-        if hasattr(self.editor, 'currentFlowPath') and self.editor.currentFlowPath:
-            flowDir = os.path.dirname(self.editor.currentFlowPath)
+        if hasattr(self.view.editor, 'currentFlowPath') and self.view.editor.currentFlowPath:
+            flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.abspath(os.path.join(flowDir, filePath))
         else:
             return None
 
     def getConfigHash(self):
         """基本的な設定ハッシュ（サブクラスでオーバーライド）"""
-        config = f"{self.type}_{'|'.join(self.filePaths)}"
+        config = f"{self.minorType}_{'|'.join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def process(self, context=None):
@@ -118,9 +125,9 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def onEdit(self):
+    def createSettingWindow(self):
         """Settings dialogを開く"""
-        return BaseReaderSettingsDialog(self.editor.root, self)
+        return BaseReaderSettingsDialog(self.view.editor.root, self)
     
     def countFileBlocks(self, filePath):
         """ファイルのブロック数を計算（サブクラスでオーバーライド）
@@ -183,7 +190,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("600x500")
         
         # ファイルパスのコピーを作成
@@ -280,7 +287,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             self.fileTreeview.insert('', 'end', values=values)
     
     def addFiles(self):
-        filePaths = filedialog.askopenfilenames(parent=self, title=f"{self.node.text}ファイルを追加", filetypes=self.node.fileTypes)
+        filePaths = filedialog.askopenfilenames(parent=self, title=f"{self.node.name}ファイルを追加", filetypes=self.node.fileTypes)
         
         if filePaths:
             # 重複を除いて追加
@@ -327,11 +334,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         # カスタム設定の適用
         self.customOnApply()
         
-        self.node.updateNodeText()
-        
-        newHash = self.node.getConfigHash()
-        if newHash != self.node._lastConfigHash:
-            self.node.editor.onNodeConfigChanged(self.node)
+        self.node.view.onNodeConfigChanged(self.node)
     
     def getColumns(self):
         """列構成を取得（サブクラスでオーバーライド）"""
@@ -389,7 +392,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             self.selectedFilePaths.sort(key=lambda x: os.path.basename(x).lower())
             self.updateFileList()
         except Exception as e:
-            messagebox.showerror(f"{self.node.text} エラー", f"ソートに失敗しました: {str(e)}")
+            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
     
     def onClose(self):
         self.destroy()

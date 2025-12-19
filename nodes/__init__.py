@@ -19,7 +19,7 @@ from .NodeFactory import NodeFactory
 
 __all__ = [
     'N1BlockOperationNode',
-    'NNBlockOperationNode', 
+    'NNBlockOperationNode',
     'LazyNNOperationNode',
     'ConfigurableNode',
     'BaseReaderNode',

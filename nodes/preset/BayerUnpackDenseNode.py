@@ -10,16 +10,23 @@ All rights reserved.
 import numpy as np
 
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import DataBlock, LazyFlowData
 from nodes import LazyNNOperationNode
 from utils import numpy_helpers as nh
 
 class BayerUnpackDenseNode(LazyNNOperationNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'bayer_unpack_dense'
+    # ノード名
+    name      = 'ベイヤー分離(密)'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "bayer_unpack_dense", "ベイヤー分離(密)")
-    
-    def getColor(self):
-        return self._color_func
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def preprocessInputs(self, inputDatas):
         """ベイヤーデータのみを抽出"""
@@ -73,7 +80,7 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         result = nh.nans((outHeight, outWidth))
         
         # ベイヤーパターンに応じてマスクを作成     [   R      G1      B       G2  ]
-        if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]  
+        if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]
         elif bayer_pattern == 'GRBG': offsets = [(0, 1), (0, 0), (1, 0), (1, 1)]
         elif bayer_pattern == 'GBRG': offsets = [(1, 0), (1, 1), (0, 1), (0, 0)]
         elif bayer_pattern == 'BGGR': offsets = [(1, 1), (1, 0), (0, 0), (0, 1)]

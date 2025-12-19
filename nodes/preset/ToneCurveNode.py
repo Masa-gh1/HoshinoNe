@@ -12,6 +12,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import FlowData
 from nodes import ConfigurableNode
@@ -37,8 +38,17 @@ except ImportError:
     matplotlibAvailable = False
 
 class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'tone_curve'
+    # ノード名
+    name      = 'トーンカーブ'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "tone_curve", "トーンカーブ")
+        super().__init__(canvas, editor, x, y, **kwargs)
 
         # デフォルト設定 - 半開区間 [0.0, 1.0) で正規化範囲
         self.displayMin = 0.0
@@ -50,22 +60,17 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         
         # ライブラリチェック
         if not scipyAvailable:
-            messagebox.showerror(f"{self.text} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
             return
         
         if not matplotlibAvailable:
-            messagebox.showerror(f"{self.text} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
             return
-        
-        self.lastConfigHash = None
-        self.updateNodeText()
     
-    def getColor(self):
-        return self._color_func
-    
-    def updateNodeText(self):
-        displayText = f"{self.text}\n{len(self.controlPoints)-2}点\n出力[{self.outputMin:.2f}, {self.outputEnd:.2f})"
-        self.editor.updateNodeText(self, displayText)
+    def getText(self):
+        """ノードのテキストを取得"""
+        displayText = f"{self.name}\n{len(self.controlPoints)-2}点\n出力[{self.outputMin:.2f}, {self.outputEnd:.2f})"
+        return displayText
     
     def store(self, nodeData):
         nodeData["displayMin"] = self.displayMin
@@ -88,10 +93,9 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
             self.controlPoints = nodeData["controlPoints"]
         if "boundaryCondition" in nodeData:
             self.boundaryCondition = nodeData["boundaryCondition"]
-        self.updateNodeText()
     
-    def onEdit(self):
-        return ToneCurveDialog( self.editor.root, self)
+    def createSettingWindow(self):
+        return ToneCurveDialog( self.view.editor.root, self)
         
     def processBlock(self, block):
         if block is None:
@@ -167,12 +171,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         self.outputEnd = outputEnd
         self.controlPoints = controlPoints
         self.boundaryCondition = boundaryCondition
-        self.updateNodeText()
-        
-        newHash = self.getConfigHash()
-        if newHash != self.lastConfigHash:
-            self.lastConfigHash = newHash
-            self.editor.onNodeConfigChanged(self)
+        self.view.onNodeConfigChanged(self)
     
     def setupDisplayLevels(self, outputFlowData, inputFlowData):
         """出力のdisplay_levelsを設定"""
@@ -189,18 +188,18 @@ class ToneCurveDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("600x500")
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
         # ライブラリチェック
         if not scipyAvailable:
-            messagebox.showerror(f"{node.text} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            messagebox.showerror(f"{node.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
             self.destroy()
             return
         
         if not matplotlibAvailable:
-            messagebox.showerror(f"{node.text} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            messagebox.showerror(f"{node.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
             self.destroy()
             return
         
@@ -302,7 +301,7 @@ class ToneCurveDialog(tk.Toplevel):
         # 操作説明
         helpFrame = tk.Frame(self)
         helpFrame.pack(fill=tk.X, padx=10, pady=2)
-        tk.Label(helpFrame, text="操作: 左クリック=追加/削除, ドラッグ=移動, ホイール=ズーム", 
+        tk.Label(helpFrame, text="操作: 左クリック=追加/削除, ドラッグ=移動, ホイール=ズーム",
                 font=("Arial", 9), foreground="gray").pack(side=tk.LEFT)
         
         # ボタンフレーム
@@ -312,8 +311,8 @@ class ToneCurveDialog(tk.Toplevel):
         tk.Button(buttonFrame, text="適用", command=self.onApply).pack(side=tk.LEFT, padx=5)
         
         self.previewVariable = tk.BooleanVar(value=False)
-        self.previewCheckbox = tk.Checkbutton(buttonFrame, text="プレビュー", 
-                                            variable=self.previewVariable, 
+        self.previewCheckbox = tk.Checkbutton(buttonFrame, text="プレビュー",
+                                            variable=self.previewVariable,
                                             command=self.onPreviewToggle)
         self.previewCheckbox.pack(side=tk.LEFT, padx=5)
         
@@ -657,10 +656,10 @@ class ToneCurveDialog(tk.Toplevel):
         # 確定値をノードに適用
         if self.originalSettings:
             self.node.displayMin = self.originalSettings['displayMin']
-            self.node.displayEnd = self.originalSettings['displayEnd'] 
+            self.node.displayEnd = self.originalSettings['displayEnd']
             self.node.outputMin = self.originalSettings['outputMin']
-            self.node.outputEnd = self.originalSettings['outputEnd'] 
-            self.node.controlPoints = self.originalSettings['controlPoints'] 
+            self.node.outputEnd = self.originalSettings['outputEnd']
+            self.node.controlPoints = self.originalSettings['controlPoints']
             self.node.boundaryCondition = self.originalSettings['boundaryCondition']
     
     def triggerPreview(self):

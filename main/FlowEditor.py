@@ -28,10 +28,10 @@ from utils.Debug import Debug
 from utils.ThreadPool import CoalescingExecutor
 
 class FlowEditor:
-    def __init__(self, root, text):
+    def __init__(self, root, name):
         self.root = root
-        self.text = text
-        self.root.title(f"{self.text} - {VERSION}")
+        self.name = name
+        self.root.title(f"{self.name} - {VERSION}")
         self.autoExecute = tk.BooleanVar(value=False)
         self.reprocessingHighlights = []
         self.selectedHighlight = None
@@ -128,7 +128,7 @@ class FlowEditor:
         self.statusLabel = tk.Label(statusFrame, text="状態: 待機中", bg='lightgray', anchor=tk.W)
         self.statusLabel.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        self.gcButton = tk.Button(statusFrame, text="ゴミ掃除", command=self.forceGarbageCollection, 
+        self.gcButton = tk.Button(statusFrame, text="ゴミ掃除", command=self.forceGarbageCollection,
                                  bg='lightgray', relief=tk.FLAT, padx=5)
         self.gcButton.bind('<Double-Button-3>', self.toggleDebugMode)
         self.gcButton.pack(side=tk.RIGHT, padx=(5, 0))
@@ -144,7 +144,7 @@ class FlowEditor:
         """子画面を最前面に持ち上げる"""
         # 各ノードの設定ダイアログをチェック
         for node in self.nodes:
-            node.liftWindow()
+            node.view.liftWindow()
         
         self.statusLabel.config(text=f"状態: 子画面を最前面に移動")
     
@@ -160,7 +160,7 @@ class FlowEditor:
         if clickedItems:
             clickedItem = clickedItems[0]
             for node in self.nodes:
-                if clickedItem == node.rect or clickedItem == node.label:
+                if clickedItem == node.view.rect or clickedItem == node.view.label:
                     isItemClick = True
                     break
             if not isItemClick:
@@ -180,7 +180,8 @@ class FlowEditor:
         node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
         if node:
             self.nodes.append(node)
-            self._placeItemBeforeConnections(node.rect, node.label)
+            self._placeItemBeforeConnections(node.view.rect, node.view.label)
+            node.view.updatePositionAndAppearance()
     
     def addTrayAtPosition(self):
         x = self.canvas.canvasx(self.rightClickX)
@@ -251,11 +252,6 @@ class FlowEditor:
         # 残りのトレイの外観を更新
         self.updateAllTrayAppearance()
     
-    def updateNodeText(self, node, text):
-        if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadIndex'):
-            text = f"{node._loadIndex} {text}"
-        self.canvas.itemconfig(node.label, text=text)
-    
     def adjustCanvasSize(self):
         """ノードとトレイの位置に合わせてcanvasサイズを調整"""
         if not self.nodes and not self.trays:
@@ -264,9 +260,9 @@ class FlowEditor:
         # 全ノードとトレイの範囲を計算
         items = []
         for node in self.nodes:
-            items.extend([node.x - 60, node.x + 60, node.y - 30, node.y + 30])
+            items.extend([node.view.x - 60, node.view.x + 60, node.view.y - 30, node.view.y + 30])
         for tray in self.trays:
-            items.extend([tray.x - tray.width//2, tray.x + tray.width//2, 
+            items.extend([tray.x - tray.width//2, tray.x + tray.width//2,
                          tray.y - tray.height//2, tray.y + tray.height//2])
         
         if not items:
@@ -299,27 +295,27 @@ class FlowEditor:
     def _getConnectionPoints(self, fromNode, toNode):
         """ノード間の接続点を取得する"""
         # 中心間の線とノード境界の交点を計算
-        dx = toNode.x - fromNode.x
-        dy = toNode.y - fromNode.y
+        dx = toNode.view.x - fromNode.view.x
+        dy = toNode.view.y - fromNode.view.y
         
         if dx == 0 and dy == 0:
-            return fromNode.x, fromNode.y, toNode.x, toNode.y
+            return fromNode.view.x, fromNode.view.y, toNode.view.x, toNode.view.y
         
         # fromNodeからの交点を計算
         if abs(dx) * 20 > abs(dy) * 50:  # 水平方向が主
-            x1 = fromNode.x + (50 if dx > 0 else -50)
-            y1 = max(-20, min(20, fromNode.y + dy * 50 / abs(dx) - fromNode.y)) + fromNode.y
+            x1 = fromNode.view.x + (50 if dx > 0 else -50)
+            y1 = max(-20, min(20, fromNode.view.y + dy * 50 / abs(dx) - fromNode.view.y)) + fromNode.view.y
         else:  # 垂直方向が主
-            x1 = max(-50, min(50, fromNode.x + dx * 20 / abs(dy) - fromNode.x)) + fromNode.x
-            y1 = fromNode.y + (20 if dy > 0 else -20)
+            x1 = max(-50, min(50, fromNode.view.x + dx * 20 / abs(dy) - fromNode.view.x)) + fromNode.view.x
+            y1 = fromNode.view.y + (20 if dy > 0 else -20)
         
         # toNodeへの交点を計算
         if abs(dx) * 20 > abs(dy) * 50:  # 水平方向が主
-            x2 = toNode.x - (50 if dx > 0 else -50)
-            y2 = max(-20, min(20, toNode.y - dy * 50 / abs(dx) - toNode.y)) + toNode.y
+            x2 = toNode.view.x - (50 if dx > 0 else -50)
+            y2 = max(-20, min(20, toNode.view.y - dy * 50 / abs(dx) - toNode.view.y)) + toNode.view.y
         else:  # 垂直方向が主
-            x2 = max(-50, min(50, toNode.x - dx * 20 / abs(dy) - toNode.x)) + toNode.x
-            y2 = toNode.y - (20 if dy > 0 else -20)
+            x2 = max(-50, min(50, toNode.view.x - dx * 20 / abs(dy) - toNode.view.x)) + toNode.view.x
+            y2 = toNode.view.y - (20 if dy > 0 else -20)
         
         return x1, y1, x2, y2
     
@@ -330,7 +326,7 @@ class FlowEditor:
             self.canvas.coords(line, x1, y1, x2, y2)
     
     def selectNode(self, node):
-        self.statusLabel.config(text=f"ノードクリック: {node.text}")
+        self.statusLabel.config(text=f"ノードクリック: {node.name}")
         
         # 前の選択をクリア
         self.clearSelectedHighlight()
@@ -349,9 +345,9 @@ class FlowEditor:
                         break
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
-                self.resultText.insert(tk.END, f"接続削除: {self.selectedNode.text} → {node.text}\n")
+                self.resultText.insert(tk.END, f"接続削除: {self.selectedNode.name} → {node.name}\n")
                 self.resultText.see(tk.END)
-                self.statusLabel.config(text=f"接続削除: {self.selectedNode.text} → {node.text}")
+                self.statusLabel.config(text=f"接続削除: {self.selectedNode.name} → {node.name}")
             elif self.selectedNode in node.outputNodes:
                 # 逆方向接続を削除
                 node.outputNodes.remove(self.selectedNode)
@@ -364,9 +360,9 @@ class FlowEditor:
                         break
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
-                self.resultText.insert(tk.END, f"逆向き接続削除: {node.text} → {self.selectedNode.text}\n")
+                self.resultText.insert(tk.END, f"逆向き接続削除: {node.name} → {self.selectedNode.name}\n")
                 self.resultText.see(tk.END)
-                self.statusLabel.config(text=f"逆向き接続削除: {node.text} → {self.selectedNode.text}")
+                self.statusLabel.config(text=f"逆向き接続削除: {node.name} → {self.selectedNode.name}")
             else:
                 # 新規接続を作成
                 self.selectedNode.outputNodes.append(node)
@@ -376,9 +372,9 @@ class FlowEditor:
                 self.connectionLines.append((self.selectedNode, node, line))
                 # 接続情報を表示
                 self.resultText.delete(1.0, tk.END)
-                self.resultText.insert(tk.END, f"接続: {self.selectedNode.text} → {node.text}\n")
+                self.resultText.insert(tk.END, f"接続: {self.selectedNode.name} → {node.name}\n")
                 self.resultText.see(tk.END)
-                self.statusLabel.config(text=f"接続完了: {self.selectedNode.text} → {node.text}")
+                self.statusLabel.config(text=f"接続完了: {self.selectedNode.name} → {node.name}")
             
             self.selectedNode = None
             
@@ -393,13 +389,13 @@ class FlowEditor:
             self.selectedNode = node
             # 選択状態を表示
             self.selectedHighlight = self.canvas.create_rectangle(
-                node.x-55, node.y-25, node.x+55, node.y+25, 
+                node.view.x-55, node.view.y-25, node.view.x+55, node.view.y+25,
                 outline='red', width=3, fill=''
             )
             self.resultText.delete(1.0, tk.END)
-            self.resultText.insert(tk.END, f"選択中: {node.text}\n次のノードをクリックして接続")
+            self.resultText.insert(tk.END, f"選択中: {node.name}\n次のノードをクリックして接続")
             self.resultText.see(tk.END)
-            self.statusLabel.config(text=f"選択中: {node.text}")
+            self.statusLabel.config(text=f"選択中: {node.name}")
     
     def unselectNode(self):
         if self.selectedNode:
@@ -422,7 +418,7 @@ class FlowEditor:
         if clickedItems:
             clickedItem = clickedItems[0]
             for node in self.nodes:
-                if clickedItem == node.rect or clickedItem == node.label:
+                if clickedItem == node.view.rect or clickedItem == node.view.label:
                     isItemClick = True
                     break
             if not isItemClick:
@@ -448,11 +444,61 @@ class FlowEditor:
         if scrollRegion:
             self.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
     
+    def onNodeClick(self, view):
+        for node in self.nodes:
+            if view == node.view:
+                self.selectNode(node)
+                break
+    
+    def onNodeDoubleClick(self, view):
+        self.unselectNode()
+        for node in self.nodes:
+            if view == node.view:
+                node.view.onResult(node)
+                break
+    
+    def onNodeRightClick(self, view, event):
+        for node in self.nodes:
+            if view == node.view:
+                if "menu" in node.view._window and node.view._window["menu"].winfo_exists():
+                    node.view._window["menu"].post(event.x_root, event.y_root)
+                else:
+                    menu = tk.Menu(self.canvas, tearoff=0)
+                    
+                    if hasattr(node, 'setFilePaths'):
+                        menu.add_command(label="ファイル選択", command=lambda n=node:self.onSelectFiles(n))
+                    if hasattr(node, 'setOutputFilePath'):
+                        menu.add_command(label="出力ファイル選択", command=lambda n=node: self.onSelectOutputFile(n))
+                    if hasattr(node, 'createSettingWindow'):
+                        menu.add_command(label="設定", command=lambda n=node: node.view.onEdit(n))
+                        
+                    if None != menu.index(tk.END):
+                        menu.add_separator()
+                    
+                    menu.add_command(label="削除", command=lambda: self.deleteNode(node))
+                    
+                    node.view._window["menu"] = menu
+                
+                    menu.post(event.x_root, event.y_root)
+                break
+
+    def onSelectFiles(self, node):
+        filePaths = filedialog.askopenfilenames(filetypes=node.fileTypes)
+        if filePaths:
+            node.setFilePaths(filePaths)
+            node.view.onNodeConfigChanged(node)
+        
+    def onSelectOutputFile(self, node):
+        outputPath = filedialog.asksaveasfilename( defaultextension=node.defaultOutputExtension, filetypes=node.outputFileTypes)
+        if outputPath:
+            node.setOutputFilePath(outputPath)
+            node.view.onNodeConfigChanged(node)
+    
     def goHome(self):
         """キャンバスをホームポジションに戻す"""
         if self.nodes or self.trays:
             # ノードやトレイがある場合は重心に移動
-            items = [(node.x, node.y) for node in self.nodes] + [(tray.x, tray.y) for tray in self.trays]
+            items = [(node.view.x, node.view.y) for node in self.nodes] + [(tray.x, tray.y) for tray in self.trays]
             centerX = sum(x for x, y in items) / len(items)
             centerY = sum(y for x, y in items) / len(items)
             
@@ -510,7 +556,7 @@ class FlowEditor:
         
             # ウィンドウタイトルにファイル名を追記
             fileName = os.path.basename(filePath)
-            self.root.title(f"{self.text} - {fileName}")
+            self.root.title(f"{self.name} - {fileName}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
@@ -543,7 +589,7 @@ class FlowEditor:
 
             if (0 != targetX or 0 != targetY) and (nodes or trays):
                 # 座標指定があるので、位置を調整
-                items = [(node.x, node.y) for node in nodes] + [(tray.x, tray.y) for tray in trays]
+                items = [(node.view.x, node.view.y) for node in nodes] + [(tray.x, tray.y) for tray in trays]
                 centerX = sum(x for x, y in items) / len(items)
                 centerY = sum(y for x, y in items) / len(items)
                 
@@ -553,21 +599,12 @@ class FlowEditor:
                     
                 # 全アイテムの座標を調整
                 for node in nodes:
-                    node.x += offsetX
-                    node.y += offsetY
+                    node.view.x += offsetX
+                    node.view.y += offsetY
                 
                 for tray in trays:
                     tray.x += offsetX
                     tray.y += offsetY
-
-            # 全アイテムの座標を調整
-            for node in nodes:
-                # 描画を更新
-                node.updatePositionAndAppearance()
-            
-            for tray in trays:
-                # 描画を更新
-                tray.updatePositionAndAppearance()
 
             self.nodes.extend(nodes)
             self.trays.extend(trays)
@@ -582,14 +619,23 @@ class FlowEditor:
             
             # Z-orderで表示順を再現
             for obj in zOrderObj:
-                obj.lift()
+                if isinstance( obj, FlowNode):
+                    obj.view.lift()
+                else:
+                    obj.lift()
             
             # 接続線を最上位に配置
             for _, _, line in self.connectionLines:
                 self.canvas.tag_raise(line)
             
-            # トレイの外観を更新
-            self.updateAllTrayAppearance()
+            # 全アイテムの座標と外観を更新
+            for node in self.nodes:
+                # 描画を更新
+                node.view.updatePositionAndAppearance()
+            
+            for tray in self.trays:
+                # 描画を更新
+                tray.updatePositionAndAppearance()
             
             # canvasサイズを調整
             self.adjustCanvasSize()
@@ -597,7 +643,7 @@ class FlowEditor:
             if not appendMode:
                 # ウィンドウタイトルにファイル名を追記
                 fileName = os.path.basename(filePath)
-                self.root.title(f"{self.text} - {fileName}")
+                self.root.title(f"{self.name} - {fileName}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
@@ -628,8 +674,8 @@ class FlowEditor:
         
     def deleteNode(self, node):
         # ノードをキャンバスから削除
-        self.canvas.delete(node.rect)
-        self.canvas.delete(node.label)
+        self.canvas.delete(node.view.rect)
+        self.canvas.delete(node.view.label)
         
         # 削除対象ノードに関連する接続線を削除
         newConnectionLines = []
@@ -678,7 +724,7 @@ class FlowEditor:
         for node in self.nodes:
             if self._needsReprocessingRecursive(node):
                 highlight = self.canvas.create_rectangle(
-                    node.x-55, node.y-25, node.x+55, node.y+25,
+                    node.view.x-55, node.view.y-25, node.view.x+55, node.view.y+25,
                     outline='orange', width=4, fill='', dash=(5, 5)
                 )
                 self.reprocessingHighlights.append(highlight)
@@ -696,8 +742,13 @@ class FlowEditor:
         
         return False
     
-    def onNodeConfigChanged(self, changedNode):
+    def onNodeConfigChanged(self, node):
         """ノードの設定変更時に呼び出される"""
+        text = node.getText()
+        if Debug.LEVEL_NONE < Debug.LEVEL and hasattr(node, '_loadIndex'):
+            text = f"{node._loadIndex} {text}"
+        self.canvas.itemconfig(node.view.label, text=text)
+
         # 強調表示更新
         self.highlightReprocessingNodes()
         

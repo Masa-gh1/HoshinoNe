@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import MAX_WORKERS
-from utils.ThreadPool import ProcessExecutorInNode 
+from utils.ThreadPool import ProcessExecutorInNode
 
 # 同時ノード実行数
 MAX_NODE_WORKERS = 4
@@ -64,13 +64,13 @@ class FlowControl:
                     sep="開始: "
                             
                     for node in readyNodes:
-                        reportProgress( id(node), node.text, "待機中")
+                        reportProgress( id(node), node.name, "待機中")
                         context = {
-                            'progress_callback': lambda msg, current=None, total=None, id=id(node), t=node.text: reportProgress( id, t, msg, current, total)
+                            'progress_callback': lambda msg, current=None, total=None, id=id(node), t=node.name: reportProgress( id, t, msg, current, total)
                         }
                         future = nodeExecutor.submit(self._executeNode, node, context)
                         futures[future] = node
-                        text +=f"{sep}{node.text}"
+                        text +=f"{sep}{node.name}"
                         sep=","
                     
                     if 0<len(text):
@@ -80,8 +80,8 @@ class FlowControl:
                     for future in as_completed(futures):
                         node        = futures.pop(future)
                         elapsedMs = future.result()
-                        reportProgress(id(node), node.text, "完了", -1, -1)
-                        sendMessage(f"完了: {node.text} ({elapsedMs} ms)\n")
+                        reportProgress(id(node), node.name, "完了", -1, -1)
+                        sendMessage(f"完了: {node.name} ({elapsedMs} ms)\n")
                         break
         except:
             endTime = time.time()
@@ -104,4 +104,4 @@ class FlowControl:
             elapsedMs = int((endTime - startTime) * 1000)
             return elapsedMs
         except Exception as e:
-            raise Exception(f"ノード '{node.text}' でエラー: {str(e)}") from e
+            raise Exception(f"ノード '{node.name}' でエラー: {str(e)}") from e

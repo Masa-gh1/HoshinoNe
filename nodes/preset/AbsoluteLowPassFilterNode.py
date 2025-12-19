@@ -7,17 +7,25 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
 class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'absolute_lowpass_filter'
+    # ノード名
+    name      = '絶対値(低通)'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "absolute_lowpass_filter", "絶対値(低通)")
+        super().__init__(canvas, editor, x, y, **kwargs)
         self._combinedPolynomial = None
-    
-    def getColor(self):
-        return self._color_func
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""

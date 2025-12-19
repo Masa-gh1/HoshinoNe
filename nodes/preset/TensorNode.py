@@ -11,24 +11,31 @@ import hashlib
 import tkinter as tk
 from tkinter import simpledialog
 
+from base.FlowNode_CONST import *
 from base import FlowNode, FlowData, DataBlock
 from nodes import ConfigurableNode
 from utils.interval_helper import createHalfOpenEnd
 
 class TensorNode(FlowNode,ConfigurableNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_CONST
+    minorType = 'tensor'
+    # ノード名
+    name      = '数列'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_0N
+    outputCat = _OUT_CAT_AUX
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "tensor", "数列")
+        super().__init__(canvas, editor, x, y, **kwargs)
         self.planeCount = 3
         self.xOrder = 1
         self.yOrder = 1
         self.planeNames = ["Plane 0","Plane 1","Plane 2"]
         self.tensor = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIdx,i,j": value}
-        self.updateNodeText()
     
-    def getColor(self):
-        return self._color_const
-    
-    def updateNodeText(self):
+    def getText(self):
+        """ノードのテキストを取得"""
         constVal = ""
         for planeIndex in range(self.planeCount):
             value = self.tensor.get(f"{planeIndex},0,0", 0)
@@ -40,8 +47,8 @@ class TensorNode(FlowNode,ConfigurableNode):
                 constVal += f" {value:.1f}"
             else:
                 constVal += f" {value:.0f}"
-        displayText = f"{self.text}\nP:{self.planeCount} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
-        self.editor.updateNodeText(self, displayText)
+        displayText = f"{self.name}\nP:{self.planeCount} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
+        return displayText
     
     def store(self, nodeData):
         nodeData["planeCount"] = self.planeCount
@@ -64,10 +71,9 @@ class TensorNode(FlowNode,ConfigurableNode):
         else:
             # デフォルト名を生成
             self.planeNames = [f"Plane {i}" for i in range(self.planeCount)]
-        self.updateNodeText()
     
-    def onEdit(self):
-        return TensorSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return TensorSettingsDialog(self.view.editor.root, self)
     
     def applySettings(self, planeCount, xOrder, yOrder, tensor, planeNames):
         self.planeCount = planeCount
@@ -75,11 +81,7 @@ class TensorNode(FlowNode,ConfigurableNode):
         self.yOrder = yOrder
         self.tensor = tensor
         self.planeNames = planeNames
-        self.updateNodeText()
-        
-        newHash = self.getConfigHash()
-        if newHash != self._lastConfigHash:
-            self.editor.onNodeConfigChanged(self)
+        self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
         self.reportProgress(context, "開始")
@@ -143,7 +145,7 @@ class TensorNode(FlowNode,ConfigurableNode):
     def getConfigHash(self):
         tensorStr = str(sorted(self.tensor.items()))
         planeStr = str(self.planeNames)
-        config = f"{self.type}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{tensorStr}_{planeStr}"
+        config = f"{self.minorType}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{tensorStr}_{planeStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
@@ -153,7 +155,7 @@ class TensorSettingsDialog(tk.Toplevel):
         self.coeffEntries = {}
         self.planeNameEntries = []
         
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("600x450")
         
         # 基本設定フレーム

@@ -13,6 +13,8 @@ import os
 import threading
 import tkinter as tk
 from tkinter import filedialog
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import FlowData
 from base import FlowNode
@@ -20,41 +22,46 @@ from nodes import ConfigurableNode
 
 class BaseWriterNode(FlowNode,ConfigurableNode):
     """ファイル出力ノードの基底クラス"""
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_IO
+    minorType = 'base_writer'
+    # ノード名
+    name      = 'BaseWriterNode'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_N0
+    outputCat = _OUT_CAT_ETC
     
-    def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
-        super().__init__(canvas, editor, x, y, nodeType, text, **kwargs)
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, **kwargs)
         self.outputFilePath = ""
         self.outputFileTypes = [("files", "*.*")]
         self.defaultOutputExtension = ".txt"
     
-    def getColor(self):
-        return self._color_io
+    def getText(self):
+        """ノードのテキストを取得"""
+        if self.outputFilePath:
+            displayText = f"{self.name}\n{os.path.basename(self.outputFilePath)}"
+        else:
+            displayText = self.name
+        return displayText
     
     def setOutputFilePath(self, outputPath):
         self.outputFilePath = outputPath
     
-    def updateNodeText(self):
-        if self.outputFilePath:
-            displayText = f"{self.text}\n{os.path.basename(self.outputFilePath)}"
-        else:
-            displayText = self.text
-        self.editor.updateNodeText(self, displayText)
-    
     def store(self, nodeData):
         """相対パスで保存"""
-        flowDir = os.path.dirname(self.editor.currentFlowPath)
+        flowDir = os.path.dirname(self.view.editor.currentFlowPath)
         relativePath = os.path.relpath(self.outputFilePath, flowDir)
         nodeData["outputFilePath"] = relativePath
     
     def restore(self, nodeData):
         """絶対パスに復元"""
         if "outputFilePath" in nodeData:
-            flowDir = os.path.dirname(self.editor.currentFlowPath)
+            flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             self.outputFilePath = os.path.abspath(os.path.join(flowDir, nodeData["outputFilePath"]))
-            self.updateNodeText()
     
     def getConfigHash(self):
-        config = f"{self.type}_{self.outputFilePath}"
+        config = f"{self.minorType}_{self.outputFilePath}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def process(self, context=None):
@@ -101,9 +108,9 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         
         self.reportProgress(context, "完了")
         
-    def onEdit(self):
+    def createSettingWindow(self):
         """Settings dialogを開く"""
-        return BaseWriterSettingsDialog(self.editor.root, self)
+        return BaseWriterSettingsDialog(self.view.editor.root, self)
 
     def _createResultFlowData(self, fileInfos):
         """結果FlowDataを生成"""
@@ -157,7 +164,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("500x300")
         
         # メインフレーム
@@ -195,7 +202,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
     
     def browseFile(self):
         dialog = filedialog.asksaveasfilename(
-            title=f"{self.node.text} - 出力ファイルを選択",
+            title=f"{self.node.name} - 出力ファイルを選択",
             filetypes=self.node.outputFileTypes,
             defaultextension=self.node.defaultOutputExtension
         )
@@ -221,11 +228,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         # カスタム設定の適用
         self.customOnApply()
         
-        self.node.updateNodeText()
-        
-        newHash = self.node.getConfigHash()
-        if newHash != self.node._lastConfigHash:
-            self.node.editor.onNodeConfigChanged(self.node)
+        self.node.view.onNodeConfigChanged(self.node)
     
     def onClose(self):
         self.destroy()

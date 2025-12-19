@@ -11,6 +11,8 @@ import hashlib
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from nodes import NNBlockOperationNode, ConfigurableNode
 from utils import numpy_helpers as nh
@@ -34,8 +36,17 @@ except ImportError:
     SKIMAGE_AVAILABLE = False
 
 class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'wavelet_denoise'
+    # ノード名
+    name      = 'ウェーブレットノイズ除去'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "wavelet_denoise", "ウェーブレットノイズ除去")
+        super().__init__(canvas, editor, x, y, **kwargs)
         
         # デフォルト設定
         self.wavelet = "db4"
@@ -45,36 +56,26 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         self.star_protection = True
         self.protection_radius = 3
         
-        self.lastConfigHash = None
-        
         if not PYWT_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "PyWaveletsライブラリが必要です\npip install PyWavelets")
+            messagebox.showerror(f"{self.name} エラー", "PyWaveletsライブラリが必要です\npip install PyWavelets")
         
         if not SKIMAGE_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "scikit-imageライブラリが必要です\npip install scikit-image")
+            messagebox.showerror(f"{self.name} エラー", "scikit-imageライブラリが必要です\npip install scikit-image")
         
         if not SCIPY_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "scipyライブラリが必要です\npip install scipy")
+            messagebox.showerror(f"{self.name} エラー", "scipyライブラリが必要です\npip install scipy")
     
-    def getColor(self):
-        return self._color_func
-    
-    def updateNodeText(self):
-        displayText = f"{self.text}\n{self.wavelet}\nL:{self.levels} S:{self.sigma}"
+    def getText(self):
+        """ノードのテキストを取得"""
+        displayText = f"{self.name}\n{self.wavelet}\nL:{self.levels} S:{self.sigma}"
         if self.star_protection:
             displayText += f" 星保護ON"
         else:
             displayText += f" 星保護OFF"
-        self.editor.updateNodeText(self, displayText)
-        
-        newHash = self.getConfigHash()
-        if newHash != self.lastConfigHash:
-            self.lastConfigHash = newHash
-            if hasattr(self.editor, 'onNodeConfigChanged'):
-                self.editor.onNodeConfigChanged(self)
+        return displayText
     
-    def onEdit(self):
-        return WaveletDenoiseSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return WaveletDenoiseSettingsDialog(self.view.editor.root, self)
     
     def store(self, nodeData):
         nodeData["wavelet"] = self.wavelet
@@ -91,7 +92,6 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         self.star_threshold = nodeData.get("star_threshold", 99.0)
         self.star_protection = nodeData.get("star_protection", True)
         self.protection_radius = nodeData.get("protection_radius", 3)
-        self.updateNodeText()
     
     def getConfigHash(self):
         config = f"{self.wavelet}_{self.levels}_{self.sigma}_{self.star_threshold}_{self.star_protection}_{self.protection_radius}"
@@ -198,7 +198,7 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("400x500")
         
         self.createWidgets()
@@ -231,7 +231,7 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         self.waveletVar = tk.StringVar(value=self.node.wavelet)
         wavelets = [
             "db1 - Daubechies1（最もシンプル）",
-            "db4 - Daubechies4（バランス良好・推奨）", 
+            "db4 - Daubechies4（バランス良好・推奨）",
             "db8 - Daubechies8（高品質・重い）",
             "haar - Haar（最速・粗い）",
             "bior2.2 - Biorthogonal2.2（対称性重視）",
@@ -276,26 +276,14 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         
         return frame
     
-    def customOnApply(self):
+    def onApply(self):
         self.node.wavelet = self.waveletVar.get().split(' - ')[0]
         self.node.levels = self.levelsVar.get()
         self.node.sigma = self.sigmaVar.get()
         self.node.star_threshold = self.thresholdVar.get()
         self.node.star_protection = self.protectionVar.get()
         self.node.protection_radius = self.radiusVar.get()
-        self.node.updateNodeText()
+        self.node.view.onNodeConfigChanged(self.node)
     
     def onClose(self):
         self.destroy()
-    
-    def onApply(self):
-        self.customOnApply()
-        self.node.updateNodeText()
-        
-        newHash = self.node.getConfigHash()
-        if newHash != self.node.lastConfigHash:
-            self.node.lastConfigHash = newHash
-            if hasattr(self.node.editor, 'onNodeConfigChanged'):
-                self.node.editor.onNodeConfigChanged(self.node)
-    def getFormalFileInfo(self, filePath): return {}
-    def createSortButton(self, parent): return None

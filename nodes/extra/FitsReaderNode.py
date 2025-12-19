@@ -29,12 +29,22 @@ except ImportError:
     ASTROPY_AVAILABLE = False
 
 class FitsReaderNode(BaseReaderNode):
+    # ノードタイプ
+    #majorType = スーパークラスを継承
+    minorType = 'fits_reader'
+    # ノード名
+    name      = 'FITS読み込み'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "fits_reader", "FITS読み込み")
+        super().__init__(canvas, editor, x, y, **kwargs)
+
         self.fileTypes = [("FITS files", "*.fits *.fit *.fts")]
         
         if not ASTROPY_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "astropyライブラリがインストールされていません。\npip install astropy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "astropyライブラリがインストールされていません。\npip install astropy でインストールしてください。")
             return
     
     def countFileBlocks(self, filePath):
@@ -59,8 +69,8 @@ class FitsReaderNode(BaseReaderNode):
         except:
             return 0
     
-    def onEdit(self):
-        return FitsSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return FitsSettingsDialog(self.view.editor.root, self)
     
     def processFile(self, filePath, context=None):
         """単一FITSファイルの処理"""
@@ -289,7 +299,7 @@ class FitsReaderNode(BaseReaderNode):
             }
     
     def getConfigHash(self):
-        config = f"{self.type}_{"|".join(self.filePaths)}"
+        config = f"{self.minorType}_{"|".join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def _processBlock(self, data, x, y, channels, width, height):
@@ -360,5 +370,5 @@ class FitsSettingsDialog(BaseReaderSettingsDialog):
             self.selectedFilePaths.sort(key=get_obs_timestamp)
             self.updateFileList()
         except Exception as e:
-            messagebox.showerror(f"{self.node.text} エラー", f"ソートに失敗しました: {str(e)}")
+            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
     

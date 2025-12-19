@@ -8,17 +8,25 @@ All rights reserved.
 '''
 
 import numpy as np
+
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import DataBlock
 from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
 from utils import numpy_helpers as nh
 
 class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_OP
+    minorType = 'sum'
+    # ノード名
+    name      = '総和'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "sum", "総和")
-    
-    def getColor(self):
-        return self._color_op
+        super().__init__(canvas, editor, x, y, **kwargs)
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
@@ -44,11 +52,11 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         if datas:
             return datas
         elif self._combinedTensor:
-            datas = [self._combinedTensor] 
+            datas = [self._combinedTensor]
             self._combinedTensor = None
             return datas
         elif self._combinedPolynomial:
-            datas = [self._combinedPolynomial] 
+            datas = [self._combinedPolynomial]
             self._combinedPolynomial = None
             return datas
         else:

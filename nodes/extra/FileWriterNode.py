@@ -13,8 +13,18 @@ from nodes import BaseWriterNode
 from config import BLOCK_SIZE
 
 class FileWriterNode(BaseWriterNode):
+    # ノードタイプ
+    #majorType = スーパークラスを継承
+    minorType = 'file_writer'
+    # ノード名
+    name      = 'ファイル書き出し'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "file_writer", "ファイル書き出し", **kwargs)
+        super().__init__(canvas, editor, x, y, **kwargs)
+
         self.outputFileTypes = [("CSV files", "*.csv"), ("All files", "*.*")]
         self.defaultOutputExtension = ".csv"
         

@@ -82,7 +82,7 @@ HEADERS_EXIF_OPT = [
 # ここには無い、"bayer", "bayer crop", "unpack", "raw" はプリセットされています。
 RAW_DEMOSAIC_ALGORITHMS = {
     # name  text
-    "AHD" : "適応的同質性指向アルゴリズム:高品質だが処理時間が長い", 
+    "AHD" : "適応的同質性指向アルゴリズム:高品質だが処理時間が長い",
     "AAHD": "適応的AHD:AHDの改良版",
     "VNG" : "可変勾配数アルゴリズム:バランスの取れた品質と速度",
     "PPG" : "パターン化ピクセルグループ化:高速だが品質は劣る",
@@ -105,7 +105,7 @@ def configRawParams(params):
     #params.bad_pixels         = None         # -:     None
     params.output_bps          = 16           # int:   8
     #params.user_flip          = -1           # int:   -1
-    #params.user_qual          = -1           # int:   -1  
+    #params.user_qual          = -1           # int:   -1
     params.user_black          = 0            # int:   -1
     #params.user_sat           = -1           # int:   -1
     #params.med_passes         = 0            # int:   0

@@ -13,7 +13,7 @@ class ConfigurableNode(AbstractBaseClass):
     """設定可能なノードのインターフェース"""
     
     @abstractmethod
-    def onEdit(self):
+    def createSettingWindow(self):
         """設定ダイアログを開く"""
         pass
     

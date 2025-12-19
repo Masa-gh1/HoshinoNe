@@ -46,7 +46,7 @@ class ResultWindow(tk.Toplevel):
         super().__init__(parent)
         self.node = node
     
-        self.title(f"{self.node.text} - 処理結果")
+        self.title(f"{self.node.name} - 処理結果")
         self.geometry("600x400")
         
         # 制御フレーム
@@ -141,7 +141,7 @@ class ResultWindow(tk.Toplevel):
                 def update():
                     self._resize_timer = None
                     self.updateResult()
-                self._resize_timer = self.node.editor.root.after(300, update)
+                self._resize_timer = self.node.view.editor.root.after(300, update)
         
         self.bind('<Configure>', on_configure)
     
@@ -156,9 +156,9 @@ class ResultWindow(tk.Toplevel):
         
         # タイトルを更新してデータ読み込み中を表示
         def update_title_loading():
-            self.title(f"{self.node.text} - データ読み込み中...")
+            self.title(f"{self.node.name} - データ読み込み中...")
         
-        self.node.editor.root.after(0, update_title_loading)
+        self.node.view.editor.root.after(0, update_title_loading)
         
         # 選択されたデータのみ処理
         content_parts = []
@@ -172,7 +172,7 @@ class ResultWindow(tk.Toplevel):
         
         # 結果をメインスレッドで表示
         def display_result():
-            self.title(f"{self.node.text} - 処理結果")
+            self.title(f"{self.node.name} - 処理結果")
             
             if hasattr(self, '_result_text_widget'):
                 text_widget = self._result_text_widget
@@ -197,7 +197,7 @@ class ResultWindow(tk.Toplevel):
                 # スクロール位置を復元
                 text_widget.yview_moveto(scroll_pos)
         
-        self.node.editor.root.after(0, display_result)
+        self.node.view.editor.root.after(0, display_result)
         
         # コントロールフレームの表示状態を更新
         def safe_update():
@@ -208,7 +208,7 @@ class ResultWindow(tk.Toplevel):
             except tk.TclError:
                 pass
         
-        self.node.editor.root.after(0, safe_update)
+        self.node.view.editor.root.after(0, safe_update)
     
     def _generateFlowDataContent(self, flowData):
         """フローデータの内容を文字列として生成（非同期処理用）"""

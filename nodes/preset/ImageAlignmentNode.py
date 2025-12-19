@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import FlowData
 from base import LazyFlowData
 from base import DataBlock
@@ -38,8 +39,17 @@ class AlignmentResult:
         self.extra_info = extra_info
 
 class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_OP
+    minorType = 'image_alignment'
+    # ノード名
+    name      = '画像位置合わせ'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "image_alignment", "画像位置合わせ")
+        super().__init__(canvas, editor, x, y, **kwargs)
         
         # 設定パラメータ
         # 基準画像選択（auxiliaryでマークされた画像を使用）
@@ -71,18 +81,14 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # 拡張領域計算
         # 位置合わせ実行
         
-        self.lastConfigHash = None
-        
         if not CV2_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
-    def getColor(self):
-        return self._color_op
-    
-    def updateNodeText(self):
-        displayText = f"{self.text}\nG:{self.star.grid.cols}x{self.star.grid.rows} S:{self.star.ransac.sampleRadius}"
-        self.editor.updateNodeText(self, displayText)
+    def getText(self):
+        """ノードのテキストを取得"""
+        displayText = f"{self.name}\nG:{self.star.grid.cols}x{self.star.grid.rows} S:{self.star.ransac.sampleRadius}"
+        return displayText
     
     def store(self, nodeData):
         nodeData["usePreviousOffset"] = self.usePreviousOffset
@@ -135,7 +141,6 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             self.phase.maxOffset = nodeData["phaseMaxOffset"]
         if "templateSearchRange" in nodeData:
             self.template.searchRange = nodeData["templateSearchRange"]
-        self.updateNodeText()
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類"""
@@ -686,7 +691,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         target_centered = target_pts - image_center
         
         # 中心座標系でアフィン変換を計算
-        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC, 
+        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC,
                                         ransacReprojThreshold=2.0)[0]
         
         if M is not None:
@@ -890,8 +895,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
 
     
-    def onEdit(self):
-        return ImageAlignmentSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return ImageAlignmentSettingsDialog(self.view.editor.root, self)
     
     def getConfigHash(self):
         config = f"{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
@@ -1010,7 +1015,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("450x700")
         
         self.createWidgets()
@@ -1193,11 +1198,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
             self.node.star.useSaturationMask = self.useSaturationMaskVar.get()
             self.node.star.maxAspectRatio = max(1.0, float(self.aspectRatioEntry.get()))
             
-            self.node.updateNodeText()
-            
-            newHash = self.node.getConfigHash()
-            if newHash != self.node.lastConfigHash:
-                self.node.editor.onNodeConfigChanged(self.node)
+            self.node.view.onNodeConfigChanged(self.node)
                 
         except ValueError:
             messagebox.showerror("エラー", "数値の入力が正しくありません")

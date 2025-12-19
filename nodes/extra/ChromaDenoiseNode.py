@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import FlowNode, DataBlock, FlowData
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
@@ -24,8 +25,17 @@ except ImportError:
     SCIPY_AVAILABLE = False
 
 class ChromaDenoiseNode(FlowNode,ConfigurableNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'chroma_denoise'
+    # ノード名
+    name      = '色空間分離ノイズ除去'
+    # 入出力タイプ
+    ioType    = _IO_TYPE_NN
+    outputCat = _OUT_CAT_PAS
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "chroma_denoise", "色空間分離ノイズ除去")
+        super().__init__(canvas, editor, x, y, **kwargs)
         
         # デフォルト設定
         self.colorspace = "Lab"  # Lab, YUV, HSV
@@ -34,25 +44,16 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         self.preserve_edges = True  # エッジ保護
         self.edge_threshold = 0.01  # エッジ検出閾値
         
-        self.lastConfigHash = None
-
         if not SCIPY_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "scipyライブラリがインストールされていません\npip install scipy でインストールしてください")
-        
-        self.updateNodeText()
+            messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません\npip install scipy でインストールしてください")
     
-    def updateNodeText(self):
-        displayText = f"{self.text}\n{self.colorspace}\nC:{self.chroma_strength:.1f} L:{self.luma_strength:.1f}"
-        self.editor.updateNodeText(self, displayText)
-        
-        newHash = self.getConfigHash()
-        if newHash != self.lastConfigHash:
-            self.lastConfigHash = newHash
-            if hasattr(self.editor, 'onNodeConfigChanged'):
-                self.editor.onNodeConfigChanged(self)
+    def getText(self):
+        """ノードのテキストを取得"""
+        displayText = f"{self.name}\n{self.colorspace}\nC:{self.chroma_strength:.1f} L:{self.luma_strength:.1f}"
+        return displayText
     
-    def onEdit(self):
-        return ChromaDenoiseSettingsDialog(self.editor.root, self)
+    def createSettingWindow(self):
+        return ChromaDenoiseSettingsDialog(self.view.editor.root, self)
     
     def store(self, nodeData):
         nodeData["colorspace"] = self.colorspace
@@ -67,10 +68,6 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         self.luma_strength = nodeData.get("luma_strength", 0.2)
         self.preserve_edges = nodeData.get("preserve_edges", True)
         self.edge_threshold = nodeData.get("edge_threshold", 0.1)
-        self.updateNodeText()
-    
-    def getColor(self):
-        return self._color_func
     
     def getConfigHash(self):
         config = f"{self.colorspace}_{self.chroma_strength}_{self.luma_strength}_{self.preserve_edges}_{self.edge_threshold}"
@@ -412,7 +409,7 @@ class ChromaDenoiseSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
-        self.title(f"{node.text}設定")
+        self.title(f"{node.name}設定")
         self.geometry("400x450")
         
         self.createWidgets()
@@ -443,8 +440,8 @@ class ChromaDenoiseSettingsDialog(tk.Toplevel):
         # 色空間選択
         tk.Label(frame, text="色空間:").pack(anchor="w")
         self.colorspaceVar = tk.StringVar(value=self.node.colorspace)
-        colorspaces = ["Lab - 知覚的均等色空間（推奨）", 
-                      "YUV - 輝度・色差分離", 
+        colorspaces = ["Lab - 知覚的均等色空間（推奨）",
+                      "YUV - 輝度・色差分離",
                       "HSV - 色相・彩度・明度"]
         current_cs = next((cs for cs in colorspaces if cs.startswith(self.node.colorspace)), colorspaces[0])
         self.colorspaceVar.set(current_cs)
@@ -475,17 +472,13 @@ class ChromaDenoiseSettingsDialog(tk.Toplevel):
         
         return frame
     
-    def customOnApply(self):
+    def onApply(self):
         self.node.colorspace = self.colorspaceVar.get().split(' - ')[0]
         self.node.chroma_strength = self.chromaVar.get()
         self.node.luma_strength = self.lumaVar.get()
         self.node.preserve_edges = self.edgeVar.get()
         self.node.edge_threshold = self.thresholdVar.get()
-        self.node.updateNodeText()
-    
-    def onApply(self):
-        self.customOnApply()
-        self.node.updateNodeText()
+        self.node.view.onNodeConfigChanged(self.node)
     
     def onClose(self):
         self.destroy()

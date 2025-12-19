@@ -11,6 +11,7 @@ import hashlib
 from tkinter import messagebox
 
 from config import BLOCK_SIZE
+from base.FlowNode_CONST import *
 from base import FlowData
 from base import LazyFlowData
 from base import DataBlock
@@ -24,21 +25,24 @@ except ImportError:
     CV2_AVAILABLE = False
 
 class TransformNode(LazyNNOperationNode):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_FUNC
+    minorType = 'transform'
+    # ノード名
+    name      = '変形'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "transform", "変形")
+        super().__init__(canvas, editor, x, y, **kwargs)
         
         self._tableData   = None
         self._extendParams = None
 
         if not CV2_AVAILABLE:
-            messagebox.showerror(f"{self.text} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
             return
-    
-    def getColor(self):
-        return self._color_func
-    
-    def updateNodeText(self):
-        self.editor.updateNodeText(self, self.text)
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類"""
@@ -128,7 +132,7 @@ class TransformNode(LazyNNOperationNode):
             transform_params = self._getTransformParams(image_id, tableData)
             
             if transform_params:
-                corners = self._calculateTransformedCorners(width, height, 
+                corners = self._calculateTransformedCorners(width, height,
                     transform_params['dx'], transform_params['dy'], transform_params['rotation'])
                 all_corners.extend(corners)
         

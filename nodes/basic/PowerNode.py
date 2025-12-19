@@ -7,17 +7,25 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
+
+from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
 class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
+    # ノードタイプ
+    majorType = _MAJOR_TYPE_OP
+    minorType = 'power'
+    # ノード名
+    name      = '冪算'
+    # 入出力タイプ
+    #ioType    = スーパークラスを継承
+    #outputCat = スーパークラスを継承
+
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "power", "冪算")
+        super().__init__(canvas, editor, x, y, **kwargs)
         self._combinedPolynomial = None
-    
-    def getColor(self):
-        return self._color_op
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
@@ -96,7 +104,7 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
                     expMin, expMax = cls.calculatePolynomialRange(polynomial.data, width, height)
                     
                     # 冪乗の範囲計算（実数部のみ）
-                    powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax), 
+                    powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax),
                              np.real(inputMax ** expMin), np.real(inputMax ** expMax)]
                     return {
                         'display_levels': {
