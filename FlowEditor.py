@@ -18,8 +18,10 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import atexit
+import gc
 from nodes import NodeFactory
-from base.ResultWindow import ResultWindow
+from base.FlowNode import FlowNode
+from base.CacheManager import CacheManager
 
 # グローバルスレッドプール
 MAX_NODE_WORKERS = 4
@@ -126,24 +128,11 @@ class FlowEditor:
     
     def bringChildWindowsToFront(self):
         """子画面を最前面に持ち上げる"""
-        childWindows = []
-        
         # 各ノードの設定ダイアログをチェック
         for node in self.nodes:
-            if hasattr(node, '_settings_dialog') and node._settings_dialog.winfo_exists():
-                childWindows.append(node._settings_dialog)
-            if hasattr(node, '_result_window') and node._result_window.winfo_exists():
-                childWindows.append(node._result_window)
+            node.lift()
         
-        # 子画面を最前面に持ち上げ
-        for window in childWindows:
-            window.lift()
-            window.focus_force()
-        
-        if childWindows:
-            self.statusLabel.config(text=f"状態: {len(childWindows)}個の子画面を最前面に移動")
-        else:
-            self.statusLabel.config(text="状態: 最前面に移動する子画面がありません")
+        self.statusLabel.config(text=f"状態: 子画面を最前面に移動")
     
     def onCanvasRightRelease(self, event):
         # ノード以外の場所をクリックした場合のみメニューを表示
@@ -438,7 +427,7 @@ class FlowEditor:
                         self.root.after(0, lambda n=node: self.statusLabel.config(text=f"完了: {n.text}"))
                         self.root.after(0, lambda: self._clearAllProgress())
                         self.root.after(0, lambda: self.highlightReprocessingNodes())
-                        self.root.after(0, lambda n=node: self._updateOpenResultWindows(n))
+                        self.root.after(0, lambda n=node: n.updateResult())
             
             if not self.autoExecute.get():
                 self.root.after(0, lambda: self.resultText.insert(tk.END, f"実行完了\n"))
@@ -620,6 +609,10 @@ class FlowEditor:
         return NodeFactory.createNode(nodeData["type"], self.canvas, self, nodeData["x"], nodeData["y"], nonDialog=True)
     
     def clearFlow(self):
+        # ノードのイベントバインディングを解除してFlowData参照をクリア
+        for node in self.nodes:
+            node.cleanUp()
+            
         # キャンバスをクリア
         self.canvas.delete("all")
         # ノードと接続をクリア
@@ -629,8 +622,15 @@ class FlowEditor:
         # 選択ハイライトをクリア
         if hasattr(self, 'selectedHighlight'):
             delattr(self, 'selectedHighlight')
+        
+        # debug ガベージコレクションを強制実行
+        gc.collect()
+        self._debugNodeReferences()
+        ########################
     
     def deleteNode(self, node):
+        node.cleanUp()
+        
         # ノードをキャンバスから削除
         self.canvas.delete(node.rect)
         self.canvas.delete(node.label)
@@ -754,33 +754,19 @@ class FlowEditor:
             else:
                 progressInfo['bar'].config(value=0)
     
-    def showNodeResult(self, node):
-        """ノードの処理結果を表示"""
-        result_window = ResultWindow(self.root, node)
-        result_window.show()
-    
-    def _updateResultWindow(self, node):
-        """結果ウィンドウの内容を更新"""
-        result_window = ResultWindow(self.root, node)
-        result_window.update()
-        
-    def _updateOpenResultWindows(self, node):
-        """開いている結果ウィンドウを更新"""
-        if hasattr(node, '_result_window'):
-            try:
-                if node._result_window.winfo_exists():
-                    self._updateResultWindow(node)
-            except tk.TclError:
-                # ウィンドウが既に閉じられている場合
-                if hasattr(node, '_result_window'):
-                    delattr(node, '_result_window')
-                if hasattr(node, '_result_text_widget'):
-                    delattr(node, '_result_text_widget')
-    
     def updateCacheStats(self):
         """キャッシュ統計を更新"""
-        from base.FlowData import FlowData
-        cacheSize, diskSize = FlowData.getCacheStats()
+        
+        flowNodeCount = f"{len(self.nodes)}個"
+        
+        flowNodes = []
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and isinstance( obj, FlowNode):
+                flowNodes.append(obj)
+        
+        cacheNodeCount = f"{len(flowNodes)}個"
+        
+        cacheSize, diskSize = CacheManager.getCacheStats()
         
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 1024:
@@ -799,10 +785,72 @@ class FlowEditor:
             diskStr = f"{diskSize/(1024*1024):.1f}MB"
         
         # 使用量ラベルを更新
-        self.usageLabel.config(text=f"Cache: {cacheStr} Disk: {diskStr}")
+        self.usageLabel.config(text=f"Node: {flowNodeCount} Cache:{cacheNodeCount} {cacheStr} Disk: {diskStr}")
         
         # 5秒後に再度更新
         self.root.after(5000, self.updateCacheStats)
+
+    def _debugNodeReferences(self):
+        """ノードの参照状況をデバッグ出力"""
+        print("========================")
+        
+        # 全オブジェクトからflowNodeを探す
+        objs = []
+        for obj in gc.get_objects():
+            if(   hasattr(obj, '__class__')
+              and (  isinstance( obj, FlowNode)
+                  or isinstance( obj, tk.Toplevel)
+                  )
+              ):
+                objs.append(obj)
+        
+        print(f"残存flowNode数: {len(objs)}")
+        
+        for i, obj in enumerate(objs):
+            print(f"残存ノード{i}: {getattr(obj, 'text', type(obj).__name__)} (id: {id(obj)})")
+            
+            # 参照カウントを取得
+            refCount = sys.getrefcount(obj)
+            print(f"  参照カウント: {refCount}")
+            
+            # gcモジュールで参照元を調査
+            referrers = gc.get_referrers(obj)
+            print(f"  参照元数: {len(referrers)}")
+            
+            for j, ref in enumerate(referrers):
+                refType = type(ref).__name__
+                if refType == 'list':
+                    print(f"    {j}: リスト (長さ: {len(ref)})")
+                elif refType == 'tuple':
+                    print(f"    {j}: タプル (長さ: {len(ref)})")
+                elif refType == 'dict':
+                    print(f"    {j}: 辞書 (キー数: {len(ref)})")
+                elif refType == 'method':
+                    print(f"    {j}: メソッド {ref.__name__} (オブジェクト: {type(ref.__self__).__name__})")
+                elif hasattr(ref, '__class__'):
+                    print(f"    {j}: {ref.__class__.__name__} オブジェクト")
+                else:
+                    print(f"    {j}: {refType}")
+            
+            referrers = gc.get_referents(obj)
+            print(f"  参照先数: {len(referrers)}")
+            for j, ref in enumerate(referrers):
+                refType = type(ref).__name__
+                if refType == 'list':
+                    print(f"    {j}: リスト (長さ: {len(ref)})")
+                elif refType == 'tuple':
+                    print(f"    {j}: タプル (長さ: {len(ref)})")
+                elif refType == 'dict':
+                    print(f"    {j}: 辞書 (キー数: {len(ref)})")
+                elif refType == 'method':
+                    print(f"    {j}: メソッド {ref.__name__} (オブジェクト: {type(ref.__self__).__name__})")
+                elif hasattr(ref, '__class__'):
+                    print(f"    {j}: {ref.__class__.__name__} オブジェクト")
+                else:
+                    print(f"    {j}: {refType}")
+        
+        print("========================")
+
 
 if __name__ == '__main__':
     root = tk.Tk()

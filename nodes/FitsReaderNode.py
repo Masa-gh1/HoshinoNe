@@ -58,10 +58,7 @@ class FitsReaderNode(BaseReaderNode):
             return 0
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = FitsSettingsDialog(self.editor.root, self)
+        return FitsSettingsDialog(self.editor.root, self)
     
     def processFile(self, filePath, context=None):
         """単一FITSファイルの処理"""

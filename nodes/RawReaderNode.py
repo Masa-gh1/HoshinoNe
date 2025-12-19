@@ -114,10 +114,7 @@ class RawReaderNode(BaseReaderNode):
             return 1
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = RawSettingsDialog(self.editor.root, self)
+        return RawSettingsDialog(self.editor.root, self)
     
     def processFile(self, filePath, context=None):
         """単一RAWファイルの処理"""
@@ -292,7 +289,6 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
     def __init__(self, parent, node):
         super().__init__(parent, node)
         self.geometry("700x500")
-
     
     def getColumns(self):
         return ('filename', 'datetime', 'size', 'exposure', 'fnumber', 'iso')

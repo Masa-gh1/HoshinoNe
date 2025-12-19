@@ -50,10 +50,7 @@ class ImageReaderNode(BaseReaderNode):
             return 0
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = ImageSettingsDialog(self.editor.root, self)
+        return ImageSettingsDialog(self.editor.root, self)
         
     def processFile(self, filePath, context=None):
         if not PIL_AVAILABLE:

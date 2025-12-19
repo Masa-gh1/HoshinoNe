@@ -48,6 +48,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         self.gridCols = 3  # グリッド列数
         self.starsPerGrid = 8  # グリッド当たりの選択星数
         self.starSampleRadius = 100  # 星サンプル半径（ピクセル）
+        self.ransacIterations = 100  # RANSAC試行回数
         # オフセット計算 優先順位2: 位相相関法
         self.phaseCorrelationMaxOffset = 100  # 位相相関最大オフセット（ピクセル）
         # オフセット計算 優先順位3: テンプレートマッチング法
@@ -88,6 +89,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         nodeData["starMinDiameter"] = self.starMinDiameter
         nodeData["starMaxDiameter"] = self.starMaxDiameter
         nodeData["templateSearchRange"] = self.templateSearchRange
+        nodeData["ransacIterations"] = self.ransacIterations
         nodeData["usePreviousOffset"] = self.usePreviousOffset
     
     def restore(self, nodeData):
@@ -113,6 +115,8 @@ class ImageAlignmentNode(NNBlockOperationNode):
             self.starMaxDiameter = nodeData["starMaxDiameter"]
         if "templateSearchRange" in nodeData:
             self.templateSearchRange = nodeData["templateSearchRange"]
+        if "ransacIterations" in nodeData:
+            self.ransacIterations = nodeData["ransacIterations"]
         if "usePreviousOffset" in nodeData:
             self.usePreviousOffset = nodeData["usePreviousOffset"]
         self.updateNodeText()
@@ -465,7 +469,7 @@ class ImageAlignmentNode(NNBlockOperationNode):
         best_offset = None
         best_inliers = 0
         
-        for _ in range(100):  # 100回試行
+        for _ in range(self.ransacIterations):  # RANSAC試行回数
             # ランダムに3点選択
             sample = np.random.choice(len(matches), min(3, len(matches)), replace=False)
             
@@ -856,13 +860,10 @@ class ImageAlignmentNode(NNBlockOperationNode):
         return image
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = ImageAlignmentSettingsDialog(self.editor.root, self)
+        return ImageAlignmentSettingsDialog(self.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.referenceIndex}_{self.gridRows}_{self.gridCols}_{self.starsPerGrid}_{self.alignmentPlane}_{self.starThreshold}_{self.cropMode}_{self.phaseCorrelationMaxOffset}_{self.starSampleRadius}_{self.starMinDiameter}_{self.starMaxDiameter}_{self.templateSearchRange}_{self.usePreviousOffset}"
+        config = f"{self.referenceIndex}_{self.gridRows}_{self.gridCols}_{self.starsPerGrid}_{self.alignmentPlane}_{self.starThreshold}_{self.cropMode}_{self.phaseCorrelationMaxOffset}_{self.starSampleRadius}_{self.starMinDiameter}_{self.starMaxDiameter}_{self.templateSearchRange}_{self.ransacIterations}_{self.usePreviousOffset}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class ImageAlignmentSettingsDialog(tk.Toplevel):
@@ -963,6 +964,15 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
         self.starDistEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(starDistFrame, text="px (統計処理用サンプル収集範囲)").pack(side=tk.LEFT)
         
+        # RANSAC試行回数
+        ransacFrame = tk.Frame(mainFrame)
+        ransacFrame.pack(fill=tk.X, pady=2)
+        tk.Label(ransacFrame, text="    RANSAC試行回数:").pack(side=tk.LEFT)
+        self.ransacEntry = tk.Entry(ransacFrame, width=5)
+        self.ransacEntry.insert(0, str(self.node.ransacIterations))
+        self.ransacEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(ransacFrame, text="回 (外れ値耐性用繰り返し回数)").pack(side=tk.LEFT)
+        
         # 優先順位2: 位相相関法
         tk.Label(mainFrame, text="  □ 優先順位2: 位相相関法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
         
@@ -1028,6 +1038,7 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
             self.node.starMinDiameter = max(1, int(self.starMinDiameterEntry.get()))
             self.node.starMaxDiameter = max(self.node.starMinDiameter, int(self.starMaxDiameterEntry.get()))
             self.node.templateSearchRange = max(10, int(self.templateSearchEntry.get()))
+            self.node.ransacIterations = max(10, min(1000, int(self.ransacEntry.get())))
             self.node.usePreviousOffset = self.usePrevOffsetVar.get()
             
             self.node.updateNodeText()
@@ -1042,6 +1053,4 @@ class ImageAlignmentSettingsDialog(tk.Toplevel):
             messagebox.showerror("エラー", "数値の入力が正しくありません")
     
     def onClose(self):
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()

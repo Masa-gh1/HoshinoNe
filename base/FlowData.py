@@ -42,7 +42,7 @@ class FlowData:
     def __del__(self):
         try:
             # 統一キャッシュから自身のエントリを削除
-            CacheManager.clearByPolicy(self.cachePolicy, self.instanceId)
+            CacheManager.clearByInstanceId(self.instanceId)
         except (ImportError, AttributeError):
             pass
     
@@ -278,11 +278,3 @@ class FlowData:
         result = {'planes': planeHistograms}
         self._histogramCache[cacheKey] = result
         return result
-    
-    # 古いキャッシュ実装を削除（CacheManagerに統合）
-    
-    @classmethod
-    def getCacheStats(cls):
-        """キャッシュ統計情報を取得（CacheManagerに委謗）"""
-        from .CacheManager import CacheManager
-        return CacheManager.getCacheStats()

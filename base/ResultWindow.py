@@ -35,44 +35,30 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-class ResultWindow:
-    def __init__(self, root, node):
-        self.root = root
+class ResultWindow(tk.Toplevel):
+    def __init__(self, parent, node):
+        super().__init__(parent)
         self.node = node
-        
-    def show(self):
-        """結果ウィンドウを表示"""
-        # 既存の結果ウィンドウをチェック
-        if hasattr(self.node, '_result_window') and self.node._result_window.winfo_exists():
-            # 既存ウィンドウを更新
-            self._updateResultWindow()
-            self.node._result_window.lift()
-            return
-        
-        # 新しいウィンドウで結果を表示
-        resultWindow = tk.Toplevel(self.root)
-        resultWindow.title(f"{self.node.text} - 処理結果")
-        resultWindow.geometry("600x400")
-        
-        # ウィンドウ参照を保存
-        self.node._result_window = resultWindow
+    
+        self.title(f"{self.node.text} - 処理結果")
+        self.geometry("600x400")
         
         # 制御フレーム
-        control_frame = tk.Frame(resultWindow)
+        control_frame = tk.Frame(self)
         control_frame.pack(fill=tk.X, padx=10, pady=5)
-        self.node._control_frame = control_frame
+        self._control_frame = control_frame
         
         # データ選択フレーム（常に表示）
         data_select_frame = tk.Frame(control_frame)
         data_select_frame.pack(fill=tk.X)
-        self.node._data_select_frame = data_select_frame
+        self._data_select_frame = data_select_frame
         
         tk.Label(data_select_frame, text="表示データ:").pack(side=tk.LEFT)
-        self.node._selected_data_var = tk.StringVar()
-        self.node._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self.node._selected_data_var, state="readonly", width=30)
-        self.node._data_combo.pack(side=tk.LEFT, padx=(5,0))
-        self.node._data_combo.bind('<<ComboboxSelected>>', lambda e: self._updateResultWindow())
-        self.node._data_combo.bind('<Key>', self._onComboKeyPress)
+        self._selected_data_var = tk.StringVar()
+        self._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self._selected_data_var, state="readonly", width=30)
+        self._data_combo.pack(side=tk.LEFT, padx=(5,0))
+        self._data_combo.bind('<<ComboboxSelected>>', lambda e: self._updateResultWindow())
+        self._data_combo.bind('<Key>', self._onComboKeyPress)
         
         # ヒストグラム軸制御（画像データのみ）
         axis_frame = tk.Frame(control_frame)
@@ -81,16 +67,16 @@ class ResultWindow:
         tk.Label(axis_frame, text="ヒストグラム軸:").pack(side=tk.LEFT)
         
         # X軸制御
-        self.node._x_scale_var = tk.StringVar(value="log")
+        self._x_scale_var = tk.StringVar(value="log")
         tk.Label(axis_frame, text="X軸:").pack(side=tk.LEFT, padx=(10,0))
-        tk.Radiobutton(axis_frame, text="Log", variable=self.node._x_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(axis_frame, text="Linear", variable=self.node._x_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Log", variable=self._x_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Linear", variable=self._x_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
         
         # Y軸制御
-        self.node._y_scale_var = tk.StringVar(value="log")
+        self._y_scale_var = tk.StringVar(value="log")
         tk.Label(axis_frame, text="Y軸:").pack(side=tk.LEFT, padx=(10,0))
-        tk.Radiobutton(axis_frame, text="Log", variable=self.node._y_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(axis_frame, text="Linear", variable=self.node._y_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Log", variable=self._y_scale_var, value="log", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(axis_frame, text="Linear", variable=self._y_scale_var, value="linear", command=self._updateResultWindow).pack(side=tk.LEFT)
         
         # 表示レベル制御（画像データのみ）
         level_frame = tk.Frame(control_frame)
@@ -98,13 +84,13 @@ class ResultWindow:
         
         tk.Label(level_frame, text="画像表示レベル:").pack(side=tk.LEFT)
         
-        self.node._display_levels_var = tk.StringVar(value="display")
-        tk.Radiobutton(level_frame, text="display", variable=self.node._display_levels_var, value="display", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(level_frame, text="adaptive", variable=self.node._display_levels_var, value="adaptive", command=self._updateResultWindow).pack(side=tk.LEFT)
-        tk.Radiobutton(level_frame, text="all", variable=self.node._display_levels_var, value="all", command=self._updateResultWindow).pack(side=tk.LEFT)
+        self._display_levels_var = tk.StringVar(value="display")
+        tk.Radiobutton(level_frame, text="display", variable=self._display_levels_var, value="display", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="adaptive", variable=self._display_levels_var, value="adaptive", command=self._updateResultWindow).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="all", variable=self._display_levels_var, value="all", command=self._updateResultWindow).pack(side=tk.LEFT)
         
         # スクロールバー付きテキストエリア
-        frame = tk.Frame(resultWindow)
+        frame = tk.Frame(self)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         text_widget = tk.Text(frame, wrap=tk.WORD)
@@ -115,35 +101,29 @@ class ResultWindow:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # テキストウィジェット参照を保存
-        self.node._result_text_widget = text_widget
+        self._result_text_widget = text_widget
         
         # ウィンドウが閉じられたときのクリーンアップ
         def on_close():
-            if hasattr(self.node, '_result_window'):
-                delattr(self.node, '_result_window')
-            if hasattr(self.node, '_result_text_widget'):
-                delattr(self.node, '_result_text_widget')
-            if hasattr(self.node, '_control_frame'):
-                delattr(self.node, '_control_frame')
-            resultWindow.destroy()
+            self.destroy()
         
-        resultWindow.protocol("WM_DELETE_WINDOW", on_close)
+        self.protocol("WM_DELETE_WINDOW", on_close)
         
         # ウィンドウの幅変更時のみ画像を再描画（300ms毎）
         self._resize_timer = None
-        self._last_width = resultWindow.winfo_width()
+        self._last_width = self.winfo_width()
         
         def on_configure(event):
-            if event.widget == resultWindow and not self._resize_timer:
-                current_width = resultWindow.winfo_width()
+            if event.widget == self and not self._resize_timer:
+                current_width = self.winfo_width()
                 if current_width != self._last_width:
                     self._last_width = current_width
                     def update():
                         self._resize_timer = None
                         self._updateResultWindow()
-                    self._resize_timer = self.root.after(300, update)
+                    self._resize_timer = self.node.editor.root.after(300, update)
         
-        resultWindow.bind('<Configure>', on_configure)
+        self.bind('<Configure>', on_configure)
         
         # データ選択コンボボックスを更新
         self._updateDataCombo()
@@ -168,15 +148,14 @@ class ResultWindow:
     
     def _updateResultWindowAsync(self):
         """結果ウィンドウの内容を非同期で更新"""
-        if not hasattr(self.node, '_result_text_widget'):
+        if not hasattr(self, '_result_text_widget'):
             return
         
         # タイトルを更新してデータ読み込み中を表示
         def update_title_loading():
-            if hasattr(self.node, '_result_window'):
-                self.node._result_window.title(f"{self.node.text} - データ読み込み中...")
+            self.title(f"{self.node.text} - データ読み込み中...")
         
-        self.root.after(0, update_title_loading)
+        self.node.editor.root.after(0, update_title_loading)
         
         # 選択されたデータのみ処理
         content_parts = []
@@ -190,10 +169,10 @@ class ResultWindow:
         
         # 結果をメインスレッドで表示
         def display_result():
-            if hasattr(self.node, '_result_window'):
-                self.node._result_window.title(f"{self.node.text} - 処理結果")
-            if hasattr(self.node, '_result_text_widget'):
-                text_widget = self.node._result_text_widget
+            self.title(f"{self.node.text} - 処理結果")
+            
+            if hasattr(self, '_result_text_widget'):
+                text_widget = self._result_text_widget
                 
                 # スクロール位置を保存（比率）
                 scroll_pos = text_widget.yview()[0]
@@ -215,11 +194,11 @@ class ResultWindow:
                 # スクロール位置を復元
                 text_widget.yview_moveto(scroll_pos)
         
-        self.root.after(0, display_result)
+        self.node.editor.root.after(0, display_result)
         
         # コントロールフレームの表示状態を更新
-        self.root.after(0, self._updateControlVisibility)
-        self.root.after(0, self._updateDataCombo)
+        self.node.editor.root.after(0, self._updateControlVisibility)
+        self.node.editor.root.after(0, self._updateDataCombo)
     
     def _generateFlowDataContent(self, flowData):
         """フローデータの内容を文字列として生成（非同期処理用）"""
@@ -380,8 +359,8 @@ class ResultWindow:
                 plane_names = planes[:min(planeCount, 4)]
                 
                 # 軸スケール設定を取得
-                ax_xScale = self.node._x_scale_var.get()
-                ax_yScale = self.node._y_scale_var.get()
+                ax_xScale = self._x_scale_var.get()
+                ax_yScale = self._y_scale_var.get()
                 
                 histogram_data = flowData.getHistogram(log_scale=("log"==ax_xScale))
                 total_samples = 0
@@ -441,7 +420,7 @@ class ResultWindow:
         else:
             try:
                 # 表示レベル設定を取得
-                displayLevels = self.node._display_levels_var.get()
+                displayLevels = self._display_levels_var.get()
 
                 # 表示レベルを設定
                 if "display" == displayLevels:
@@ -539,7 +518,7 @@ class ResultWindow:
                     return content.append(f"サポートされていないモード: {mode}\n")
                 
                 # ウィンドウ横幅に合わせて表示サイズを調整
-                window_width = self.node._result_window.winfo_width() if hasattr(self.node, '_result_window') else 600
+                window_width = self.winfo_width()
                 max_width = window_width - 40  # 最小余白
                 
                 display_width, display_height = img.size
@@ -569,12 +548,12 @@ class ResultWindow:
     
     def _updateControlVisibility(self):
         """コントロールフレームの表示/非表示を制御"""
-        if hasattr(self.node, '_control_frame'):
+        if hasattr(self, '_control_frame'):
             # 画像制御部分のみ画像データがある場合に表示
             has_image_data = any(data.headers and data.headers.get('type') == 'image' for data in self.node.flowDatas)
             
             # ヒストグラム軸制御と表示レベル制御の表示/非表示
-            for child in self.node._control_frame.winfo_children():
+            for child in self._control_frame.winfo_children():
                 if hasattr(child, '_is_image_control'):
                     if has_image_data:
                         child.pack(fill=tk.X, pady=(5,0))
@@ -585,7 +564,7 @@ class ResultWindow:
     
     def _updateDataCombo(self):
         """データ選択コンボボックスを更新"""
-        if not hasattr(self.node, '_data_combo'):
+        if not hasattr(self, '_data_combo'):
             return
         
         # コンボボックスの選択肢を更新
@@ -600,23 +579,21 @@ class ResultWindow:
                 exif = headers['exif']
                 if 'DateTime' in exif:
                     display_name += f" - {exif['DateTime']}"
-                if 'Model' in exif:
-                    display_name += f" [{exif['Model']}]"
             
             options.append(display_name)
         
-        self.node._data_combo['values'] = options
+        self._data_combo['values'] = options
         
         # 初期選択を設定
-        if options and not self.node._selected_data_var.get():
-            self.node._selected_data_var.set(options[0])
+        if options and not self._selected_data_var.get():
+            self._selected_data_var.set(options[0])
     
     def _getSelectedFlowData(self):
         """選択されたフローデータを取得"""
-        if not hasattr(self.node, '_selected_data_var') or not self.node.flowDatas:
+        if not hasattr(self, '_selected_data_var') or not self.node.flowDatas:
             return self.node.flowDatas[0] if self.node.flowDatas else None
         
-        selected = self.node._selected_data_var.get()
+        selected = self._selected_data_var.get()
         if not selected:
             return self.node.flowDatas[0] if self.node.flowDatas else None
         
@@ -633,11 +610,11 @@ class ResultWindow:
     def _onComboKeyPress(self, event):
         """コンボボックスのキーイベント処理"""
         if event.keysym in ['Up', 'Down']:
-            current_values = self.node._data_combo['values']
+            current_values = self._data_combo['values']
             if not current_values:
                 return 'break'
             
-            current_selection = self.node._selected_data_var.get()
+            current_selection = self._selected_data_var.get()
             try:
                 current_index = list(current_values).index(current_selection)
             except ValueError:
@@ -648,7 +625,7 @@ class ResultWindow:
             else:  # Down
                 new_index = (current_index + 1) % len(current_values)
             
-            self.node._selected_data_var.set(current_values[new_index])
+            self._selected_data_var.set(current_values[new_index])
             self._updateResultWindow()
             return 'break'  # デフォルト動作を無効化
     

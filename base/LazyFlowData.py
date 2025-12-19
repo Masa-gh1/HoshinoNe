@@ -33,8 +33,8 @@ class LazyFlowData(FlowData):
         self.operationChain.append(operation)
         return operation
     
-    def addHeaderCompute(self, key, func, *args, **kwargs):
-        """header計算関数を追加"""
+    def addHeaderOperation(self, key, func, *args, **kwargs):
+        """header操作関数を追加"""
         operation = LazyHeaderOperation(func, *args, **kwargs)
         self._headerComputeFuncs[key] = operation
         if key in self.headers:
@@ -273,12 +273,12 @@ class LazyOperations:
         return extended_data
     
     @staticmethod
-    def scale(flowData, planeIndex, blockX, blockY, factor):
+    def scale(flowData, planeIndex, blockX, blockY, scaleValue):
         """スケール変換"""
         block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
         if not block or block.data is None:
             return None
-        return DataBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize, block.data * factor)
+        return DataBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize, block.data * scaleValue)
     
     @staticmethod
     def offset(flowData, planeIndex, blockX, blockY, offsetValue):

@@ -18,9 +18,9 @@ from .ConfigurableNode import ConfigurableNode
 from .TensorOperationMixin import TensorOperationMixin
 
 from .LazyFlowData import LazyFlowData
-from .LazyBlockOperationNode import LazyBlockOperationNode
+from .LazyNNOperationNode import LazyNNOperationNode
 
 __all__ = ['DataBlock', 'FlowData', 'FlowNode', 'BaseReaderNode', 'BaseWriterNode', 
            'N1BlockOperationNode', 'NNBlockOperationNode',
            'ConfigurableNode', 'TensorOperationMixin',
-           'LazyFlowData', 'LazyBlockOperationNode']
+           'LazyFlowData', 'LazyNNOperationNode']

@@ -8,16 +8,19 @@ All rights reserved.
 '''
 
 import hashlib
-import os
 import tkinter as tk
 from tkinter import filedialog
 from abc import ABC as AbstractBaseClass, abstractmethod
-from .FlowData import FlowData
+from base.ResultWindow import ResultWindow
+import traceback
+import sys
 
 class FlowNode(AbstractBaseClass):
     def __init__(self, canvas, editor, x, y, nodeType, text, **kwargs):
         self.canvas = canvas
         self.editor = editor
+        self._binds = []
+        self._window = {}
         self.x, self.y = x, y
         self.type = nodeType
         self.text = text
@@ -34,32 +37,57 @@ class FlowNode(AbstractBaseClass):
         self.createVisual()
         self.bindEvents()
     
-    def createVisual(self):
-        color = self.getColor()
-        self.rect = self.canvas.create_rectangle(self.x-50, self.y-20, self.x+50, self.y+20, fill=color, outline='black')
-        self.label = self.canvas.create_text(self.x, self.y, text=self.text, font=('Arial', 8))
-    
     _color_const = 'lightcyan'    # 定数系 cyan
     _color_coff  = 'lightblue'    # 係数系 blue
     _color_func  = 'plum'         # 関数系 magenta
     _color_op    = 'pink'         # 演算系 red
     _color_io    = 'lightyellow'  # 入出系 yellow
+    _color_util  = 'lightgrey'    # ユーティリティ  
     _color_xxx   = 'lightgreen'   # 予約  
     
     def getColor(self):
         return 'lightgreen'
     
+    def createVisual(self):
+        color = self.getColor()
+        self.rect = self.canvas.create_rectangle(self.x-50, self.y-20, self.x+50, self.y+20, fill=color, outline='black')
+        self.label = self.canvas.create_text(self.x, self.y, text=self.text, font=('Arial', 8))
+    
     def bindEvents(self):
-        self.canvas.tag_bind(self.rect, '<Button-1>', self.onClick)
-        self.canvas.tag_bind(self.label, '<Button-1>', self.onClick)
-        self.canvas.tag_bind(self.rect, '<B1-Motion>', self.onDrag)
-        self.canvas.tag_bind(self.label, '<B1-Motion>', self.onDrag)
-        self.canvas.tag_bind(self.rect, '<ButtonRelease-1>', self.onRelease)
-        self.canvas.tag_bind(self.label, '<ButtonRelease-1>', self.onRelease)
-        self.canvas.tag_bind(self.rect, '<Button-3>', self.onRightClick)
-        self.canvas.tag_bind(self.label, '<Button-3>', self.onRightClick)
-        self.canvas.tag_bind(self.rect, '<Double-Button-1>', self.onDoubleClick)
-        self.canvas.tag_bind(self.label, '<Double-Button-1>', self.onDoubleClick)
+        self.canvasBind('<Button-1>'       , self.onClick      )
+        self.canvasBind('<B1-Motion>'      , self.onDrag       )
+        self.canvasBind('<ButtonRelease-1>', self.onRelease    )
+        self.canvasBind('<Button-3>'       , self.onRightClick )
+        self.canvasBind('<Double-Button-1>', self.onDoubleClick)
+    
+    def canvasBind(self, sequence, callback):
+        fid1 = self.canvas.tag_bind( self.rect , sequence, callback)
+        fid2 = self.canvas.tag_bind( self.label, sequence, callback)
+        self._binds.append((sequence,fid1))
+        self._binds.append((sequence,fid2))
+    
+    def cleanUp(self):
+        # 接続の初期化
+        self.outputNodes = [] # 接続先ノードの一覧
+        self.inputNodes = []  # 入力元ノードの一覧
+
+        # データの初期化
+        self.flowDatas = []   # 処理結果データ
+        
+        # UIウィンドウを閉じる
+        for window in self._window.values():
+            print(type(window))
+            window.destroy()
+        self._window = {}
+        
+        # bindを削除
+        for sequence,fid in self._binds:
+            self.canvas.unbind(sequence,fid)
+        self._binds = []
+            
+        # ノード図を削除
+        self.canvas.delete(self.rect)
+        self.canvas.delete(self.label)
     
     @abstractmethod
     def process(self, context=None):
@@ -80,10 +108,11 @@ class FlowNode(AbstractBaseClass):
             self.process(context)
             
             # 開いているResultWindowがあれば直接更新
-            if hasattr(self, '_result_window') and self._result_window.winfo_exists():
-                self.editor._updateResultWindow(self)
+            if "result_window"  in self._window and self._window["result_window"].winfo_exists():
+                self._window["result_window"]._updateResultWindow()
         except Exception as e:
-            print(f"プレビューエラー: {e}")
+            tb = traceback.format_exc()
+            print(tb,file=sys.stderr)
     
     def needsReprocessing(self):
         """再処理が必要かどうかを判定"""
@@ -180,23 +209,30 @@ class FlowNode(AbstractBaseClass):
         self.dragging = False
     
     def onDoubleClick(self, event):
+        """ダブルクリックで処理結果を表示"""
         self.editor.unselectNode()
         self.isDoubleClick = True
         
-        """ダブルクリックで処理結果を表示"""
-        self.editor.showNodeResult(self)
+        self.onResult()
     
     def onRightClick(self, event):
-        menu = tk.Menu(self.canvas, tearoff=0)
-        if hasattr(self, 'setFilePaths'):
-            menu.add_command(label="ファイル選択", command=self.onSelectFiles)
-        if hasattr(self, 'setOutputFilePath'):
-            menu.add_command(label="出力ファイル選択", command=self.onSelectOutputFile)
-        if hasattr(self, 'onEdit'):
-            menu.add_command(label="設定", command=self.onEdit)
-        menu.add_separator()
-        menu.add_command(label="削除", command=lambda: self.editor.deleteNode(self))
-        menu.post(event.x_root, event.y_root)
+        if "menu" in self._window and self._window["menu"].winfo_exists():
+            self._window["menu"].post(event.x_root, event.y_root)
+        else:
+            menu = tk.Menu(self.canvas, tearoff=0)
+            
+            if hasattr(self, 'setFilePaths'):
+                menu.add_command(label="ファイル選択", command=self.onSelectFiles)
+            if hasattr(self, 'setOutputFilePath'):
+                menu.add_command(label="出力ファイル選択", command=self.onSelectOutputFile)
+            if hasattr(self, 'onEdit'):
+                menu.add_command(label="設定", command=self._onEdit)
+            menu.add_separator()
+            menu.add_command(label="削除", command=lambda: self.editor.deleteNode(self))
+            
+            self._window["menu"] = self._menu = menu
+        
+            menu.post(event.x_root, event.y_root)
     
     def onSelectFiles(self):
         """編集メニューから呼び出される編集処理"""
@@ -217,3 +253,36 @@ class FlowNode(AbstractBaseClass):
                 self.editor.onNodeConfigChanged(self)
         except ValueError:
             pass
+
+    def _onEdit(self):
+        """編集メニューから呼び出される編集処理"""
+        if not hasattr(self, 'onEdit'):
+            pass
+        elif not 'settings_dialog' in self._window:
+            self._window["settings_dialog"] = self.onEdit()
+        elif not self._window["settings_dialog"].winfo_exists():
+            self._window["settings_dialog"].destroy()
+            self._window["settings_dialog"] = self.onEdit()
+        else:
+            self._window["settings_dialog"].lift()
+    
+    def onResult(self):
+        """ノードの処理結果を表示"""
+        if not 'result_window' in self._window:
+            self._window["result_window"] = ResultWindow(self.editor.root, self)
+        elif not self._window["result_window"].winfo_exists():
+            self._window["result_window"].destroy()
+            self._window["result_window"] = ResultWindow(self.editor.root, self)
+        else:
+            self._window["result_window"].lift()
+
+    def updateResult(self):
+        if 'result_window' in self._window:
+            self._window["result_window"].update()
+    
+    def lift(self):
+        """ウィンドウを最前面に表示"""
+        for window in self._window.values():
+            window.lift()
+            window.focus_force()
+

@@ -1,5 +1,5 @@
 '''
-OffsetNode - オフセット加算ノード
+OffsetNode - LazyFlowDataを用いるオフセット加算ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -7,65 +7,98 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
-from base import NNBlockOperationNode, TensorOperationMixin, DataBlock
+from base import LazyNNOperationNode, TensorOperationMixin, DataBlock
+from base.LazyFlowData import LazyFlowData
 
-class OffsetNode(NNBlockOperationNode, TensorOperationMixin):
+class OffsetNode(LazyNNOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "offset", "オフセット")
+        super().__init__(canvas, editor, x, y, "offset", "加算")
         self._combinedTensor = None
     
     def getColor(self):
         return self._color_op
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：matrixとtensorを分類し、tensorを統合"""
-        matrixDatas = []
-        tensorDatas = []
+        """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
+        primaryDatas = []
+        auxiliaryTensors = []
+        auxiliaryMatrices = []
         
         for data in inputDatas:
-            dataType = data.headers.get('type', 'matrix')
-            if dataType == 'tensor':
-                tensorDatas.append(data)
+            category = data.headers.get('category', 'primary')
+            if category == 'auxiliary':
+                dataType = data.headers.get('type', 'matrix')
+                if dataType == 'tensor':
+                    auxiliaryTensors.append(data)
+                else:
+                    auxiliaryMatrices.append(data)
             else:
-                matrixDatas.append(data)
+                primaryDatas.append(data)
         
-        # tensorを事前統合
-        self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.add)
+        # auxiliary tensorを事前統合
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.add)
         
-        return matrixDatas
-
+        # auxiliary matrixを事前統合（最初のものをベースに加算）
+        self._combinedAuxiliaryMatrix = None
+        if auxiliaryMatrices:
+            self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
+        
+        return primaryDatas
     
-    def setupDisplayLevels(self, outputFlowData, inputFlowData):
-        """オフセット加算後のdisplay_levelsを設定"""
-        if not inputFlowData.headers or 'display_levels' not in inputFlowData.headers:
-            return
-        
-        inputLevels = inputFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        if self._combinedTensor:
-            coeffBlock = self._combinedTensor.getBlock(0, 0, 0)
-            if coeffBlock:
-                width, height = inputFlowData.getDimensions()
-                offsetMin, offsetMax = self.calculateTensorRange(coeffBlock.data, width, height)
-                outputFlowData.headers['display_levels'] = {
-                    'min': inputMin + offsetMin,
-                    'exclusive_upper': inputMax + offsetMax
-                }
-                return
-        
-        # tensorがない場合は入力のまま
-        outputFlowData.headers['display_levels'] = inputLevels
+    def createLazyFlowData(self, inputData):
+        """LazyFlowDataを作成"""
+        lazyFlowData = LazyFlowData(inputData)
+        lazyFlowData.addOperation(self._offsetOperation)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
+        return lazyFlowData
     
-    def processBlock(self, block):
-        """ブロック処理"""
-        if self._combinedTensor is None:
+    def _offsetOperation(self, flowData, planeIndex, blockX, blockY):
+        """オフセット操作（事前統合されたauxiliaryデータを加算）"""
+        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        if not block:
             return block
         
-        # tensor係数から実際の値を計算
-        tensorValues = self.calculateTensorBlock(self._combinedTensor, block.planeIndex, block.x, block.y, block.data.shape)
+        result = block.data.copy()
         
-        # 加算実行
-        result = np.add(block.data, tensorValues)
+        # auxiliary tensorを加算
+        if self._combinedAuxiliaryTensor:
+            tensorValues = self.calculateTensorBlock(self._combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape)
+            result = np.add(result, tensorValues)
+        
+        # auxiliary matrixを加算
+        if self._combinedAuxiliaryMatrix:
+            auxiliaryBlock = self._combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+            if auxiliaryBlock:
+                result = np.add(result, auxiliaryBlock.data)
+        
         return DataBlock(block.planeIndex, block.x, block.y, result)
+    
+    def _computeDisplayLevels(self):
+        """display_levelsを計算"""
+        def compute(lazyFlowData):
+            try:
+                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+                    return None
+                    
+                inputMin = inputLevels['min']
+                inputMax = inputLevels['exclusive_upper']
+                
+                if self._combinedAuxiliaryTensor:
+                    coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
+                    if coeffBlock:
+                        width, height = lazyFlowData.sourceFlowData.getDimensions()
+                        offsetMin, offsetMax = self.calculateTensorRange(coeffBlock.data, width, height)
+                        return {
+                            'display_levels': {
+                                'min': inputMin + offsetMin,
+                                'exclusive_upper': inputMax + offsetMax
+                            }
+                        }
+                # auxiliary matrixの場合は範囲計算が複雑なので省略
+                # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
+                return {'display_levels': inputLevels}
+            except (KeyError, AttributeError):
+                return None
+        return compute
+    

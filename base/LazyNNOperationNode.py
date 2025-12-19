@@ -1,5 +1,5 @@
 '''
-LazyBlockOperationNode - LazyFlowDataを用いるN:Nブロック処理基底クラス
+LazyNNOperationNode - LazyFlowDataを用いるN:N処理基底クラス
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -11,8 +11,8 @@ from abc import abstractmethod
 from .FlowNode import FlowNode
 from .LazyFlowData import LazyFlowData
 
-class LazyBlockOperationNode(FlowNode):
-    """LazyFlowDataを用いるN:Nブロック処理ノードの基底クラス"""
+class LazyNNOperationNode(FlowNode):
+    """LazyFlowDataを用いるN:N処理ノードの基底クラス"""
 
     def process(self, context=None):
         self.reportProgress(context, "開始")

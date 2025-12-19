@@ -49,10 +49,7 @@ class ChromaDenoiseNode(FlowNode):
                 self.editor.onNodeConfigChanged(self)
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = ChromaDenoiseSettingsDialog(self.editor.root, self)
+        return ChromaDenoiseSettingsDialog(self.editor.root, self)
     
     def store(self, nodeData):
         nodeData["colorspace"] = self.colorspace
@@ -465,6 +462,4 @@ class ChromaDenoiseSettingsDialog(tk.Toplevel):
         self.node.updateNodeText()
     
     def onClose(self):
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()

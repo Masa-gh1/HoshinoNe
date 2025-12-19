@@ -97,7 +97,11 @@ class BaseWriterNode(FlowNode):
         self._createResultFlowData(fileInfos)
         
         self.reportProgress(context, "完了")
-    
+        
+    def onEdit(self):
+        """Settings dialogを開く"""
+        return BaseWriterSettingsDialog(self.editor.root, self)
+
     def _createResultFlowData(self, fileInfos):
         """結果FlowDataを生成"""
         fileNames = [os.path.basename(path) for path, _, _, _, _ in fileInfos]
@@ -223,13 +227,4 @@ class BaseWriterSettingsDialog(tk.Toplevel):
             self.node.editor.onNodeConfigChanged(self.node)
     
     def onClose(self):
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()
-    
-    def onEdit(self):
-        """Settings dialogを開く"""
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = BaseWriterSettingsDialog(self.editor.root, self)

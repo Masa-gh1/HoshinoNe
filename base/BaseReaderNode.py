@@ -97,10 +97,7 @@ class BaseReaderNode(FlowNode):
     
     def onEdit(self):
         """Settings dialogを開く"""
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = BaseReaderSettingsDialog(self.editor.root, self)
+        return BaseReaderSettingsDialog(self.editor.root, self)
     
     def countFileBlocks(self, filePath):
         """ファイルのブロック数を計算（サブクラスでオーバーライド）
@@ -372,6 +369,4 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             messagebox.showerror(f"{self.node.text} エラー", f"ソートに失敗しました: {str(e)}")
     
     def onClose(self):
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()

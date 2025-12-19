@@ -88,7 +88,7 @@ class ToneCurveNode(NNBlockOperationNode):
         self.updateNodeText()
     
     def onEdit(self):
-        self.openSettings()
+        return ToneCurveDialog( self.editor.root, self)
         
     def processBlock(self, block):
         if block is None:
@@ -166,12 +166,6 @@ class ToneCurveNode(NNBlockOperationNode):
         from base.DataBlock import DataBlock
         return DataBlock(block.planeIndex, block.x, block.y, resultData.tolist())
     
-    def openSettings(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = ToneCurveDialog(self)
-    
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):
         self.inputMin = inputMin
         self.inputEnd = inputEnd
@@ -198,8 +192,8 @@ class ToneCurveNode(NNBlockOperationNode):
         return hashlib.md5(config.encode()).hexdigest()
 
 class ToneCurveDialog(tk.Toplevel):
-    def __init__(self, node):
-        super().__init__(node.editor.root)
+    def __init__(self, parent, node):
+        super().__init__(parent)
         self.node = node
         self.title(f"{node.text}設定")
         self.geometry("600x500")
@@ -255,7 +249,7 @@ class ToneCurveDialog(tk.Toplevel):
         self.endEntry.insert(0, str(self.node.inputEnd))
         self.endEntry.pack(side=tk.LEFT, padx=(2,5))
         self.endEntry.bind('<Return>', self.onRangeChange)
-        tk.Button(inputFrame, text="フィット", command=self.fitInputRange).pack(side=tk.LEFT, padx=5)
+        tk.Button(inputFrame, text="入力元フィット", command=self.fitInputRange).pack(side=tk.LEFT, padx=5)
         
         # 出力範囲行
         outputFrame = tk.Frame(basicFrame)
@@ -275,27 +269,23 @@ class ToneCurveDialog(tk.Toplevel):
         curveFrame = tk.Frame(basicFrame)
         curveFrame.pack(fill=tk.X, pady=2)
         tk.Label(curveFrame, text="トーンカーブ:").pack(side=tk.LEFT, padx=(0,5))
-        self.boundaryVariable = tk.StringVar(value=self.node.boundaryCondition)
-        boundaryCombobox = ttk.Combobox(curveFrame, textvariable=self.boundaryVariable, values=['natural', 'clamped', 'not-a-knot'], state="readonly", width=12)
-        boundaryCombobox.pack(side=tk.LEFT, padx=(0,5))
-        self.boundaryVariable.trace('w', self.onBoundaryChange)
-        tk.Button(curveFrame, text="制御点フィット", command=self.fitToRange).pack(side=tk.LEFT, padx=5)
-        
-        # ヒストグラムX軸行
-        histXFrame = tk.Frame(basicFrame)
-        histXFrame.pack(fill=tk.X, pady=2)
-        tk.Label(histXFrame, text="ヒストグラムX軸:").pack(side=tk.LEFT, padx=(0,5))
-        self.xScaleVar = tk.StringVar(value="linear")
-        tk.Radiobutton(histXFrame, text="Log", variable=self.xScaleVar, value="log", command=self.updatePlot).pack(side=tk.LEFT, padx=2)
-        tk.Radiobutton(histXFrame, text="Linear", variable=self.xScaleVar, value="linear", command=self.updatePlot).pack(side=tk.LEFT, padx=2)
+        self.boundaryCombobox = ttk.Combobox(curveFrame, values=['natural', 'clamped', 'not-a-knot'], state="readonly", width=12)
+        self.boundaryCombobox.set(self.node.boundaryCondition)
+        self.boundaryCombobox.pack(side=tk.LEFT, padx=(0,5))
+        self.boundaryCombobox.bind('<<ComboboxSelected>>', self.onBoundaryChange)
+        tk.Button(curveFrame, text="制御点フィット", command=self.fitControlPoint).pack(side=tk.LEFT, padx=5)
+        tk.Button(curveFrame, text="0.1-99.9%範囲", command=self.zoomToHistogram).pack(side=tk.LEFT, padx=5)
         
         # ヒストグラムY軸行
         histYFrame = tk.Frame(basicFrame)
         histYFrame.pack(fill=tk.X, pady=2)
         tk.Label(histYFrame, text="ヒストグラムY軸:").pack(side=tk.LEFT, padx=(0,5))
-        self.yScaleVar = tk.StringVar(value="log")
-        tk.Radiobutton(histYFrame, text="Log", variable=self.yScaleVar, value="log", command=self.updatePlot).pack(side=tk.LEFT, padx=2)
-        tk.Radiobutton(histYFrame, text="Linear", variable=self.yScaleVar, value="linear", command=self.updatePlot).pack(side=tk.LEFT, padx=2)
+        self.yScaleMode = "log"  # デフォルトはlog
+        self.yScaleLog = tk.Radiobutton(histYFrame, text="Log", command=lambda: self.setYScale("log"))
+        self.yScaleLinear = tk.Radiobutton(histYFrame, text="Linear", command=lambda: self.setYScale("linear"))
+        self.yScaleLog.pack(side=tk.LEFT, padx=2)
+        self.yScaleLinear.pack(side=tk.LEFT, padx=2)
+        self.yScaleLog.select()  # デフォルトでLogを選択
         
         # グラフフレーム
         graphFrame = tk.Frame(self, height=250)
@@ -315,11 +305,12 @@ class ToneCurveDialog(tk.Toplevel):
         self.canvas.mpl_connect('button_press_event', self.onPress)
         self.canvas.mpl_connect('button_release_event', self.onRelease)
         self.canvas.mpl_connect('motion_notify_event', self.onMotion)
+        self.canvas.mpl_connect('scroll_event', self.onScroll)
         
         # 操作説明
         helpFrame = tk.Frame(self)
         helpFrame.pack(fill=tk.X, padx=10, pady=2)
-        tk.Label(helpFrame, text="操作: 左クリック=追加/削除, ドラッグ=移動", 
+        tk.Label(helpFrame, text="操作: 左クリック=追加/削除, ドラッグ=移動, ホイール=ズーム", 
                 font=("Arial", 9), foreground="gray").pack(side=tk.LEFT)
         
         # ボタンフレーム
@@ -336,6 +327,10 @@ class ToneCurveDialog(tk.Toplevel):
         
         tk.Button(buttonFrame, text="閉じる", command=self.onClose).pack(side=tk.LEFT, padx=5)
         
+    def setYScale(self, mode):
+        self.yScaleMode = mode
+        self.updatePlot()
+    
     def updatePlot(self):
         self.axes.clear()
         
@@ -382,11 +377,10 @@ class ToneCurveDialog(tk.Toplevel):
         self.histAxes.clear()
         
         # 軸スケール設定を取得
-        xScale = self.xScaleVar.get()
-        yScale = self.yScaleVar.get()
+        yScale = self.yScaleMode
         
         # flowData.getHistogramを使用してヒストグラムデータを取得
-        histogramData = flowData.getHistogram(log_scale=(xScale == "log"))
+        histogramData = flowData.getHistogram(log_scale=False)
         
         if histogramData and 'planes' in histogramData:
             # プレーン用の色を定義
@@ -435,7 +429,7 @@ class ToneCurveDialog(tk.Toplevel):
                 inputEnd = float(self.endEntry.get())
                 outputMin = float(self.outputMinEntry.get())
                 outputEnd = float(self.outputEndEntry.get())
-                boundaryCondition = self.boundaryVariable.get()
+                boundaryCondition = self.boundaryCombobox.get()
                 
                 # 制御点をX座標でソート
                 sortedPoints = sorted(self.tempControlPoints, key=lambda p: p[0])
@@ -617,6 +611,38 @@ class ToneCurveDialog(tk.Toplevel):
         self.pressedPoint = None
         self.dragStarted = False
     
+    def onScroll(self, event):
+        if event.inaxes != self.axes or event.xdata is None or event.ydata is None:
+            return
+        
+        try:
+            currentMin = float(self.minEntry.get())
+            currentEnd = float(self.endEntry.get())
+            currentRange = currentEnd - currentMin
+            
+            # ズーム倍率
+            zoomFactor = 0.9 if event.step > 0 else 1.1
+            newRange = currentRange * zoomFactor
+            
+            # マウス位置を中心にズーム
+            mouseX = event.xdata
+            centerRatio = (mouseX - currentMin) / currentRange
+            
+            newMin = mouseX - newRange * centerRatio
+            newEnd = newMin + newRange
+            
+            # 最小範囲制限
+            if newRange > 1e-10:
+                self.minEntry.delete(0, tk.END)
+                self.minEntry.insert(0, f"{newMin:.8f}")
+                self.endEntry.delete(0, tk.END)
+                self.endEntry.insert(0, f"{newEnd:.8f}")
+                
+                self.updatePlot()
+        except ValueError:
+            pass
+    
+
     def onRangeChange(self, event=None):
         # 範囲の変更時
         self.updatePlot()
@@ -646,7 +672,7 @@ class ToneCurveDialog(tk.Toplevel):
             self.node.outputMin = float(self.outputMinEntry.get())
             self.node.outputEnd = float(self.outputEndEntry.get())
             self.node.controlPoints = self.tempControlPoints
-            self.node.boundaryCondition = self.boundaryVariable.get()
+            self.node.boundaryCondition = self.boundaryCombobox.get()
         except ValueError:
             pass
     
@@ -684,9 +710,55 @@ class ToneCurveDialog(tk.Toplevel):
                 self.endEntry.insert(0, str(inputEnd))
                 
                 self.updatePlot()
-                self.triggerPreview()
     
-    def fitToRange(self):
+    def zoomToHistogram(self):
+        # ヒストグラムのパーセンタイル範囲（1%～99%）にズーム
+        if (hasattr(self.node, 'inputNodes') and self.node.inputNodes and 
+            hasattr(self.node.inputNodes[0], 'flowDatas') and self.node.inputNodes[0].flowDatas):
+            
+            flowData = self.node.inputNodes[0].flowDatas[0]
+            histogramData = flowData.getHistogram(log_scale=False)
+            
+            if histogramData and 'planes' in histogramData:
+                # 全プレーンのヒストグラムを統合してパーセンタイルを計算
+                allBinCenters = []
+                allCounts = []
+                
+                for planeHist in histogramData['planes']:
+                    binCounts = planeHist['counts']
+                    binEdges = planeHist['bin_edges']
+                    
+                    # ビン中心を計算
+                    binCenters = [(binEdges[i] + binEdges[i+1]) / 2 for i in range(len(binCounts))]
+                    
+                    for center, count in zip(binCenters, binCounts):
+                        if count > 0:
+                            allBinCenters.extend([center] * count)
+                
+                if allBinCenters:
+                    # パーセンタイルを計算（0.1%と99.9%）
+                    allBinCenters.sort()
+                    totalPixels = len(allBinCenters)
+                    
+                    p001_index = int(totalPixels * 0.001)
+                    p999_index = int(totalPixels * 0.999)
+                    
+                    p001_value = allBinCenters[p001_index]
+                    p999_value = allBinCenters[p999_index]
+                    
+                    # 少し余裕を持たせる
+                    margin = (p999_value - p001_value) * 0.1
+                    zoomMin = p001_value - margin
+                    zoomMax = p999_value + margin
+                    
+                    self.minEntry.delete(0, tk.END)
+                    self.minEntry.insert(0, f"{zoomMin:.6f}")
+                    self.endEntry.delete(0, tk.END)
+                    self.endEntry.insert(0, f"{zoomMax:.6f}")
+                    
+                    self.updatePlot()
+    
+    def fitControlPoint(self):
         try:
             inputMin = float(self.minEntry.get())
             inputEnd = float(self.endEntry.get())
@@ -716,7 +788,7 @@ class ToneCurveDialog(tk.Toplevel):
             inputEnd = float(self.endEntry.get())
             outputMin = float(self.outputMinEntry.get())
             outputEnd = float(self.outputEndEntry.get())
-            boundaryCondition = self.boundaryVariable.get()
+            boundaryCondition = self.boundaryCombobox.get()
             
             if inputMin < inputEnd and outputMin < outputEnd:
                 # 確定値を更新
@@ -739,6 +811,4 @@ class ToneCurveDialog(tk.Toplevel):
             self.restoreConfirmedSettings()
             threading.Thread(target=self.node.processPreviewOnly, daemon=True).start()
         
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()

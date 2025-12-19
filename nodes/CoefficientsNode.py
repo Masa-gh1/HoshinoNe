@@ -55,13 +55,7 @@ class CoefficientsNode(FlowNode):
         self.updateNodeText()
     
     def onEdit(self):
-        self.editSettings()
-    
-    def editSettings(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = TensorSettingsDialog(self.editor.root, self)
+        return TensorSettingsDialog(self.editor.root, self)
     
     def applySettings(self, planeCount, xOrder, yOrder, coefficients, planeNames):
         self.planeCount = planeCount
@@ -292,6 +286,4 @@ class TensorSettingsDialog(tk.Toplevel):
             pass
     
     def onClose(self):
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()

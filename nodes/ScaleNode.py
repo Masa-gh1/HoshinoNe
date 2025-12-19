@@ -1,5 +1,5 @@
 '''
-ScaleNode - スケール乗算ノード
+ScaleNode - LazyFlowDataを用いるスケール乗算ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -7,67 +7,101 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 import numpy as np
-from base import NNBlockOperationNode, TensorOperationMixin, DataBlock
+from base import LazyNNOperationNode, TensorOperationMixin, DataBlock
+from base.LazyFlowData import LazyFlowData
 
-class ScaleNode(NNBlockOperationNode, TensorOperationMixin):
+class ScaleNode(LazyNNOperationNode, TensorOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, "scale", "スケール")
+        super().__init__(canvas, editor, x, y, "scale", "乗算")
         self._combinedTensor = None
     
     def getColor(self):
         return self._color_op
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：matrixとtensorを分類し、tensorを統合"""
-        matrixDatas = []
-        tensorDatas = []
+        """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
+        primaryDatas = []
+        auxiliaryTensors = []
+        auxiliaryMatrices = []
         
         for data in inputDatas:
-            dataType = data.headers.get('type', 'matrix')
-            if dataType == 'tensor':
-                tensorDatas.append(data)
+            category = data.headers.get('category', 'primary')
+            if category == 'auxiliary':
+                dataType = data.headers.get('type', 'matrix')
+                if dataType == 'tensor':
+                    auxiliaryTensors.append(data)
+                else:
+                    auxiliaryMatrices.append(data)
             else:
-                matrixDatas.append(data)
+                primaryDatas.append(data)
         
-        # tensorを事前統合
-        self._combinedTensor = self.computeCombinedTensor(tensorDatas, np.multiply)
+        # auxiliary tensorを事前統合（乗算）
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxiliaryTensors, np.multiply)
         
-        return matrixDatas
+        # auxiliary matrixを事前統合（最初のもののみ使用）
+        self._combinedAuxiliaryMatrix = None
+        if auxiliaryMatrices:
+            self._combinedAuxiliaryMatrix = auxiliaryMatrices[0]
+        
+        return primaryDatas
     
-    def setupDisplayLevels(self, outputFlowData, inputFlowData):
-        """スケール乗算後のdisplay_levelsを設定"""
-        if not inputFlowData.headers or 'display_levels' not in inputFlowData.headers:
-            return
-        
-        inputLevels = inputFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        if self._combinedTensor:
-            coeffBlock = self._combinedTensor.getBlock(0, 0, 0)
-            if coeffBlock:
-                width, height = inputFlowData.getDimensions()
-                scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
-                
-                products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
-                
-                outputFlowData.headers['display_levels'] = {
-                    'min': min(products),
-                    'exclusive_upper': max(products)
-                }
-                return
-        
-        # tensorがない場合は入力のまま
-        outputFlowData.headers['display_levels'] = inputLevels
+    def createLazyFlowData(self, inputData):
+        """LazyFlowDataを作成"""
+        lazyFlowData = LazyFlowData(inputData)
+        lazyFlowData.addOperation(self._scaleOperation)
+        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
+        return lazyFlowData
     
-    def processBlock(self, block):
-        """ブロック処理"""
-        if self._combinedTensor is None:
+    def _scaleOperation(self, flowData, planeIndex, blockX, blockY):
+        """スケール操作（事前統合されたauxiliaryデータを乗算）"""
+        block = flowData.getBlock(planeIndex, blockX * flowData._blockSize, blockY * flowData._blockSize)
+        if not block:
             return block
         
-        # tensor係数から実際の値を計算
-        tensorValues = self.calculateTensorBlock(self._combinedTensor, block.planeIndex, block.x, block.y, block.data.shape, defaultValue=1.0)
+        result = block.data.copy()
         
-        # 乗算実行
-        result = np.multiply(block.data, tensorValues)
+        # auxiliary tensorを乗算
+        if self._combinedAuxiliaryTensor:
+            tensorValues = self.calculateTensorBlock(self._combinedAuxiliaryTensor, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            result = np.multiply(result, tensorValues)
+        
+        # auxiliary matrixを乗算
+        if self._combinedAuxiliaryMatrix:
+            auxiliaryBlock = self._combinedAuxiliaryMatrix.getBlock(planeIndex, block.x, block.y)
+            if auxiliaryBlock:
+                result = np.multiply(result, auxiliaryBlock.data)
+        
         return DataBlock(block.planeIndex, block.x, block.y, result)
+    
+    def _computeDisplayLevels(self):
+        """display_levelsを計算"""
+        def compute(lazyFlowData):
+            try:
+                inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
+                if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+                    return None
+                    
+                inputMin = inputLevels['min']
+                inputMax = inputLevels['exclusive_upper']
+                
+                if self._combinedAuxiliaryTensor:
+                    coeffBlock = self._combinedAuxiliaryTensor.getBlock(0, 0, 0)
+                    if coeffBlock:
+                        width, height = lazyFlowData.sourceFlowData.getDimensions()
+                        scaleMin, scaleMax = self.calculateTensorRange(coeffBlock.data, width, height)
+                        
+                        # 乗算の場合は範囲が複雑になる
+                        products = [inputMin * scaleMin, inputMin * scaleMax, inputMax * scaleMin, inputMax * scaleMax]
+                        
+                        return {
+                            'display_levels': {
+                                'min': min(products),
+                                'exclusive_upper': max(products)
+                            }
+                        }
+                # auxiliary matrixの場合は範囲計算が複雑なので省略
+                # auxiliaryがない場合は元のdisplay_levelsをそのまま返す
+                return {'display_levels': inputLevels}
+            except (KeyError, AttributeError):
+                return None
+        return compute

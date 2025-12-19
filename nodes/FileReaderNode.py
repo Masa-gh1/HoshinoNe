@@ -33,10 +33,7 @@ class FileReaderNode(BaseReaderNode):
             return 1
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = FileReaderSettingsDialog(self.editor.root, self)
+        return FileReaderSettingsDialog(self.editor.root, self)
     
     def processFile(self, filePath, context=None):
         """単一CSVファイルの処理"""

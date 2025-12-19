@@ -71,10 +71,7 @@ class WaveletDenoiseNode(NNBlockOperationNode):
                 self.editor.onNodeConfigChanged(self)
     
     def onEdit(self):
-        if hasattr(self, '_settings_dialog') and self._settings_dialog.winfo_exists():
-            self._settings_dialog.lift()
-        else:
-            self._settings_dialog = WaveletDenoiseSettingsDialog(self.editor.root, self)
+        return WaveletDenoiseSettingsDialog(self.editor.root, self)
     
     def store(self, nodeData):
         nodeData["wavelet"] = self.wavelet
@@ -286,8 +283,6 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         self.node.updateNodeText()
     
     def onClose(self):
-        if hasattr(self.node, '_settings_dialog'):
-            delattr(self.node, '_settings_dialog')
         self.destroy()
     
     def onApply(self):

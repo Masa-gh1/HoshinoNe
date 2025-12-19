@@ -132,14 +132,46 @@ class CacheManager:
             return None
     
     @classmethod
-    def clearByPolicy(cls, cachePolicy, instanceId=None):
-        """指定ポリシーのキャッシュをクリア"""
+    def clearByInstanceId(cls, instanceId):
+        """指定instanceIdの全データを削除"""
         with cls._lock:
             keysToRemove = []
+            diskFilesToRemove = []
+            
+            # メモリキャッシュから対象キーを収集
+            for key in cls._globalBlockCache.keys():
+                if len(key) > 0 and key[0] == instanceId:
+                    keysToRemove.append(key)
+            
+            # ディスクファイルも削除対象に含める
+            if cls._globalTempDir and os.path.exists(cls._globalTempDir):
+                try:
+                    for fileName in os.listdir(cls._globalTempDir):
+                        if fileName.startswith(f"{instanceId}_") and fileName.endswith(".pkl"):
+                            diskFilesToRemove.append(os.path.join(cls._globalTempDir, fileName))
+                except (OSError, IOError):
+                    pass
+            
+            # メモリキャッシュから削除
+            for key in keysToRemove:
+                del cls._globalBlockCache[key]
+            
+            # ディスクファイルを削除
+            for filePath in diskFilesToRemove:
+                try:
+                    os.remove(filePath)
+                except (OSError, IOError):
+                    pass
+    
+    @classmethod
+    def clearByPolicy(cls, cachePolicy):
+        """指定ポリシーのデータを削除（instanceId無関係）"""
+        with cls._lock:
+            keysToRemove = []
+            
             for key, (_, policy) in cls._globalBlockCache.items():
                 if policy == cachePolicy:
-                    if instanceId is None or (len(key) > 0 and key[0] == instanceId):
-                        keysToRemove.append(key)
+                    keysToRemove.append(key)
             
             for key in keysToRemove:
                 del cls._globalBlockCache[key]
@@ -153,12 +185,32 @@ class CacheManager:
         cacheSize = cacheCount * BLOCK_SIZE * BLOCK_SIZE * 8  # 1ブロック = BLOCK_SIZE x BLOCK_SIZE x 8バイト(float64)
         
         diskSize = 0
+        diskFileCount = 0
         if cls._globalTempDir and os.path.exists(cls._globalTempDir):
             try:
                 for root, dirs, files in os.walk(cls._globalTempDir):
                     for file in files:
-                        diskSize += os.path.getsize(os.path.join(root, file))
+                        if file.endswith('.pkl'):
+                            diskFileCount += 1
+                            diskSize += os.path.getsize(os.path.join(root, file))
             except (OSError, IOError):
                 pass
         
         return cacheSize, diskSize
+    
+    @classmethod
+    def listDiskFiles(cls):
+        """ディスクファイルの一覧を表示"""
+        if not cls._globalTempDir or not os.path.exists(cls._globalTempDir):
+            print("No temp directory exists")
+            return
+        
+        try:
+            files = [f for f in os.listdir(cls._globalTempDir) if f.endswith('.pkl')]
+            print(f"Disk files in {cls._globalTempDir}:")
+            for file in files:
+                filePath = os.path.join(cls._globalTempDir, file)
+                size = os.path.getsize(filePath)
+                print(f"  {file} ({size} bytes)")
+        except (OSError, IOError) as e:
+            print(f"Error listing disk files: {e}")
