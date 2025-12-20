@@ -16,7 +16,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_FUNC
-    minorType = 'Lab_to_rgb_converter'
+    minorType = 'rgb_converter'
     # ノード名
     name      = 'RGB変換'
     # 入出力タイプ

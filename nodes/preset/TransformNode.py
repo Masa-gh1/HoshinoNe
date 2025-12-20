@@ -204,7 +204,7 @@ class TransformNode(LazyNNOperationNode):
         orig_width, orig_height = flowData.getDimensions()
         
         # 出力ブロックの4隅を逆変換して必要な入力範囲を計算
-        corners = np.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]], dtype=np.float64)
+        corners = nh.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]])
         
         if rotation != 0:
             # 回転ありの場合は逆変換行列で計算
@@ -215,7 +215,7 @@ class TransformNode(LazyNNOperationNode):
             source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
         else:
             # 平行移動のみ
-            source_corners = corners - np.array([dx, dy])
+            source_corners = corners - nh.array([dx, dy])
         
         # 必要な入力範囲を計算
         min_x = int(np.floor(np.min(source_corners[:, 0])))
@@ -273,7 +273,7 @@ class TransformNode(LazyNNOperationNode):
                 M[0, 2] += dx
                 M[1, 2] += dy
             else:
-                M = np.float64([[1, 0, dx], [0, 1, dy]])
+                M = nh.BDTYPE([[1, 0, dx], [0, 1, dy]])
             
             # 変換後に必要なサイズを計算
             transform_output_width = min(region_width, new_width - (x - min_block_x))
@@ -289,7 +289,7 @@ class TransformNode(LazyNNOperationNode):
                 # NaN対応の補間変形
                 validMask = ~np.isnan(region_image)              # 有効データマスクを作成
                 imageData = np.where(validMask, region_image, 0) # 無効データを 0 にした画像
-                imageMask = np.where(validMask, np.nan, 0)       # 有効データを NaN に、無効データを 0 にした画像
+                imageMask = np.where(validMask, nh.nan, 0)       # 有効データを NaN に、無効データを 0 にした画像
                 transformed_data = cv2.warpAffine(imageData, M, (transform_output_width, transform_output_height),  # データを変形
                                                 flags=cv2.INTER_LINEAR,
                                                 borderMode=cv2.BORDER_CONSTANT,
@@ -300,7 +300,7 @@ class TransformNode(LazyNNOperationNode):
                                                 borderValue=0)
                 # 有効データを NaN に、無効データを 0 にしたマスク画像を用いているから
                 # NaN = NaN * 0 なので NaN のある場所が有効なデータとなる
-                transformed_region =  np.where( np.isnan(transformed_mask), transformed_data, np.nan)
+                transformed_region =  np.where( np.isnan(transformed_mask), transformed_data, nh.nan)
             
             # 出力ブロック位置を部分画像座標系に変換
             output_x_in_region = x - min_block_x

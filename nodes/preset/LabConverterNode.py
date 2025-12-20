@@ -16,7 +16,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_FUNC
-    minorType = 'Lab_converter'
+    minorType = 'lab_converter'
     # ノード名
     name      = 'Lab変換'
     # 入出力タイプ

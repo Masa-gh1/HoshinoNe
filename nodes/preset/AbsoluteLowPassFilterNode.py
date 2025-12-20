@@ -11,7 +11,8 @@ import numpy as np
 from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, PolynomialOperationMixin 
+from nodes import LazyNNOperationNode, PolynomialOperationMixin
+from utils import numpy_helpers as nh
 
 class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
@@ -74,14 +75,14 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         if combinedAuxiliaryPolynomial:
             polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             mask = np.abs(result) > polynomialValues
-            result = np.where(mask, np.nan, result)
+            result = np.where(mask, nh.nan, result)
         
         # auxiliary tableから閾値を取得
         if combinedAuxiliaryTable:
             auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
             if auxiliaryBlock:
                 mask = np.abs(result) > auxiliaryBlock.data
-                result = np.where(mask, np.nan, result)
+                result = np.where(mask, nh.nan, result)
         
         return DataBlock(result, planeIndex, x, y)
     

@@ -17,6 +17,12 @@ np.float_ = DEFAULT_BLOCK_TYPE
 # 型変換用エイリアス
 BDTYPE = DEFAULT_BLOCK_TYPE  # ブロックデータタイプ 使用例 arr.astype(nh.BDTYPE)
 
+e           = BDTYPE(np.e)
+euler_gamma = BDTYPE(np.euler_gamma)
+pi          = BDTYPE(np.pi)
+inf         = BDTYPE(np.inf)
+nan         = BDTYPE(np.nan)
+
 def array(*args, **kwargs):
     """np.arrayのデフォルトdtype版"""
     kwargs.setdefault('dtype', DEFAULT_BLOCK_TYPE)
@@ -40,7 +46,7 @@ def nans(shape, **kwargs):
         **kwargs: np.fullの追加引数
     """
     kwargs.setdefault('dtype', DEFAULT_BLOCK_TYPE)
-    return np.full(shape, np.nan, **kwargs)
+    return np.full(shape, nan, **kwargs)
 
 def full(*args, **kwargs):
     """np.fullのデフォルトdtype版"""

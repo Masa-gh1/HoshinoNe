@@ -173,11 +173,11 @@ class FlowEditor:
             self.rightClickY = event.y
             self.contextMenu.post(event.x_root, event.y_root)
     
-    def addNodeAtPosition(self, nodeName):
+    def addNodeAtPosition(self, nodeType):
         from nodes import NodeFactory
         x = self.canvas.canvasx(self.rightClickX)
         y = self.canvas.canvasy(self.rightClickY)
-        node = NodeFactory.createNodeByName(nodeName, self.canvas, self, x, y)
+        node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
         if node:
             self.nodes.append(node)
             self._placeItemBeforeConnections(node.view.rect, node.view.label)
@@ -639,7 +639,7 @@ class FlowEditor:
         if "Tray" == type:
             return Tray( self.canvas, self, nonDialog=True)
         else:
-            return NodeFactory.createNodeByType( type, self.canvas, self, 0, 0, nonDialog=True)
+            return NodeFactory.createNode( type, self.canvas, self, 0, 0, nonDialog=True)
     
     def clearFlow(self):
         # ノードをクリーンアップ

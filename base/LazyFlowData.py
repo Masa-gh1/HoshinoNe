@@ -162,11 +162,12 @@ class LazyOperations:
         extended_data = LazyOperations._getExtendedBlockData(flowData, planeIndex, inputBlockX, inputBlockY)
         
         # 変換実行
-        transformed_extended = cv2.warpAffine(
-            extended_data, matrix2x3,
-            extended_data.shape[::-1],
-            flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan
-        )
+        transformed_extended = cv2.warpAffine(extended_data, matrix2x3,
+                                              extended_data.shape[::-1],
+                                              flags=cv2.INTER_LINEAR,
+                                              borderMode=cv2.BORDER_CONSTANT,
+                                              borderValue=np.nan
+                                             )
         
         # 出力ブロックサイズに切り出し
         margin = (extended_data.shape[0] - BLOCK_SIZE) // 2

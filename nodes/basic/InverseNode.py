@@ -13,6 +13,7 @@ from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode 
+from utils import numpy_helpers as nh
 
 class InverseNode(LazyNNOperationNode):
     # ノードタイプ
@@ -43,7 +44,7 @@ class InverseNode(LazyNNOperationNode):
         
         arr = block.data
         with np.errstate(divide='ignore', invalid='ignore'):
-            result = np.where(arr != 0, 1.0 / arr, np.nan)
+            result = np.where(arr != 0, 1.0 / arr, nh.nan)
         
         return DataBlock(result, planeIndex, x, y)
     
