@@ -394,12 +394,12 @@ class ToneCurveDialog(tk.Toplevel):
                 # 入力範囲内のビンのみをフィルタリング
                 mask = (binCenters >= displayMin) & (binCenters <= displayEnd)
                 filteredCenters = binCenters[mask]
-                filteredCounts = np.array(binCounts)[mask]
+                filteredCounts = nh.array(binCounts)[mask]
 
                 if filteredCounts.any():
                     # Y軸がログスケールの場合は1を加算
                     if yScale == "log":
-                        filteredCounts = np.array(filteredCounts) + 1
+                        filteredCounts = nh.array(filteredCounts) + 1
                     
                     # プレーン別の色で表示
                     color = colors[planeIndex % len(colors)]

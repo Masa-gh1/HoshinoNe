@@ -20,6 +20,7 @@ MAX_NODE_EXEC = min(4,MAX_WORKERS)
 class FlowControl:
     def __init__(self):
         self._nodeExecutor = None
+        self.elapsedMs = 0
     
     def getMaxNodeWorkers(self):
         return MAX_NODE_EXEC
@@ -98,6 +99,7 @@ class FlowControl:
         
         endTime = time.time()
         elapsedMs = int((endTime - startTime) * 1000)
+        self.elapsedMs = elapsedMs
         sendMessage(f"フロー実行完了: ({elapsedMs} ms)\n")
 
     def _executeNode(self, node, context):

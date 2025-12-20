@@ -161,7 +161,7 @@ class TransformNode(LazyNNOperationNode):
             M[1, 2] += dy
             transformed = cv2.transform(corners.reshape(-1, 1, 2), M).reshape(-1, 2)
         else:
-            transformed = corners + np.array([dx, dy])
+            transformed = corners + nh.array([dx, dy])
         
         return transformed
     

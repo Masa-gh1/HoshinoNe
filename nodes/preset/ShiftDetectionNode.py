@@ -502,8 +502,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         # 高精度サブピクセル推定
         if 2 <= peak_x < correlation.shape[1] - 2 and 2 <= peak_y < correlation.shape[0] - 2:
             # 5点フィッティングでより高精度に
-            x_vals = np.array([-2, -1, 0, 1, 2])
-            y_vals = np.array([-2, -1, 0, 1, 2])
+            x_vals = nh.array([-2, -1, 0, 1, 2])
+            y_vals = nh.array([-2, -1, 0, 1, 2])
             
             x_corr = correlation[peak_y, peak_x-2:peak_x+3]
             y_corr = correlation[peak_y-2:peak_y+3, peak_x]
@@ -582,18 +582,18 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         radius_sq = self.star.ransac.sampleRadius ** 2  # 二乗距離で比較
         
         # NumPy配列化で高速化
-        ref_array = np.array([(rx, ry) for rx, ry, _, _ in ref_bright])
-        target_array = np.array([(tx, ty) for tx, ty, _, _ in target_bright])
+        ref_array = nh.array([(rx, ry) for rx, ry, _, _ in ref_bright])
+        target_array = nh.array([(tx, ty) for tx, ty, _, _ in target_bright])
         
         for i, (rx, ry, _, _) in enumerate(ref_bright):
             # 予測位置計算
             if self.usePreviousOffset:
-                expected_pos = target_array + np.array([previous_result.dx, previous_result.dy])
+                expected_pos = target_array + nh.array([previous_result.dx, previous_result.dy])
             else:
                 expected_pos = target_array
             
             # 距離計算（二乗距離）
-            dist_sq = np.sum((expected_pos - np.array([rx, ry]))**2, axis=1)
+            dist_sq = np.sum((expected_pos - nh.array([rx, ry]))**2, axis=1)
             valid_indices = np.where(dist_sq < radius_sq)[0]
             
             # マッチを追加
@@ -689,12 +689,12 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _calculateAffineTransform(self, matches, shape):
         """対応点からアフィン変換を計算（画像中心回転）"""
-        ref_pts = np.array([match[0] for match in matches])
-        target_pts = np.array([match[1] for match in matches])
+        ref_pts = nh.array([match[0] for match in matches])
+        target_pts = nh.array([match[1] for match in matches])
         
         # 画像中心を回転中心として使用
         h, w = shape
-        image_center = np.array([w/2, h/2])
+        image_center = nh.array([w/2, h/2])
         
         # 画像中心を原点とした座標系に変換
         ref_centered = ref_pts - image_center

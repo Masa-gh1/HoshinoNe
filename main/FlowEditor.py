@@ -38,8 +38,11 @@ class FlowEditor:
         self.nodes = []
         self.trays = []
         self.connectionLines = [] # (fromNode, toNode, line)
-        self.currentFlowPath = None
         self.flowControl     = FlowControl()
+
+        self.currentFlowPath = None
+        self.applicationHome = None
+        self.take = 0
 
         self.createWidgets()
     
@@ -508,8 +511,17 @@ class FlowEditor:
     
     def executeFlowAsync(self):
         try:
+            self.take += 1
+
             self.resultText.delete(1.0, tk.END)
             self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
+
+            from utils.Debug import Debug
+            if 1==self.take and Debug.isTestMode():
+                # テストモードなので結果を記録
+                filename = os.path.basename(self.currentFlowPath)
+                Debug.log(type(self).__name__, f"{filename} elapsed {self.flowControl.elapsedMs} ms")
+                Debug.record( self.currentFlowPath, "elapsed ms", self.flowControl.elapsedMs)
         except Exception as e:
             self.root.after(0, lambda m = str(e): messagebox.showerror("エラー", f"フロー実行エラー: {m}"))
             raise
@@ -540,8 +552,8 @@ class FlowEditor:
             flowFile.save( filePath, self.canvas, self, self.nodes, self.trays)
         
             # ウィンドウタイトルにファイル名を追記
-            fileName = os.path.basename(filePath)
-            self.root.title(f"{self.name} - {fileName}")
+            filename = os.path.basename(filePath)
+            self.root.title(f"{self.name} - {filename}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)
@@ -627,8 +639,8 @@ class FlowEditor:
             
             if not appendMode:
                 # ウィンドウタイトルにファイル名を追記
-                fileName = os.path.basename(filePath)
-                self.root.title(f"{self.name} - {fileName}")
+                filename = os.path.basename(filePath)
+                self.root.title(f"{self.name} - {filename}")
         except Exception as e:
             tb = traceback.format_exc()
             print(tb,file=sys.stderr)

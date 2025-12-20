@@ -17,6 +17,7 @@ from tkinter import ttk
 from config import BLOCK_SIZE
 from base.LazyFlowData import LazyHeadersDict
 from utils import string_helper as sh
+from utils import numpy_helpers as nh
 from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
 from utils.Debug import Debug
@@ -473,7 +474,7 @@ class ResultWindow(tk.Toplevel):
 
                         # グラフ表示
                         plane_name = planes[planeIndex] if planeIndex < len(planes) else f'Plane{planeIndex}'
-                        ax.plot(bin_centers, np.array(bin_counts) + 1, color=colors[planeIndex], label=plane_name, linewidth=1)
+                        ax.plot(bin_centers, nh.array(bin_counts) + 1, color=colors[planeIndex], label=plane_name, linewidth=1)
                     
                     histogram_text = f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
                     ax.set_xlabel(f'Value ({ax_xScale})' if "log" == ax_xScale else f'Value ({ax_xScale}, normalized adjusted)')

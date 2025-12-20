@@ -1,0 +1,8 @@
+name,item,min,max
+sample/fits/sample.flow,elapsed ms,7778,8628
+sample/fits/sample_sigma.flow,elapsed ms,11311,11338
+sample/dng/sample.flow,elapsed ms,11759,11759
+sample/raw/sample.flow,elapsed ms,23444,23444
+sample/raw/sample_sigma.flow,elapsed ms,42029,42029
+sample/fits/sample_pixcomp.flow,elapsed ms,51942,55583
+sample/raw/sample_pixcomp.flow,elapsed ms,153281,153281

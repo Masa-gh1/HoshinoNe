@@ -92,7 +92,7 @@ class QuadraticFitNode(FlowNode):
                 
                 # 2次関数の係数行列を構築 (次数の少ない順)
                 A = np.column_stack([
-                    np.ones(len(x_valid)),  # 0次: 1
+                    nh.ones(len(x_valid)),  # 0次: 1
                     x_valid,                # 1次: x
                     y_valid,                # 1次: y
                     x_valid**2,             # 2次: x²
