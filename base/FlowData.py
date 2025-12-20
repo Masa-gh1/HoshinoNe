@@ -60,20 +60,20 @@ class FlowData:
         except (ImportError, AttributeError) as e:
             print(f"Warning: cleanup: {str(e)}", file=sys.stderr)
 
-    def _updateStatistics(self, planeIndex, x, y, blockData):
+    def _updateStatistics(self, blockData):
         """統計情報を更新"""
         # ブロック上書き検出
-        blockKey = (planeIndex, x, y)
-        if blockKey in self._existingBlocks:
+        if blockData.blockId in self._existingBlocks:
             if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
-                print(f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}", file=sys.stderr)
+                print(f"Warning: Block overwrite detected at plane={blockData.planeIndex}, x={blockData.x}, y={blockData.y}", file=sys.stderr)
         else:
-            self._existingBlocks.add(blockKey)
+            self._existingBlocks.add(blockData.blockId)
             
-            # 最大値・最小値を更新し、キャッシュをクリア
-            if 0 < blockData.size:
-                blockMax = np.nanmax(blockData)
-                blockMin = np.nanmin(blockData)
+            data = blockData.data
+            if 0 < data.size:
+                # 最大値・最小値を更新し、キャッシュをクリア
+                blockMax = np.nanmax(data)
+                blockMin = np.nanmin(data)
                 
                 if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
                     self._maxValue = blockMax
@@ -197,7 +197,7 @@ class FlowData:
         dataBlock.data = arr
     
         # 統計情報更新
-        self._updateStatistics(dataBlock.planeIndex, dataBlock.x, dataBlock.y, arr)
+        self._updateStatistics(dataBlock)
         
     def getMaxValue(self):
         """最大値を取得"""
