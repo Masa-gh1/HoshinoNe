@@ -80,6 +80,10 @@ class LazyHeadersDict(UserDict):
     
 class LazyOperation:
     """遅延実行される単一操作"""
+    __slots__ = ('func'  ,
+                 'args'  ,
+                 'kwargs',
+                )
     def __init__(self, func, *args, **kwargs):
         self.func = func
         self.args = args
@@ -90,6 +94,10 @@ class LazyOperation:
 
 class LazyHeaderOperation:
     """遅延実行されるヘッダー操作"""
+    __slots__ = ('func'  ,
+                 'args'  ,
+                 'kwargs',
+                )
     def __init__(self, func, *args, **kwargs):
         self.func = func
         self.args = args
@@ -101,7 +109,6 @@ class LazyHeaderOperation:
 ##### 以下サンプル実装
 class LazyOperations:
     """遅延操作関数群"""
-    
     @staticmethod
     def offsetDisplayLevels(lazyFlowData, offsetValue):
         """オフセット加算後のdisplay_levelsを計算"""
