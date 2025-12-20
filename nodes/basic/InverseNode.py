@@ -12,7 +12,7 @@ import numpy as np
 from base.FlowNode_CONST import *
 from base import DataBlock
 from base import LazyFlowData
-from nodes import LazyNNOperationNode 
+from nodes import LazyNNOperationNode
 from utils import numpy_helpers as nh
 
 class InverseNode(LazyNNOperationNode):

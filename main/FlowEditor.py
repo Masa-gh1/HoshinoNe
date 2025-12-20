@@ -746,18 +746,17 @@ class FlowEditor:
     
     def showMessage(self,msg):
         status = msg.split('\n')[0]
-        self.root.after(0, lambda: self.statusLabel.config(text=status))
+        self.root.after(0, self.statusLabel.config, {"text":status})
+        self.root.after(0, self.updateResultText, msg)
+        self.root.after(0, self.highlightReprocessingNodes)
 
-        def updateResultText(msg):
-            lines = int(self.resultText.index(tk.END).split('.')[0]) # tk.END 位置を取得 "{line}.{row}"
-            if 10000 < lines:
-                self.resultText.delete("1.0", "100.0")
-            self.resultText.insert(tk.END, msg)
-            self.resultText.see(tk.END)
-        self.root.after(0, lambda: updateResultText(msg))
-
-        self.root.after(0, lambda: self.highlightReprocessingNodes())
-
+    def updateResultText(self, msg):
+        lines = int(self.resultText.index(tk.END).split('.')[0]) # tk.END 位置を取得 "{line}.{row}"
+        if 10000 < lines:
+            self.resultText.delete("1.0", "100.0")
+        self.resultText.insert(tk.END, msg)
+        self.resultText.see(tk.END)
+    
     def showProgress(self, nodeId, nodeName, message, current=None, total=None):
         """処理経過をプログレスバーで表示"""
         self.root.after(0, lambda: self._updateProgress(nodeId, nodeName, message, current, total))
