@@ -16,6 +16,7 @@ from .Constants import CachePolicy
 from .DataBlock import DataBlock
 from .CacheManager import CacheManager
 from utils import numpy_helpers as nh
+from utils.Debug import Debug
 
 try:
     import numpy as np
@@ -44,10 +45,10 @@ class FlowData:
         self._dimensions = (0, 0)
         self._maxValue = None
         self._minValue = None
-        self._percentileCache = {} # パーセンタイルキャッシュ
-        self._histogramCache = {}  # ヒストグラムキャッシュ
-        self._highResHistCache = None  # 高解像度ヒストグラムキャッシュ
-        self._existingBlocks = set()  # 保存済みブロックの記録 上書きチェックなどに使用する
+        self._percentileCache  = {}   # パーセンタイルキャッシュ
+        self._histogramCache   = {}   # ヒストグラムキャッシュ
+        self._highResHistCache = None # 高解像度ヒストグラムキャッシュ
+        self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
         
         if not NUMPY_AVAILABLE:
             messagebox.showerror("FlowData エラー", "numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
@@ -58,17 +59,28 @@ class FlowData:
             # キャッシュから自身のエントリを削除
             CacheManager.clearByPartialKey(self.instanceId)
         except (ImportError, AttributeError) as e:
-            print(f"Warning: cleanup: {str(e)}", file=sys.stderr)
+            Debug.log(type(self).__name__, f"Warning: cleanup: {str(e)}")
 
     def _updateStatistics(self, blockData):
         """統計情報を更新"""
-        # ブロック上書き検出
-        if blockData.blockId in self._existingBlocks:
+        if self._existingBlocks is None:
+            width, height = self._dimensions
+            blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
+            blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
+            self._existingBlocks = np.zeros((self.getPlaneCount(), blockH, blockW), dtype=bool)
+        
+        planeIndex = blockData.planeIndex
+        x = blockData.x
+        y = blockData.y
+        blockX = x // BLOCK_SIZE
+        blockY = y // BLOCK_SIZE
+
+        if self._existingBlocks[planeIndex, blockY, blockX]:
+            # ブロック上書き検出
             if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
-                print(f"Warning: Block overwrite detected at plane={blockData.planeIndex}, x={blockData.x}, y={blockData.y}", file=sys.stderr)
+                Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
         else:
-            self._existingBlocks.add(blockData.blockId)
-            
+            self._existingBlocks[planeIndex, blockY, blockX] = True
             data = blockData.data
             if 0 < data.size:
                 # 最大値・最小値を更新し、キャッシュをクリア
@@ -118,7 +130,6 @@ class FlowData:
         """プレーン数を取得"""
         if 'planes' in self.headers:
             return len(self.headers['planes'])
-        # フォールバック: 次元数から推定
         return None
     
     def getArea(self):

@@ -317,26 +317,26 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         else:
             table_array = nh.zeros((0, 5))
         
-        # FlowDataを作成
-        flowData = FlowData()
-        
-        # 複数ブロックに対応
-        rows, cols = table_array.shape
-        for y in range(0, rows, BLOCK_SIZE):
-            block_height = min(BLOCK_SIZE, rows - y)
-            result = table_array[y:y+block_height, :]
-            flowData.setBlock(DataBlock(result, 0, 0, y))
-        
         # ヘッダー情報を設定
-        flowData.headers.update({
+        headers = {
             'category': 'auxiliary',
             'type'    : 'table',
             'mode'    : '2D',
             'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
             'lines'   : lines,
             'planes'  : ['shift_detection']
-        })
+        }
+                
+        # FlowDataを作成
+        flowData = FlowData(headers)
+        
+        # 複数ブロックに対応
+        rows, cols = table_array.shape
         flowData.setDimensions(cols, rows)
+        for y in range(0, rows, BLOCK_SIZE):
+            block_height = min(BLOCK_SIZE, rows - y)
+            result = table_array[y:y+block_height, :]
+            flowData.setBlock(DataBlock(result, 0, 0, y))
         
         return flowData
     
