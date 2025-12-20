@@ -7,145 +7,95 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-from .basic.CategoryAuxiliaryNode import CategoryAuxiliaryNode
-from .basic.PassNode import PassNode
-
-from .basic.OffsetNode import OffsetNode
-from .basic.ScaleNode import ScaleNode
-from .basic.PowerNode import PowerNode
-from .basic.NegateNode import NegateNode
-from .basic.InverseNode import InverseNode
-from .basic.AbsoluteNode import AbsoluteNode
-from .basic.MaxNode import MaxNode
-from .basic.MinNode import MinNode
-from .basic.SumNode import SumNode
-from .basic.ProductNode import ProductNode
-from .basic.CountNode import CountNode
-from .basic.MaximumNode import MaximumNode
-from .basic.MinimumNode import MinimumNode
-from .basic.QuadraticFitNode import QuadraticFitNode
-
-from .preset.AutoLevelsNode import AutoLevelsNode
-from .preset.TensorNode import TensorNode
-from .preset.CoefficientsNode import CoefficientsNode
-from .preset.AbsoluteLowPassFilterNode import AbsoluteLowPassFilterNode
-from .preset.ImageAlignmentNode import ImageAlignmentNode # 廃止 ShiftDetectionNode, TransformNode に分割
-from .preset.ShiftDetectionNode import ShiftDetectionNode
-from .preset.TransformNode import TransformNode
-from .preset.ToneCurveNode import ToneCurveNode
-from .preset.BayerUnpackSparseNode import BayerUnpackSparseNode
-from .preset.BayerUnpackDenseNode import BayerUnpackDenseNode
-from .preset.LabConverterNode import LabConverterNode
-from .preset.RGBConverterNode import RGBConverterNode
-
-from .extra.FileReaderNode import FileReaderNode
-from .extra.FileWriterNode import FileWriterNode
-from .extra.FitsReaderNode import FitsReaderNode
-from .extra.ImageReaderNode import ImageReaderNode
-from .extra.ImageWriterNode import ImageWriterNode
-from .extra.RawReaderNode import RawReaderNode
-from .extra.ChromaDenoiseNode import ChromaDenoiseNode
-from .extra.WaveletDenoiseNode import WaveletDenoiseNode
-
 class NodeFactory:
-    nodeClasses = {
-        OffsetNode               .minorType: OffsetNode               ,
-        ScaleNode                .minorType: ScaleNode                ,
-        PowerNode                .minorType: PowerNode                ,
-        NegateNode               .minorType: NegateNode               ,
-        InverseNode              .minorType: InverseNode              ,
-        AbsoluteNode             .minorType: AbsoluteNode             ,
-        MaxNode                  .minorType: MaxNode                  ,
-        MinNode                  .minorType: MinNode                  ,
-        ###############################################################
-        SumNode                  .minorType: SumNode                  ,
-        ProductNode              .minorType: ProductNode              ,
-        CountNode                .minorType: CountNode                ,
-        MaximumNode              .minorType: MaximumNode              ,
-        MinimumNode              .minorType: MinimumNode              ,
-        ###############################################################
-        TensorNode               .minorType: TensorNode               ,
-        CoefficientsNode         .minorType: CoefficientsNode         ,
-        QuadraticFitNode         .minorType: QuadraticFitNode         ,
-        ###############################################################
-        AbsoluteLowPassFilterNode.minorType: AbsoluteLowPassFilterNode,
-        AutoLevelsNode           .minorType: AutoLevelsNode           ,
-        ToneCurveNode            .minorType: ToneCurveNode            ,
-        BayerUnpackSparseNode    .minorType: BayerUnpackSparseNode    ,
-        BayerUnpackDenseNode     .minorType: BayerUnpackDenseNode     ,
-        LabConverterNode         .minorType: LabConverterNode         ,
-        RGBConverterNode         .minorType: RGBConverterNode         ,
-        ###############################################################
-        ImageAlignmentNode       .minorType: ImageAlignmentNode       , # 廃止 ShiftDetectionNode, TransformNode に分割
-        ShiftDetectionNode       .minorType: ShiftDetectionNode       ,
-        TransformNode            .minorType: TransformNode            ,
-        ###############################################################
-        ChromaDenoiseNode        .minorType: ChromaDenoiseNode        ,
-        WaveletDenoiseNode       .minorType: WaveletDenoiseNode       ,
-        ###############################################################
-        CategoryAuxiliaryNode    .minorType: CategoryAuxiliaryNode    ,
-        PassNode                 .minorType: PassNode                 ,
-        ###############################################################
-        FileReaderNode           .minorType: FileReaderNode           ,
-        FileWriterNode           .minorType: FileWriterNode           ,
-        ImageReaderNode          .minorType: ImageReaderNode          ,
-        ImageWriterNode          .minorType: ImageWriterNode          ,
-        RawReaderNode            .minorType: RawReaderNode            ,
-        FitsReaderNode           .minorType: FitsReaderNode           ,
-    }
-    
-    nodeLabels = [
-        (OffsetNode               .minorType, '加算(N:N)'),
-        (ScaleNode                .minorType, '乗算(N:N)'),
-        (PowerNode                .minorType, '冪算(N:N)'),
-        (NegateNode               .minorType, '符号反転(N:N)'),
-        (InverseNode              .minorType, '逆数(N:N)'),
-        (AbsoluteNode             .minorType, '絶対値(N:N)'),
-        (MaxNode                  .minorType, '比較大(N:N)'),
-        (MinNode                  .minorType, '比較小(N:N)'),
-        ('separator'                        , None),
-        (SumNode                  .minorType, '総和(N:1)'),
-        (ProductNode              .minorType, '総積(N:1)'),
-        (CountNode                .minorType, 'カウント(N:1)'),
-        (MaximumNode              .minorType, '最大(N:1)'),
-        (MinimumNode              .minorType, '最小(N:1)'),
-        ('separator'                        , None),
-        (TensorNode               .minorType, '数列'),
-        (CoefficientsNode         .minorType, '係数'),
-        (QuadraticFitNode         .minorType, '2次関数近似'),
-        ('separator'                        , None),
-        (AbsoluteLowPassFilterNode.minorType, '絶対値(低通)(N:N)'),
-        (AutoLevelsNode           .minorType, '自動レベル(N:N)'),
-        (ToneCurveNode            .minorType, 'トーンカーブ(N:N)'),
-        (BayerUnpackSparseNode    .minorType, 'ベイヤー分離(疎)(N:N)'),
-        (BayerUnpackDenseNode     .minorType, 'ベイヤー分離(密)(N:N)'),
-        (LabConverterNode         .minorType, 'Lab変換(正規化なし)(N:N)'),
-        (RGBConverterNode         .minorType, 'RGB変換(正規化なし)(N:N)'),
-        ('separator'                        , None),
-        (ShiftDetectionNode       .minorType, 'ズレ検出(N:1)'),
-        (TransformNode            .minorType, '変形(N:N)'),
-        ('separator'                        , None),
-        (ChromaDenoiseNode        .minorType, '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
-        (WaveletDenoiseNode       .minorType, 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),
-        ('separator'                        , None),
-        (CategoryAuxiliaryNode    .minorType, '補正値として使う'),
-        (PassNode                 .minorType, '通点(何もしない)'),
-        ('separator'                        , None),
-        (FileReaderNode           .minorType, 'ファイル読み込み(0:N)'),
-        (FileWriterNode           .minorType, 'ファイル書き出し(N:0)'),
-        (ImageReaderNode          .minorType, '画像読み込み(0:N)'),
-        (ImageWriterNode          .minorType, '画像書き出し(N:0)'),
-        (RawReaderNode            .minorType, 'RAW読み込み(0:N)'),
-        (FitsReaderNode           .minorType, 'FITS読み込み(0:N)'),
-    ]
+    @classmethod
+    def createNodeByName(cls, nodeType, canvas, editor, x, y, **kwargs):
+        nodeClass = loadNode().loadNodeClassByName(nodeType)
+        return nodeClass(canvas, editor, x, y, **kwargs)
     
     @classmethod
-    def createNode(cls, nodeType, canvas, editor, x, y, **kwargs):
-        nodeClass = cls.nodeClasses.get(nodeType)
-        if nodeClass:
-            return nodeClass(canvas, editor, x, y, **kwargs)
-        return None
+    def createNodeByType(cls, nodeType, canvas, editor, x, y, **kwargs):
+        nodeClass = loadNode().loadNodeClassByType(nodeType)
+        return nodeClass(canvas, editor, x, y, **kwargs)
     
     @classmethod
     def getMenuItems(cls):
-        return cls.nodeLabels
+        return loadNode().nodeLabels
+
+class loadNode():
+    def __init__(self):
+        self.nodeLabels = [
+            ('OffsetNode'               , '加算(N:N)'),
+            ('ScaleNode'                , '乗算(N:N)'),
+            ('PowerNode'                , '冪算(N:N)'),
+            ('NegateNode'               , '符号反転(N:N)'),
+            ('InverseNode'              , '逆数(N:N)'),
+            ('AbsoluteNode'             , '絶対値(N:N)'),
+            ('MaxNode'                  , '比較大(N:N)'),
+            ('MinNode'                  , '比較小(N:N)'),
+            ('-------------------------', None),
+            ('SumNode'                  , '総和(N:1)'),
+            ('ProductNode'              , '総積(N:1)'),
+            ('CountNode'                , 'カウント(N:1)'),
+            ('MaximumNode'              , '最大(N:1)'),
+            ('MinimumNode'              , '最小(N:1)'),
+            ('-------------------------', None),
+            ('TensorNode'               , '数列'),
+            ('CoefficientsNode'         , '係数'),
+            ('QuadraticFitNode'         , '2次関数近似'),
+            ('-------------------------', None),
+            ('AbsoluteLowPassFilterNode', '絶対値(低通)(N:N)'),
+            ('AutoLevelsNode'           , '自動レベル(N:N)'),
+            ('ToneCurveNode'            , 'トーンカーブ(N:N)'),
+            ('BayerUnpackSparseNode'    , 'ベイヤー分離(疎)(N:N)'),
+            ('BayerUnpackDenseNode'     , 'ベイヤー分離(密)(N:N)'),
+            ('LabConverterNode'         , 'Lab変換(正規化なし)(N:N)'),
+            ('RGBConverterNode'         , 'RGB変換(正規化なし)(N:N)'),
+            ('-------------------------', None),
+            ('ShiftDetectionNode'       , 'ズレ検出(N:1)'),
+            ('TransformNode'            , '変形(N:N)'),
+            ('-------------------------', None),
+            ('ChromaDenoiseNode'        , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
+            ('WaveletDenoiseNode'       , 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),
+            ('-------------------------', None),
+            ('CategoryAuxiliaryNode'    , '補正値として使う'),
+            ('PassNode'                 , '通点(何もしない)'),
+            ('-------------------------', None),
+            ('FileReaderNode'           , 'ファイル読み込み(0:N)'),
+            ('FileWriterNode'           , 'ファイル書き出し(N:0)'),
+            ('ImageReaderNode'          , '画像読み込み(0:N)'),
+            ('ImageWriterNode'          , '画像書き出し(N:0)'),
+            ('RawReaderNode'            , 'RAW読み込み(0:N)'),
+            ('FitsReaderNode'           , 'FITS読み込み(0:N)'),
+        ]
+    
+        self.nodeClasses = None
+
+    def loadNodeClassByName(self, nodeName):
+        import importlib
+        pkgs = ["extra","preset","basic"]
+        mod = None
+        ex = []
+        for pkg in pkgs:
+            try:
+                mod = importlib.import_module(__package__+"."+pkg+"."+nodeName)
+                clz = getattr(mod, nodeName)
+                return clz
+            except ModuleNotFoundError as e:
+                ex.append(e)
+        raise ex[0]
+
+    def loadNodeClassByType(self, nodeType):
+        if self.nodeClasses is None:
+            self.nodeClasses = {}
+            for className, label in self.nodeLabels:
+                if '---' in className:
+                    pass
+                else:
+                    clz = self.loadNodeClassByName(className)
+                    self.nodeClasses[clz.minorType] = (clz.__module__, clz.__name__)
+        
+        import importlib
+        moduleName, className = self.nodeClasses[nodeType]
+        mod = importlib.import_module(moduleName)
+        return getattr(mod, className) 

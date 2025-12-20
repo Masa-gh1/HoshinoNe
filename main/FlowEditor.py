@@ -39,7 +39,7 @@ class FlowEditor:
         self.trays = []
         self.connectionLines = [] # (fromNode, toNode, line)
         self.currentFlowPath = None
-        self.flowControl = FlowControl()
+        self.flowControl     = FlowControl()
 
         self.createWidgets()
     
@@ -82,11 +82,11 @@ class FlowEditor:
         
         # 右クリックメニュー
         self.contextMenu = tk.Menu(self.root, tearoff=0)
-        for nodeType, label in NodeFactory.getMenuItems():
-            if nodeType == 'separator':
+        for nodeName, label in NodeFactory.getMenuItems():
+            if '---' in nodeName:
                 self.contextMenu.add_separator()
             else:
-                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt))
+                self.contextMenu.add_command(label=label, command=lambda nt=nodeName: self.addNodeAtPosition(nt))
         
         self.contextMenu.add_separator()
         self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
@@ -173,10 +173,11 @@ class FlowEditor:
             self.rightClickY = event.y
             self.contextMenu.post(event.x_root, event.y_root)
     
-    def addNodeAtPosition(self, nodeType):
+    def addNodeAtPosition(self, nodeName):
+        from nodes import NodeFactory
         x = self.canvas.canvasx(self.rightClickX)
         y = self.canvas.canvasy(self.rightClickY)
-        node = NodeFactory.createNode(nodeType, self.canvas, self, x, y)
+        node = NodeFactory.createNodeByName(nodeName, self.canvas, self, x, y)
         if node:
             self.nodes.append(node)
             self._placeItemBeforeConnections(node.view.rect, node.view.label)
@@ -638,7 +639,7 @@ class FlowEditor:
         if "Tray" == type:
             return Tray( self.canvas, self, nonDialog=True)
         else:
-            return NodeFactory.createNode( type, self.canvas, self, 0, 0, nonDialog=True)
+            return NodeFactory.createNodeByType( type, self.canvas, self, 0, 0, nonDialog=True)
     
     def clearFlow(self):
         # ノードをクリーンアップ
