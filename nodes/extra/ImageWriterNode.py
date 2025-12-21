@@ -11,7 +11,6 @@ import os
 import datetime
 from nodes import BaseWriterNode
 from config import BLOCK_SIZE, HEADERS_EXIF, HEADERS_EXIF_OPT
-from utils.Debug import Debug
 
 class ImageWriterNode(BaseWriterNode):
     # ノードタイプ
@@ -39,11 +38,11 @@ class ImageWriterNode(BaseWriterNode):
         if ext.lower() in ['.tiff', '.tif']:
             import importlib.util
             if not importlib.util.find_spec('tifffile'):
-                raise Exception("tifffileライブラリがインストールされていません\npip install tifffile でインストールしてください。")
+                raise Exception("ライブラリ tifffile がインストールされていません\npip install tifffile でインストールしてください。")
         else:
             import importlib.util
             if not importlib.util.find_spec('PIL'):
-                raise Exception("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+                raise Exception("ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
 
         width, height = flowData.getDimensions()
         planeCount = flowData.getPlaneCount()
@@ -188,6 +187,7 @@ class ImageWriterNode(BaseWriterNode):
             exif_dict = {tag: original_exif[tag] for tag in preserve_tags if tag in original_exif}
             
             exif_dict['Software'] = 'ほしのね'
+            from utils.Debug import Debug
             if not Debug.isTestMode():
                 # テストモードではないので現在時刻を入れる
                 exif_dict['DateTime'] = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S")

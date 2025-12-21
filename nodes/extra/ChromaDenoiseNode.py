@@ -37,7 +37,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         
         import importlib.util
         if not importlib.util.find_spec("scipy"):
-            messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません\npip install scipy でインストールしてください")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ scipy がインストールされていません\npip install scipy でインストールしてください")
     
     def getText(self):
         """ノードのテキストを取得"""

@@ -15,7 +15,7 @@ import tempfile
 import shutil
 import atexit
 
-from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK, BLOCK_SIZE
+from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK
 from base.Constants import CachePolicy
 
 class CacheManager:

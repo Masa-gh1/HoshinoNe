@@ -34,7 +34,7 @@ class ImageReaderNode(BaseReaderNode):
         
         import importlib.util
         if not importlib.util.find_spec("PIL"):
-            messagebox.showerror(f"{self.name} エラー", "PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
             return
     
     def countFileBlocks(self, filePath):

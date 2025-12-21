@@ -8,21 +8,12 @@ All rights reserved.
 '''
 
 import uuid
-import sys
 from tkinter import messagebox
 
 from config import BLOCK_SIZE
 from .Constants import CachePolicy
-from .DataBlock import DataBlock
 from .CacheManager import CacheManager
-from utils import numpy_helpers as nh
 from utils.Debug import Debug
-
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
 
 class FlowData:
     """ノードの実行結果を保存する"""
@@ -50,19 +41,21 @@ class FlowData:
         self._highResHistCache = None # 高解像度ヒストグラムキャッシュ
         self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
         
-        if not NUMPY_AVAILABLE:
-            messagebox.showerror("FlowData エラー", "numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
-            return
+        import importlib.util
+        if not importlib.util.find_spec("numpy"):
+            raise ImportError("ライブラリ numpy がインストールされていません。\npip install numpy でインストールしてください。")  
     
     def __del__(self):
         try:
             # キャッシュから自身のエントリを削除
             CacheManager.clearByPartialKey(self.instanceId)
-        except (ImportError, AttributeError) as e:
+        except Exception as e:
             Debug.log(type(self).__name__, f"Warning: cleanup: {str(e)}")
 
     def _updateStatistics(self, blockData):
         """統計情報を更新"""
+        import numpy as np
+        
         if self._existingBlocks is None:
             width, height = self._dimensions
             blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
@@ -78,6 +71,7 @@ class FlowData:
         if self._existingBlocks[planeIndex, blockY, blockX]:
             # ブロック上書き検出
             if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
+                from utils.Debug import Debug
                 Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
         else:
             self._existingBlocks[planeIndex, blockY, blockX] = True
@@ -139,6 +133,8 @@ class FlowData:
     
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得"""
+        from .DataBlock import DataBlock
+
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         if planeIndex >= planeCount or x >= width or y >= height:
@@ -185,6 +181,9 @@ class FlowData:
     
     def setBlock(self, dataBlock):
         """ブロックデータを保存"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
         dataBlock.blockId = f"{self.instanceId}:{dataBlock.planeIndex}:{dataBlock.x}:{dataBlock.y}"
         dataBlock.cachePolicy = self.cachePolicy
         
@@ -220,10 +219,12 @@ class FlowData:
     
     def _getHighResHistograms(self):
         """高解像度ヒストグラムを取得（中間生成物キャッシュ）"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
         if self._highResHistCache:
             return self._highResHistCache
         
-        width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         
         planeHistograms = []
@@ -310,6 +311,8 @@ class FlowData:
     
     def getModeValue(self):
         """最頻値を取得（全プレーン統合）"""
+        import numpy as np
+        
         planeHistograms = self._getHighResHistograms()
         
         if not planeHistograms or not any(hist is not None for hist in planeHistograms):
@@ -331,6 +334,8 @@ class FlowData:
     
     def getPercentile(self, percentile):
         """指定したパーセンタイル値を取得（キャッシュ付き）"""
+        import numpy as np
+        
         if percentile in self._percentileCache:
             return self._percentileCache[percentile]
         
@@ -373,6 +378,9 @@ class FlowData:
     
     def getHistogram(self, bins=256, log_scale=False):
         """プレーン別ヒストグラムを取得（キャッシュ付き）"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+        
         cacheKey = (bins, log_scale)
         if cacheKey in self._histogramCache:
             return self._histogramCache[cacheKey]

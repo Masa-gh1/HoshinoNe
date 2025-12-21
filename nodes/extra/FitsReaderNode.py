@@ -34,7 +34,7 @@ class FitsReaderNode(BaseReaderNode):
         
         import importlib.util
         if not importlib.util.find_spec("astropy"):
-            messagebox.showerror(f"{self.name} エラー", "astropyライブラリがインストールされていません。\npip install astropy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ astropy がインストールされていません。\npip install astropy でインストールしてください。")
             return
     
     def countFileBlocks(self, filePath):

@@ -14,7 +14,6 @@ from tkinter import ttk, messagebox
 from base.FlowNode_CONST import *
 from nodes import ConfigurableNode
 from nodes import NNBlockOperationNode
-from utils.ThreadPool import CoalescingExecutor
 
 class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
     # ノードタイプ
@@ -40,11 +39,11 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         # ライブラリチェック
         import importlib.util
         if not importlib.util.find_spec("scipy"):
-            messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ scipy がインストールされていません。\npip install scipy でインストールしてください。")
             return
         
         if not importlib.util.find_spec("matplotlib"):
-            messagebox.showerror(f"{self.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ matplotlib がインストールされていません。\npip install matplotlib でインストールしてください。")
             return
     
     def getText(self):
@@ -197,11 +196,11 @@ class ToneCurveDialog(tk.Toplevel):
         # ライブラリチェック
         import importlib.util
         if not importlib.util.find_spec("scipy"):
-            messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ scipy がインストールされていません。\npip install scipy でインストールしてください。")
             return
         
         if not importlib.util.find_spec("matplotlib"):
-            messagebox.showerror(f"{self.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ matplotlib がインストールされていません。\npip install matplotlib でインストールしてください。")
             return
         
         self.createWidgets()
@@ -626,6 +625,8 @@ class ToneCurveDialog(tk.Toplevel):
     
     def onPreviewToggle(self):
         # プレビューのトグル時
+        from utils.ThreadPool import CoalescingExecutor
+
         if self.previewVariable.get():
             # プレビュー有効：一時保存値を適用
             self.restoreTemporarySettings()
@@ -655,6 +656,8 @@ class ToneCurveDialog(tk.Toplevel):
             self.node.boundaryCondition = self.originalSettings['boundaryCondition']
     
     def triggerPreview(self):
+        from utils.ThreadPool import CoalescingExecutor
+        
         if self.previewVariable.get():
             # プレビュー有効：一時保存値を適用
             self.restoreTemporarySettings()
@@ -781,6 +784,8 @@ class ToneCurveDialog(tk.Toplevel):
             }
     
     def onClose(self):
+        from utils.ThreadPool import CoalescingExecutor
+        
         # プレビュー表示を解除して閉じる
         if self.previewVariable.get():
             self.restoreConfirmedSettings()

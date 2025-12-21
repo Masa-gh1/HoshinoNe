@@ -8,7 +8,6 @@ All rights reserved.
 '''
 
 from .Constants import CachePolicy
-from .CacheManager import CacheManager
 
 class DataBlock:
     __slots__ = ('blockId'    ,
@@ -32,6 +31,8 @@ class DataBlock:
     @property
     def data(self):
         """遅延ロードでデータを取得"""
+        from .CacheManager import CacheManager
+
         if self._data is None:
             data = CacheManager.get(self.blockId)
             self._data = data
@@ -40,11 +41,15 @@ class DataBlock:
     @data.setter
     def data(self, data):
         """データを設定してキャッシュに保存"""
+        from .CacheManager import CacheManager
+        
         self._data = data
         CacheManager.set(self.blockId, data, self.cachePolicy)
     
     def isValid(self):
         """データが有効かどうかを確認"""
+        from .CacheManager import CacheManager
+        
         return CacheManager.isCached(self.blockId)
     
     def getWidth(self):

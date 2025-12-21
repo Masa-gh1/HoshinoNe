@@ -57,7 +57,7 @@ class RawReaderNode(BaseReaderNode):
 
         import importlib.util
         if not importlib.util.find_spec("rawpy"):
-            messagebox.showerror(f"{self.name} エラー", "rawpyライブラリがインストールされていません。\npip install rawpy でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ rawpy がインストールされていません。\npip install rawpy でインストールしてください。")
             return
         
     def getText(self):

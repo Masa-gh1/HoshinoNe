@@ -31,7 +31,7 @@ class TransformNode(LazyNNOperationNode):
         import importlib.util
         if not importlib.util.find_spec("cv2"):
             from tkinter import messagebox
-            messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
+            messagebox.showerror(f"{self.name} エラー", "ライブラリ OpenCV がインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
     def preprocessInputs(self, inputDatas):

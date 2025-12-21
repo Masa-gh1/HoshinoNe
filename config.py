@@ -10,7 +10,7 @@ All rights reserved.
 try:
     import numpy as np
 except ImportError:
-    print("numpyライブラリがインストールされていません。\npip install numpy でインストールしてください。")
+    print("ライブラリ numpy がインストールされていません。\npip install numpy でインストールしてください。")
     exit()
 
 # ノードの並列処理ワーカー数設定

@@ -41,7 +41,7 @@ def getExif(filepath):
     if PIL_AVAILABLE:
         pil_exif = _get_pil_exif(filepath, attr)
     else:
-        print(f"PILライブラリがインストールされていません\npip install pillow でインストールしてください。", file=sys.stderr)
+        Debug.log(__file__, "ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
         pil_exif = {}
     
     expected_tags = ["DateTime"] + [name for name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)]
@@ -53,7 +53,7 @@ def getExif(filepath):
         # 不足情報をexifreadで補完
         exifread_tags = _get_exifread_exif(filepath, attr)
     else:
-        print(f"exifread ライブラリがインストールされていません\npip install ExifRead でインストールしてください。", file=sys.stderr)
+        Debug.log(__file__, "ライブラリ exifread がインストールされていません\npip install ExifRead でインストールしてください。")
         exifread_tags = {}
     
     expected_tags = ["DateTime"] + [name for name, _, _ in HEADERS_EXIF]
