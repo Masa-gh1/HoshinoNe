@@ -2,7 +2,8 @@ name,item,min,latestMax,max
 sample/fits/sample.flow,elapsed ms,7778,8628,8628
 sample/fits/sample_sigma.flow,elapsed ms,11311,11338,11338
 sample/dng/sample.flow,elapsed ms,11759,11759,11759
-sample/raw/sample.flow,elapsed ms,23444,24490,24490
+sample/raw/sample.flow,elapsed ms,23444,27129,27129
 sample/raw/sample_sigma.flow,elapsed ms,42029,43327,43327
 sample/fits/sample_pixcomp.flow,elapsed ms,51942,55583,55583
 sample/raw/sample_pixcomp.flow,elapsed ms,153281,168369,168369
+sample/raw/sample.flow,maxObjectCount,139519,139790,139790

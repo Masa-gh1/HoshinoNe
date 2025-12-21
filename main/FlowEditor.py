@@ -9,8 +9,6 @@ All rights reserved.
 
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
-import datetime
-import numpy as np
 import sys
 import os
 import traceback
@@ -524,7 +522,9 @@ class FlowEditor:
                 # ファーストテイクかつテストモードなので結果を記録
                 filename = os.path.basename(self.currentFlowPath)
                 Debug.log(type(self).__name__, f"{filename} elapsed {self.flowControl.elapsedMs} ms")
+                Debug.log(type(self).__name__, f"{filename} maxObjectCount {self.flowControl.maxObjectCount}")
                 Debug.record( self.currentFlowPath, "elapsed ms", self.flowControl.elapsedMs)
+                Debug.record( self.currentFlowPath, "maxObjectCount", self.flowControl.maxObjectCount)
         except Exception as e:
             self.root.after(0, lambda m = str(e): messagebox.showerror("エラー", f"フロー実行エラー: {m}"))
             raise
@@ -812,15 +812,11 @@ class FlowEditor:
     
     def updateCacheStats(self):
         """キャッシュ統計を更新"""
-        import gc
         from utils.Debug import Debug
         
-        ObjectCount = f"{len(gc.get_objects())}個"
         flowNodeCount = f"{len(self.nodes)}個"
         trayCount = f"{len(self.trays)}個"
         flowDataCount = f"{sum([len(node.flowDatas) for node in self.nodes])}個"
-        
-        cacheNodeCount = f"{self.getNodeCount()}個"
         
         _, cacheSize, _, storageSize, cacheMissCount, purgeCount, saveCount, loadCount, _ = CacheManager.getCacheStats()
         
@@ -845,14 +841,21 @@ class FlowEditor:
             storageStr = f"{int(storageSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
-        objInfo  = f"Object: {ObjectCount}"
-        nodeInfo = f"Node: {flowNodeCount} Cache: {cacheNodeCount}"
-        dataInfo = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
-        info = f"{nodeInfo} {dataInfo} {objInfo}"
-
-        if Debug.LEVEL_NONE < Debug.LEVEL:
-            info = f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount} {info}"
+        if Debug.LEVEL_NONE == Debug.LEVEL:
+            objInfo   = ""
+            CacheInfo = ""
+            dataInfo  = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
+            nodeInfo  = f"Node: {flowNodeCount}"
+        else:
+            import gc
+            ObjectCount    = f"{len(gc.get_objects())}個"
+            cacheNodeCount = f"{self.getNodeCount()}個"
+            objInfo   = f"Object: {ObjectCount}"
+            CacheInfo = f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount}"
+            dataInfo  = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
+            nodeInfo  = f"Node: {flowNodeCount} exist: {cacheNodeCount}"
         
+        info = f" {objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
         self.usageLabel.config(text=info)
         
         # 5秒後に再度更新

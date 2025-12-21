@@ -20,13 +20,18 @@ MAX_NODE_EXEC = min(4,MAX_WORKERS)
 class FlowControl:
     def __init__(self):
         self._nodeExecutor = None
-        self.elapsedMs = 0
+
+        self.elapsedMs      = 0
+        self.maxObjectCount = 0
     
     def getMaxNodeWorkers(self):
         return MAX_NODE_EXEC
     
     def execute(self, nodes, sendMessage=None, reportProgress=None):
         """フローを実行"""
+        self.elapsedMs      = 0
+        self.maxObjectCount = 0
+
         if not sendMessage:
             sendMessage = lambda msg: print(msg)
 
@@ -110,6 +115,14 @@ class FlowControl:
             node.execute(context)
             endTime = time.time()
             elapsedMs = int((endTime - startTime) * 1000)
+            
+            import gc
+            from utils.Debug import Debug
+            if Debug.isTestMode():
+                objectCount = len(gc.get_objects())
+                self.maxObjectCount = max(self.maxObjectCount, objectCount)
+                Debug.log(type(self).__name__, f"objectCount: {objectCount}")
+
             return elapsedMs
         except Exception as e:
             raise Exception(f"ノード '{node.name}' でエラー: {str(e)}") from e
