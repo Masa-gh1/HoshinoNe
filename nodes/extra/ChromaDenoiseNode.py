@@ -7,22 +7,13 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
 import hashlib
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import FlowNode, DataBlock, FlowData
+from base import FlowNode
 from nodes import ConfigurableNode
-from utils import numpy_helpers as nh
-
-try:
-    from scipy.ndimage import gaussian_filter, sobel
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
 
 class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     # ノードタイプ
@@ -38,13 +29,14 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         super().__init__(canvas, editor, x, y, **kwargs)
         
         # デフォルト設定
-        self.colorspace = "Lab"  # Lab, YUV, HSV
+        self.colorspace      = "Lab"  # Lab, YUV, HSV
         self.chroma_strength = 2.0  # 色成分のノイズ除去強度
-        self.luma_strength = 0.2    # 輝度成分のノイズ除去強度
-        self.preserve_edges = True  # エッジ保護
-        self.edge_threshold = 0.01  # エッジ検出閾値
+        self.luma_strength   = 0.2    # 輝度成分のノイズ除去強度
+        self.preserve_edges  = True  # エッジ保護
+        self.edge_threshold  = 0.01  # エッジ検出閾値
         
-        if not SCIPY_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("scipy"):
             messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません\npip install scipy でインストールしてください")
     
     def getText(self):
@@ -95,13 +87,13 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
             
             # RGB画像を再構築
             width, height = flowData.getDimensions()
-            rgb_image = self._reconstruct_rgb_image(flowData, width, height)
+            rgb_image = self._reconstructRgbImage(flowData, width, height)
             
             # 色空間変換してノイズ除去
             denoised_rgb = self._denoise_color_image(rgb_image)
             
             # 結果をFlowDataに変換
-            result_flowdata = self._create_result_flowdata(flowData, denoised_rgb)
+            result_flowdata = self._createFlowdata(flowData, denoised_rgb)
             resultFlowDatas.append(result_flowdata)
             
             self.reportProgress(context, "処理中")
@@ -109,8 +101,11 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def _reconstruct_rgb_image(self, flowData, width, height):
+    def _reconstructRgbImage(self, flowData, width, height):
         """FlowDataからRGB画像を再構築"""
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+
         rgb_image = nh.zeros((height, width, 3))
         
         if 4 <= flowData.getPlaneCount():
@@ -150,6 +145,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _denoise_color_image(self, rgb_image):
         """色ノイズ除去処理（NaN対応）"""
+        import numpy as np
+        
         # NaN値を事前に検出
         nan_mask = np.isnan(rgb_image)
         if np.all(nan_mask):
@@ -217,6 +214,9 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _create_edge_mask(self, luma):
         """エッジマスクを作成"""
+        import numpy as np
+        from scipy.ndimage import sobel
+
         # Sobelフィルタでエッジ検出
         grad_x = sobel(luma, axis=1)
         grad_y = sobel(luma, axis=0)
@@ -233,6 +233,9 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _gaussian_filter_nan(self, image, sigma):
         """ガウシアンフィルタ（NaN対応）"""
+        import numpy as np
+        from scipy.ndimage import gaussian_filter
+        
         nan_mask = np.isnan(image)
         if np.all(nan_mask):
             return image
@@ -248,12 +251,16 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _edge_preserving_filter_nan(self, image, sigma, edge_mask):
         """エッジ保護ガウシアンフィルタ（NaN対応）"""
+        import numpy as np
+        
         filtered = self._gaussian_filter_nan(image, sigma)
         # エッジ部分は元画像を保持
         return np.where(edge_mask, image, filtered)
     
     def _rgb_to_lab(self, rgb):
         """RGB to Lab 変換（簡易 Lab 白色点正規化なし）"""
+        import numpy as np
+        
         # 入力は既に0.0-1.0に正規化済み
         rgb_norm = rgb
         
@@ -273,6 +280,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _lab_to_rgb(self, lab):
         """Lab to RGB 変換（簡易 Lab 白色点正規化なし）"""
+        import numpy as np
+        
         # Lab to XYZ
         xyz = np.zeros_like(lab)
         fy = (lab[:,:,0] + 16) / 116
@@ -293,6 +302,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _rgb_to_yuv(self, rgb):
         """RGB to YUV変換"""
+        import numpy as np
+        
         yuv = np.zeros_like(rgb)
         yuv[:,:,0] = 0.299 * rgb[:,:,0] + 0.587 * rgb[:,:,1] + 0.114 * rgb[:,:,2]  # Y
         yuv[:,:,1] = -0.147 * rgb[:,:,0] - 0.289 * rgb[:,:,1] + 0.436 * rgb[:,:,2]  # U
@@ -301,6 +312,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _yuv_to_rgb(self, yuv):
         """YUV to RGB変換"""
+        import numpy as np
+        
         rgb = np.zeros_like(yuv)
         rgb[:,:,0] = yuv[:,:,0] + 1.140 * yuv[:,:,2]  # R
         rgb[:,:,1] = yuv[:,:,0] - 0.394 * yuv[:,:,1] - 0.581 * yuv[:,:,2]  # G
@@ -309,6 +322,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _rgb_to_hsv(self, rgb):
         """RGB to HSV変換"""
+        import numpy as np
+        
         # 入力は既に半開区間 [0.0, 1.0) に正規化済み
         rgb_norm = rgb
         hsv = np.zeros_like(rgb_norm)
@@ -347,6 +362,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     
     def _hsv_to_rgb(self, hsv):
         """HSV to RGB変換"""
+        import numpy as np
+        
         # 入力は既に0.0-1.0に正規化済み
         hsv_norm = hsv
         h, s, v = hsv_norm[:,:,0], hsv_norm[:,:,1], hsv_norm[:,:,2]
@@ -380,8 +397,12 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         
         return np.clip(rgb, 0, 1)
     
-    def _create_result_flowdata(self, original_flowdata, denoised_rgb):
+    def _createFlowdata(self, original_flowdata, denoised_rgb):
         """結果FlowDataを作成"""
+        from config import BLOCK_SIZE
+        from base import DataBlock
+        from base import FlowData
+
         headers = original_flowdata.headers.copy()
         result_flowdata = FlowData(headers)
         

@@ -7,13 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import DataBlock
 from nodes import N1BlockOperationNode
-from utils import numpy_helpers as nh
 
 class CountNode(N1BlockOperationNode):
     # ノードタイプ
@@ -50,6 +45,11 @@ class CountNode(N1BlockOperationNode):
     
     def processBlock(self, block, inputDatas):
         """単一ブロックのカウント処理"""
+        import numpy as np
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+
         planeIndex = block.planeIndex
         x, y = block.x, block.y
         
@@ -93,6 +93,9 @@ class CountNode(N1BlockOperationNode):
     
     def _processPolynomialCount(self, block, polynomialDatas):
         """全てpolynomialの場合のカウント処理"""
+        import numpy as np
+        from base import DataBlock
+
         planeIndex = block.planeIndex
         
         # 最初のpolynomialの係数行列を取得してサイズを決定

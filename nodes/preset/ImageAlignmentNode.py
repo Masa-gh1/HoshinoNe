@@ -145,8 +145,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         if 0 == len(auxiliaryDatas):
             # 基準画像（auxiliary）が必要
-            messagebox.showerror("エラー", "基準画像（補正値）が必要です")
             self._referenceData = None
+            raise ValueError("基準画像（補正値）が必要です")
         else:
             # 複数ある場合は最初のものを採用
             self._referenceData = auxiliaryDatas[0]

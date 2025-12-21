@@ -8,32 +8,11 @@ All rights reserved.
 '''
 
 import hashlib
-import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
 
 from base.FlowNode_CONST import *
-from base import DataBlock
 from nodes import NNBlockOperationNode, ConfigurableNode
-from utils import numpy_helpers as nh
-
-try:
-    from scipy.ndimage import gaussian_filter, sobel
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-
-try:
-    import pywt
-    PYWT_AVAILABLE = True
-except ImportError:
-    PYWT_AVAILABLE = False
-
-try:
-    from skimage import morphology
-    SKIMAGE_AVAILABLE = True
-except ImportError:
-    SKIMAGE_AVAILABLE = False
 
 class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
     # ノードタイプ
@@ -56,14 +35,12 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         self.star_protection = True
         self.protection_radius = 3
         
-        if not PYWT_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("pywt"):
             messagebox.showerror(f"{self.name} エラー", "PyWaveletsライブラリが必要です\npip install PyWavelets")
         
-        if not SKIMAGE_AVAILABLE:
+        if not importlib.util.find_spec("skimage"):
             messagebox.showerror(f"{self.name} エラー", "scikit-imageライブラリが必要です\npip install scikit-image")
-        
-        if not SCIPY_AVAILABLE:
-            messagebox.showerror(f"{self.name} エラー", "scipyライブラリが必要です\npip install scipy")
     
     def getText(self):
         """ノードのテキストを取得"""
@@ -99,9 +76,11 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
     
     def processBlock(self, block):
         """ウェーブレットノイズ除去処理"""
-        if not PYWT_AVAILABLE or not SKIMAGE_AVAILABLE or not SCIPY_AVAILABLE:
-            return block
-        
+        import numpy as np
+        import pywt
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+
         data = nh.array(block.data)
         
         # NaN値を事前に検出
@@ -161,6 +140,8 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
     
     def _calculate_max_levels(self, shape):
         """データサイズに基づいて適切な最大分解レベルを計算"""
+        import numpy as np
+        
         min_size = min(shape)
         # 最小サイズが8ピクセル以下にならないよう制限
         max_levels = int(np.log2(min_size // 8)) if min_size >= 16 else 1
@@ -168,6 +149,9 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
     
     def _create_star_mask(self, data):
         """星検出マスクを作成"""
+        import numpy as np
+        from skimage import morphology
+
         # 複数の閾値で星を検出
         masks = []
         thresholds = [self.star_threshold, self.star_threshold - 2.0, self.star_threshold - 5.0]
@@ -178,11 +162,10 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
                 mask = data > star_level
                 
                 # 小さなノイズを除去
-                if SKIMAGE_AVAILABLE:
-                    mask = morphology.remove_small_objects(mask, min_size=4)
+                mask = morphology.remove_small_objects(mask, min_size=4)
                 
                 # マスクを拡張して星の周辺も保護
-                if np.any(mask) and SKIMAGE_AVAILABLE:
+                if np.any(mask):
                     mask = morphology.dilation(mask, morphology.disk(self.protection_radius))
                 
                 masks.append(mask)
@@ -221,8 +204,7 @@ class WaveletDenoiseSettingsDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.onClose)
     
     def createCustomSettings(self, parent):
-        if not parent:
-            return tk.Frame()
+        import numpy as np
         
         frame = tk.Frame(parent)
         

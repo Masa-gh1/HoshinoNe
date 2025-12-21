@@ -7,27 +7,15 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
 import hashlib
 import datetime
 import os
 from concurrent.futures import as_completed
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from config import BLOCK_SIZE
-from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
-from utils import numpy_helpers as nh
-from utils.ThreadPool import ProcessExecutorInNode 
-from utils.exif_helper import getExif
-
-try:
-    from PIL import Image
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
 
 class ImageReaderNode(BaseReaderNode):
     # ノードタイプ
@@ -44,12 +32,16 @@ class ImageReaderNode(BaseReaderNode):
 
         self.fileTypes = [("Image files", "*.jpg *.jpeg *.png *.bmp *.gif")]
         
-        if not PIL_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("PIL"):
             messagebox.showerror(f"{self.name} エラー", "PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
             return
     
     def countFileBlocks(self, filePath):
         """画像ファイルのブロック数を事前計算"""
+        from PIL import Image
+        from config import BLOCK_SIZE
+
         try:
             img = Image.open(filePath)
             width, height = img.size
@@ -65,8 +57,11 @@ class ImageReaderNode(BaseReaderNode):
         return ImageSettingsDialog(self.view.editor.root, self)
         
     def processFile(self, filePath, context=None):
-        if not PIL_AVAILABLE:
-            raise Exception("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
+        from PIL import Image
+        from utils.ThreadPool import ProcessExecutorInNode 
+        from utils.exif_helper import getExif
+        from config import BLOCK_SIZE
+        from base import FlowData
         
         img = Image.open(filePath)
         width, height = img.size
@@ -144,6 +139,8 @@ class ImageReaderNode(BaseReaderNode):
     
     def getFileInfo(self, filePath):
         """画像ファイルの情報を取得（生データ）"""
+        from utils.exif_helper import getExif
+        
         try:
             exif = getExif(filePath)
             return {
@@ -172,6 +169,10 @@ class ImageReaderNode(BaseReaderNode):
     
     def _processBlock(self, pixels, x, y, planeCount, width, height):
         """プレーン毎ブロックの処理"""
+        from config import BLOCK_SIZE
+        from base import DataBlock
+        from utils import numpy_helpers as nh
+        
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         blockWidth = endX - x

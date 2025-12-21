@@ -7,13 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import DataBlock
 from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
-from utils import numpy_helpers as nh
 
 class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     # ノードタイプ
@@ -30,6 +25,8 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
+        import numpy as np
+
         datas = []
         tensors = []
         polynomials = []
@@ -87,6 +84,11 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     
     def processBlock(self, block, inputDatas):
         """単一ブロックの加算処理"""
+        import numpy as np
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+        
         planeIndex = block.planeIndex
         x, y = block.x, block.y
         
@@ -136,6 +138,8 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     
     def _processPolynomialAddition(self, block, polynomialDatas):
         """全てpolynomialの場合の加算処理"""
+        from base import DataBlock
+
         planeIndex = block.planeIndex
         
         # 最初のpolynomialの係数行列を取得

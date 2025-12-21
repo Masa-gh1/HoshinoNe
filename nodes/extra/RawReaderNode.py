@@ -12,7 +12,6 @@ https://letmaik.github.io/rawpy/api/index.html
 https://www.libraw.org/docs/API-datastruct.html
 '''
 
-import numpy as np
 import hashlib
 import datetime
 import os
@@ -20,20 +19,8 @@ from concurrent.futures import as_completed
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from config import BLOCK_SIZE
-from config import RAW_DEMOSAIC_ALGORITHMS
-from config import configRawParams
-from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
-from utils.exif_helper import getExif
-from utils.ThreadPool import ProcessExecutorInNode 
-
-try:
-    import rawpy
-    RAWPY_AVAILABLE = True
-except ImportError:
-    RAWPY_AVAILABLE = False
 
 class RawReaderNode(BaseReaderNode):
     # ノードタイプ
@@ -67,11 +54,12 @@ class RawReaderNode(BaseReaderNode):
         self.whiteBalance = "daylight"  # camera, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
         self.gammaPower = 1.0  # gamma power
         self.gammaSlope = 1.0  # gamma slope
-        
-        if not RAWPY_AVAILABLE:
+
+        import importlib.util
+        if not importlib.util.find_spec("rawpy"):
             messagebox.showerror(f"{self.name} エラー", "rawpyライブラリがインストールされていません。\npip install rawpy でインストールしてください。")
             return
-    
+        
     def getText(self):
         """ノードのテキストを取得"""
         if self.filePaths:
@@ -107,6 +95,9 @@ class RawReaderNode(BaseReaderNode):
     
     def countFileBlocks(self, filePath):
         """RAWファイルのブロック数を事前計算"""
+        import rawpy
+        from config import BLOCK_SIZE
+        
         try:
             with rawpy.imread(filePath) as raw:
                 height, width = raw.sizes.raw_height, raw.sizes.raw_width
@@ -134,8 +125,13 @@ class RawReaderNode(BaseReaderNode):
     
     def processFile(self, filePath, context=None):
         """単一RAWファイルの処理"""
-        if not RAWPY_AVAILABLE:
-            raise Exception("rawpyライブラリがインストールされていません\npip install rawpy でインストールしてください。")
+        import rawpy
+        from config import RAW_DEMOSAIC_ALGORITHMS
+        from config import configRawParams
+        from utils.exif_helper import getExif
+        from utils.ThreadPool import ProcessExecutorInNode
+        from config import BLOCK_SIZE
+        from base import FlowData
         
         # RAW現像パラメータ設定
         params = rawpy.Params()
@@ -336,6 +332,9 @@ class RawReaderNode(BaseReaderNode):
     
     def _processBlock(self, channelData, planeIndex, x, y, height, width):
         """単一ブロックの処理"""
+        from config import BLOCK_SIZE
+        from base import DataBlock
+        
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         
@@ -344,6 +343,8 @@ class RawReaderNode(BaseReaderNode):
     
     def getFileInfo(self, filePath):
         """RAWファイルの情報を取得（生データ）"""
+        from utils.exif_helper import getExif
+
         try:
             exif = getExif(filePath)
             return {
@@ -402,6 +403,8 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         return tk.Button(parent, text="撮影時刻ソート", command=self.sortByTimestamp)
     
     def createCustomSettings(self, parent):
+        from config import RAW_DEMOSAIC_ALGORITHMS
+        
         if not parent:
             return tk.Frame()  # テスト用ダミー
         

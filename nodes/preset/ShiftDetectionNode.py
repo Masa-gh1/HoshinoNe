@@ -8,22 +8,13 @@ All rights reserved.
 '''
 from types import SimpleNamespace
 import hashlib
-import numpy as np
 import datetime
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from base.FlowNode_CONST import *
-from base import FlowNode, FlowData, DataBlock
+from base import FlowNode
 from nodes import ConfigurableNode
-from utils import numpy_helpers as nh
-from utils.Debug import Debug
-
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
 
 class AlignmentResult:
     def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, time=None, method="", extra_info={}):
@@ -77,7 +68,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         self.template = SimpleNamespace()
         self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
 
-        if not CV2_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("cv2"):
             messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
@@ -152,8 +144,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         if 0 == len(auxiliaryDatas):
             # 基準画像（auxiliary）が必要
-            messagebox.showerror("エラー", "基準画像（補正値）が必要です")
             self._referenceData = None
+            raise ValueError("基準画像（補正値）が必要です")
         else:
             # 複数ある場合は最初のものを採用
             self._referenceData = auxiliaryDatas[0]
@@ -233,18 +225,21 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             if result:
                 star_result = result
             else:
+                from utils.Debug import Debug
                 Debug.log(type(self).__name__,"fail findOffsetByStarDetection")
                 star_result = None
                 result = self._findOffsetByPhaseCorrelation(refGray, targetGray, previous_result)
             if result:
                 phase_result = result
             else:
+                from utils.Debug import Debug
                 Debug.log(type(self).__name__,"fail findOffsetByPhaseCorrelation")
                 phase_result = None
                 result = self._findOffsetByTemplateMatching(refGray, targetGray, previous_result)
             if result:
                 template_result = result
             else:
+                from utils.Debug import Debug
                 Debug.log(type(self).__name__,"fail findOffsetByTemplateMatching")
                 template_result = None
             
@@ -297,6 +292,9 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     def _createTableOutput(self, inputDatas, results):
         """table形式のFlowDataを生成"""
         from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+        from base import FlowData
         
         # データ行を作成
         table_data = []
@@ -342,6 +340,9 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
         """FlowDataから画像配列を構築"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
         width, height = flowData.getDimensions()
         
         if planeIndex is not None:
@@ -397,6 +398,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _findOffsetByTemplateMatching(self, refImage, targetImage, previous_result=None):
         """テンプレートマッチングでオフセットを検出"""
+        import cv2
+
         if previous_result is None:
             previous_result = AlignmentResult()
         
@@ -450,6 +453,10 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _findOffsetByPhaseCorrelation(self, refImage, targetImage, previous_result=None):
         """位相相関法でオフセットを検出"""
+        import numpy as np
+        import cv2
+        from utils import numpy_helpers as nh
+
         if previous_result is None:
             previous_result = AlignmentResult()
         
@@ -542,6 +549,9 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _findOffsetByStarDetection(self, refImage, targetImage, previous_result=None):
         """星点検出による天体写真用位置合わせ"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
         if previous_result is None:
             previous_result = AlignmentResult()
         
@@ -676,6 +686,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
                     dx, dy = transform_result[0, 2], transform_result[1, 2]
                     rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
             
+            from utils.Debug import Debug
             degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
             degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
             degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
@@ -689,6 +700,10 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _calculateAffineTransform(self, matches, shape):
         """対応点からアフィン変換を計算（画像中心回転）"""
+        import numpy as np
+        import cv2
+        from utils import numpy_helpers as nh
+
         ref_pts = nh.array([match[0] for match in matches])
         target_pts = nh.array([match[1] for match in matches])
         
@@ -701,8 +716,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         target_centered = target_pts - image_center
         
         # 中心座標系でアフィン変換を計算
-        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC,
-                                        ransacReprojThreshold=2.0)[0]
+        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC, ransacReprojThreshold=2.0)[0]
         
         if M is not None:
             # 回転角を計算
@@ -734,6 +748,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _calculateGridMatches(self, matches, offset, image_shape):
         """グリッド別のマッチ数を計算"""
+        import numpy as np
+
         h, w = image_shape
         grid_rows, grid_cols = self.star.grid.rows, self.star.grid.cols
         cell_h = h // grid_rows
@@ -758,6 +774,9 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _detectStars(self, image):
         """画像から星点を検出"""
+        import numpy as np
+        import cv2
+        
         # ガウシアンブラーでノイズ除去
         blurred = cv2.GaussianBlur(image, (3, 3), 0)
         
@@ -785,6 +804,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         except (cv2.error, SystemError):
             # OpenCV 4.5.5以降のバグ対応
+            from utils.Debug import Debug
             Debug.log(type(self).__name__,"Retry cv2.findContours")
             try:
                 contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -846,6 +866,9 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _createSaturationMask(self, image):
         """飽和領域のマスクを作成"""
+        import numpy as np
+        import cv2
+
         max_val = np.max(image)
         saturated = image > (max_val * self.saturationThreshold / 100)
         

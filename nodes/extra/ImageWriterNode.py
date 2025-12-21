@@ -9,23 +9,9 @@ All rights reserved.
 
 import os
 import datetime
-import numpy as np
 from nodes import BaseWriterNode
 from config import BLOCK_SIZE, HEADERS_EXIF, HEADERS_EXIF_OPT
 from utils.Debug import Debug
-
-try:
-    from PIL import Image
-    from PIL.ExifTags import TAGS
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
-
-try:
-    import tifffile
-    TIFFFILE_AVAILABLE = True
-except ImportError:
-    TIFFFILE_AVAILABLE = False
 
 class ImageWriterNode(BaseWriterNode):
     # ノードタイプ
@@ -45,14 +31,18 @@ class ImageWriterNode(BaseWriterNode):
     
     def processFile(self, filePath, flowData, context=None):
         """単一ファイル出力処理"""
+        import numpy as np
+
         # 拡張子に応じたbit深度のデータ型と最大値を決定
         _, ext = os.path.splitext(filePath)
         
         if ext.lower() in ['.tiff', '.tif']:
-            if not TIFFFILE_AVAILABLE:
+            import importlib.util
+            if not importlib.util.find_spec('tifffile'):
                 raise Exception("tifffileライブラリがインストールされていません\npip install tifffile でインストールしてください。")
         else:
-            if not PIL_AVAILABLE:
+            import importlib.util
+            if not importlib.util.find_spec('PIL'):
                 raise Exception("PILライブラリがインストールされていません\npip install pillow でインストールしてください。")
 
         width, height = flowData.getDimensions()
@@ -208,6 +198,9 @@ class ImageWriterNode(BaseWriterNode):
             save_kwargs['metadata'] = exif_dict
         else:
             # EXIF bytes変換
+            from PIL import Image
+            from PIL.ExifTags import TAGS
+
             if exif_dict:
                 exif = Image.Exif()
                 tag_map = {tname: tid for tid, tname in TAGS.items()}
@@ -220,9 +213,11 @@ class ImageWriterNode(BaseWriterNode):
 
         # 保存処理
         if ext.lower() in ['.tiff', '.tif']:
+            import tifffile
             imgMode = 'rgb' if "RGB" == imgMode else 'minisblack'
             tifffile.imwrite(filePath, imgArray, photometric=imgMode, **save_kwargs)
         else: # 他フォーマット: PIL使用
+            from PIL import Image
             img = Image.fromarray(imgArray, imgMode)
             img.save(filePath, **save_kwargs)
         
@@ -231,6 +226,8 @@ class ImageWriterNode(BaseWriterNode):
         
     def _getBitDepthForFormat(self, ext):
         """拡張子に応じたbit深度のデータ型と最大値を返す"""
+        import numpy as np
+        
         if ext in ['.tiff', '.tif']:
             return np.uint16, 65535  # 32bit float がうまく行かないので暫定
             #return np.float32, None  # 32bit float ：元の値をそのまま保存

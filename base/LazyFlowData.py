@@ -7,15 +7,11 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
 import uuid
 from collections import UserDict
 
-from config import BLOCK_SIZE
 from .Constants import CachePolicy
 from .FlowData import FlowData
-from .DataBlock import DataBlock
-from utils import numpy_helpers as nh
 
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
@@ -50,15 +46,15 @@ class LazyFlowData(FlowData):
             self.setBlock(block)
             return block
     
-    def operation(self, flowData, planeIndex, x, y) -> DataBlock:
+    def operation(self, flowData, planeIndex, x, y):
         """遅延評価を実行"""
         return None
 
-    def getLazyHeaderkeys(self) -> list:
+    def getLazyHeaderkeys(self):
         """遅延評価対象の header キーを取得"""
         return []
 
-    def headerOperation(self, lazyFlowData, key) -> dict:
+    def headerOperation(self, lazyFlowData, key):
         """headers 遅延評価"""
         return {}
 
@@ -130,7 +126,11 @@ class LazyOperations:
     @staticmethod
     def transform(flowData, planeIndex, x, y, transformMatrix):
         """アフィン変換"""
+        import numpy as np
+        from utils import numpy_helpers as nh
         import cv2
+        from config import BLOCK_SIZE
+        from .DataBlock import DataBlock
         
         # 出力ブロックの中心位置
         outputCenterX = x + BLOCK_SIZE // 2
@@ -168,6 +168,9 @@ class LazyOperations:
     @staticmethod
     def _getExtendedBlockData(flowData, planeIndex, x, y, margin=64):
         """隣接ブロックを含む拡張データを取得"""
+        from utils import numpy_helpers as nh
+        from config import BLOCK_SIZE
+
         blockX = x // BLOCK_SIZE
         blockY = y // BLOCK_SIZE
         extendedSize = BLOCK_SIZE + 2 * margin
@@ -199,6 +202,8 @@ class LazyOperations:
     @staticmethod
     def scale(flowData, planeIndex, x, y, scaleValue):
         """スケール変換"""
+        from .DataBlock import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block or block.data is None:
             return None
@@ -207,6 +212,8 @@ class LazyOperations:
     @staticmethod
     def offset(flowData, planeIndex, x, y, offsetValue):
         """オフセット加算"""
+        from .DataBlock import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block or block.data is None:
             return None

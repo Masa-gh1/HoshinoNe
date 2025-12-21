@@ -1,14 +1,15 @@
 name,item,min,wma,latestMax,max
-sample/fits/sample.flow,elapsed ms,7690,7778,7690,8628
-sample/fits/sample_sigma.flow,elapsed ms,11311,11311,11483,11483
-sample/dng/sample.flow,elapsed ms,11759,11759,11759,11759
+sample/fits/sample.flow,elapsed ms,7690,7778,7868,8628
+sample/fits/sample_sigma.flow,elapsed ms,11311,11311,11848,11848
+sample/dng/sample.flow,elapsed ms,11759,11759,11781,11781
 sample/raw/sample.flow,elapsed ms,23444,23444,27129,27129
-sample/raw/sample_sigma.flow,elapsed ms,40114,41788,40114,47660
-sample/fits/sample_pixcomp.flow,elapsed ms,51942,51942,55583,55583
-sample/raw/sample_pixcomp.flow,elapsed ms,151270,153281,163120,179656
-sample/fits/sample.flow,maxObjectCount,127381,127381,127381,127381
-sample/fits/sample_sigma.flow,maxObjectCount,129248,129248,129248,129248
-sample/fits/sample_pixcomp.flow,maxObjectCount,137805,137805,137805,137805
-sample/raw/sample.flow,maxObjectCount,139978,146561,146728,147040
-sample/raw/sample_sigma.flow,maxObjectCount,148313,148330,148313,148856
-sample/raw/sample_pixcomp.flow,maxObjectCount,157458,157856,159518,159743
+sample/raw/sample_sigma.flow,elapsed ms,40114,41788,40630,47660
+sample/fits/sample_pixcomp.flow,elapsed ms,50729,51942,50729,55583
+sample/raw/sample_pixcomp.flow,elapsed ms,147727,153281,147727,179656
+sample/fits/sample.flow,maxObjectCount,118473,127381,118473,127381
+sample/dng/sample.flow,maxObjectCount,118504,118504,118504,118504
+sample/fits/sample_sigma.flow,maxObjectCount,120557,129248,120557,129248
+sample/raw/sample.flow,maxObjectCount,121685,146561,121685,147040
+sample/raw/sample_sigma.flow,maxObjectCount,123894,148330,123894,148856
+sample/fits/sample_pixcomp.flow,maxObjectCount,126540,137805,126540,137805
+sample/raw/sample_pixcomp.flow,maxObjectCount,137234,157856,137234,159743

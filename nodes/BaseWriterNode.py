@@ -15,8 +15,6 @@ import tkinter as tk
 from tkinter import filedialog
 
 from base.FlowNode_CONST import *
-from base import DataBlock
-from base import FlowData
 from base import FlowNode
 from nodes import ConfigurableNode
 
@@ -104,7 +102,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
                 fileInfos.append(fileInfo)
         
         # 結果データを生成
-        self._createResultFlowData(fileInfos)
+        self._createFlowData(fileInfos)
         
         self.reportProgress(context, "完了")
         
@@ -112,8 +110,11 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         """Settings dialogを開く"""
         return BaseWriterSettingsDialog(self.view.editor.root, self)
 
-    def _createResultFlowData(self, fileInfos):
+    def _createFlowData(self, fileInfos):
         """結果FlowDataを生成"""
+        from base import DataBlock
+        from base import FlowData
+
         fileNames = [os.path.basename(path) for path, _, _, _, _ in fileInfos]
         
         headers = {

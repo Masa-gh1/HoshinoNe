@@ -27,7 +27,7 @@ class TransformNode(LazyNNOperationNode):
         
         self._tableData   = None
         self._extendParams = None
-
+        
         import importlib.util
         if not importlib.util.find_spec("cv2"):
             from tkinter import messagebox

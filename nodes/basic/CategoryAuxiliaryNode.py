@@ -9,7 +9,6 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import FlowNode
-from base import FlowDataWrapper
 
 class CategoryAuxiliaryNode(FlowNode):
     # ノードタイプ
@@ -25,6 +24,8 @@ class CategoryAuxiliaryNode(FlowNode):
         super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
+        from base import FlowDataWrapper
+        
         self.reportProgress(context, "開始")
         
         # 入力データを収集

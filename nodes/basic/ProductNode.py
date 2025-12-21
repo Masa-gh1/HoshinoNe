@@ -7,13 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import DataBlock
 from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
-from utils import numpy_helpers as nh
 
 class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     # ノードタイプ
@@ -30,6 +25,8 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
 
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
+        import numpy as np
+        
         datas = []
         tensors = []
         polynomials = []
@@ -92,6 +89,11 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     
     def processBlock(self, block, inputDatas):
         """単一ブロックの乗算処理"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+        from config import BLOCK_SIZE
+        from base import DataBlock
+
         planeIndex = block.planeIndex
         x, y = block.x, block.y
         

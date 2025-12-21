@@ -7,12 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import FlowNode, FlowData, DataBlock
-from utils import numpy_helpers as nh
+from base import FlowNode
 
 class QuadraticFitNode(FlowNode):
     # ノードタイプ
@@ -28,6 +24,12 @@ class QuadraticFitNode(FlowNode):
         super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
+        import numpy as np
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import FlowData
+        from base import DataBlock
+
         self.reportProgress(context, "開始")
         
         # 入力データを収集

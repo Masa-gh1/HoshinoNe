@@ -8,34 +8,13 @@ All rights reserved.
 '''
 
 import hashlib
-import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
 
 from base.FlowNode_CONST import *
-from base import DataBlock
-from base import FlowData
 from nodes import ConfigurableNode
 from nodes import NNBlockOperationNode
-from utils import numpy_helpers as nh
-from utils.interval_helper import createHalfOpenEnd
 from utils.ThreadPool import CoalescingExecutor
-
-# scipyのインポートチェック
-try:
-    from scipy.interpolate import interp1d, CubicSpline
-    scipyAvailable = True
-except ImportError:
-    scipyAvailable = False
-
-# matplotlibのインポートチェック
-try:
-    import matplotlib.pyplot as plt
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-    from matplotlib.figure import Figure
-    matplotlibAvailable = True
-except ImportError:
-    matplotlibAvailable = False
 
 class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
     # ノードタイプ
@@ -59,11 +38,12 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         self.boundaryCondition = 'natural'  # 境界条件
         
         # ライブラリチェック
-        if not scipyAvailable:
+        import importlib.util
+        if not importlib.util.find_spec("scipy"):
             messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
             return
         
-        if not matplotlibAvailable:
+        if not importlib.util.find_spec("matplotlib"):
             messagebox.showerror(f"{self.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
             return
     
@@ -98,6 +78,10 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         return ToneCurveDialog( self.view.editor.root, self)
         
     def processBlock(self, block):
+        import numpy as np
+        from scipy.interpolate import interp1d, CubicSpline
+        from base import DataBlock
+
         if block is None:
             return None
         
@@ -192,17 +176,6 @@ class ToneCurveDialog(tk.Toplevel):
         self.geometry("600x500")
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
-        # ライブラリチェック
-        if not scipyAvailable:
-            messagebox.showerror(f"{node.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
-            self.destroy()
-            return
-        
-        if not matplotlibAvailable:
-            messagebox.showerror(f"{node.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
-            self.destroy()
-            return
-        
         self.selectedPoint = None
         self.dragging = False
         self.dragStarted = False
@@ -221,10 +194,24 @@ class ToneCurveDialog(tk.Toplevel):
         # UI側でcontrolPointsの一時保存を管理
         self.tempControlPoints = self.node.controlPoints.copy()
         
+        # ライブラリチェック
+        import importlib.util
+        if not importlib.util.find_spec("scipy"):
+            messagebox.showerror(f"{self.name} エラー", "scipyライブラリがインストールされていません。\npip install scipy でインストールしてください。")
+            return
+        
+        if not importlib.util.find_spec("matplotlib"):
+            messagebox.showerror(f"{self.name} エラー", "matplotlibライブラリがインストールされていません。\npip install matplotlib でインストールしてください。")
+            return
+        
         self.createWidgets()
         self.updatePlot()
         
     def createWidgets(self):
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        from matplotlib.figure import Figure
+
         # 基本設定フレーム
         basicFrame = tk.Frame(self)
         basicFrame.pack(fill=tk.X, padx=10, pady=5)
@@ -356,6 +343,8 @@ class ToneCurveDialog(tk.Toplevel):
         self.canvas.draw()
     
     def plotHistogram(self, flowData):
+        from utils import numpy_helpers as nh
+
         # ヒストグラム軸をクリア
         self.histAxes.clear()
         
@@ -415,6 +404,9 @@ class ToneCurveDialog(tk.Toplevel):
             self.histAxes.tick_params(axis='y', labelleft=False)  # Y軸ラベルを非表示
     
     def plotToneCurve(self):
+        import numpy as np
+        from scipy.interpolate import interp1d, CubicSpline
+
         if 2 <= len(self.tempControlPoints):
             # UI入力値を取得
             displayMin = float(self.displayMinEntry.get())
@@ -670,6 +662,8 @@ class ToneCurveDialog(tk.Toplevel):
     
     def fitDisplayToInput(self):
         # 入力データから最大最小値を取得してUIに設定
+        from utils.interval_helper import createHalfOpenEnd
+
         if self.node.inputNodes and self.node.inputNodes[0].flowDatas:
             
             flowData = self.node.inputNodes[0].flowDatas[0]

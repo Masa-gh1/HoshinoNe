@@ -6,10 +6,6 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
-from base import FlowData
-from base import DataBlock
-import utils.numpy_helpers as nh
 
 class TensorOperationMixin:
     """tensor 操作の共通機能を提供するMixin"""
@@ -17,6 +13,9 @@ class TensorOperationMixin:
     @classmethod
     def computeCombinedTensor(cls, tensorDatas, operation):
         """複数 tensor を事前に統合計算"""
+        from base import FlowData
+        from base import DataBlock
+        
         if not tensorDatas:
             return None
         if len(tensorDatas) == 1:
@@ -44,6 +43,8 @@ class TensorOperationMixin:
     @classmethod
     def calculateTensorRange(cls, tensor, width, height):
         """tensor の範囲を計算"""
+        import numpy as np
+        
         if tensor is None:
             return 0.0, 0.0
         

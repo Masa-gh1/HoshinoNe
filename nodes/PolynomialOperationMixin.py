@@ -6,10 +6,6 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
-from base import FlowData
-from base import DataBlock
-import utils.numpy_helpers as nh
 
 class PolynomialOperationMixin:
     """polynomial 操作の共通機能を提供するMixin"""
@@ -22,6 +18,10 @@ class PolynomialOperationMixin:
             polynomialDatas: polynomial データのリスト
             operation: 係数演算関数 (加算・減算用)
         """
+        import numpy as np
+        from base import FlowData
+        from base import DataBlock
+
         if not polynomialDatas:
             return None
         if len(polynomialDatas) == 1:
@@ -99,6 +99,9 @@ class PolynomialOperationMixin:
     @classmethod
     def calculatePolynomialBlock(cls, polynomialData, planeIndex, x, y, blockShape, defaultValue=0.0):
         """Polynomial データからブロック内の各座標に対応する値を計算"""
+        import numpy as np
+        import utils.numpy_helpers as nh
+
         width, height = polynomialData.getDimensions()
         planeCount = polynomialData.getPlaneCount()
         if width < 1 or height < 1 or planeIndex >= planeCount:
@@ -146,6 +149,9 @@ class PolynomialOperationMixin:
     @classmethod
     def _addPolynomialPlane(cls, planeIndex, polynomialDatas):
         """polynomial の加算処理"""
+        import numpy as np
+        from base import DataBlock
+        
         # 最初の polynomial の係数行列を取得
         coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
         data = coeffBlock.data.copy()
@@ -160,6 +166,8 @@ class PolynomialOperationMixin:
     @classmethod
     def _multiplyPolynomialPlane(cls, planeIndex, polynomialDatas):
         """polynomial の乗算処理（係数の畳み込み）"""
+        from base import DataBlock
+
         # 最初の polynomial の係数行列を取得
         coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
         data = coeffBlock.data.copy()
@@ -175,6 +183,8 @@ class PolynomialOperationMixin:
     @classmethod
     def _convolvePolynomialCoeffs(cls, coeffs1, coeffs2):
         """係数行列の畳み込み乗算"""
+        import utils.numpy_helpers as nh
+
         h1, w1 = coeffs1.shape
         h2, w2 = coeffs2.shape
         

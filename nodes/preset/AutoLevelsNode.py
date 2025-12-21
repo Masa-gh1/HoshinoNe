@@ -7,13 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
 from base import FlowNode
-from base import FlowDataWrapper
-from utils import numpy_helpers as nh
 
 class AutoLevelsNode(FlowNode):
     # ノードタイプ
@@ -29,6 +24,11 @@ class AutoLevelsNode(FlowNode):
         super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
+        import numpy as np
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import FlowDataWrapper
+
         self.reportProgress(context, "開始")
         
         # 入力データを収集

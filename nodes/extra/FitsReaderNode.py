@@ -11,22 +11,11 @@ import hashlib
 import datetime
 import os
 from concurrent.futures import as_completed
-import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from config import BLOCK_SIZE
-from base import FlowData, DataBlock
 from nodes import BaseReaderSettingsDialog
 from nodes import BaseReaderNode
-from utils.ThreadPool import ProcessExecutorInNode 
-from utils.interval_helper import createHalfOpenEnd
-
-try:
-    from astropy.io import fits
-    ASTROPY_AVAILABLE = True
-except ImportError:
-    ASTROPY_AVAILABLE = False
 
 class FitsReaderNode(BaseReaderNode):
     # ノードタイプ
@@ -43,12 +32,16 @@ class FitsReaderNode(BaseReaderNode):
 
         self.fileTypes = [("FITS files", "*.fits *.fit *.fts")]
         
-        if not ASTROPY_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("astropy"):
             messagebox.showerror(f"{self.name} エラー", "astropyライブラリがインストールされていません。\npip install astropy でインストールしてください。")
             return
     
     def countFileBlocks(self, filePath):
         """FITSファイルのブロック数を事前計算"""
+        from astropy.io import fits
+        from config import BLOCK_SIZE
+        
         try:
             with fits.open(filePath) as hdul:
                 totalBlocks = 0
@@ -74,8 +67,12 @@ class FitsReaderNode(BaseReaderNode):
     
     def processFile(self, filePath, context=None):
         """単一FITSファイルの処理"""
-        if not ASTROPY_AVAILABLE:
-            raise Exception("astropyライブラリがインストールされていません\npip install astropy でインストールしてください。")
+        import numpy as np
+        from astropy.io import fits
+        from config import BLOCK_SIZE
+        from utils.interval_helper import createHalfOpenEnd
+        from utils.ThreadPool import ProcessExecutorInNode
+        from base import FlowData
         
         resultFlowDatas = []
         futureToDatas = {}
@@ -240,6 +237,8 @@ class FitsReaderNode(BaseReaderNode):
     
     def getFileInfo(self, filePath):
         """FITSファイルの情報を取得"""
+        from astropy.io import fits
+
         try:
             with fits.open(filePath) as hdul:
                 hdu_count = len(hdul)
@@ -304,6 +303,9 @@ class FitsReaderNode(BaseReaderNode):
     
     def _processBlock(self, data, x, y, channels, width, height):
         """FITSデータブロックの処理"""
+        from config import BLOCK_SIZE
+        from base import DataBlock
+        
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         

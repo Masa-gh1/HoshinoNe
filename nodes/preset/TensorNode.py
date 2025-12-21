@@ -9,13 +9,10 @@ All rights reserved.
 
 import hashlib
 import tkinter as tk
-from tkinter import simpledialog
 
 from base.FlowNode_CONST import *
-from base import FlowNode, FlowData, DataBlock
+from base import FlowNode
 from nodes import ConfigurableNode
-from utils import string_helper as sh
-from utils.interval_helper import createHalfOpenEnd
 
 class TensorNode(FlowNode,ConfigurableNode):
     # ノードタイプ
@@ -37,6 +34,8 @@ class TensorNode(FlowNode,ConfigurableNode):
     
     def getText(self):
         """ノードのテキストを取得"""
+        from utils import string_helper as sh
+
         constVal = ""
         for planeIndex in range(self.planeCount):
             value = self.tensor.get(f"{planeIndex},0,0", 0)
@@ -78,6 +77,10 @@ class TensorNode(FlowNode,ConfigurableNode):
         self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
+        from utils.interval_helper import createHalfOpenEnd
+        from base import DataBlock
+        from base import FlowData
+        
         self.reportProgress(context, "開始")
         
         # 指定されたサイズの tensor を作成

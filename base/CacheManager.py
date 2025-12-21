@@ -8,7 +8,6 @@ All rights reserved.
 '''
 
 import time
-import numpy as np
 import sys
 import os
 import threading
@@ -162,6 +161,8 @@ class CacheManager:
     @classmethod
     def _saveToStorage(cls, cacheKey, data):
         """ストレージに退避（永続化データのみ）"""
+        import numpy as np
+
         try:
             tempDir = cls._getGlobelTempDir()
 
@@ -181,6 +182,8 @@ class CacheManager:
     @classmethod
     def _loadFromStorage(cls, cacheKey):
         """ストレージから読み込み（永続化データのみ）"""
+        import numpy as np
+        
         try:
             if cls._globalTempDir is None:
                 return None

@@ -7,8 +7,6 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
 from .Constants import CachePolicy
 from .CacheManager import CacheManager
 

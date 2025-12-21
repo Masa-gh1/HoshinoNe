@@ -9,7 +9,6 @@ All rights reserved.
 
 from abc import abstractmethod
 from base.FlowNode_CONST import *
-from base import LazyFlowData
 from base import FlowNode
 
 class LazyNNOperationNode(FlowNode):
