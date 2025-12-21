@@ -512,13 +512,16 @@ class FlowEditor:
     def executeFlowAsync(self):
         try:
             self.take += 1
-
             self.resultText.delete(1.0, tk.END)
+
+            import gc
+            gc.collect()
+
             self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
 
             from utils.Debug import Debug
             if 1==self.take and Debug.isTestMode():
-                # テストモードなので結果を記録
+                # ファーストテイクかつテストモードなので結果を記録
                 filename = os.path.basename(self.currentFlowPath)
                 Debug.log(type(self).__name__, f"{filename} elapsed {self.flowControl.elapsedMs} ms")
                 Debug.record( self.currentFlowPath, "elapsed ms", self.flowControl.elapsedMs)

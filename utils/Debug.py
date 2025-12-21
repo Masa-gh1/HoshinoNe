@@ -70,7 +70,7 @@ class Debug:
             filename = os.path.join(cls.applicationHome,f"record_{MAX_BLOCK_CACHE_SIZE_GB}GB_{BLOCK_SIZE}px_{MAX_BLOCK_CACHE_SIZE}_{MAX_WORKERS}.csv")
             if not os.path.exists(filename):
                 with open(os.path.join(filename), "w") as file:
-                    file.write("name,item,min,max\n")
+                    file.write("name,item,min,latestMax,max\n")
 
             try:
                 with open(os.path.join(filename), "r") as file:
@@ -78,16 +78,17 @@ class Debug:
                     lines = file.readlines()
                 out = []
                 for line in lines:
-                    _name, _item, _min, _max = line.strip().split(",")
+                    _name, _item, _min, _latestMax, _max = line.strip().split(",")
                     if name == _name and item == _item:
-                        _max = max(int(_max), num)
-                        _min = min(int(_min), num)
-                        out.append(f"{_name},{_item},{_min},{_max}\n")
+                        _latestMax = max(int(_latestMax), num) if int(_min)<num else num
+                        _min       = min(int(_min), num)
+                        _max       = max(int(_max), num)
+                        out.append(f"{_name},{_item},{_min},{_latestMax},{_max}\n")
                         name = None
                     else:
                         out.append(line)
                 if name:
-                    out.append(f"{name},{item},{num},{num}\n")
+                    out.append(f"{name},{item},{num},{num},{num}\n")
                 
                 out = sorted(out, key=lambda x: (x.split(",")[1],int(x.split(",")[2])))
 
