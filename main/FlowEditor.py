@@ -14,11 +14,8 @@ import os
 import traceback
 
 from Version import VERSION
-from base import FlowNode
-from base import FlowData
 from base import FlowControl
 from base import FlowFile
-from base import CacheManager
 from nodes import NodeFactory
 from .Tray import Tray
 from utils.ThreadPool import CoalescingExecutor
@@ -622,7 +619,7 @@ class FlowEditor:
             
             # Z-orderで表示順を再現
             for obj in zOrderObj:
-                if isinstance( obj, FlowNode):
+                if hasattr( obj, 'view'):
                     obj.view.lift()
                 else:
                     obj.lift()
@@ -821,11 +818,14 @@ class FlowEditor:
     
     def updateCacheStats(self):
         """キャッシュ統計を更新"""
+        import gc
         from utils.Debug import Debug
+        from base import CacheManager
         
+        ObjectCount    = f"{len(gc.get_objects())}個"
+        flowDataCount = f"{sum([len(node.flowDatas) for node in self.nodes])}個"
         flowNodeCount = f"{len(self.nodes)}個"
         trayCount = f"{len(self.trays)}個"
-        flowDataCount = f"{sum([len(node.flowDatas) for node in self.nodes])}個"
         
         _, cacheSize, _, storageSize, cacheMissCount, purgeCount, saveCount, loadCount, _ = CacheManager.getCacheStats()
         
@@ -851,13 +851,11 @@ class FlowEditor:
         
         # 使用量ラベルを更新
         if Debug.LEVEL_NONE == Debug.LEVEL:
-            objInfo   = ""
+            objInfo   = f"Object: {ObjectCount}"
             CacheInfo = ""
             dataInfo  = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
             nodeInfo  = f"Node: {flowNodeCount}"
         else:
-            import gc
-            ObjectCount    = f"{len(gc.get_objects())}個"
             cacheNodeCount = f"{self.getNodeCount()}個"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount}"
@@ -872,6 +870,7 @@ class FlowEditor:
 
     def getNodeCount(self):
         import gc
+        from base import FlowNode
         
         nodes = []
         for obj in gc.get_objects():
@@ -883,6 +882,7 @@ class FlowEditor:
         """ガベージコレクションを強制実行"""
         import gc
         from utils.Debug import Debug
+        from base import CacheManager
         
         # 実行前のメモリ使用量を取得
         beforeNodeCount = self.getNodeCount()
@@ -956,6 +956,8 @@ class FlowEditor:
     def _debugReferencesReport(self):
         """ノードの参照状況をデバッグ出力"""
         import gc
+        from base import FlowData
+        from base import FlowNode
         # 全オブジェクトからflowNodeを探す
         objs = []
         objCount = 0
@@ -1070,6 +1072,7 @@ class FlowEditor:
         """ノードの参照状況を再帰的に収集"""
         import gc
         import inspect
+        from base import FlowData
         
         level += 16
         objs = set()

@@ -7,10 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
 from base.FlowNode_CONST import *
-from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode 
 
@@ -33,6 +30,9 @@ class AbsoluteNode(LazyNNOperationNode):
 
 class AbsoluteLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):
+        import numpy as np
+        from base import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block

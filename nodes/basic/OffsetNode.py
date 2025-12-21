@@ -6,10 +6,8 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
 
 from base.FlowNode_CONST import *
-from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
@@ -29,6 +27,8 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
+        import numpy as np
+
         primaryDatas = []
         auxiliaryPolynomials = []
         auxiliaryTables = []
@@ -60,6 +60,9 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
 
 class OffsetLazyFlowData(LazyFlowData, PolynomialOperationMixin):
     def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+        import numpy as np
+        from base import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block

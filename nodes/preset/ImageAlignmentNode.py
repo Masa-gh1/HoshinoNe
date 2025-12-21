@@ -8,25 +8,13 @@ All rights reserved.
 '''
 from types import SimpleNamespace
 import hashlib
-import numpy as np
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import FlowData
 from base import LazyFlowData
-from base import DataBlock
 from nodes import NNBlockOperationNode
 from nodes import ConfigurableNode
-from utils import numpy_helpers as nh
-from utils.Debug import Debug
-
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
 
 class AlignmentResult:
     def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, method="", extra_info={}):
@@ -81,7 +69,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # 拡張領域計算
         # 位置合わせ実行
         
-        if not CV2_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("cv2"):
             messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
@@ -198,6 +187,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _calculateAlignmentMetadata(self, inputDatas, context):
         """移動/回転計算のみを実行"""
+        import numpy as np
+        
         # 基準画像
         referenceData = self._referenceData
 
@@ -277,6 +268,9 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _calculateTransformedCorners(self, width, height, dx, dy, rotation):
         """画像の4隅の変換後座標を計算（画像中心回転）"""
+        import cv2
+        from utils import numpy_helpers as nh
+
         corners = nh.array([[0, 0], [width, 0], [width, height], [0, height]])
         
         if rotation != 0:
@@ -328,6 +322,9 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
         """FlowDataから画像配列を構築"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
         width, height = flowData.getDimensions()
         
         if planeIndex is not None:
@@ -383,6 +380,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _findOffsetByTemplateMatching(self, refImage, targetImage, previous_result=None):
         """テンプレートマッチングでオフセットを検出"""
+        import cv2
+
         if previous_result is None:
             previous_result = AlignmentResult()
         
@@ -436,6 +435,10 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _findOffsetByPhaseCorrelation(self, refImage, targetImage, previous_result=None):
         """位相相関法でオフセットを検出"""
+        import numpy as np
+        import cv2
+        from utils import numpy_helpers as nh
+
         if previous_result is None:
             previous_result = AlignmentResult()
         
@@ -528,6 +531,9 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _findOffsetByStarDetection(self, refImage, targetImage, previous_result=None):
         """星点検出による天体写真用位置合わせ"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
         if previous_result is None:
             previous_result = AlignmentResult()
         
@@ -662,6 +668,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
                     dx, dy = transform_result[0, 2], transform_result[1, 2]
                     rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
             
+            from utils.Debug import Debug
             degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
             degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
             degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
@@ -675,6 +682,10 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _calculateAffineTransform(self, matches, shape):
         """対応点からアフィン変換を計算（画像中心回転）"""
+        import numpy as np
+        import cv2
+        from utils import numpy_helpers as nh
+
         ref_pts = nh.array([match[0] for match in matches])
         target_pts = nh.array([match[1] for match in matches])
         
@@ -720,6 +731,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _calculateGridMatches(self, matches, offset, image_shape):
         """グリッド別のマッチ数を計算"""
+        import numpy as np
+
         h, w = image_shape
         grid_rows, grid_cols = self.star.grid.rows, self.star.grid.cols
         cell_h = h // grid_rows
@@ -744,6 +757,9 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _detectStars(self, image):
         """画像から星点を検出"""
+        import numpy as np
+        import cv2
+
         # ガウシアンブラーでノイズ除去
         blurred = cv2.GaussianBlur(image, (3, 3), 0)
         
@@ -771,6 +787,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         except (cv2.error, SystemError):
             # OpenCV 4.5.5以降のバグ対応
+            from utils.Debug import Debug
             Debug.log(type(self).__name__,"Retry cv2.findContours")
             try:
                 contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -832,6 +849,9 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _createSaturationMask(self, image):
         """飽和領域のマスクを作成"""
+        import numpy as np
+        import cv2
+
         max_val = np.max(image)
         saturated = image > (max_val * self.saturationThreshold / 100)
         
@@ -901,6 +921,12 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
 class ImageAlignmentLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
         """位置合わせ + 拡張を一度に実行"""
+        import numpy as np
+        import cv2
+        
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import DataBlock
         
         orig_width, orig_height = flowData.getDimensions()
         

@@ -7,13 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
 from base.FlowNode_CONST import *
-from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode
-from utils import numpy_helpers as nh
 
 class InverseNode(LazyNNOperationNode):
     # ノードタイプ
@@ -34,6 +30,10 @@ class InverseNode(LazyNNOperationNode):
 
 class InverseLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):
+        import numpy as np
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block

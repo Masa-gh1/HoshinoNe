@@ -7,13 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
 from base import DataBlock, LazyFlowData
 from nodes import LazyNNOperationNode
-from utils import numpy_helpers as nh
 
 class BayerUnpackDenseNode(LazyNNOperationNode):
     # ノードタイプ
@@ -42,6 +38,9 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
 class BayerUnpackDenseLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):
         """ベイヤー分離操作（4プレーン、縦横半分）"""
+        from utils import numpy_helpers as nh
+        from config import BLOCK_SIZE
+
         # 出力座標から入力座標を計算
         inputX = x * 2
         inputY = y * 2

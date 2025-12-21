@@ -7,12 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import numpy as np
-
 from base.FlowNode_CONST import *
 from base import DataBlock, LazyFlowData
 from nodes import LazyNNOperationNode
-from utils import numpy_helpers as nh
 
 class BayerUnpackSparseNode(LazyNNOperationNode):
     # ノードタイプ
@@ -38,6 +35,9 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
 class BayerUnpackSparseLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):
         """ベイヤー分離操作（3プレーン、元サイズ、NaN埋め）"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+        
         block = flowData.getBlock(0, x, y)
         if not block or block.data is None:
             return None

@@ -6,13 +6,10 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
 
 from base.FlowNode_CONST import *
-from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin
-from utils import numpy_helpers as nh
 
 class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
@@ -30,6 +27,8 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
+        import numpy as np
+
         primaryDatas = []
         auxiliaryPolynomials = []
         auxiliaryTables = []
@@ -62,6 +61,10 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
 class AbsoluteLowPassFilterLazyFlowData(LazyFlowData, PolynomialOperationMixin):
     def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+        import numpy as np
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block

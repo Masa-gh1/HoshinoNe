@@ -6,10 +6,7 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
-
 from base.FlowNode_CONST import *
-from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
@@ -29,6 +26,8 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
+        import numpy as np
+
         primaryDatas = []
         auxiliaryPolynomials = []
         auxiliaryTables = []
@@ -60,6 +59,9 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
 
 class PowerLazyFlowData(LazyFlowData, PolynomialOperationMixin):
     def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+        import numpy as np
+        from base import DataBlock
+
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -86,6 +88,8 @@ class PowerLazyFlowData(LazyFlowData, PolynomialOperationMixin):
         return ['display_levels']
     
     def headerOperation(cls, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+        import numpy as np
+        
         if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
             return None
         

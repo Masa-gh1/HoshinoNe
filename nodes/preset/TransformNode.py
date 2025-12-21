@@ -6,23 +6,11 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
 import hashlib
-from tkinter import messagebox
 
-from config import BLOCK_SIZE
 from base.FlowNode_CONST import *
-from base import FlowData
 from base import LazyFlowData
-from base import DataBlock
 from nodes import LazyNNOperationNode
-from utils import numpy_helpers as nh
-
-try:
-    import cv2
-    CV2_AVAILABLE = True
-except ImportError:
-    CV2_AVAILABLE = False
 
 class TransformNode(LazyNNOperationNode):
     # ノードタイプ
@@ -40,7 +28,9 @@ class TransformNode(LazyNNOperationNode):
         self._tableData   = None
         self._extendParams = None
 
-        if not CV2_AVAILABLE:
+        import importlib.util
+        if not importlib.util.find_spec("cv2"):
+            from tkinter import messagebox
             messagebox.showerror(f"{self.name} エラー", "OpenCVライブラリがインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
@@ -86,6 +76,8 @@ class TransformNode(LazyNNOperationNode):
         
     def _loadTableData(self, auxiliaryDatas):
         """table 形式データを読み込み"""
+        import numpy as np
+
         # 複数の auxiliary データから table 形式を探す
         lines   = []
         columns = None
@@ -118,6 +110,8 @@ class TransformNode(LazyNNOperationNode):
     
     def _calculateExpand(self, inputDatas, tableData):
         """拡張領域計算"""
+        import numpy as np
+
         if not inputDatas or not tableData:
             return None
         
@@ -151,6 +145,9 @@ class TransformNode(LazyNNOperationNode):
     
     def _calculateTransformedCorners(self, width, height, dx, dy, rotation):
         """画像の4隅の変換後座標を計算（画像中心回転）"""
+        import cv2
+        from utils import numpy_helpers as nh
+
         corners = nh.array([[0, 0], [width, 0], [width, height], [0, height]])
         
         if rotation != 0:
@@ -199,6 +196,13 @@ class TransformNode(LazyNNOperationNode):
 class TransformLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
         """変形 + 拡張を一度に実行"""
+        import numpy as np
+        import cv2
+
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+
         orig_width, orig_height = flowData.getDimensions()
         
         # 出力ブロックの4隅を逆変換して必要な入力範囲を計算

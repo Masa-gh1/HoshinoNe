@@ -6,10 +6,8 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-import numpy as np
 
 from base.FlowNode_CONST import *
-from base import DataBlock
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin 
 
@@ -28,6 +26,8 @@ class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
+        import numpy as np
+
         primaryDatas = []
         auxiliaryPolynomials = []
         auxiliaryTables = []
@@ -62,6 +62,8 @@ class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
 class RGBConverterLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):
         """RGB 変換 (正規化なし)"""
+        from base import DataBlock
+
         mode = flowData.getMode()
         if not mode in ["Lab", "RGBA", "RGBG"]:
             # RGBはそのまま通す
