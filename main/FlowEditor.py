@@ -811,7 +811,6 @@ class FlowEditor:
             import gc
             objectCount = len(gc.get_objects())
             self.maxObjectCount = max(self.maxObjectCount, objectCount)
-            Debug.log(type(self).__name__, f"{nodeName} objectCount: {objectCount}")
     
     def _clearAllProgress(self):
         """全てのプログレスバーをクリア"""

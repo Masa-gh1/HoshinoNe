@@ -1,5 +1,5 @@
 '''
-LazySystem - 遅延評価システム統合
+LazyFlowData - 遅延評価 FlowData
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -21,33 +21,22 @@ class LazyFlowData(FlowData):
     """遅延評価FlowData"""
     __slots__ = ('cachePolicy'        ,
                  'sourceFlowData'     ,
-                 'operation'          ,
                  'instanceId'         ,
-                 '_headerComputeFuncs',
                  'headers'            ,
+                 'args'  ,
+                 'kwargs',
                 )
     
-    def __init__(self, sourceFlowData):
+    def __init__(self, sourceFlowData, *args, **kwargs):
         super().__init__(None)
-        self.cachePolicy = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
+        self.cachePolicy    = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowData = sourceFlowData
-        self.operation = None
-        self.instanceId = str(uuid.uuid4())
-        self._headerComputeFuncs = {}
-        self.headers = LazyHeadersDict(self)
+        self.instanceId     = str(uuid.uuid4())
+        self.headers        = LazyHeadersDict(self, *args, **kwargs)
+        self.args           = args
+        self.kwargs         = kwargs
+
         self.setDimensions(*sourceFlowData.getDimensions())
-    
-    def addOperation(self, func, *args, **kwargs):
-        """新しい操作を追加"""
-        operation = LazyOperation(func, *args, **kwargs)
-        self.operation = operation
-        return operation
-    
-    def addHeaderOperation(self, key, func, *args, **kwargs):
-        """header操作関数を追加"""
-        operation = LazyHeaderOperation(func, *args, **kwargs)
-        self.headers[key] = operation
-        return operation
     
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
@@ -57,54 +46,48 @@ class LazyFlowData(FlowData):
         elif block.isValid():
             return block
         else:
-            # 計算済みの block が無いので遅延評価を開始
-            block = self.operation( self.sourceFlowData, planeIndex, x, y)
+            block = self.operation(self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
             self.setBlock(block)
             return block
     
+    def operation(self, flowData, planeIndex, x, y) -> DataBlock:
+        """遅延評価を実行"""
+        return None
+
+    def getLazyHeaderkeys(self) -> list:
+        """遅延評価対象の header キーを取得"""
+        return []
+
+    def headerOperation(self, lazyFlowData, key) -> dict:
+        """headers 遅延評価"""
+        return {}
+
 class LazyHeadersDict(UserDict):
     """遅延評価対応のheaders辞書"""
-    
-    def __init__(self, lazyFlowData):
+    __slots__ = ('_lazyFlowData',
+                 'args'         ,
+                 'kwargs'       ,
+                )
+    def __init__(self, lazyFlowData, *args, **kwargs):
         super().__init__(lazyFlowData.sourceFlowData.headers)
+        
         self._lazyFlowData = lazyFlowData
+        self.args           = args
+        self.kwargs         = kwargs
+
+        for key in self._lazyFlowData.getLazyHeaderkeys():
+            self.data[key]= "<LazyHeaderOperation>"
     
     def __getitem__(self, key):
-        if key in self.data:
+        if not key in self.data:
+            return None
+        else:
             value = self.data[key]
-            if isinstance(value, LazyHeaderOperation):
-                lazyResult = value(self._lazyFlowData)
+            if isinstance(value, str) and "<LazyHeaderOperation>"==value:
+                lazyResult = self._lazyFlowData.headerOperation(self._lazyFlowData, key, *self.args, **self.kwargs)
                 self.data.update(lazyResult)
                 value = self.data[key]
             return value
-    
-class LazyOperation:
-    """遅延実行される単一操作"""
-    __slots__ = ('func'  ,
-                 'args'  ,
-                 'kwargs',
-                )
-    def __init__(self, func, *args, **kwargs):
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-    
-    def __call__(self, flowData, planeIndex, x, y):
-        return self.func(flowData, planeIndex, x, y, *self.args, **self.kwargs)
-
-class LazyHeaderOperation:
-    """遅延実行されるヘッダー操作"""
-    __slots__ = ('func'  ,
-                 'args'  ,
-                 'kwargs',
-                )
-    def __init__(self, func, *args, **kwargs):
-        self.func = func
-        self.args = args
-        self.kwargs = kwargs
-    
-    def __call__(self, lazyFlowData):
-        return self.func(lazyFlowData, *self.args, **self.kwargs)
 
 ##### 以下サンプル実装
 class LazyOperations:

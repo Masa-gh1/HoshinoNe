@@ -292,21 +292,16 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
     
     def _createLazyOutputs(self, inputDatas, metadata):
         """LazyFlowDataを生成"""
-        results = metadata['results']
+        flowDatas = metadata['results']
         method_results = metadata['method_results']
         expand_left, expand_top, new_width, new_height = metadata['expand_params']
         
-        lazy_outputs = []
+        flowDatas = []
         
-        for i, (inputData, result, method_result) in enumerate(zip(inputDatas, results, method_results)):
-            lazy_data = LazyFlowData(inputData)
-            
+        for i, (inputData, result, method_result) in enumerate(zip(inputDatas, flowDatas, method_results)):
             # 画像移動量 = 検出移動量 + 拡張領域
-            actual_dx = result.dx + expand_left
-            actual_dy = result.dy + expand_top
-            
-            lazy_data.addOperation(LazyAlignmentOperations.alignAndExpand,
-                                    actual_dx, actual_dy, result.rotation, new_width, new_height)
+            dx = result.dx + expand_left
+            dy = result.dy + expand_top
             
             # 位置合わせ情報をheadersに追加
             alignment_info = {}
@@ -324,11 +319,12 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
                     if value.extra_info:
                         alignment_info[f'{method}_extra_info'] = value.extra_info
 
-            lazy_data.headers.update(alignment_info)
-            lazy_data.setDimensions(new_width, new_height)
-            lazy_outputs.append(lazy_data)
+            flowData = ImageAlignmentLazyFlowData(inputData, dx, dy, result.rotation, new_width, new_height)
+            flowData.headers.update(alignment_info)
+            flowData.setDimensions(new_width, new_height)
+            flowDatas.append(flowData)
             
-        return lazy_outputs
+        return flowDatas
     
     def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
         """FlowDataから画像配列を構築"""
@@ -902,11 +898,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         config = f"{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
         return hashlib.md5(config.encode()).hexdigest()
 
-class LazyAlignmentOperations:
-    """位置合わせ専用の遅延操作"""
-    
-    @staticmethod
-    def alignAndExpand(flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
+class ImageAlignmentLazyFlowData(LazyFlowData):
+    def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
         """位置合わせ + 拡張を一度に実行"""
         
         orig_width, orig_height = flowData.getDimensions()

@@ -29,14 +29,10 @@ class AbsoluteNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._absoluteOperation)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
-        return lazyFlowData
-    
-    @staticmethod
-    def _absoluteOperation(flowData, planeIndex, x, y):
-        """絶対値操作"""
+        return AbsoluteLazyFlowData(inputData)
+
+class AbsoluteLazyFlowData(LazyFlowData):
+    def operation(self, flowData, planeIndex, x, y):
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -44,14 +40,15 @@ class AbsoluteNode(LazyNNOperationNode):
         result = np.abs(block.data)
         
         return DataBlock(result, planeIndex, x, y)
-    
-    @staticmethod
-    def _computeDisplayLevels(lazyFlowData):
-        """display_levelsを計算"""
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+
+    def getLazyHeaderkeys(self):
+        return ['display_levels']    
+
+    def headerOperation(self, lazyFlowData, key):
+        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
             return None
-            
+        
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
         inputMin = inputLevels['min']
         inputMax = inputLevels['exclusive_upper']
         

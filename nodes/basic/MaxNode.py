@@ -55,14 +55,10 @@ class MaxNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._MaxOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
-        return lazyFlowData
+        return MaxLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
     
-    @classmethod
-    def _MaxOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """スケール操作（事前統合されたauxiliaryデータを乗算）"""
+class MaxLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -71,7 +67,7 @@ class MaxNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         # auxiliary polynomialを比較小
         if combinedAuxiliaryPolynomial:
-            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             result = np.maximum(result, polynomialValues)
         
         # auxiliary tableを比較小
@@ -81,10 +77,3 @@ class MaxNode(LazyNNOperationNode, PolynomialOperationMixin):
                 result = np.maximum(result, auxiliaryBlock.data)
         
         return DataBlock(result, planeIndex, x, y)
-    
-    @staticmethod
-    def _computeDisplayLevels(lazyFlowData):
-        """display_levelsを計算"""
-        # クリップ処理では元の範囲を保持
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        return {'display_levels': inputLevels} if inputLevels else None

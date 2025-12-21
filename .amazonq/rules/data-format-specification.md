@@ -143,4 +143,4 @@
 2. ノード固有の情報を追加/更新
 3. 競合する場合は新しい値で上書き
 4. 削除は原則禁止（トレーサビリティ確保）
-5. LazyFlowData では addHeaderOperation で動的計算可能
+5. LazyFlowData では headerOperation で動的計算可能

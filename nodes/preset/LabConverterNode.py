@@ -57,14 +57,10 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._labConverterOperation)
-        lazyFlowData.addHeaderOperation('mode'  , self._computeHeaders)
-        lazyFlowData.addHeaderOperation('planes', self._computeHeaders)
-        return lazyFlowData
+        return LabConverterLazyFlowData(inputData)
     
-    @staticmethod
-    def _labConverterOperation(flowData, planeIndex, x, y):
+class LabConverterLazyFlowData(LazyFlowData):
+    def operation(self, flowData, planeIndex, x, y):
         """Lab 変換操作(正規化なし)"""
         mode = flowData.getMode()
         if not mode in ["RGB", "RGBA", "RGBG"]:
@@ -96,9 +92,10 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
                 _b = _B - _L
                 return DataBlock(_b, planeIndex, x, y)
     
-    @staticmethod
-    def _computeHeaders(lazyFlowData):
-        """ヘッダーを計算"""
+    def getLazyHeaderkeys(self):
+        return ['mode', 'planes']
+    
+    def headerOperation(self, lazyFlowData, key):
         # Lab変換では mode plane が変わる
         return {
             'mode': 'Lab',

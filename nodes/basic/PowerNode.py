@@ -56,14 +56,10 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._powerOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial)
-        return lazyFlowData
-    
-    @classmethod
-    def _powerOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """冪乗操作（事前統合されたauxiliaryデータを指数として使用）"""
+        return PowerLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+
+class PowerLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -73,7 +69,7 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         # auxiliary polynomialを指数として冪乗
         if combinedAuxiliaryPolynomial:
-            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             power_result = np.power(result, polynomialValues)
             result = power_result if is_complex else np.real(power_result)
         
@@ -86,13 +82,14 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         return DataBlock( result, planeIndex, x, y)
     
-    @classmethod
-    def _computeDisplayLevels(cls, lazyFlowData, combinedAuxiliaryPolynomial):
-        """display_levelsを計算"""
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        if not inputLevels or 'min' not in inputLevels or 'exclusive_upper' not in inputLevels:
+    def getLazyHeaderkeys(self):
+        return ['display_levels']
+    
+    def headerOperation(cls, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
             return None
-            
+        
+        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
         inputMin = inputLevels['min']
         inputMax = inputLevels['exclusive_upper']
         

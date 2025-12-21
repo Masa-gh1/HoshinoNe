@@ -57,14 +57,11 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._absoluteLowPassFilterOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels)
+        lazyFlowData = AbsoluteLowPassFilterLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         return lazyFlowData
     
-    @classmethod
-    def _absoluteLowPassFilterOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """絶対値低域通過フィルター操作（閾値を超える値をNaNに変換）"""
+class AbsoluteLowPassFilterLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -73,7 +70,7 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         # auxiliary polynomialから閾値を取得
         if combinedAuxiliaryPolynomial:
-            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             mask = np.abs(result) > polynomialValues
             result = np.where(mask, nh.nan, result)
         
@@ -86,9 +83,10 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @staticmethod
-    def _computeDisplayLevels(lazyFlowData):
-        """display_levelsを計算"""
+    def getLazyHeaderkeys(self):
+        return ['display_levels']
+    
+    def headerOperation(self, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         # フィルター処理では元の範囲を保持（一部がNaNになるだけ）
         inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
         return {'display_levels': inputLevels} if inputLevels else None

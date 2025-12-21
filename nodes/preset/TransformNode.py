@@ -72,18 +72,17 @@ class TransformNode(LazyNNOperationNode):
         image_id = self._generateImageId(inputData)
         transform_params = self._getTransformParams(image_id, self._tableData)
         
-        lazyData = LazyFlowData(inputData)
-        
-        if transform_params:
+        if not transform_params:
+            result = inputData
+        else:
             expand_left, expand_top, new_width, new_height = self._extendParams
             dx = transform_params['dx'] + expand_left
             dy = transform_params['dy'] + expand_top
             rotation = transform_params['rotation']
-            
-            lazyData.addOperation(self.transformAndExpand, dx, dy, rotation, new_width, new_height)
-            lazyData.setDimensions(new_width, new_height)
+            result = TransformLazyFlowData(inputData, dx, dy, rotation, new_width, new_height)
+            result.setDimensions(new_width, new_height)
         
-        return lazyData
+        return result
         
     def _loadTableData(self, auxiliaryDatas):
         """table 形式データを読み込み"""
@@ -196,11 +195,10 @@ class TransformNode(LazyNNOperationNode):
             'dy': float(row_data[dy_idx]),
             'rotation': float(row_data[rotation_idx])
         }
-        
-    @staticmethod
-    def transformAndExpand(flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
+
+class TransformLazyFlowData(LazyFlowData):
+    def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
         """変形 + 拡張を一度に実行"""
-        
         orig_width, orig_height = flowData.getDimensions()
         
         # 出力ブロックの4隅を逆変換して必要な入力範囲を計算

@@ -55,14 +55,10 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._scaleOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        return lazyFlowData
-    
-    @classmethod
-    def _scaleOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """スケール操作（事前統合されたauxiliaryデータを乗算）"""
+        return ScaleLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+
+class ScaleLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -71,7 +67,7 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         # auxiliary polynomialを乗算
         if combinedAuxiliaryPolynomial:
-            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
             result = np.multiply(result, polynomialValues)
         
         # auxiliary tableを乗算
@@ -82,12 +78,13 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeDisplayLevels(cls, lazyFlowData, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """display_levelsを計算"""
+    def getLazyHeaderkeys(self):
+        return ['display_levels']
+
+    def headerOperation(self, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
             return None
-            
+        
         inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
         inputMin = inputLevels['min']
         inputMax = inputLevels['exclusive_upper']
@@ -97,7 +94,7 @@ class ScaleNode(LazyNNOperationNode, PolynomialOperationMixin):
             for planeIndex in range(combinedAuxiliaryPolynomial.getPlaneCount()):
                 polynomial = combinedAuxiliaryPolynomial.getBlock(planeIndex, 0, 0)
                 width, height = lazyFlowData.sourceFlowData.getDimensions()
-                minValue, maxValue = cls.calculatePolynomialRange(polynomial.data, width, height)
+                minValue, maxValue = self.calculatePolynomialRange(polynomial.data, width, height)
                 mixs.extend([inputMin * minValue, inputMin * maxValue, inputMax * minValue, inputMax * maxValue])
             inputMin = min(mixs)
             inputMax = max(mixs)

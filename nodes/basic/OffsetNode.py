@@ -56,14 +56,10 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LazyFlowData(inputData)
-        lazyFlowData.addOperation(self._offsetOperation, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        lazyFlowData.addHeaderOperation('display_levels', self._computeDisplayLevels, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        return lazyFlowData
-    
-    @classmethod
-    def _offsetOperation(cls, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """オフセット操作（事前統合されたauxiliaryデータを加算）"""
+        return OffsetLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+
+class OffsetLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
@@ -72,7 +68,7 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         # auxiliary polynomialを加算
         if combinedAuxiliaryPolynomial:
-            polynomialValues = cls.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape)
             result = np.add(result, polynomialValues)
         
         # auxiliary tableを加算
@@ -83,12 +79,13 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
         
         return DataBlock(result, planeIndex, x, y)
     
-    @classmethod
-    def _computeDisplayLevels(cls, lazyFlowData, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        """display_levelsを計算"""
+    def getLazyHeaderkeys(self):
+        return ['display_levels']
+
+    def headerOperation(self, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
             return None
-            
+        
         inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
         inputMin = inputLevels['min']
         inputMax = inputLevels['exclusive_upper']
@@ -98,7 +95,7 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
             for planeIndex in range(combinedAuxiliaryPolynomial.getPlaneCount()):
                 polynomial = combinedAuxiliaryPolynomial.getBlock(planeIndex, 0, 0)
                 width, height = lazyFlowData.sourceFlowData.getDimensions()
-                minValue, maxValue = cls.calculatePolynomialRange(polynomial.data, width, height)
+                minValue, maxValue = self.calculatePolynomialRange(polynomial.data, width, height)
                 mixs.extend([inputMin + minValue, inputMax + maxValue])
             inputMin = min(mixs)
             inputMax = max(mixs)
@@ -119,4 +116,3 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
                 'exclusive_upper': inputMax,
             }
         }
-    
