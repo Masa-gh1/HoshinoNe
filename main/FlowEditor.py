@@ -40,7 +40,9 @@ class FlowEditor:
 
         self.currentFlowPath = None
         self.applicationHome = None
-        self.take = 0
+        
+        self.take           = 0
+        self.maxObjectCount = 0
 
         self.createWidgets()
     
@@ -510,6 +512,7 @@ class FlowEditor:
     def executeFlowAsync(self):
         try:
             self.take += 1
+            self.maxObjectCount = 0
             self.resultText.delete(1.0, tk.END)
 
             import gc
@@ -518,13 +521,13 @@ class FlowEditor:
             self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
 
             from utils.Debug import Debug
-            if 1==self.take and Debug.isTestMode():
+            if Debug.isTestMode() and 1==self.take:
                 # ファーストテイクかつテストモードなので結果を記録
                 filename = os.path.basename(self.currentFlowPath)
                 Debug.log(type(self).__name__, f"{filename} elapsed {self.flowControl.elapsedMs} ms")
-                Debug.log(type(self).__name__, f"{filename} maxObjectCount {self.flowControl.maxObjectCount}")
+                Debug.log(type(self).__name__, f"{filename} maxObjectCount {self.maxObjectCount}")
                 Debug.record( self.currentFlowPath, "elapsed ms", self.flowControl.elapsedMs)
-                Debug.record( self.currentFlowPath, "maxObjectCount", self.flowControl.maxObjectCount)
+                Debug.record( self.currentFlowPath, "maxObjectCount", self.maxObjectCount)
         except Exception as e:
             self.root.after(0, lambda m = str(e): messagebox.showerror("エラー", f"フロー実行エラー: {m}"))
             raise
@@ -802,6 +805,13 @@ class FlowEditor:
             else:
                 progressInfo['bar'].config(value=100)
                 del self.activeProgressBars[nodeId]
+        
+        from utils.Debug import Debug
+        if Debug.isTestMode() and current and int(current)==(total*9)//10:
+            import gc
+            objectCount = len(gc.get_objects())
+            self.maxObjectCount = max(self.maxObjectCount, objectCount)
+            Debug.log(type(self).__name__, f"{nodeName} objectCount: {objectCount}")
     
     def _clearAllProgress(self):
         """全てのプログレスバーをクリア"""

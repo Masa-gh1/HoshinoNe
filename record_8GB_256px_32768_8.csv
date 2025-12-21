@@ -3,7 +3,9 @@ sample/fits/sample.flow,elapsed ms,7778,8628,8628
 sample/fits/sample_sigma.flow,elapsed ms,11311,11338,11338
 sample/dng/sample.flow,elapsed ms,11759,11759,11759
 sample/raw/sample.flow,elapsed ms,23444,27129,27129
-sample/raw/sample_sigma.flow,elapsed ms,42029,43327,43327
+sample/raw/sample_sigma.flow,elapsed ms,41788,41788,47076
 sample/fits/sample_pixcomp.flow,elapsed ms,51942,55583,55583
-sample/raw/sample_pixcomp.flow,elapsed ms,153281,168369,168369
-sample/raw/sample.flow,maxObjectCount,139519,139790,139790
+sample/raw/sample_pixcomp.flow,elapsed ms,153281,169506,169506
+sample/raw/sample.flow,maxObjectCount,147015,147015,147015
+sample/raw/sample_pixcomp.flow,maxObjectCount,157856,157856,157856
+sample/raw/sample_sigma.flow,maxObjectCount,148380,148380,148380
