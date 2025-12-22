@@ -24,12 +24,15 @@ DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 MAX_BLOCK_CACHE_SIZE_GB = 8
 
 # ブロックサイズ設定
+# ベイヤーを処理する場合、ベイヤーのサイズの倍数にしてください
 BLOCK_SIZE = 256
 
 # ブロック当たりの推定 byte 数 (画像なら)
 ESTIMATE_SIZE_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
 
 # ブロックキャッシュサイズ設定(ブロック数)
+# キャッシュサイズが 32768 を超えるとパフォーマンスが下がる PC 構成があります。
+# 恐らく CPU キャッシュサイズと python の dict の実装に関係していると思われます。
 MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024//ESTIMATE_SIZE_PER_BLOCK
 
 # 画像読み書きノードで使用する

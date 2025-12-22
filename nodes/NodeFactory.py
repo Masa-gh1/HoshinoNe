@@ -84,7 +84,7 @@ class NodeFactory:
         import nodes.preset
         import nodes.extra
         from utils.Debug import Debug
-        print(nodes.extra.__path__)
+        
         nodeList = {}
         for pkg in [nodes.basic, nodes.preset, nodes.extra]:
             for modInfo in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):

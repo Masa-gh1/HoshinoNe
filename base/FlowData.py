@@ -57,10 +57,11 @@ class FlowData:
         import numpy as np
         
         if self._existingBlocks is None:
+            planeCount = self.getPlaneCount()
             width, height = self._dimensions
             blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
             blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
-            self._existingBlocks = np.zeros((self.getPlaneCount(), blockH, blockW), dtype=bool)
+            self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
         
         planeIndex = blockData.planeIndex
         x = blockData.x
@@ -137,7 +138,7 @@ class FlowData:
 
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
-        if planeIndex >= planeCount or x >= width or y >= height:
+        if planeCount <= planeIndex or width <= x or height <= y:
             return None
         
         # 遅延ロード用のDataBlockを作成
@@ -153,7 +154,7 @@ class FlowData:
         if 0 == planeCount:
             return 0
         
-        blocksX = (width + BLOCK_SIZE - 1) // BLOCK_SIZE
+        blocksX = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
         blocksY = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
         
         return planeCount * blocksX * blocksY

@@ -87,8 +87,7 @@ class Debug:
 
                         _latestMax = max(_latestMax, num) if _min<num else num
                         _min       = min(_min, num)
-                        wma        = (_wma*9 + num)//10
-                        _wma       = wma if _wma//20 < abs(_wma-wma) else _wma
+                        _wma       = (_wma*9 + num)//10 if _wma//20 < abs(_wma-num) else _wma
                         _max       = max(_max, num)
                         out.append(f"{_name},{_item},{_min},{_wma},{_latestMax},{_max}\n")
                         name = None

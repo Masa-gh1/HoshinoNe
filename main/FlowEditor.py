@@ -827,7 +827,7 @@ class FlowEditor:
         flowNodeCount = f"{len(self.nodes)}個"
         trayCount = f"{len(self.trays)}個"
         
-        _, cacheSize, _, storageSize, cacheMissCount, purgeCount, saveCount, loadCount, _ = CacheManager.getCacheStats()
+        cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
         
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 10*1024:
@@ -853,16 +853,16 @@ class FlowEditor:
         if Debug.LEVEL_NONE == Debug.LEVEL:
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = ""
-            dataInfo  = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
+            dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheStr}) Storage: {storageStr}"
             nodeInfo  = f"Node: {flowNodeCount}"
         else:
             cacheNodeCount = f"{self.getNodeCount()}個"
             objInfo   = f"Object: {ObjectCount}"
-            CacheInfo = f"CacheMissCount: {cacheMissCount} PurgeCount: {purgeCount} SaveCount:{saveCount} LoadCount: {loadCount}"
-            dataInfo  = f"Data: {flowDataCount} Cache: {cacheStr} Storage: {storageStr}"
-            nodeInfo  = f"Node: {flowNodeCount} exist: {cacheNodeCount}"
+            CacheInfo = f"Cache[MissCount: {cacheMissCount} {cacheMissCount/getCount:.3f} RecalculateCount: {recalculateCount} {recalculateCount/getCount:.3f} LoadCount: {loadCount} {loadCount/getCount:.3f} PurgeCount: {purgeCount} {purgeCount/setCount:.3f} SaveCount:{saveCount} {saveCount/setCount:.3f}]" if 0!=getCount and 0!=setCount else ""
+            dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheStr}) Storage: {storageCount}({storageStr})"
+            nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
-        info = f" {objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
+        info = f"{objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
         self.usageLabel.config(text=info)
         
         # 5秒後に再度更新
@@ -885,19 +885,19 @@ class FlowEditor:
         from base import CacheManager
         
         # 実行前のメモリ使用量を取得
-        beforeNodeCount = self.getNodeCount()
-        _, beforeCache, _, beforeStorage, _, _, _, _, _ = CacheManager.getCacheStats()
+        b_nodeCount = self.getNodeCount()
+        b_cacheCount, b_cacheSize, b_storageCount, b_storageSize, b_getCount, b_cacheMissCount, b_loadCount, b_recalculateCount, b_setCount, b_purgeCount, b_saveCount, b_elapsedHis = CacheManager.getCacheStats()
         
         # ガベージコレクションを実行
         collected = gc.collect()
         
         # 実行後のメモリ使用量を取得
-        afterNodeCount = self.getNodeCount()
-        _, afterCache, _, afterStorage, _, _, _, _, _  = CacheManager.getCacheStats()
+        a_nodeCount = self.getNodeCount()
+        a_cacheCount, a_cacheSize, a_storageCount, a_storageSize, a_getCount, a_cacheMissCount, a_loadCount, a_recalculateCount, a_setCount, a_purgeCount, a_saveCount, a_elapsedHis = CacheManager.getCacheStats()
         
         # 結果を表示
-        freedNodeCount = beforeNodeCount - afterNodeCount
-        freedMemory = beforeCache - afterCache
+        freedNodeCount = b_nodeCount - a_nodeCount
+        freedMemory = b_cacheSize - a_cacheSize
         if freedMemory > 0:
             if freedMemory < 10*1024:
                 freedStr = f"{int(freedMemory)}B"
@@ -925,15 +925,18 @@ class FlowEditor:
             for text in Debug.getDebugReport():
                 print(text)
             print("========================")
-            cacheCount, cacheSize, storageCount, storageSize, cacheMissCount, purgeCount, saveCount, loadCount, elapsedHis = CacheManager.getCacheStats()
+            cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
             print(f"cacheCount: {cacheCount}")
             print(f"cacheSize: {cacheSize}")
             print(f"storageCount: {storageCount}")
             print(f"storageSize: {storageSize}")
+            print(f"getCount: {getCount}")
             print(f"cacheMissCount: {cacheMissCount}")
+            print(f"loadCount: {loadCount}")
+            print(f"recalculateCount: {recalculateCount}")
+            print(f"setCount: {setCount}")
             print(f"purgeCount: {purgeCount}")
             print(f"saveCount: {saveCount}")
-            print(f"loadCount: {loadCount}")
             for name, his in elapsedHis.items():
                 print("------------------------")
                 print(name)

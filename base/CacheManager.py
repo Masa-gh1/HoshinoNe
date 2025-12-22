@@ -20,16 +20,19 @@ from base.Constants import CachePolicy
 
 class CacheManager:
     """統一キャッシュ管理"""
-    _globalBlockCache = {}
-    _globalBlockSerial = {}
-    _cacheLock = threading.RLock()
+    _globalBlockCache  = {} # メモリキャッシュ
+    _globalBlockSerial = {} # ストレージ保存目次
+    _cacheLock = threading.Lock()
     _globalTempDir = None
     _cleanup_registered = False
     
-    _cacheMissCount = 0
-    _purgeCount = 0
-    _saveCount = 0
-    _loadCount = 0
+    _setCount         = 0 # メモリに保存した回数
+    _purgeCount       = 0 # メモリから破棄された回数
+    _saveCount        = 0 # メモリからストレージに保存された回数
+    _getCount         = 0 # メモリから取得した回数
+    _cacheMissCount   = 0 # メモリでキャッシュミスした回数
+    _recalculateCount = 0 # メモリに無く再計算となった回数
+    _loadCount        = 0 # メモリに無くストレージから復元した回数
     _elapsedHis = {}
     
     @classmethod
@@ -83,68 +86,74 @@ class CacheManager:
     
     @classmethod
     def get(cls, cacheKey):
-        return cls.elapsed( cls._get, cacheKey)
+        """キャッシュから取得"""
+        with cls._cacheLock:
+            return cls.elapsed( cls._get, cacheKey)
 
     @classmethod
     def _get(cls, cacheKey):
-        """キャッシュから取得"""
-        with cls._cacheLock:
-            cache = cls._globalBlockCache.pop(cacheKey,None)
-        if cache is None:
-            data = None
-        else:
+        cls._getCount += 1
+
+        cache = cls._globalBlockCache.pop(cacheKey,None)
+        if not cache is None:
             cls._globalBlockCache[cacheKey] = cache # 最後尾に再追加(LRU)
             _, data = cache
-        
+        else:
+            cls._cacheMissCount += 1
+            data = None
+    
         if not data is None:
             return data
-        elif cls.isStoraged(cacheKey):
+        elif cls._isStoraged(cacheKey):
             # ストレージに在るので復元
             cls._loadCount += 1
             data = cls._loadFromStorage(cacheKey)
             if not data is None:
-                cls.set(cacheKey, data, CachePolicy.PERSISTENT)
+                # ストレージから読み込んだので最後尾に追加
+                cls._set(cacheKey, data, CachePolicy.PERSISTENT)
             else:
                 #ここには来ないはず
                 pass
             return data
         else:
             # ストレージに無いので、残念なら要再計算
-            cls._cacheMissCount += 1
+            cls._recalculateCount += 1
             return None
     
     @classmethod
     def set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
-        return cls.elapsed( cls._set, cacheKey, data, cachePolicy)
+        """キャッシュに保存"""
+        with cls._cacheLock:
+            return cls.elapsed( cls._set, cacheKey, data, cachePolicy)
 
     @classmethod
     def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
-        """キャッシュに保存"""
-        with cls._cacheLock:
-            if MAX_BLOCK_CACHE_SIZE <= len(cls._globalBlockCache):
-                # 古いデータから削除(LRU)
-                oldestKey = next(iter(cls._globalBlockCache))
-                oldPolicy, oldData = cls._globalBlockCache[oldestKey]
-                
-                if oldPolicy != CachePolicy.PERSISTENT:
-                    # ポリシー persistent ではないのでキャッシュから削除
-                    cls._purgeCount += 1
-                    del cls._globalBlockCache[oldestKey]
-                elif cls.isStoraged(oldestKey):
-                    # ポリシー persistent であり、
-                    # 既にストレージに保存ずみなのでキャッシュから削除
-                    del cls._globalBlockCache[oldestKey]
-                elif cls._saveToStorage(oldestKey, oldData):
-                    # ポリシー persistent であり、
-                    # ストレージへ保存したのでキャッシュから削除
-                    cls._saveCount += 1
-                    cls._globalBlockSerial[oldestKey] = True
-                    del cls._globalBlockCache[oldestKey]
-                else:
-                    # ストレージへの保存に失敗した。
-                    # log は _saveToStorage に委譲
-                    pass
-            cls._globalBlockCache[cacheKey] = (cachePolicy, data)
+        cls._setCount += 1
+
+        if MAX_BLOCK_CACHE_SIZE <= len(cls._globalBlockCache):
+            # 古いデータから削除(LRU)
+            oldestKey = next(iter(cls._globalBlockCache))
+            oldPolicy, oldData = cls._globalBlockCache[oldestKey]
+            
+            if oldPolicy != CachePolicy.PERSISTENT:
+                # ポリシー persistent ではないのでキャッシュから削除
+                cls._purgeCount += 1
+                del cls._globalBlockCache[oldestKey]
+            elif cls._isStoraged(oldestKey):
+                # ポリシー persistent であり、
+                # 既にストレージに保存ずみなのでキャッシュから削除
+                del cls._globalBlockCache[oldestKey]
+            elif cls._saveToStorage(oldestKey, oldData):
+                # ポリシー persistent であり、
+                # ストレージへ保存したのでキャッシュから削除
+                cls._saveCount += 1
+                cls._globalBlockSerial[oldestKey] = True
+                del cls._globalBlockCache[oldestKey]
+            else:
+                # ストレージへの保存に失敗した。
+                # log は _saveToStorage に委譲
+                pass
+        cls._globalBlockCache[cacheKey] = (cachePolicy, data)
     
     @classmethod
     def isCached(cls, cacheKey):
@@ -156,7 +165,11 @@ class CacheManager:
     def isStoraged(cls, cacheKey):
         """ストレージ保存されているかどうかを判定"""
         with cls._cacheLock:
-            return cacheKey in cls._globalBlockSerial
+            return cls._isStoraged(cacheKey)
+
+    @classmethod
+    def _isStoraged(cls, cacheKey):
+        return cacheKey in cls._globalBlockSerial
 
     @classmethod
     def _saveToStorage(cls, cacheKey, data):
@@ -239,7 +252,15 @@ class CacheManager:
         result = func(*args, **kwargs)
         elapsed = int((time.time() - start)*1000)
         elapsed = min( elapsed , 8191)
-        his = cls._elapsedHis.setdefault( func.__qualname__, {1:0, 2:0, 4:0, 8:0, 16:0, 32:0, 64:0, 128:0, 256:0, 512:0, 1024:0, 2048:0, 4096:0, 8192:0})
+
+        globalBlockCacheCount = len(cls._globalBlockCache)
+        name = f"{MAX_BLOCK_CACHE_SIZE//16384*16384}+:{func.__qualname__}"
+        for x in range(16384,MAX_BLOCK_CACHE_SIZE+1,16384):
+            if globalBlockCacheCount <= x-1:
+                name = f"{x}:{func.__qualname__}"
+                break
+        
+        his = cls._elapsedHis.setdefault( name, {1:0, 2:0, 4:0, 8:0, 16:0, 32:0, 64:0, 128:0, 256:0, 512:0, 1024:0, 2048:0, 4096:0, 8192:0})
         x = 1
         while x<=8192:
             if elapsed < x:
@@ -255,4 +276,4 @@ class CacheManager:
         cacheSize = cacheCount * ESTIMATE_SIZE_PER_BLOCK
         storageCount = len(cls._globalBlockSerial)
         storageSize = storageCount * ESTIMATE_SIZE_PER_BLOCK
-        return cacheCount, cacheSize, storageCount, storageSize, cls._cacheMissCount, cls._purgeCount, cls._saveCount, cls._loadCount, cls._elapsedHis
+        return cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis

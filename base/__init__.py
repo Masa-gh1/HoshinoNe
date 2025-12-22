@@ -7,24 +7,24 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from .Constants import CachePolicy
 from .DataBlock import DataBlock
 from .FlowData import FlowData
+from .FlowDataWrapper import FlowDataWrapper
+from .LazyFlowData import LazyFlowData
 from .FlowNode import FlowNode
 from .FlowControl import FlowControl
 from .FlowFile import FlowFile
-from .FlowDataWrapper import FlowDataWrapper
-from .LazyFlowData import LazyFlowData
-from .Constants import CachePolicy
 from .CacheManager import CacheManager
 
 __all__ = [
     'DataBlock',
     'FlowData',
+    'FlowDataWrapper',
+    'LazyFlowData',
     'FlowNode',
     'FlowControl',
     'FlowFile',
-    'FlowDataWrapper',
-    'LazyFlowData',
     'CachePolicy',
     'CacheManager',
 ]
