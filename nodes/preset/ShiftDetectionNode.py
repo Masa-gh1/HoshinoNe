@@ -69,7 +69,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
 
         import importlib.util
-        if not importlib.util.find_spec("cv2"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ OpenCV がインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     

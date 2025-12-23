@@ -42,7 +42,8 @@ class FlowData:
         self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
         
         import importlib.util
-        if not importlib.util.find_spec("numpy"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("numpy"):
             raise ImportError("ライブラリ numpy がインストールされていません。\npip install numpy でインストールしてください。")  
     
     def __del__(self):

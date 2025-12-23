@@ -38,11 +38,12 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         
         # ライブラリチェック
         import importlib.util
-        if not importlib.util.find_spec("scipy"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("scipy"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ scipy がインストールされていません。\npip install scipy でインストールしてください。")
             return
         
-        if not importlib.util.find_spec("matplotlib"):
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("matplotlib"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ matplotlib がインストールされていません。\npip install matplotlib でインストールしてください。")
             return
     
@@ -195,11 +196,12 @@ class ToneCurveDialog(tk.Toplevel):
         
         # ライブラリチェック
         import importlib.util
-        if not importlib.util.find_spec("scipy"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("scipy"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ scipy がインストールされていません。\npip install scipy でインストールしてください。")
             return
         
-        if not importlib.util.find_spec("matplotlib"):
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("matplotlib"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ matplotlib がインストールされていません。\npip install matplotlib でインストールしてください。")
             return
         

@@ -33,7 +33,8 @@ class ImageReaderNode(BaseReaderNode):
         self.fileTypes = [("Image files", "*.jpg *.jpeg *.png *.bmp *.gif")]
         
         import importlib.util
-        if not importlib.util.find_spec("PIL"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("PIL"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
             return
     

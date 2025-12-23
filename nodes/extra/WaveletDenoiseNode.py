@@ -36,10 +36,11 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         self.protection_radius = 3
         
         import importlib.util
-        if not importlib.util.find_spec("pywt"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("pywt"):
             messagebox.showerror(f"{self.name} エラー", "PyWaveletsライブラリが必要です\npip install PyWavelets")
         
-        if not importlib.util.find_spec("skimage"):
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("skimage"):
             messagebox.showerror(f"{self.name} エラー", "scikit-imageライブラリが必要です\npip install scikit-image")
     
     def getText(self):

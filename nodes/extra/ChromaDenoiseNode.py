@@ -36,7 +36,8 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         self.edge_threshold  = 0.01  # エッジ検出閾値
         
         import importlib.util
-        if not importlib.util.find_spec("scipy"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("scipy"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ scipy がインストールされていません\npip install scipy でインストールしてください")
     
     def getText(self):

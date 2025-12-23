@@ -33,7 +33,8 @@ class FitsReaderNode(BaseReaderNode):
         self.fileTypes = [("FITS files", "*.fits *.fit *.fts")]
         
         import importlib.util
-        if not importlib.util.find_spec("astropy"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("astropy"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ astropy がインストールされていません。\npip install astropy でインストールしてください。")
             return
     

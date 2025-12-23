@@ -37,11 +37,13 @@ class ImageWriterNode(BaseWriterNode):
         
         if ext.lower() in ['.tiff', '.tif']:
             import importlib.util
-            if not importlib.util.find_spec('tifffile'):
+            import sys
+            if not getattr(sys, 'frozen', False) and not importlib.util.find_spec('tifffile'):
                 raise Exception("ライブラリ tifffile がインストールされていません\npip install tifffile でインストールしてください。")
         else:
             import importlib.util
-            if not importlib.util.find_spec('PIL'):
+            import sys
+            if not getattr(sys, 'frozen', False) and not importlib.util.find_spec('PIL'):
                 raise Exception("ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
 
         width, height = flowData.getDimensions()

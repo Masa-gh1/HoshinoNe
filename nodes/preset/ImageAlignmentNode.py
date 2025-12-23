@@ -70,7 +70,8 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         # 位置合わせ実行
         
         import importlib.util
-        if not importlib.util.find_spec("cv2"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ OpenCV がインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     

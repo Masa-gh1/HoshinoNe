@@ -29,7 +29,8 @@ class TransformNode(LazyNNOperationNode):
         self._extendParams = None
         
         import importlib.util
-        if not importlib.util.find_spec("cv2"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
             from tkinter import messagebox
             messagebox.showerror(f"{self.name} エラー", "ライブラリ OpenCV がインストールされていません。\npip install opencv-python でインストールしてください。")
             return

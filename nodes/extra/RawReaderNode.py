@@ -56,7 +56,8 @@ class RawReaderNode(BaseReaderNode):
         self.gammaSlope = 1.0  # gamma slope
 
         import importlib.util
-        if not importlib.util.find_spec("rawpy"):
+        import sys
+        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("rawpy"):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ rawpy がインストールされていません。\npip install rawpy でインストールしてください。")
             return
         
