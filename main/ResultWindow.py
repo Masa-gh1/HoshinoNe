@@ -85,7 +85,7 @@ class ResultWindow(tk.Toplevel):
         tk.Radiobutton(axis_frame, text="Log", variable=self._y_scale_var, value="log", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(axis_frame, text="Linear", variable=self._y_scale_var, value="linear", command=self.updateResult).pack(side=tk.LEFT)
         
-        # 表示レベル制御（画像データのみ）
+        # 画像レベル制御（画像データのみ）
         level_frame = tk.Frame(control_frame)
         level_frame._is_image_control = True
         
@@ -95,6 +95,29 @@ class ResultWindow(tk.Toplevel):
         tk.Radiobutton(level_frame, text="display", variable=self._display_levels_var, value="display", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="adaptive", variable=self._display_levels_var, value="adaptive", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="all", variable=self._display_levels_var, value="all", command=self.updateResult).pack(side=tk.LEFT)
+        
+        # 画像グリッド制御（画像データのみ）
+        grid_frame = tk.Frame(control_frame)
+        grid_frame._is_image_control = True
+        
+        tk.Label(grid_frame, text="グリッド分割:").pack(side=tk.LEFT)
+        
+        self._display_grid_var = tk.StringVar(value="full")
+        tk.Radiobutton(grid_frame, text="full", variable=self._display_grid_var, value="full", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(grid_frame, text="3x3 grid", variable=self._display_grid_var, value="3x3 grid", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(grid_frame, text="5x5 grid", variable=self._display_grid_var, value="5x5 grid", command=self.updateResult).pack(side=tk.LEFT)
+        
+        # 画像ズーム制御（画像データのみ）
+        zoom_frame = tk.Frame(control_frame)
+        zoom_frame._is_image_control = True
+        
+        tk.Label(zoom_frame, text="画像ズーム:").pack(side=tk.LEFT)
+        
+        self._display_zoom_var = tk.StringVar(value="fit")
+        tk.Radiobutton(zoom_frame, text="fit", variable=self._display_zoom_var, value="fit", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(zoom_frame, text="x1", variable=self._display_zoom_var, value="x1", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(zoom_frame, text="x2", variable=self._display_zoom_var, value="x2", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(zoom_frame, text="x3", variable=self._display_zoom_var, value="x3", command=self.updateResult).pack(side=tk.LEFT)
         
         # スクロールバー付きテキストエリア
         frame = tk.Frame(self)
@@ -413,9 +436,8 @@ class ResultWindow(tk.Toplevel):
             
             content.append(text)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
             content.append(text + f"\nerror: {str(e)}\n")
+            Debug.log(type(self).__name__, "error", e)
         
         # ヒストグラムグラフを作成
         histogramImageKey = (flowData, self._x_scale_var.get(), self._y_scale_var.get())
@@ -507,18 +529,15 @@ class ResultWindow(tk.Toplevel):
                     content.append(histogram_text)
                     content.append(histogram_image)
                 except Exception as e:
-                    tb = traceback.format_exc()
-                    print(tb,file=sys.stderr)
+                    Debug.log(type(self).__name__, "Histogram error", e)
                     content.append(f"Histogram error: {str(e)}\n")
         
         if not PIL_AVAILABLE:
             content.append("\nImage is not available.\n\n")
         else:
             try:
-                # 表示レベル設定を取得
-                displayLevels = self._display_levels_var.get()
-
                 # 表示レベルを設定
+                displayLevels = self._display_levels_var.get()
                 if "display" == displayLevels:
                     scale = 255.0 / (displayLevelEnd - displayLevelMin)
                     offset = float(displayLevelMin)
@@ -532,106 +551,181 @@ class ResultWindow(tk.Toplevel):
                     scale = 1.0
                     offset = 0.0
                 
-                # 画像データを再構成
+                # グリッド分割を設定
+                displaygrids = self._display_grid_var.get()
+                if "full" == displaygrids:
+                    gridLline=False
+                    gridSize =BLOCK_SIZE
+                    d_width  = width
+                    d_height = height
+                    srcX = list(range(0, d_width , BLOCK_SIZE))
+                    srcY = list(range(0, d_height, BLOCK_SIZE))
+                elif "3x3 grid" == displaygrids:
+                    gridLline=True
+                    gridSize =160
+                    d_width  = 3*gridSize
+                    d_height = 3*gridSize
+                    srcX = [0, (width -gridSize)//2, (width -gridSize)]
+                    srcY = [0, (height-gridSize)//2, (height-gridSize)]
+                elif "5x5 grid" == displaygrids:
+                    gridLline=True
+                    gridSize =96
+                    d_width  = 5*gridSize
+                    d_height = 5*gridSize
+                    srcX = [0, (width -gridSize)//4*1, (width -gridSize)//4*2, (width -gridSize)//4*3, (width -gridSize)]
+                    srcY = [0, (height-gridSize)//4*1, (height-gridSize)//4*2, (height-gridSize)//4*3, (height-gridSize)]
+                else:
+                    gridLline=False
+                    gridSize =BLOCK_SIZE
+                    d_width  = width
+                    d_height = height
+                    srcX = list(range(0, d_width , BLOCK_SIZE))
+                    srcY = list(range(0, d_height, BLOCK_SIZE))
+
+                # ズームを設定
+                displayzooms = self._display_zoom_var.get()
+                if "fit" == displayzooms:
+                    fit = True
+                    zoom = 1
+                elif "x1" == displayzooms:
+                    fit = False
+                    zoom = 1
+                elif "x2" == displayzooms:
+                    fit = False
+                    zoom = 2
+                elif "x3" == displayzooms:
+                    fit = False
+                    zoom = 3
+                else:
+                    fit = True
+                    zoom = 1
+
+                # 画像 mode を設定
                 if 'RGB' == mode and 3 <= planeCount:
-                    imgArray = np.zeros((height, width, 3), dtype=np.uint8)
-                    
-                    for planeIndex in range(3):
-                        for y in range(0, height, BLOCK_SIZE):
-                            for x in range(0, width, BLOCK_SIZE):
-                                block = flowData.getBlock(planeIndex, x, y)
-                                if block and block.data is not None:
-                                    try:
-                                        blockHeight = min(block.getHeight(), height - y)
-                                        blockWidth = min(block.getWidth(), width - x)
-                                        endY = y + blockHeight
-                                        endX = x + blockWidth
-                                        
-                                        # レベル調整を適用（NaNは0に変換）
-                                        data = block.data[:blockHeight, :blockWidth]
-                                        normalized = np.nan_to_num((data - offset) * scale, nan=0.0)
-                                        imgArray[y:endY, x:endX, planeIndex] = np.clip(normalized, 0, 255).astype(np.uint8)
-                                    except (IndexError, TypeError, ValueError) as e:
-                                        content.append(f"\n{str(e)}\n\n")
-                    
-                    img = Image.fromarray(imgArray, 'RGB')
+                    smode = 'RGB'
+                    dmode = 'RGB'
+                    imgW = nh.ceil(d_width , gridSize).astype(int)
+                    imgH = nh.ceil(d_height, gridSize).astype(int)
+                    imgD = 3
                 elif 'RGBG' == mode and 4 <= planeCount:
-                    imgArray = np.zeros((height, width, 3), dtype=np.uint8)
-                    
-                    for y in range(0, height, BLOCK_SIZE):
-                        for x in range(0, width, BLOCK_SIZE):
-                            r_block = flowData.getBlock(0, x, y)
-                            g1_block = flowData.getBlock(1, x, y)
-                            b_block = flowData.getBlock(2, x, y)
-                            g2_block = flowData.getBlock(3, x, y)
-                            
-                            if r_block and g1_block and b_block and g2_block:
-                                if (   r_block.data is not None
-                                   and g1_block.data is not None
-                                   and b_block.data is not None
-                                   and g2_block.data is not None
-                                   ):
-                                    try:
-                                        blockHeight = min(r_block.getHeight(), height - y)
-                                        blockWidth = min(r_block.getWidth(), width - x)
-                                        endY = y + blockHeight
-                                        endX = x + blockWidth
-                                        
-                                        g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
-                                        
-                                        # レベル調整を適用（NaNは0に変換）
-                                        r_norm = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                                        g_norm = np.nan_to_num((g_avg - offset) * scale, nan=0.0)
-                                        b_norm = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                                        
-                                        imgArray[y:endY, x:endX, 0] = np.clip(r_norm, 0, 255).astype(np.uint8)
-                                        imgArray[y:endY, x:endX, 1] = np.clip(g_norm, 0, 255).astype(np.uint8)
-                                        imgArray[y:endY, x:endX, 2] = np.clip(b_norm, 0, 255).astype(np.uint8)
-                                    except (IndexError, TypeError, ValueError) as e:
-                                        content.append(f"\n{str(e)}\n\n")
-                    
-                    img = Image.fromarray(imgArray, 'RGB')
+                    smode = 'RGBG'
+                    dmode = 'RGB'
+                    imgW = nh.ceil(d_width , gridSize).astype(int)
+                    imgH = nh.ceil(d_height, gridSize).astype(int)
+                    imgD = 3
                 elif(  'L'     == mode and 1 <= planeCount
                     or 'BAYER' == mode and 1 <= planeCount
                     ):
-                    imgArray = np.zeros((height, width), dtype=np.uint8)
-                    
-                    for y in range(0, height, BLOCK_SIZE):
-                        for x in range(0, width, BLOCK_SIZE):
-                            block = flowData.getBlock(0, x, y)
-                            if block and block.data is not None:
-                                try:
-                                    blockHeight = min(block.getHeight(), height - y)
-                                    blockWidth = min(block.getWidth(), width - x)
-                                    endY = y + blockHeight
-                                    endX = x + blockWidth
-                                    
-                                    # レベル調整を適用（NaNは0に変換）
-                                    normalized = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                                    imgArray[y:endY, x:endX] = np.clip(normalized, 0, 255).astype(np.uint8)
-                                except (IndexError, TypeError, ValueError) as e:
-                                    content.append(f"\n{str(e)}\n\n")
-                    
-                    img = Image.fromarray(imgArray, 'L')
+                    smode = 'L'
+                    dmode = 'L'
+                    imgW = nh.ceil(d_width , gridSize).astype(int)
+                    imgH = nh.ceil(d_height, gridSize).astype(int)
+                    imgD = 1
                 else:
                     raise ValueError(f"サポートされていないモード: {mode}")
+
+                # 画像データを構築
+                imgArray = np.empty((imgH, imgW, imgD), dtype=np.uint8)
+
+                tmpImg = np.empty((gridSize, gridSize, imgD), dtype=np.uint8) # 作業領域は使いまわす
                 
-                window_width = self.winfo_width()
-                max_width = window_width - 40  # 最小余白
+                for sy1,dy in zip(srcY, range(0, imgH, gridSize)): # コピー元座標
+                    for sx1,dx in zip(srcX, range(0, imgW, gridSize)):
+                        sx2 = sx1+gridSize
+                        sy2 = sy1+gridSize
+                        x1  = nh.floor(sx1, BLOCK_SIZE).astype(int) # コピー元を包含するブロック座標
+                        y1  = nh.floor(sy1, BLOCK_SIZE).astype(int)
+                        x2  = nh.ceil( sx2, BLOCK_SIZE).astype(int)
+                        y2  = nh.ceil( sy2, BLOCK_SIZE).astype(int)
+
+                        try:
+                            for by1 in range(y1, y2, BLOCK_SIZE): # コピー元を一部でも含むブロック座標
+                                for bx1 in range(x1, x2, BLOCK_SIZE):
+
+                                    if 'RGB' == smode:
+                                        r_block = flowData.getBlock(0, bx1, by1)
+                                        g_block = flowData.getBlock(1, bx1, by1)
+                                        b_block = flowData.getBlock(2, bx1, by1)
+                                        r_data  = r_block.data if r_block else None
+                                        g_data  = g_block.data if g_block else None
+                                        b_data  = b_block.data if b_block else None
+                                        rgb = [r_data, g_data, b_data]
+                                    elif 'RGBG' == smode:
+                                        r_block  = flowData.getBlock(0, bx1, by1)
+                                        g1_block = flowData.getBlock(1, bx1, by1)
+                                        b_block  = flowData.getBlock(2, bx1, by1)
+                                        g2_block = flowData.getBlock(3, bx1, by1)
+                                        r_data   = r_block.data  if r_block else None
+                                        g1_data  = g1_block.data if g1_block else None
+                                        b_data   = b_block.data  if b_block else None
+                                        g2_data  = g2_block.data if g1_block else None
+                                        g_data   = (    (g1_data + g2_data) / 2 if g1_data is not None and g2_data is not None
+                                                    else g1_data                if g1_data is not None
+                                                    else g2_data                if g2_data is not None
+                                                    else None
+                                                   )
+                                        rgb = [r_data, g_data, b_data]
+                                    elif 'L' == smode:
+                                        l_block = flowData.getBlock(0, bx1, by1)
+                                        l_data  = l_block.data if l_block else None
+                                        rgb = [l_data]
+                                    else:
+                                        pass # ここには来ない
+
+                                    for bd,data in enumerate(rgb):
+                                        if data is not None:
+                                            try:
+                                                cx1 = max(sx1, bx1) # コピー元座標とブロック座標 の積集合
+                                                cy1 = max(sy1, by1)
+                                                cx2 = min(sx2, bx1+data.shape[1])
+                                                cy2 = min(sy2, by1+data.shape[0])
+                                                trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
+                                                leveled = (trimed - offset) * scale              # レベル調整を適用
+                                                norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
+                                                cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
+                                                tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, bd] = cliped
+                                            except (IndexError, TypeError, ValueError) as e:
+                                                Debug.log(type(self).__name__, "error", e)
+                                                content.append(f"\nerror: {str(e)}\n\n")
+                            
+                            imgArray[dy:dy+gridSize, dx:dx+gridSize, 0:imgD] = tmpImg
+                        except (IndexError, TypeError, ValueError) as e:
+                            Debug.log(type(self).__name__, "error", e)
+                            content.append(f"\nerror: {str(e)}\n\n")
                 
-                display_width, display_height = img.size
-                if display_width > max_width:
-                    ratio = max_width / display_width
-                    display_width = int(display_width * ratio)
-                    display_height = int(display_height * ratio)
-                    img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)
+                if gridLline:
+                    for sy1 in range(0, imgH, gridSize):
+                        imgArray[sy1, 0:imgW, 0:imgD] = 128
+                    imgArray[imgH-1, 0:imgW, 0:imgD] = 128
+                    for sx1 in range(0, imgW, gridSize):
+                        imgArray[0:imgH, sx1, 0:imgD] = 128
+                    imgArray[0:imgH, imgW-1, 0:imgD] = 128
+
+                if 'RGB' == dmode:
+                    img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD], 'RGB')
+                elif 'L' == dmode:
+                    img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD].squeeze(), 'L')
+                
+                if 1 != zoom:
+                    img = img.resize((int(img.width * zoom), int(img.height * zoom)), Image.Resampling.LANCZOS)
+
+                if fit:
+                    window_width = self.winfo_width()
+                    max_width = window_width - 40  # 最小余白
+                    
+                    display_width, display_height = img.size
+                    if display_width > max_width:
+                        ratio = max_width / display_width
+                        display_width = int(display_width * ratio)
+                        display_height = int(display_height * ratio)
+                        img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)
                 
                 # Tkinterで表示するためにPhotoImageに変換
                 photo = ImageTk.PhotoImage(img)
                 content.append(photo)
             except Exception as e:
-                Debug.log( type(self).__name__, "画像表示エラー", e)
-                content.append(f"\n画像表示エラー: {str(e)}\n\n")
+                Debug.log( type(self).__name__, "error", e)
+                content.append(f"\nerror: {str(e)}\n\n")
         
         # EXIF情報を表示
         exif = headers.get('exif', {})

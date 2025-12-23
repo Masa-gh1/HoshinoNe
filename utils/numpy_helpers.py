@@ -67,3 +67,25 @@ def linspace(*args, **kwargs):
     """np.linspaceのデフォルトdtype版"""
     kwargs.setdefault('dtype', DEFAULT_BLOCK_TYPE)
     return np.linspace(*args, **kwargs)
+
+def floor(arr, unit=1, **kwargs):
+    """単位を指定して切り捨て（デフォルトdtype版）
+
+    Args:
+        arr: 配列
+        unit: 切り捨てする単位
+    Returns:
+        単位で切り捨てされた配列
+    """
+    return np.floor(arr / unit, **kwargs) * unit
+
+def ceil(arr, unit=1, **kwargs):
+    """単位を指定して切り上げ（デフォルトdtype版）
+
+    Args:
+        arr: 配列
+        unit: 切り上げるする単位
+    Returns:
+        単位で切り上げされた配列
+    """
+    return np.ceil(arr / unit, **kwargs) * unit
