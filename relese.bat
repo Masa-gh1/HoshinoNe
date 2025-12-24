@@ -13,6 +13,7 @@ echo HoshinoNe.spec >> EXCLUDE.lst
 echo .CR2           >> EXCLUDE.lst
 echo sample         >> EXCLUDE.lst
 echo Thumbs.db      >> EXCLUDE.lst
+echo .bak           >> EXCLUDE.lst
 xcopy /E /S /EXCLUDE:EXCLUDE.lst .             ..\HoshinoNe_%VERSION_DATE%_src
 xcopy /E /S                      .\dist        ..\HoshinoNe_%VERSION_DATE%
 xcopy /E /S                      .\subFlow     ..\HoshinoNe_%VERSION_DATE%\subFlow
