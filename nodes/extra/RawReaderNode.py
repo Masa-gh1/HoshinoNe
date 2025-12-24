@@ -129,7 +129,7 @@ class RawReaderNode(BaseReaderNode):
         import rawpy
         from config import RAW_DEMOSAIC_ALGORITHMS
         from config import configRawParams
-        from utils.exif_helper import getExif
+        from utils import exif_helper as exif
         from utils.ThreadPool import ProcessExecutorInNode
         from config import BLOCK_SIZE
         from base import FlowData
@@ -266,7 +266,7 @@ class RawReaderNode(BaseReaderNode):
                     plane_names = ['R', 'G', 'B'][:planeCount]
             
             # EXIF情報を取得
-            exif_info = getExif(filePath)
+            exif_info = exif.getExif(filePath)
             
             # DateTimeを文字列化
             headers_exif = None
@@ -275,7 +275,9 @@ class RawReaderNode(BaseReaderNode):
                 headers_exif = dict(exif_info)
                 for tag in ['DateTime', 'DateTimeDigitized', 'DateTimeOriginal']:
                     if tag in headers_exif:
-                        orgDateTime = headers_exif[tag]
+                        orgDateTime = exif.toDatetime(headers_exif[tag])
+                        orgDateTime = orgDateTime.strftime("%Y-%m-%d %H:%M:%S") if orgDateTime else None
+                
                 if not 'DateTimeOriginal'  in headers_exif:
                     headers_exif['DateTimeOriginal'] = orgDateTime
                 if not 'DateTimeDigitized' in headers_exif:
@@ -344,10 +346,10 @@ class RawReaderNode(BaseReaderNode):
     
     def getFileInfo(self, filePath):
         """RAWファイルの情報を取得（生データ）"""
-        from utils.exif_helper import getExif
+        from utils import exif_helper as exif
 
         try:
-            exif = getExif(filePath)
+            exif = exif.getExif(filePath)
             return {
                 'filePath': filePath,
                 'datetime': exif.get('DateTime') if exif else None,

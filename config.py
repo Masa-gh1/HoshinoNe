@@ -7,6 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from fractions import Fraction
+
 try:
     import numpy as np
 except ImportError:
@@ -37,47 +39,51 @@ MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024//ESTIMATE_SIZE_PER
 
 # 画像読み書きノードで使用する
 # データヘッダに含める Exif
-# ここには無い、"DateTime", "DateTimeDigitized", "DateTimeOriginal" はプリセットされています。
 HEADERS_EXIF = [
-    # name                tag                        converter
-    ("Make"             , "Make"                   , str  ),
-    ("Model"            , "Model"                  , str  ),
-    ("ImageWidth"       , "ImageWidth"             , int  ),
-    ("ImageWidth"       , "ExifImageWidth"         , int  ),
-    ("ImageLength"      , "ImageLength"            , int  ),
-    ("ImageLength"      , "ExifImageHeight"        , int  ),
-    ("LensModel"        , "LensModel"              , str  ),
-    ("FocalLength"      , "FocalLength"            , float),
-    ("FNumber"          , "FNumber"                , float),
-    ("ExposureTime"     , "ExposureTime"           , float),
-    ("ISOSpeedRatings"  , "ISO"                    , int  ),
-    ("ISOSpeedRatings"  , "ISOSpeedRatings"        , int  ),
-    ("ISOSpeedRatings"  , "PhotographicSensitivity", int  ),
+    # name                       tag                         converter
+    # 0th IFD TIFF Tag
+    ("ImageWidth"              , "ImageWidth"              , int         ),
+    ("ImageWidth"              , "ExifImageWidth"          , int         ),
+    ("ImageLength"             , "ImageLength"             , int         ),
+    ("ImageLength"             , "ExifImageHeight"         , int         ),
+    ("DateTime"                , "DateTime"                , str         ),
+    ("ExposureTime"            , "ExposureTime"            , Fraction    ),
+    ("FNumber"                 , "FNumber"                 , Fraction    ),
+    ("ISOSpeed"                , "ISOSpeed"                , int         ),
+    ("ISOSpeed"                , "ISO"                     , int         ),
+    ("ISOSpeed"                , "ISOSpeedRatings"         , int         ),
+    ("ISOSpeed"                , "PhotographicSensitivity" , int         ),
+    ("DateTimeOriginal"        , "DateTimeOriginal"        , str         ),
+    ("DateTimeDigitized"       , "DateTimeDigitized"       , str         ),
+    ("FocalLength"             , "FocalLength"             , Fraction    ),
+    # 0th IFD Exif Private Tag
+    ("ColorSpace"              , "ColorSpace"              , str         ),
+    ("FocalPlaneXResolution"   , "FocalPlaneXResolution"   , Fraction    ),
+    ("FocalPlaneYResolution"   , "FocalPlaneYResolution"   , Fraction    ),
+    ("FocalPlaneResolutionUnit", "FocalPlaneResolutionUnit", int         ),
 ]
 HEADERS_EXIF_OPT = [
-    # name                tag                        converter
-    # 位置情報
-    ("GPSLatitude"      , "GPSLatitude"            , float),
-    ("GPSLongitude"     , "GPSLongitude"           , float),
-    ("GPSAltitude"      , "GPSAltitude"            , float),
-    # 著作権情報
-    ("Artist"           , "Artist"                 , str  ),
-    ("Copyright"        , "Copyright"              , str  ),
-    # カメラ設定
-    ("Flash"            , "Flash"                  , str  ),
-    ("MeteringMode"     , "MeteringMode"           , str  ),
-    ("ExposureMode"     , "ExposureMode"           , str  ),
-    ("WhiteBalance"     , "WhiteBalance"           , str  ),
-    # レンズ情報
-    ("LensSerialNumber" , "LensSerialNumber"       , str  ),
-    ("LensMake"         , "LensMake"               , str  ),
-    # 色空間・解像度
-    ("ColorSpace"       , "ColorSpace"             , str  ),
-#    ("WhitePoint"       , "WhitePoint"             , float, 2),
-    ("Orientation"      , "Orientation"            , int  ),
-    ("XResolution"      , "XResolution"            , float),
-    ("YResolution"      , "YResolution"            , float),
-    ("ResolutionUnit"   , "ResolutionUnit"         , int  ),
+    # name                       tag                        converter
+    # 0th IFD TIFF Tag
+    ("Make"                    , "Make"                    , str         ),
+    ("Model"                   , "Model"                   , str         ),
+    ("Orientation"             , "Orientation"             , int         ),
+    ("XResolution"             , "XResolution"             , Fraction    ),
+    ("YResolution"             , "YResolution"             , Fraction    ),
+    ("ResolutionUnit"          , "ResolutionUnit"          , int         ),
+    ("Artist"                  , "Artist"                  , str         ),
+    ("Copyright"               , "Copyright"               , str         ),
+    # 0th IFD Exif Private Tag
+    ("MeteringMode"            , "MeteringMode"            , str         ),
+    ("Flash"                   , "Flash"                   , str         ),
+    ("WhiteBalance"            , "WhiteBalance"            , str         ),
+    ("ExposureMode"            , "ExposureMode"            , str         ),
+    ("LensMake"                , "LensMake"                , str         ),
+    ("LensModel"               , "LensModel"               , str         ),
+    # 0th IFD GPS Info Tag
+    ("GPSLatitude"             , "GPSLatitude"             , Fraction    ),
+    ("GPSLongitude"            , "GPSLongitude"            , Fraction    ),
+    ("GPSAltitude"             , "GPSAltitude"             , Fraction    ),
 ]
 
 # RawReaderNode 用

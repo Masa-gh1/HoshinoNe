@@ -758,14 +758,14 @@ class ResultWindow(tk.Toplevel):
             headers = flowData.headers if flowData.headers else {}
             data_type = headers.get('type', 'unknown')
             
-            # EXIF情報からファイル名や時刻を取得
-            display_name = f"データ {i + 1} ({data_type})"
-            if 'exif' in headers:
-                exif = headers['exif']
-                if 'DateTime' in exif:
-                    display_name += f" - {exif['DateTime']}"
+            # header からファイル名や時刻を取得
+            name = f"{i + 1}: ({data_type})"
+            if 'source_file' in headers:
+                name += f" {headers['source_file']}"
+            if 'datetime' in headers:
+                name += f" - {headers['datetime']}"
             
-            options.append(display_name)
+            options.append(name)
         
         self._data_combo['values'] = options
         
@@ -780,7 +780,7 @@ class ResultWindow(tk.Toplevel):
             return self.node.flowDatas[0] if self.node.flowDatas else None
         
         # 選択されたインデックスを取得
-        index = int(selected.split('データ ')[1].split(' ')[0]) - 1
+        index = int(selected.split(':')[0]) - 1
         if 0 <= index < len(self.node.flowDatas):
             return self.node.flowDatas[index]
         

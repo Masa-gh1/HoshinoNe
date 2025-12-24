@@ -7,8 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import os
+from fractions import Fraction
 import datetime
+import os
 from nodes import BaseWriterNode
 from config import BLOCK_SIZE, HEADERS_EXIF, HEADERS_EXIF_OPT
 
@@ -187,8 +188,8 @@ class ImageWriterNode(BaseWriterNode):
         if original_exif:
             preserve_tags = [name for name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)]
             exif_dict = {tag: original_exif[tag] for tag in preserve_tags if tag in original_exif}
-            
             exif_dict['Software'] = 'ほしのね'
+
             from utils.Debug import Debug
             if not Debug.isTestMode():
                 # テストモードではないので現在時刻を入れる
@@ -200,18 +201,36 @@ class ImageWriterNode(BaseWriterNode):
             save_kwargs['metadata'] = exif_dict
         else:
             # EXIF bytes変換
-            from PIL import Image
-            from PIL.ExifTags import TAGS
+            from PIL import Image, TiffImagePlugin
+            from PIL.ExifTags import IFD,TAGS
 
-            if exif_dict:
-                exif = Image.Exif()
-                tag_map = {tname: tid for tid, tname in TAGS.items()}
-                
-                for tag_name, value in exif_dict.items():
-                    if tag_name in tag_map:
-                        exif[tag_map[tag_name]] = value
-                
-                save_kwargs['exif'] = exif.tobytes()
+            exif = Image.Exif()
+            tagIdMap = {tagName: tagId for tagId, tagName in TAGS.items()}
+            
+            for tag_name, value in exif_dict.items():
+                if tag_name in tagIdMap:
+                    tagId = tagIdMap[tag_name]
+                    if 256 <= tagId <= 33432:
+                        ifd = exif                      # 0th IFD TIFF Tag
+                    elif 33434 <= tagId <= 42240:
+                        ifd = exif.get_ifd(IFD.Exif)    # 0th IFD Exif Private Tag
+                    elif 0 <= tagId <= 31:
+                        ifd = exif.get_ifd(IFD.GPSInfo) # 0th IFD GPS Info Tag
+
+                    if isinstance(value, list):
+                        values = []
+                        for v in value:
+                            if isinstance(v, Fraction):
+                                values.append(TiffImagePlugin.IFDRational(v))
+                            else:
+                                values.append(v)
+                        ifd[tagId] = tuple(values)
+                    elif isinstance(value, Fraction):
+                        ifd[tagId] = TiffImagePlugin.IFDRational(value)
+                    else:
+                        ifd[tagId] = value
+            
+            save_kwargs['exif'] = exif.tobytes()
 
         # 保存処理
         if ext.lower() in ['.tiff', '.tif']:
