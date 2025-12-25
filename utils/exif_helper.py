@@ -40,96 +40,111 @@ def getExif(filepath):
     
     # PILからEXIF情報を取得
     if PIL_AVAILABLE:
-        pil_exif = _getPilExif(filepath, attr)
+        _attr, pil_exif = _getPilExif(filepath)
+        attr.update(_attr)
     else:
-        Debug.log(__file__, "ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
+        Debug.log(__name__, "ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
         pil_exif = {}
     
-    expected_tags = [name for name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)]
-    missing_tags = [tag for tag in expected_tags if tag not in attr]
+    tagMap = {id:name for id, name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)}
+    expectedTags = tagMap
+    missingTags = [id for id in expectedTags if id not in attr]
     
-    if not missing_tags:
+    if not missingTags:
         exifread_tags = {}
     elif EXIFREAD_AVAILABLE:
         # 不足情報をexifreadで補完
-        exifread_tags = _getExifread(filepath, attr)
+        _attr, exifread_tags = _getExifread(filepath)
+        attr.update({id: _attr[id] for id in missingTags if id in _attr})
     else:
-        Debug.log(__file__, "ライブラリ exifread がインストールされていません\npip install ExifRead でインストールしてください。")
+        Debug.log(__name__, "ライブラリ exifread がインストールされていません\npip install ExifRead でインストールしてください。")
         exifread_tags = {}
     
-    expected_tags = [name for name, _, _ in HEADERS_EXIF]
-    missing_tags = [tag for tag in expected_tags if tag not in attr]
+    expectedTags = {id for id, _, _, _ in (HEADERS_EXIF)}
+    missingTags = [id for id in expectedTags if id not in attr]
     
-    if Debug.LEVEL_NONE < Debug.LEVEL and missing_tags:
+    if Debug.LEVEL_NONE < Debug.LEVEL and missingTags:
         # デバッグ出力
-        _debugMissingTags(filepath, missing_tags, pil_exif, exifread_tags)
+        _debugMissingTags(filepath, missingTags, pil_exif, exifread_tags)
     
-    result = attr if attr else None
+    result = {tagMap[id]:value for id, value in attr.items()} if attr else None
     _exif_cache[filepath] = result
     return result
 
-def _getPilExif(filepath, attr):
+def _getPilExif(filepath):
     """PILからEXIF情報を取得"""
-    pil_exif = {}
+    allExif = {}
+    result = {}
+
     if not PIL_AVAILABLE:
-        return pil_exif
+        return result, allExif
     
     try:
         with Image.open(filepath) as img:
-            pil_exif = img._getexif() if hasattr(img, '_getexif') else img.getexif()
+            allExif = img._getexif() if hasattr(img, '_getexif') else img.getexif()
             
-            for tag_id, value in pil_exif.items():
-                tag = TAGS.get(tag_id, tag_id)
-                
-                try:
-                    for name, tag_name, converter in (HEADERS_EXIF + HEADERS_EXIF_OPT):
-                        if(  (name not in attr)
-                            and(tag_name == tag)
-                            ):
-                            if False:
-                                pass
-                            else:
-                                attr[name] = converter(value)
-                            break
-                except (ValueError):
-                    print(f"PIL EXIF error for {tag} = {value} : {e}", file=sys.stderr)
-                    continue
-    except Exception as e:
-        print(f"PIL EXIF error for {filepath}: {e}", file=sys.stderr)
-    
-    return pil_exif
+            try:
+                for id, name, converter, count in (HEADERS_EXIF + HEADERS_EXIF_OPT):
+                    if id in allExif:
+                        values = allExif[id]
+                        if isinstance(values, (list,tuple)) and 2 <= len(values):
+                            vs = []
+                            for v in values:
+                                vs.append(converter(v))
+                            result[id] = tuple(vs)
+                        elif isinstance(values, (list,tuple)):
+                            result[id] = converter(values[0])
+                        else:
+                            result[id] = converter(values)
 
-def _getExifread(filepath, attr):
+            except (ValueError):
+                Debug.log(__name__, f"PIL EXIF error for {id} = {values}", e)
+    except Exception as e:
+        Debug.log(__name__, f"PIL EXIF error for {filepath}", e)
+    
+    return result, allExif
+
+def _getExifread(filepath):
     """exifreadからEXIF情報を取得（不足分のみ）"""
-    exifread_tags = {}
+    allExif = {}
+    result = {}
+
+    if not EXIFREAD_AVAILABLE:
+        return result, allExif
     
     try:
         with open(filepath, 'rb') as f:
-            exifread_tags = exifread.process_file(f)
+            orgExif = exifread.process_file(f)
+            allExif = {value.tag: value for name, value in orgExif.items() if name.startswith('Image') or name.startswith('EXIF')}
             
-            for tag, value in exifread_tags.items():
-                try:
-                    for name, tag_name, converter in (HEADERS_EXIF + HEADERS_EXIF_OPT):
-                        if(  (name not in attr)
-                          and(tag_name in tag.split(' '))
-                          ):
-                            if isinstance(value.values,list) and 2 <= len(value.values):
-                                vs = []
-                                for v in value.values:
+            try:
+                for id, name, converter, count in (HEADERS_EXIF + HEADERS_EXIF_OPT):
+                    if id in allExif:
+                        values = allExif[id].values
+                        if isinstance(values, list) and 2 <= len(values):
+                            vs = []
+                            for v in values:
+                                if isinstance(v, tuple):
+                                    vs.append(converter(*v))
+                                else:
                                     vs.append(converter(v))
-                                attr[name] = vs
-                            elif isinstance(value.values,list):
-                                attr[name] = converter(value.values[0])
+                            result[id] = tuple(vs)
+                        elif isinstance(values, list):
+                            if isinstance(values[0], tuple):
+                                result[id] = converter(*values[0])
                             else:
-                                attr[name] = converter(value.values)
-                            break
-                except (ValueError) as e:
-                    print(f"exifread error for {tag} = {value} : {e}", file=sys.stderr)
-                    continue
+                                result[id] = converter(values[0])
+                        else:
+                            if isinstance(values, tuple):
+                                result[id] = converter(*values)
+                            else:
+                                result[id] = converter(values)
+            except (ValueError) as e:
+                Debug.log(__name__, f"exifread error for {id} = {values}", e)
     except Exception as e:
-        print(f"exifread error for {filepath}: {e}", file=sys.stderr)
+        Debug.log(__name__, f"exifread error for {filepath}", e)
     
-    return exifread_tags
+    return result, allExif
 
 def _debugMissingTags(filepath, missing_tags, pil_exif, exifread_tags):
     """不足しているEXIFタグをデバッグ出力"""
@@ -137,15 +152,16 @@ def _debugMissingTags(filepath, missing_tags, pil_exif, exifread_tags):
         print(f"Debug: Missing EXIF tags for {os.path.basename(filepath)}: {missing_tags}", file=sys.stderr)
         if pil_exif:
             print(f"Debug: Available PIL EXIF tags:", file=sys.stderr)
-            for tag_id, value in pil_exif.items():
-                tag = TAGS.get(tag_id, tag_id)
+            for id, value in pil_exif.items():
+                name = TAGS.get(id, id)
                 if len(str(value)) < 100:
-                    print(f"  {tag_id}: {tag} = {value}", file=sys.stderr)
+                    print(f"  {id}: {name} = {value}", file=sys.stderr)
         if exifread_tags:
             print(f"Debug: Available exifread EXIF tags:", file=sys.stderr)
-            for tag, value in exifread_tags.items():
+            for id, value in exifread_tags.items():
+                name = TAGS.get(id, id)
                 if len(str(value)) < 100:
-                    print(f"  {tag} = {value}", file=sys.stderr)
+                    print(f"  {id}: {name} = {value}", file=sys.stderr)
 
 def clearCache():
     """キャッシュをクリア"""
