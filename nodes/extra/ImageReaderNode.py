@@ -92,17 +92,7 @@ class ImageReaderNode(BaseReaderNode):
         else                              : display_levels = {'min': 0,   'exclusive_upper':        256}  # デフォルト
         
         # EXIF情報を取得
-        exif_info = exif.getExif(filePath)
-        
-        # DateTimeを文字列化
-        headers_exif = None
-        orgDateTime = None
-        if exif_info:
-            headers_exif = dict(exif_info)
-            for tag in ['DateTime', 'DateTimeDigitized', 'DateTimeOriginal']:
-                if tag in headers_exif:
-                    orgDateTime = exif.toDatetime(headers_exif[tag])
-                    orgDateTime = orgDateTime.strftime("%Y-%m-%d %H:%M:%S") if orgDateTime else None
+        norm, exif_info = exif.getExif(filePath)
         
         headers = {
             'type': 'image',
@@ -110,14 +100,14 @@ class ImageReaderNode(BaseReaderNode):
             'width': width,
             'height': height,
             'planes': plane_names,
-            'datetime': orgDateTime,
+            'datetime': norm['datetime'],
             'display_levels': display_levels,
             'source_file': self.getRelativePath(filePath),
         }
 
         # EXIF 追加
-        if headers_exif:
-            headers['exif'] = headers_exif
+        if exif_info:
+            headers['exif'] = exif_info
         
         pixels = list(img.getdata())
         flowData = FlowData(headers)
@@ -141,29 +131,18 @@ class ImageReaderNode(BaseReaderNode):
     
     def getFileInfo(self, filePath):
         """画像ファイルの情報を取得（生データ）"""
-        from utils.exif_helper import getExif
+        from utils import exif_helper as exif
         
-        try:
-            exif = getExif(filePath)
-            return {
-                'filePath': filePath,
-                'datetime': exif.get('DateTime') if exif else None,
-                'width': exif.get('ImageWidth') if exif else None,
-                'height': exif.get('ImageLength') if exif else None,
-                'exposure': exif.get('ExposureTime') if exif else None,
-                'fnumber': exif.get('FNumber') if exif else None,
-                'iso': exif.get('ISOSpeedRatings') if exif else None
-            }
-        except Exception:
-            return {
-                'filePath': filePath,
-                'datetime': None,
-                'width': None,
-                'height': None,
-                'exposure': None,
-                'fnumber': None,
-                'iso': None
-            }
+        norm, _ = exif.getExif(filePath)
+        return {
+            'filePath': filePath,
+            'datetime': norm.get('datetime'     , None) if norm else None,
+            'width'   : norm.get('width'        , None) if norm else None,
+            'height'  : norm.get('height'       , None) if norm else None,
+            'exposure': norm.get('exposure_time', None) if norm else None,
+            'fnumber' : norm.get('f_number'     , None) if norm else None,
+            'iso'     : norm.get('iso_speed'    , None) if norm else None,
+        }
     
     def getConfigHash(self):
         config = f"{self.minorType}_{'|'.join(self.filePaths)}"

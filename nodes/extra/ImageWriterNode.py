@@ -184,51 +184,87 @@ class ImageWriterNode(BaseWriterNode):
         
         # EXIF辞書構築
         original_exif = flowData.headers.get('exif', {})
-        exif_dict = {}
+        exifInfo = {}
         if original_exif:
-            preserve_tags = [name for name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)]
-            exif_dict = {tag: original_exif[tag] for tag in preserve_tags if tag in original_exif}
-            exif_dict['Software'] = 'ほしのね'
+            tags = {name:id for id,name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)}
+            exifInfo = {id: original_exif[name] for name,id in tags.items() if name in original_exif}
+
+            exifInfo[305] = 'HoshinoNe' # 305 Software
 
             from utils.Debug import Debug
             if not Debug.isTestMode():
                 # テストモードではないので現在時刻を入れる
-                exif_dict['DateTime'] = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+                exifInfo[306] = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S") # 306 DateTime
         
-        if not exif_dict:
+        if not exifInfo:
             pass
         elif ext.lower() in ['.tiff', '.tif']:
-            save_kwargs['metadata'] = exif_dict
+            if 305 in exifInfo:
+                save_kwargs['software'] = exifInfo.pop(305)
+            
+            # tifffile が自動的に処理するタグのリスト
+            skipTags = {
+                256, # 0100h ImageWidth                画像の幅
+                257, # 0101h ImageLength               画像の高さ
+                258, # 0102h BitsPerSample             画像のビットの深さ
+                259, # 0103h Compression               圧縮の種類
+                262, # 0106h PhotometricInterpretation 画素構成
+                273, # 0111h StripOffsets              画像データのロケーション
+                277, # 0115h SamplesPerPixel           コンポーネント数
+                278, # 0116h RowsPerStrip              ストリップあたりの行数
+                279, # 0117h StripByteCounts           ストリップの総バイト数
+                282, # 011Ah XResolution               画像の幅の解像度
+                283, # 011Bh YResolution               画像の高さの解像度
+                284, # 011Ch PlanarConfiguration       画像データの並び
+                296, # 0128h ResolutionUnit            画像の幅と高さの解像度の単位
+            }
+
+            ifd = []
+            for tagId, value in exifInfo.items():
+                if tagId in skipTags:
+                    pass
+                elif isinstance(value, list) and 0<len(value):
+                    if isinstance(v[0], Fraction):
+                        values = tuple((v.numerator, v.denominator) for v in value)
+                        ifd.append((tagId, 5, len(values), values, True)) # RATIONAL
+                    elif isinstance(v[0], int):
+                        values = tuple((v.numerator, v.denominator) for v in value)
+                        ifd.append((tagId, 3, len(values), values, True)) # SHORT
+                elif isinstance(value, Fraction):
+                    ifd.append((tagId, 5, 1, (value.numerator, value.denominator), True)) # RATIONAL
+                elif isinstance(value, str):
+                    ifd.append((tagId, 2, len(value) + 1, value, True)) # ASCII
+                elif isinstance(value, int):
+                    ifd.append((tagId, 3, 1, value, True)) # SHORT
+            
+            save_kwargs['extratags'] = ifd
         else:
             # EXIF bytes変換
             from PIL import Image, TiffImagePlugin
             from PIL.ExifTags import IFD,TAGS
 
             exif = Image.Exif()
-            tagIdMap = {tagName: tagId for tagId, tagName in TAGS.items()}
             
-            for tag_name, value in exif_dict.items():
-                if tag_name in tagIdMap:
-                    tagId = tagIdMap[tag_name]
-                    if 256 <= tagId <= 33432:
-                        ifd = exif                      # 0th IFD TIFF Tag
-                    elif 33434 <= tagId <= 42240:
-                        ifd = exif.get_ifd(IFD.Exif)    # 0th IFD Exif Private Tag
-                    elif 0 <= tagId <= 31:
-                        ifd = exif.get_ifd(IFD.GPSInfo) # 0th IFD GPS Info Tag
+            for tagId, value in exifInfo.items():
+                if 256 <= tagId <= 33432:
+                    ifd = exif                      # 0th IFD TIFF Tag
+                elif 33434 <= tagId <= 42240:
+                    ifd = exif.get_ifd(IFD.Exif)    # 0th IFD Exif Private Tag
+                elif 0 <= tagId <= 31:
+                    ifd = exif.get_ifd(IFD.GPSInfo) # 0th IFD GPS Info Tag
 
-                    if isinstance(value, list):
-                        values = []
-                        for v in value:
-                            if isinstance(v, Fraction):
-                                values.append(TiffImagePlugin.IFDRational(v))
-                            else:
-                                values.append(v)
-                        ifd[tagId] = tuple(values)
-                    elif isinstance(value, Fraction):
-                        ifd[tagId] = TiffImagePlugin.IFDRational(value)
-                    else:
-                        ifd[tagId] = value
+                if isinstance(value, list):
+                    values = []
+                    for v in value:
+                        if isinstance(v, Fraction):
+                            values.append(TiffImagePlugin.IFDRational(v))
+                        else:
+                            values.append(v)
+                    ifd[tagId] = tuple(values)
+                elif isinstance(value, Fraction):
+                    ifd[tagId] = TiffImagePlugin.IFDRational(value)
+                else:
+                    ifd[tagId] = value
             
             save_kwargs['exif'] = exif.tobytes()
 

@@ -266,22 +266,7 @@ class RawReaderNode(BaseReaderNode):
                     plane_names = ['R', 'G', 'B'][:planeCount]
             
             # EXIF情報を取得
-            exif_info = exif.getExif(filePath)
-            
-            # DateTimeを文字列化
-            headers_exif = None
-            orgDateTime = None
-            if exif_info:
-                headers_exif = dict(exif_info)
-                for tag in ['DateTime', 'DateTimeDigitized', 'DateTimeOriginal']:
-                    if tag in headers_exif:
-                        orgDateTime = exif.toDatetime(headers_exif[tag])
-                        orgDateTime = orgDateTime.strftime("%Y-%m-%d %H:%M:%S") if orgDateTime else None
-                
-                if not 'DateTimeOriginal'  in headers_exif:
-                    headers_exif['DateTimeOriginal'] = orgDateTime
-                if not 'DateTimeDigitized' in headers_exif:
-                    headers_exif['DateTimeDigitized'] = orgDateTime
+            info, exif_info = exif.getExif(filePath)
             
             headers = {
                 'type': 'image',
@@ -289,7 +274,7 @@ class RawReaderNode(BaseReaderNode):
                 'width': width,
                 'height': height,
                 'planes': plane_names,
-                'datetime': orgDateTime,
+                'datetime': info['datetime'],
                 'display_levels': display_levels,
                 'source_file': self.getRelativePath(filePath),
                 'demosaic': self.demosaicAlgorithm,
@@ -306,8 +291,8 @@ class RawReaderNode(BaseReaderNode):
             headers['raw'] = raw_headers
             
             # EXIF 追加
-            if headers_exif:
-                headers['exif'] = headers_exif
+            if exif_info:
+                headers['exif'] = exif_info
             
             outputFlowData = FlowData(headers)
             outputFlowData.setDimensions(width, height)
@@ -348,27 +333,16 @@ class RawReaderNode(BaseReaderNode):
         """RAWファイルの情報を取得（生データ）"""
         from utils import exif_helper as exif
 
-        try:
-            exif = exif.getExif(filePath)
-            return {
-                'filePath': filePath,
-                'datetime': exif.get('DateTime') if exif else None,
-                'width': exif.get('ImageWidth') if exif else None,
-                'height': exif.get('ImageLength') if exif else None,
-                'exposure': exif.get('ExposureTime') if exif else None,
-                'fnumber': exif.get('FNumber') if exif else None,
-                'iso': exif.get('ISOSpeedRatings') if exif else None
-            }
-        except Exception:
-            return {
-                'filePath': filePath,
-                'datetime': None,
-                'width': None,
-                'height': None,
-                'exposure': None,
-                'fnumber': None,
-                'iso': None
-            }
+        norm, _ = exif.getExif(filePath)
+        return {
+            'filePath': filePath,
+            'datetime': norm.get('datetime'     , None) if norm else None,
+            'width'   : norm.get('width'        , None) if norm else None,
+            'height'  : norm.get('height'       , None) if norm else None,
+            'exposure': norm.get('exposure_time', None) if norm else None,
+            'fnumber' : norm.get('f_number'     , None) if norm else None,
+            'iso'     : norm.get('iso_speed'    , None) if norm else None,
+        }
     
     def getConfigHash(self):
         config = f"{self.minorType}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
@@ -386,20 +360,20 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         return {
             'filename': 'ファイル名',
             'datetime': '撮影日時',
-            'size': '画像サイズ',
+            'size'    : '画像サイズ',
             'exposure': '露出',
-            'fnumber': 'F値',
-            'iso': 'ISO'
+            'fnumber' : 'F値',
+            'iso'     : 'ISO'
         }
     
     def getColumnWidths(self):
         return {
-            'filename': {'width': 40, 'stretch': True},
+            'filename': {'width':  40, 'stretch': True},
             'datetime': {'width': 120, 'stretch': False},
-            'size': {'width': 80, 'stretch': False, 'anchor': 'e'},
-            'exposure': {'width': 40, 'stretch': False, 'anchor': 'e'},
-            'fnumber': {'width': 40, 'stretch': False, 'anchor': 'e'},
-            'iso': {'width': 40, 'stretch': False, 'anchor': 'e'}
+            'size'    : {'width':  80, 'stretch': False, 'anchor': 'e'},
+            'exposure': {'width':  40, 'stretch': False, 'anchor': 'e'},
+            'fnumber' : {'width':  40, 'stretch': False, 'anchor': 'e'},
+            'iso'     : {'width':  40, 'stretch': False, 'anchor': 'e'}
         }
     
     def createSortButton(self, parent):

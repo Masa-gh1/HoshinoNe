@@ -2,17 +2,18 @@ powershell -command "exit [DateTime]::Today.ToString('yyyyMMdd')"
 set VERSION_DATE=%ERRORLEVEL%
 
 
-echo venv            > EXCLUDE.lst
-echo __pycache__    >> EXCLUDE.lst
-echo .vscode        >> EXCLUDE.lst
-echo .amazonq       >> EXCLUDE.lst
-echo debug          >> EXCLUDE.lst
-echo build          >> EXCLUDE.lst
-echo dist           >> EXCLUDE.lst
-echo HoshinoNe.spec >> EXCLUDE.lst
+echo venv\           > EXCLUDE.lst
+echo __pycache__\   >> EXCLUDE.lst
+echo .git\          >> EXCLUDE.lst
+echo .vscode\       >> EXCLUDE.lst
+echo .amazonq\      >> EXCLUDE.lst
+echo debug\         >> EXCLUDE.lst
+echo build\         >> EXCLUDE.lst
+echo dist\          >> EXCLUDE.lst
+echo sample\        >> EXCLUDE.lst
 echo .CR2           >> EXCLUDE.lst
-echo sample         >> EXCLUDE.lst
 echo Thumbs.db      >> EXCLUDE.lst
+echo EXCLUDE.lst    >> EXCLUDE.lst
 echo .bak           >> EXCLUDE.lst
 xcopy /E /S /EXCLUDE:EXCLUDE.lst .             ..\HoshinoNe_%VERSION_DATE%_src
 xcopy /E /S                      .\dist        ..\HoshinoNe_%VERSION_DATE%

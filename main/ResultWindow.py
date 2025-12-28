@@ -7,6 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from fractions import Fraction
 import json
 import sys
 import traceback
@@ -265,6 +266,8 @@ class ResultWindow(tk.Toplevel):
                         return float(obj)
                     elif isinstance( obj, LazyHeadersDict):
                         return dict(obj)
+                    elif isinstance( obj, Fraction):
+                        return str(obj)
                     else:
                         return json.JSONEncoder.default(self, obj)
             

@@ -45,16 +45,13 @@ HEADERS_EXIF = [
     #############################################################
     # 0th IFD TIFF Tag
     #   id  name                             型         個数     id    名称
-    (  256, "ImageWidth"                   , int     ,     1), # 0100h 画像の幅
-    (  257, "ImageLength"                  , int     ,     1), # 0101h 画像の高さ
-    (  258, "BitsPerSample"                , int     ,     1), # 0102h 画像のビットの深さ
     (  306, "DateTime"                     , str     ,    20), # 0132h ファイル変更日時
     #############################################################
     # 0th IFD Exif Private Tag
     #   id  name                             型         個数     id    名称
     (33434, "ExposureTime"                 , Fraction,     1), # 829Ah 露出時間
     (33437, "FNumber"                      , Fraction,     1), # 829Dh F ナンバー
-    (34867, "ISOSpeed"                     , int     ,     1), # 8833h ISO スピード
+    (34855, "PhotographicSensitivity"      , int     ,  None), # 8827h 撮影感度
     (36867, "DateTimeOriginal"             , str     ,    20), # 9003h 原画像データの生成日時
     (36868, "DateTimeDigitized"            , str     ,    20), # 9004h デジタルデータの作成日時
     (37386, "FocalLength"                  , Fraction,     1), # 920Ah レンズ焦点距離
@@ -67,9 +64,9 @@ HEADERS_EXIF_OPT = [
     #############################################################
     # 0th IFD TIFF Tag
     #   id  name                             型         個数     id    名称
-#    (  256, "ImageWidth"                   , int     ,     1), # 0100h 画像の幅
-#    (  257, "ImageLength"                  , int     ,     1), # 0101h 画像の高さ
-#    (  258, "BitsPerSample"                , int     ,     1), # 0102h 画像のビットの深さ
+    (  256, "ImageWidth"                   , int     ,     1), # 0100h 画像の幅
+    (  257, "ImageLength"                  , int     ,     1), # 0101h 画像の高さ
+    (  258, "BitsPerSample"                , int     ,     1), # 0102h 画像のビットの深さ
 #    (  259, "Compression"                  , int     ,     1), # 0103h 圧縮の種類
 #    (  262, "PhotometricInterpretation"    , int     ,     1), # 0106h 画素構成
 #    (  270, "ImageDescription"             , str     ,  None), # 010Eh 画像タイトル
@@ -108,10 +105,10 @@ HEADERS_EXIF_OPT = [
 #    (34852, "SpectralSensitivity"          , str     ,  None), # 8824h スペクトル感度
 #    (34855, "PhotographicSensitivity"      , int     ,  None), # 8827h 撮影感度
 #    (34856, "OECF"                         , None    ,  None), # 8828h 光電変換関数
-#    (34864, "SensitivityType"              , int     ,     1), # 8830h 感度種別
-#    (34865, "StandardOutputSensitivity"    , int     ,     1), # 8831h 標準出力感度
-#    (34866, "RecommendedExposureIndex"     , int     ,     1), # 8832h 推奨露光指数
-#    (34867, "ISOSpeed"                     , int     ,     1), # 8833h ISO スピード
+    (34864, "SensitivityType"              , int     ,     1), # 8830h 感度種別
+    (34865, "StandardOutputSensitivity"    , int     ,     1), # 8831h 標準出力感度
+    (34866, "RecommendedExposureIndex"     , int     ,     1), # 8832h 推奨露光指数
+    (34867, "ISOSpeed"                     , int     ,     1), # 8833h ISO スピード
 #    (34868, "ISOSpeedLatitudeyyy"          , int     ,     1), # 8834h ISO スピードラチチュード yyy
 #    (34869, "ISOSpeedLatitudezzz"          , int     ,     1), # 8835h ISO スピードラチチュード zzz
 #    (36864, "ExifVersion"                  , None    ,     4), # 9000h Exif バージョン
@@ -132,13 +129,13 @@ HEADERS_EXIF_OPT = [
 #    (37396, "SubjectArea"                  , int     ,  None), # 9214h 被写体領域
 #    (37500, "MakerNote"                    , None    ,  None), # 927Ch メーカノート
 #    (37510, "UserComment"                  , None    ,  None), # 9286h ユーザコメント
-#    (37520, "SubSecTime"                   , str     ,  None), # 9290h DateTime のサブセック
-#    (37521, "SubSecTimeOriginal"           , str     ,  None), # 9291h DateTimeOriginal のサブセック
-#    (37522, "SubSecTimeDigitized"          , str     ,  None), # 9292h DateTimeDigitized のサブセック
+    (37520, "SubSecTime"                   , str     ,  None), # 9290h DateTime のサブセック
+    (37521, "SubSecTimeOriginal"           , str     ,  None), # 9291h DateTimeOriginal のサブセック
+    (37522, "SubSecTimeDigitized"          , str     ,  None), # 9292h DateTimeDigitized のサブセック
 #    (40960, "FlashpixVersion"              , None    ,     4), # A000h 対応フラッシュピックスバージョン
 #    (40961, "ColorSpace"                   , int     ,     1), # A001h 色空間情報
-#    (40962, "PixelXDimension"              , int     ,     1), # A002h 実効画像幅
-#    (40963, "PixelYDimension"              , int     ,     1), # A003h 実効画像高さ
+    (40962, "PixelXDimension"              , int     ,     1), # A002h 実効画像幅
+    (40963, "PixelYDimension"              , int     ,     1), # A003h 実効画像高さ
 #    (40964, "RelatedSoundFile"             , str     ,    13), # A004h 関連音声ファイル
 #    (40965, " Interoperability IFD Pointer", int     ,     1), # A005h 互換性 IFD へのポインタ
 #    (41483, "FlashEnergy"                  , Fraction,     1), # A20Bh フラッシュ強度

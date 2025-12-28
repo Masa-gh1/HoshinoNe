@@ -9,3 +9,4 @@ __pycache__
 *.DNG
 *.fits
 /debug
+/sample/test/light_jpeg

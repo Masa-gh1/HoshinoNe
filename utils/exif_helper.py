@@ -34,7 +34,8 @@ except ImportError:
 def getExif(filepath):
     """EXIF情報を取得（キャッシュ付き）"""
     if filepath in _exif_cache:
-        return _exif_cache[filepath]
+        result = _exif_cache[filepath]
+        return _normalize(result), result
     
     attr = {}
     
@@ -63,13 +64,15 @@ def getExif(filepath):
     expectedTags = {id for id, _, _, _ in (HEADERS_EXIF)}
     missingTags = [id for id in expectedTags if id not in attr]
     
-    if Debug.LEVEL_NONE < Debug.LEVEL and missingTags:
+    result = {tagMap[id]:value for id, value in attr.items()} if attr else None
+    norm = _normalize(result)
+
+    if Debug.LEVEL_NONE < Debug.LEVEL and None in norm.values():
         # デバッグ出力
         _debugMissingTags(filepath, missingTags, pil_exif, exifread_tags)
     
-    result = {tagMap[id]:value for id, value in attr.items()} if attr else None
     _exif_cache[filepath] = result
-    return result
+    return norm, result
 
 def _getPilExif(filepath):
     """PILからEXIF情報を取得"""
@@ -146,6 +149,67 @@ def _getExifread(filepath):
     
     return result, allExif
 
+def _normalize(exif):
+    """EXIF から画像処理に必要な情報を取り出す"""
+    result = {}
+
+    if not exif:
+        return result
+
+    # 画像処理に必要な情報
+    reqTag = [
+        ("PixelXDimension"         , "width"                      ), # 40962 0100h 画像の幅
+        ("ImageWidth"              , "width"                      ), #   256 0100h 画像の幅
+        ("PixelYDimension"         , "height"                     ), # 40963 0101h 画像の高さ
+        ("ImageLength"             , "height"                     ), #   257 0101h 画像の高さ
+        ("BitsPerSample"           , "bits_per_sample"            ), #   258 0102h 画像のビットの深さ
+        (None                      , "datetime"                   ), # ----- ----- 記録時刻
+        ("ExposureTime"            , "exposure_time"              ), # 33434 829Ah 露出時間
+        ("FNumber"                 , "f_number"                   ), # 33437 829Dh F ナンバー
+        (None                      , "iso_speed"                  ), # ----- ----- 撮影感度
+        ("FocalLength"             , "focal_length"               ), # 37386 920Ah レンズ焦点距離
+        ("FocalPlaneXResolution"   , "focal_plane_x_resolution"   ), # 41486 A20Eh 焦点面の幅の解像度
+        ("FocalPlaneYResolution"   , "focal_plane_y_resolution"   ), # 41487 A20Fh 焦点面の高さの解像度
+        ("FocalPlaneResolutionUnit", "focal_plane_resolution_unit"), # 41488 A210h 焦点面解像度単位
+    ]
+
+    for tag, name in reqTag:
+        if name in result and result[name]:
+            pass
+        elif tag and tag in exif:
+            result[name] = exif[tag]
+        elif tag:
+            result[name] = None
+        elif "datetime" == name:
+            for tag,sub in [("DateTime","SubSecTime"), ("DateTimeDigitized","SubSecTimeOriginal"), ("DateTimeOriginal","SubSecTimeDigitized")]:
+                if tag in exif:
+                    dateTime = toDatetime(exif[tag], exif[sub] if sub in exif else None)
+                    result["datetime"] = dateTime.strftime("%Y-%m-%d %H:%M:%S.%f") if dateTime else None
+        elif "iso_speed" == name:
+            if not "SensitivityType" in exif:
+                result[name] = exif["PhotographicSensitivity"]
+            elif 1 == exif["SensitivityType"]:
+                result[name] = exif["StandardOutputSensitivity"]
+            elif 2 == exif["SensitivityType"]:
+                result[name] = exif["RecommendedExposureIndex"]
+            elif 3 == exif["SensitivityType"]:
+                result[name] = exif["ISOSpeed"]
+            elif 4 == exif["SensitivityType"]:
+                result[name] = exif["StandardOutputSensitivity"]
+            elif 5 == exif["SensitivityType"]:
+                result[name] = exif["RecommendedExposureIndex"]
+            elif 6 == exif["SensitivityType"]:
+                result[name] = exif["RecommendedExposureIndex"]
+            elif 7 == exif["SensitivityType"]:
+                result[name] = exif["RecommendedExposureIndex"]
+            elif "PhotographicSensitivity" in exif:
+                result[name] = exif["PhotographicSensitivity"]
+        else:
+            result[name] = None
+    
+    return result
+
+
 def _debugMissingTags(filepath, missing_tags, pil_exif, exifread_tags):
     """不足しているEXIFタグをデバッグ出力"""
     if missing_tags:
@@ -160,20 +224,27 @@ def _debugMissingTags(filepath, missing_tags, pil_exif, exifread_tags):
             print(f"Debug: Available exifread EXIF tags:", file=sys.stderr)
             for id, value in exifread_tags.items():
                 name = TAGS.get(id, id)
-                if len(str(value)) < 100:
-                    print(f"  {id}: {name} = {value}", file=sys.stderr)
+                if isinstance(value.values, (tuple,list)) and 0 < len(value.values):
+                    s = f"({",".join([str(v) for v in value.values])})"
+                    s = s if len(s)<100 else s[:100] + " ..."
+                else:
+                    s = str(value.values)
+                
+                print(f"  {id}: {name} = {s} {value}", file=sys.stderr)
 
 def clearCache():
     """キャッシュをクリア"""
     global _exif_cache
     _exif_cache.clear()
 
-def toDatetime(exifdt):
+def toDatetime(exifdt, exifsubsec = None):
     """EXIF の日時文字列を datetime オブジェクトに変換"""
     if not exifdt:
         return None
     elif not exifdt.replace(":", "").strip(): # 不明の場合、: だけか、すべて空白 (Exif 2.3)
         return None
+    elif exifsubsec:
+        return datetime.datetime.strptime(exifdt+"."+exifsubsec, "%Y:%m:%d %H:%M:%S.%f")
     else:
         return datetime.datetime.strptime(exifdt, "%Y:%m:%d %H:%M:%S")
 
