@@ -42,9 +42,9 @@ MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024//ESTIMATE_SIZE_PER
 def getDatetime(exif):
     from utils import exif_helper
     result = None
-    for tag,sub in [("DateTime"         ,"SubSecTime"         ), #   306 ファイル変更日時
-                    ("DateTimeDigitized","SubSecTimeDigitized"), # 36868 デジタルデータの作成日時
-                    ("DateTimeOriginal" ,"SubSecTimeOriginal" ), # 36867 原画像データの生成日時
+    for tag,sub in [("DateTime"         ,"SubSecTime"         ), #   306 0132h ファイル変更日時
+                    ("DateTimeDigitized","SubSecTimeDigitized"), # 36868 9004h デジタルデータの作成日時
+                    ("DateTimeOriginal" ,"SubSecTimeOriginal" ), # 36867 9003h 原画像データの生成日時
                     ]:
         if tag in exif:
             dateTime = exif_helper.toDatetime(exif[tag], exif[sub] if sub in exif else None)
@@ -53,35 +53,34 @@ def getDatetime(exif):
 
 def getIsoSpeed(exif):
     result = None
-    if "SensitivityType" in exif:                      # 34864 感度種別
+    if "SensitivityType" in exif:                      # 34864 8830h 感度種別
         SensitivityType = exif["SensitivityType"]
         if   1 == SensitivityType:
-            result = exif["StandardOutputSensitivity"] # 34865 標準出力感度
+            result = exif["StandardOutputSensitivity"] # 34865 8831h 標準出力感度
         elif 2 == SensitivityType:
-            result = exif["RecommendedExposureIndex"]  # 34866 推奨露光指数
+            result = exif["RecommendedExposureIndex"]  # 34866 8832h 推奨露光指数
         elif 3 == SensitivityType:
             result = exif["ISOSpeed"]                  # 34867 ISO スピード
         elif 4 == SensitivityType:
-            result = exif["StandardOutputSensitivity"] # 34865 標準出力感度
+            result = exif["RecommendedExposureIndex"]  # 34866 8832h 推奨露光指数
         elif 5 == SensitivityType:
-            result = exif["RecommendedExposureIndex"]  # 34866 推奨露光指数
+            result = exif["ISOSpeed"]                  # 34867 ISO スピード
         elif 6 == SensitivityType:
-            result = exif["RecommendedExposureIndex"]  # 34866 推奨露光指数
+            result = exif["ISOSpeed"]                  # 34867 ISO スピード
         elif 7 == SensitivityType:
-            result = exif["RecommendedExposureIndex"]  # 34866 推奨露光指数
+            result = exif["ISOSpeed"]                  # 34867 ISO スピード
     elif "PhotographicSensitivity" in exif:
-        result = exif["PhotographicSensitivity"]       # 34855 撮影感度
+        result = exif["PhotographicSensitivity"]       # 34855 8827h 撮影感度
     else:
         result = None
     
     return result
 
-# 画像読み書きノードで使用する
-# データヘッダに含める Exif
+# 画像読み書きノードで使用するヘッダに含める項目
 # HEADERS は天体写真加工に欲しい情報
 # HEADERS_EXIF は EXIF の読み書き対象とする情報
 HEADERS = [
-    # name                          tag                            id          名称
+    # name                          Exif tag                       Exif id     名称
     ("width"                      , "ImageWidth"              ), #   256 0100h 画像の幅
     ("width"                      , "PixelXDimension"         ), # 40962 0100h 画像の幅
     ("height"                     , "ImageLength"             ), #   257 0101h 画像の高さ
