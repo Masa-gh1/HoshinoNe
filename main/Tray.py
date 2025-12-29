@@ -42,7 +42,7 @@ class Tray:
         # 右クリックメニュー
         self.contextMenu = tk.Menu(self.canvas, tearoff=0)
         for nodeType, label in NodeFactory.getMenuItems():
-            if nodeType == 'separator':
+            if '---' in nodeType:
                 self.contextMenu.add_separator()
             else:
                 self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.editor.addNodeAtPosition(nt))

@@ -82,11 +82,11 @@ class FlowEditor:
         
         # 右クリックメニュー
         self.contextMenu = tk.Menu(self.root, tearoff=0)
-        for nodeName, label in NodeFactory.getMenuItems():
-            if '---' in nodeName:
+        for nodeType, label in NodeFactory.getMenuItems():
+            if '---' in nodeType:
                 self.contextMenu.add_separator()
             else:
-                self.contextMenu.add_command(label=label, command=lambda nt=nodeName: self.addNodeAtPosition(nt))
+                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt))
         
         self.contextMenu.add_separator()
         self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
