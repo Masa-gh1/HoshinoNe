@@ -29,14 +29,10 @@ class NegateNode(LazyNNOperationNode):
         return NegateLazyFlowData(inputData)
 
 class NegateLazyFlowData(LazyFlowData):
-    def operation(self, flowData, planeIndex, x, y):
+    def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from base import DataBlock
 
-        block = flowData.getBlock(planeIndex, x, y)
-        if not block:
-            return block
-        
         result = -block.data
         return DataBlock(result, planeIndex, x, y)
     

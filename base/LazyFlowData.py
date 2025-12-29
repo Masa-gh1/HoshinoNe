@@ -46,15 +46,22 @@ class LazyFlowData(FlowData):
             self.setBlock(block)
             return block
     
-    def operation(self, flowData, planeIndex, x, y):
+    def operation(self, flowData, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
-        return None
+        block = flowData.getBlock(planeIndex, x, y)
+        if not block:
+            return block
+        return self.blockOperation(block, planeIndex, x, y, *args, **kwargs)
+
+    def blockOperation(self, block, planeIndex, x, y, *args, **kwargs):
+        """遅延評価を実行"""
+        return block
 
     def getLazyHeaderkeys(self):
         """遅延評価対象の header キーを取得"""
         return []
 
-    def headerOperation(self, lazyFlowData, key):
+    def headerOperation(self, lazyFlowData, key, *args, **kwargs):
         """headers 遅延評価"""
         return {}
 

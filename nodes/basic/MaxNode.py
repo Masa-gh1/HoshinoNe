@@ -58,13 +58,9 @@ class MaxNode(LazyNNOperationNode, PolynomialOperationMixin):
         return MaxLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
     
 class MaxLazyFlowData(LazyFlowData, PolynomialOperationMixin):
-    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         import numpy as np
         from base import DataBlock
-        
-        block = flowData.getBlock(planeIndex, x, y)
-        if not block:
-            return block
         
         result = block.data
         

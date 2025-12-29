@@ -29,14 +29,10 @@ class InverseNode(LazyNNOperationNode):
         return InverseLazyFlowData(inputData)
 
 class InverseLazyFlowData(LazyFlowData):
-    def operation(self, flowData, planeIndex, x, y):
+    def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from utils import numpy_helpers as nh
         from base import DataBlock
-
-        block = flowData.getBlock(planeIndex, x, y)
-        if not block:
-            return block
         
         arr = block.data
         with np.errstate(divide='ignore', invalid='ignore'):
