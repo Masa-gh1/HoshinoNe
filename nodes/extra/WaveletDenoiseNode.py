@@ -82,7 +82,10 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         from utils import numpy_helpers as nh
         from base import DataBlock
 
-        data = nh.array(block.data)
+        planeIndex = block.planeIndex
+        x, y = block.x, block.y
+
+        data = block.data
         
         # NaN値を事前に検出
         nan_mask = np.isnan(data)
@@ -90,7 +93,7 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
             return block  # 全てNaNの場合はそのまま返す
         
         # 結果を初期化（NaN値を保持）
-        result = data.copy()
+        result = data
         
         # 有効値（NaN以外）のみ処理
         if np.any(~nan_mask):
@@ -137,7 +140,7 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
             # 有効値のみ結果に反映
             result = np.where(nan_mask, data, denoised)
         
-        return DataBlock(result, block.planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, x, y)
     
     def _calculate_max_levels(self, shape):
         """データサイズに基づいて適切な最大分解レベルを計算"""
