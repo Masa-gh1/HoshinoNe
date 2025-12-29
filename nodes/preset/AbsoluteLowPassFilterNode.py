@@ -60,36 +60,24 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         return lazyFlowData
     
 class AbsoluteLowPassFilterLazyFlowData(LazyFlowData, PolynomialOperationMixin):
-    def operation(self, flowData, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         import numpy as np
         from utils import numpy_helpers as nh
         from base import DataBlock
-
-        block = flowData.getBlock(planeIndex, x, y)
-        if not block:
-            return block
         
         result = block.data
         
         # auxiliary polynomialから閾値を取得
         if combinedAuxiliaryPolynomial:
             polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            mask = np.abs(result) > polynomialValues
+            mask = polynomialValues < np.abs(result)
             result = np.where(mask, nh.nan, result)
         
         # auxiliary tableから閾値を取得
         if combinedAuxiliaryTable:
             auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
             if auxiliaryBlock:
-                mask = np.abs(result) > auxiliaryBlock.data
+                mask = auxiliaryBlock.data < np.abs(result)
                 result = np.where(mask, nh.nan, result)
         
         return DataBlock(result, planeIndex, x, y)
-    
-    def getLazyHeaderkeys(self):
-        return ['display_levels']
-    
-    def headerOperation(self, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        # フィルター処理では元の範囲を保持（一部がNaNになるだけ）
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        return {'display_levels': inputLevels} if inputLevels else None

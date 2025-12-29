@@ -77,13 +77,10 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
     def createSettingWindow(self):
         return ToneCurveDialog( self.view.editor.root, self)
         
-    def processBlock(self, block):
+    def processBlock(self, block, planeIndex, x, y):
         import numpy as np
         from scipy.interpolate import interp1d, CubicSpline
         from base import DataBlock
-
-        planeIndex = block.planeIndex
-        x, y = block.x, block.y
         
         # DataBlockから実際のデータを取得
         data = block.data

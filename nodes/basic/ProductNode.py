@@ -87,16 +87,13 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
             'exclusive_upper': maxProduct
         }
     
-    def processBlock(self, block, inputDatas):
+    def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの乗算処理"""
         import numpy as np
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
         from base import DataBlock
 
-        planeIndex = block.planeIndex
-        x, y = block.x, block.y
-        
         resultWidth, resultHeight = self.getResultDimensions(inputDatas)
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)

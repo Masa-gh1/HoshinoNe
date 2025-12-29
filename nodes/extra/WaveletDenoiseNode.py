@@ -75,16 +75,13 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         config = f"{self.wavelet}_{self.levels}_{self.sigma}_{self.star_threshold}_{self.star_protection}_{self.protection_radius}"
         return hashlib.md5(config.encode()).hexdigest()
     
-    def processBlock(self, block):
+    def processBlock(self, block, planeIndex, x, y):
         """ウェーブレットノイズ除去処理"""
         import numpy as np
         import pywt
         from utils import numpy_helpers as nh
         from base import DataBlock
-
-        planeIndex = block.planeIndex
-        x, y = block.x, block.y
-
+        
         data = block.data
         
         # NaN値を事前に検出

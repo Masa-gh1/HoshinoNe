@@ -82,15 +82,12 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
             'exclusive_upper': maxSum
         }
     
-    def processBlock(self, block, inputDatas):
+    def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの加算処理"""
         import numpy as np
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
         from base import DataBlock
-        
-        planeIndex = block.planeIndex
-        x, y = block.x, block.y
         
         resultWidth, resultHeight = self.getResultDimensions(inputDatas)
         
