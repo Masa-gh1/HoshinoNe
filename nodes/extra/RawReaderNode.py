@@ -63,14 +63,8 @@ class RawReaderNode(BaseReaderNode):
         
     def getText(self):
         """ノードのテキストを取得"""
-        if self.filePaths:
-            if len(self.filePaths) == 1:
-                displayText = f"{self.name}\n{os.path.basename(self.filePaths[0])}\nproc: {self.demosaicAlgorithm}"
-            else:
-                dirname = os.path.dirname(self.filePaths[0])
-                displayText = f"{self.name}\n{os.path.basename(dirname)} ... 計{len(self.filePaths)}\nproc: {self.demosaicAlgorithm}"
-        else:
-            displayText = "{self.name}\n未選択"
+        displayText = super().getText()
+        displayText += f"\nproc: {self.demosaicAlgorithm}"
         return displayText
     
     def store(self, nodeData):
