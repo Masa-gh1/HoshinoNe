@@ -66,18 +66,18 @@ class PowerLazyFlowData(LazyFlowData, PolynomialOperationMixin):
         if not block:
             return block
         
-        result = block.data.copy()
+        result = block.data
         is_complex = np.iscomplexobj(result)
         
         # auxiliary polynomialを指数として冪乗
         if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
             power_result = np.power(result, polynomialValues)
             result = power_result if is_complex else np.real(power_result)
         
         # auxiliary tableを指数として冪乗
         if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
             if auxiliaryBlock:
                 power_result = np.power(result, auxiliaryBlock.data)
                 result = power_result if is_complex else np.real(power_result)

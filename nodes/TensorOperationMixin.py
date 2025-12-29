@@ -26,7 +26,7 @@ class TensorOperationMixin:
 
         for planeIndex in range(tensorDatas[0].getPlaneCount()):
             block = tensorDatas[0].getBlock(planeIndex,0,0)
-            data = block.data.copy()
+            data = block.data
             
             # 残りの tensor を順次適用
             for tensorData in tensorDatas[1:]:

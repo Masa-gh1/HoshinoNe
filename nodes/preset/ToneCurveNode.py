@@ -81,8 +81,8 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         from scipy.interpolate import interp1d, CubicSpline
         from base import DataBlock
 
-        if block is None:
-            return None
+        planeIndex = block.planeIndex
+        x, y = block.x, block.y
         
         # DataBlockから実際のデータを取得
         data = block.data
@@ -91,7 +91,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         nan_mask = np.isnan(data)
         if np.all(nan_mask):
             # 全てNaNの場合はそのまま返す
-            return DataBlock(data, block.planeIndex, block.x, block.y)
+            return DataBlock(data, planeIndex, x, y)
         
         # トーンカーブ関数を作成
         sortedPoints = sorted(self.controlPoints, key=lambda p: p[0])
@@ -145,7 +145,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         result[valid_mask] = processedData
         
         # 新しいDataBlockを作成して返す
-        return DataBlock(result, block.planeIndex, block.x, block.y)
+        return DataBlock(result, planeIndex, x, y)
     
     def applySettings(self, inputMin, inputEnd, outputMin, outputEnd, controlPoints, boundaryCondition):
         self.displayMin = inputMin

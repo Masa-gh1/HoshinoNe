@@ -66,16 +66,16 @@ class ScaleLazyFlowData(LazyFlowData, PolynomialOperationMixin):
         if not block:
             return block
         
-        result = block.data.copy()
+        result = block.data
         
         # auxiliary polynomialを乗算
         if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
             result = np.multiply(result, polynomialValues)
         
         # auxiliary tableを乗算
         if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
             if auxiliaryBlock:
                 result = np.multiply(result, auxiliaryBlock.data)
         

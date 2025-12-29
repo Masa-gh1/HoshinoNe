@@ -69,17 +69,17 @@ class AbsoluteLowPassFilterLazyFlowData(LazyFlowData, PolynomialOperationMixin):
         if not block:
             return block
         
-        result = block.data.copy()
+        result = block.data
         
         # auxiliary polynomialから閾値を取得
         if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, block.planeIndex, block.x, block.y, result.shape, defaultValue=1.0)
+            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
             mask = np.abs(result) > polynomialValues
             result = np.where(mask, nh.nan, result)
         
         # auxiliary tableから閾値を取得
         if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, block.x, block.y)
+            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
             if auxiliaryBlock:
                 mask = np.abs(result) > auxiliaryBlock.data
                 result = np.where(mask, nh.nan, result)
