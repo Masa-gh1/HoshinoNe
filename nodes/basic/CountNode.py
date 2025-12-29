@@ -43,15 +43,12 @@ class CountNode(N1BlockOperationNode):
             'exclusive_upper': float(dataCount)
         }
     
-    def processBlock(self, block, inputDatas):
+    def processBlock(self, block, inputDatas, planeIndex, x, y):
         """単一ブロックのカウント処理"""
         import numpy as np
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
         from base import DataBlock
-
-        planeIndex = block.planeIndex
-        x, y = block.x, block.y
         
         # データタイプを分類
         polynomialDatas = []

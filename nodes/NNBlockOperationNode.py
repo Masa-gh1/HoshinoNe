@@ -60,7 +60,9 @@ class NNBlockOperationNode(FlowNode):
             
             # ブロック単位で並列処理
             for block in inputData.iterateBlocks():
-                future = ProcessExecutorInNode.submit(self, self.processBlock, block)
+                planeIndex = block.planeIndex
+                x, y = block.x, block.y
+                future = ProcessExecutorInNode.submit(self, self.processBlock, block, planeIndex, x, y)
                 futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待つ
@@ -98,7 +100,7 @@ class NNBlockOperationNode(FlowNode):
             outputFlowData.headers['display_levels'] = inputFlowData.headers['display_levels']
     
     @abstractmethod
-    def processBlock(self, block):
+    def processBlock(self, block, planeIndex, x, y):
         """単一ブロックの処理（サブクラスで実装）
         
         Args:

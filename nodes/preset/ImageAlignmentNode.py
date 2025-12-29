@@ -154,7 +154,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         return primaryDatas
     
-    def processBlock(self, block):
+    def processBlock(self, block, planeIndex, x, y):
         """ブロック単位での位置合わせ処理"""
         if block is None:
             return None
