@@ -74,7 +74,7 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
             'exclusive_upper': levelMax
         }
     
-    def processBlock(self, block, inputDatas, planeIndex, x, y):
+    def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの最大処理"""
         import numpy as np
         from config import BLOCK_SIZE

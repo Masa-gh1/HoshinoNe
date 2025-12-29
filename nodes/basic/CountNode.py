@@ -43,7 +43,7 @@ class CountNode(N1BlockOperationNode):
             'exclusive_upper': float(dataCount)
         }
     
-    def processBlock(self, block, inputDatas, planeIndex, x, y):
+    def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックのカウント処理"""
         import numpy as np
         from config import BLOCK_SIZE
@@ -63,7 +63,7 @@ class CountNode(N1BlockOperationNode):
         
         # 全てpolynomialの場合はpolynomial数を返す
         if len(polynomialDatas) == len(inputDatas):
-            return self._processPolynomialCount(block, polynomialDatas)
+            return self._processPolynomialCount(planeIndex, polynomialDatas)
         else:
             # table と polynomial の混在または table のみの場合
             resultWidth, resultHeight = self.getResultDimensions(inputDatas)
@@ -88,13 +88,11 @@ class CountNode(N1BlockOperationNode):
             
             return DataBlock(result, planeIndex, x, y)
     
-    def _processPolynomialCount(self, block, polynomialDatas):
+    def _processPolynomialCount(self, planeIndex, polynomialDatas):
         """全てpolynomialの場合のカウント処理"""
         import numpy as np
         from base import DataBlock
 
-        planeIndex = block.planeIndex
-        
         # 最初のpolynomialの係数行列を取得してサイズを決定
         firstPolynomial = polynomialDatas[0]
         coeffBlock = firstPolynomial.getBlock(planeIndex, 0, 0)
