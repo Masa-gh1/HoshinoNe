@@ -43,21 +43,13 @@ class AutoLevelsNode(FlowNode):
                 planeCount = inputData.getPlaneCount()
                 
                 # 全画像データを読み込み
-                imageData = nh.zeros((height, width))
-                
-                for planeIndex in range(planeCount):
-                    for y in range(0, height, BLOCK_SIZE):
-                        for x in range(0, width, BLOCK_SIZE):
-                            block = inputData.getBlock(planeIndex, x, y)
-                            if block:
-                                blockHeight = min(block.getHeight(), height - y)
-                                blockWidth = min(block.getWidth(), width - x)
-                                endY = y + blockHeight
-                                endX = x + blockWidth
-                                imageData[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
+                blockArrays = []
+                for block in inputData.iterateBlocks():
+                    blockArrays.append(block.data.flatten())
+                data = np.concatenate(blockArrays)
                 
                 # NaN値を除外して1%と99%のパーセンタイルを計算
-                validData = imageData[~np.isnan(imageData)]
+                validData = data[~np.isnan(data)]
                 if len(validData) > 0:
                     p1 = np.percentile(validData, 1)
                     p99 = np.percentile(validData, 99)
