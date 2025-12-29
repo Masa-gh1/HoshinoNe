@@ -7,6 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from fractions import Fraction
 import hashlib
 import datetime
 import os
@@ -168,29 +169,33 @@ class FitsReaderNode(BaseReaderNode):
                 for key, value in hduHeader.items():
                     if key and value is not None:
                         fits_header[key] = str(value)
-                
+
                 # 観測日時を取得
                 date_obs = None
-                for date_key in ['DATE-OBS', 'DATE', 'DATEOBS']:
+                dateTime = '    :  :     :  :  '
+                subsec   = ''
+                for date_key in ['DATE-OBS', 'DATEOBS', 'DATE']:
                     if date_key in hduHeader:
                         try:
                             obs_date_str = str(hduHeader[date_key])
                             dt = datetime.datetime.fromisoformat(obs_date_str)
                             date_obs = dt.strftime('%Y-%m-%d %H:%M:%S.%f')
+                            dateTime = dt.strftime('%Y:%m:%d %H:%M:%S')
+                            subsec   = obs_date_str[obs_date_str.index('.')+1:] if '.' in obs_date_str else ''
                             break
                         except:
                             continue
                 
                 headers = {
-                    'type': 'image',
-                    'mode': mode,
-                    'width': width,
-                    'height': height,
-                    'planes': plane_names,
-                    'datetime': date_obs,
+                    'type'          : 'image',
+                    'mode'          : mode,
+                    'width'         : width,
+                    'height'        : height,
+                    'planes'        : plane_names,
+                    'datetime'      : date_obs,
                     'display_levels': display_levels,
-                    'source_file': self.getRelativePath(filePath),
-                    'context_index': hduIndex,
+                    'source_file'   : self.getRelativePath(filePath),
+                    'context_index' : hduIndex,
                 }
 
                 # bayer 情報を追加
@@ -203,18 +208,38 @@ class FitsReaderNode(BaseReaderNode):
 
                 # EXIF 追加
                 headers['exif'] = {
-                    'Make'             : str(hduHeader.get('ORIGIN', '')),
-                    'Model'            : str(hduHeader.get('TELESCOP', '')),
-                    'ImageWidth'       : int(hduHeader.get('NAXIS1', 0)),
-                    'ImageLength'      : int(hduHeader.get('NAXIS2', 0)),
-                    'LensModel'        : str(hduHeader.get('CAMERA', '')),
-                    'FocalLength'      : float(hduHeader.get('FOCALLEN', 0)),
-                    'FNumber'          : 0,
-                    'ExposureTime'     : float(hduHeader.get('EXPTIME', 0)),
-                    'ISOSpeedRatings'  : 0,
-                    'DateTimeOriginal' : date_obs,
-                    'DateTimeDigitized': date_obs,
-                    'DateTime'         : date_obs,
+                    'ImageWidth'               : int(         hduHeader.get('NAXIS1'  ,  0)             ), #   256 0100h 画像の幅
+                    'ImageLength'              : int(         hduHeader.get('NAXIS2'  ,  0)             ), #   257 0101h 画像の高さ
+                    'BitsPerSample'            : int(         hduHeader.get('BITPIX'  ,  0)             ), #   258 0102h 画像のビットの深さ
+                    'Make'                     : str(         hduHeader.get('ORIGIN'  , '')             ), #   271 010Fh 画像入力機器のメーカ名
+                    'Model'                    : str(         hduHeader.get('TELESCOP', '')             ), #   272 0110h 画像入力機器のモデル名
+                   #'Orientation'              : int(                                                   ), #   274 0112h 画像方向
+                    'XResolution'              : Fraction(                                     72,     1), #   282 011Ah 画像の幅の解像度
+                    'YResolution'              : Fraction(                                     72,     1), #   283 011Bh 画像の高さの解像度
+                    'ResolutionUnit'           : 2                                                       , #   296 0128h 画像の幅と高さの解像度の単位
+                    'DateTime'                 : dateTime                                                , #   306 0132h ファイル変更日時
+                   #'Artist'                   : str(                                                   ), #   315 013Bh アーティスト
+                   #'Copyright'                : str(                                                   ), # 33432 8298h 撮影著作権者/編集著作権者
+                    'ExposureTime'             : Fraction(int(hduHeader.get('EXPTIME' ,  0)*1000),  1000), # 33434 829Ah 露出時間
+                   #'FNumber'                  : Fraction(                                              ), # 33437 829Dh F ナンバー
+                   #'PhotographicSensitivity'  : int(                                                   ), # 34855 8827h 撮影感度
+                   #'SensitivityType'          : int(                                                   ), # 34864 8830h 感度種別
+                   #'StandardOutputSensitivity': int(                                                   ), # 34865 8831h 標準出力感度
+                   #'RecommendedExposureIndex' : int(                                                   ), # 34866 8832h 推奨露光指数
+                   #'ISOSpeed'                 : int(                                                   ), # 34867 8833h ISO スピード
+                    'DateTimeOriginal'         : dateTime                                                , # 36867 9003h 原画像データの生成日時
+                    'DateTimeDigitized'        : dateTime                                                , # 36868 9004h デジタルデータの作成日時
+                    'FocalLength'              : Fraction(int(hduHeader.get('FOCALLEN',  0))             ,     1), # 37386 920Ah レンズ焦点距離
+                    'SubSecTime'               : subsec                                                  , # 37520 9290h DateTime のサブセック
+                    'SubSecTimeOriginal'       : subsec                                                  , # 37521 9291h DateTimeOriginal のサブセック
+                    'SubSecTimeDigitized'      : subsec                                                  , # 37522 9292h DateTimeDigitized のサブセック
+                    'PixelXDimension'          : int(         hduHeader.get('NAXIS1'  ,  0)             ), # 40962 A002h 実効画像幅
+                    'PixelYDimension'          : int(         hduHeader.get('NAXIS2'  ,  0)             ), # 40963 A003h 実効画像高さ
+                    'FocalPlaneXResolution'    : Fraction(int(hduHeader.get('XPIXSZ'  ,  0))     , 10000), # 41486 A20Eh 焦点面の幅の解像度
+                    'FocalPlaneYResolution'    : Fraction(int(hduHeader.get('YPIXSZ'  ,  0))     , 10000), # 41487 A20Fh 焦点面の高さの解像度
+                    'FocalPlaneResolutionUnit' : 3                                                       , # 41488 A210h 焦点面解像度単位
+                    'LensMake'                 : str(         hduHeader.get('ORIGIN'  , '')             ), # 42035 A433h レンズのメーカ名
+                    'LensModel'                : str(         hduHeader.get('CAMERA'  , '')             ), # 42036 A434h レンズのモデル名
                 }
                 
                 flowData = FlowData(headers)

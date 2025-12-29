@@ -11,7 +11,7 @@ from fractions import Fraction
 import datetime
 import os
 from nodes import BaseWriterNode
-from config import BLOCK_SIZE, HEADERS_EXIF, HEADERS_EXIF_OPT
+from config import BLOCK_SIZE, HEADERS, HEADERS_EXIF
 
 class ImageWriterNode(BaseWriterNode):
     # ノードタイプ
@@ -186,7 +186,7 @@ class ImageWriterNode(BaseWriterNode):
         original_exif = flowData.headers.get('exif', {})
         exifInfo = {}
         if original_exif:
-            tags = {name:id for id,name, _, _ in (HEADERS_EXIF + HEADERS_EXIF_OPT)}
+            tags = {name:id for id,name, _, _ in HEADERS_EXIF}
             exifInfo = {id: original_exif[name] for name,id in tags.items() if name in original_exif}
 
             exifInfo[305] = 'HoshinoNe' # 305 Software
