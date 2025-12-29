@@ -29,7 +29,9 @@ class NodeFactory:
         ('coefficients'           , '係数'),
         ('quadratic_fit'          , '2次関数近似'),
         ('-----------------------', None),
-        ('absolute_lowpass_filter', '絶対値(低通)(N:N)'),
+        ('highpass_filter'        , '高通(N:N)'),
+        ('lowpass_filter'         , '低通(N:N)'),
+       #('absolute_lowpass_filter', '絶対値(低通)(N:N)'),# 廃止 absolute, lowpass_filter に分割
         ('auto_levels'            , '自動レベル(N:N)'),
         ('tone_curve'             , 'トーンカーブ(N:N)'),
         ('bayer_unpack_sparse'    , 'ベイヤー分離(疎)(N:N)'),
