@@ -1,5 +1,5 @@
 '''
-LowPassFilterNode - ローパスフィルターノード
+HighPassFilterNode - ハイパスフィルターノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -11,12 +11,12 @@ from base.FlowNode_CONST import *
 from base import LazyFlowData
 from nodes import LazyNNOperationNode, PolynomialOperationMixin
 
-class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
+class UpperPassNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
-    minorType = 'lowpass_filter'
+    majorType = _MAJOR_TYPE_B_OP
+    minorType = 'upper_pass'
     # ノード名
-    name      = '低通'
+    name      = '上値通'
     # 入出力タイプ
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
@@ -56,28 +56,25 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = AbsoluteLowPassFilterLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        lazyFlowData = UpperPassLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
         return lazyFlowData
     
-class AbsoluteLowPassFilterLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+class UpperPassLazyFlowData(LazyFlowData, PolynomialOperationMixin):
     def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
         import numpy as np
         from utils import numpy_helpers as nh
         from base import DataBlock
-
-        result = block.data
+        
+        result = block.data.copy()
         
         # auxiliary polynomialから閾値を取得
         if combinedAuxiliaryPolynomial:
             polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            mask = polynomialValues < result
-            result = np.where(mask, nh.nan, result)
+            result[result < polynomialValues] = nh.nan
         
         # auxiliary tableから閾値を取得
         if combinedAuxiliaryTable:
             auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
-            if auxiliaryBlock:
-                mask = auxiliaryBlock.data < result
-                result = np.where(mask, nh.nan, result)
+            result[result < auxiliaryBlock.data] = nh.nan
         
         return DataBlock(result, planeIndex, x, y)

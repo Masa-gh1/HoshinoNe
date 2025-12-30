@@ -1,5 +1,5 @@
 {
-  "version": "0.1.20251208",
+  "version": "0.1.20251224",
   "nodes": [
     {
       "index": 0,
@@ -43,7 +43,7 @@
       "text": "乗算",
       "connections": [
         6,
-        17
+        16
       ]
     },
     {
@@ -89,7 +89,7 @@
       "text": "加算",
       "connections": [
         8,
-        14
+        22
       ]
     },
     {
@@ -159,7 +159,7 @@
       "type": "power",
       "text": "冪算",
       "connections": [
-        20
+        19
       ]
     },
     {
@@ -190,64 +190,54 @@
     },
     {
       "index": 14,
-      "zOrder": 39,
-      "x": 597.0,
-      "y": 278.0,
-      "type": "absolute_lowpass_filter",
-      "text": "絶対値(低通)",
+      "zOrder": 51,
+      "x": 556.0,
+      "y": 336.0,
+      "type": "category_auxiliary",
+      "text": "補正値",
       "connections": [
-        16
+        22,
+        24
       ]
     },
     {
       "index": 15,
-      "zOrder": 41,
-      "x": 594.0,
-      "y": 337.0,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "connections": [
-        14
-      ]
-    },
-    {
-      "index": 16,
-      "zOrder": 45,
+      "zOrder": 37,
       "x": 687.0,
       "y": 277.0,
       "type": "offset",
       "text": "加算",
       "connections": [
-        22
+        21
       ]
     },
     {
-      "index": 17,
-      "zOrder": 49,
+      "index": 16,
+      "zOrder": 41,
       "x": 687.0,
       "y": 338.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
-        16
+        15
+      ]
+    },
+    {
+      "index": 17,
+      "zOrder": 53,
+      "x": 557.0,
+      "y": 480.0,
+      "type": "scale",
+      "text": "乗算",
+      "connections": [
+        14
       ]
     },
     {
       "index": 18,
       "zOrder": 43,
-      "x": 593.0,
-      "y": 477.0,
-      "type": "scale",
-      "text": "乗算",
-      "connections": [
-        15
-      ]
-    },
-    {
-      "index": 19,
-      "zOrder": 51,
-      "x": 690.0,
-      "y": 451.0,
+      "x": 733.0,
+      "y": 482.0,
       "type": "coefficients",
       "text": "係数",
       "planeCount": 4,
@@ -266,22 +256,22 @@
         "Plane 3"
       ],
       "connections": [
-        18
+        17
+      ]
+    },
+    {
+      "index": 19,
+      "zOrder": 55,
+      "x": 511.0,
+      "y": 526.0,
+      "type": "pass",
+      "text": "通点",
+      "connections": [
+        17
       ]
     },
     {
       "index": 20,
-      "zOrder": 37,
-      "x": 509.0,
-      "y": 504.0,
-      "type": "pass",
-      "text": "通点",
-      "connections": [
-        18
-      ]
-    },
-    {
-      "index": 21,
       "zOrder": 5,
       "x": 115.0,
       "y": 277.0,
@@ -294,13 +284,46 @@
       ]
     },
     {
-      "index": 22,
-      "zOrder": 47,
+      "index": 21,
+      "zOrder": 39,
       "x": 752.0,
       "y": 276.0,
       "type": "pass",
       "text": "通点",
       "connections": []
+    },
+    {
+      "index": 22,
+      "zOrder": 47,
+      "x": 557.0,
+      "y": 278.0,
+      "type": "lower_pass",
+      "text": "下値通",
+      "connections": [
+        23
+      ]
+    },
+    {
+      "index": 23,
+      "zOrder": 45,
+      "x": 619.0,
+      "y": 277.0,
+      "type": "upper_pass",
+      "text": "上値通",
+      "connections": [
+        15
+      ]
+    },
+    {
+      "index": 24,
+      "zOrder": 49,
+      "x": 621.0,
+      "y": 338.0,
+      "type": "negate",
+      "text": "符号反転",
+      "connections": [
+        23
+      ]
     }
   ],
   "trays": [
