@@ -43,6 +43,7 @@ class NodeFactory:
         ('shift_detection'         , 'ズレ検出(N:1)'),
         ('transform'               , '変形(N:N)'),
         ('------------------------', None),
+        ('colorspace_mask'         , '色空間マスク(N:N)'),
         ('chroma_denoise'          , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),
         ('wavelet_denoise'         , 'ウェーブレットノイズ除去(輝度ノイズ除去)(N:N)'),
         ('------------------------', None),

@@ -68,6 +68,11 @@ def linspace(*args, **kwargs):
     kwargs.setdefault('dtype', DEFAULT_BLOCK_TYPE)
     return np.linspace(*args, **kwargs)
 
+def eye(*args, **kwargs):
+    """np.eyeのデフォルトdtype版"""
+    kwargs.setdefault('dtype', DEFAULT_BLOCK_TYPE)
+    return np.eye(*args, **kwargs)
+
 def floor(arr, unit=1, **kwargs):
     """単位を指定して切り捨て（デフォルトdtype版）
 
