@@ -70,30 +70,30 @@ class RGBConverterLazyFlowData(LazyFlowData):
             result = flowData.getBlock(planeIndex, x, y).data
             return DataBlock(result, planeIndex, x, y)
         elif "Lab" == mode:
-            # Lab/RGB変換(正規化なし)
+            # Lab/RGB変換
             if   0 == planeIndex: # R
                 _L = flowData.getBlock( 0, x, y).data # L
                 _a = flowData.getBlock( 1, x, y).data # a
-                #b = flowData.getBlock( 2, x, y).data # b
-                _R = _L + _a
-                #B = _L + _b
-                #G = 3.0 * _L - _R - _B
+                _b = flowData.getBlock( 2, x, y).data # b
+                _R = _L + _a/1.41421356237 +     _b/2.44948974278
+                #G = _L - _a/1.41421356237 +     _b/2.44948974278
+                #B = _L                    - 2.0*_b/2.44948974278
                 return DataBlock(_R, planeIndex, x, y)
             elif 1 == planeIndex: # G
                 _L = flowData.getBlock( 0, x, y).data # L
                 _a = flowData.getBlock( 1, x, y).data # a
                 _b = flowData.getBlock( 2, x, y).data # b
-                _R = _L + _a
-                _B = _L + _b
-                _G = 3.0 * _L - _R - _B
+                #R = _L + _a/1.41421356237 +     _b/2.44948974278
+                _G = _L - _a/1.41421356237 +     _b/2.44948974278
+                #B = _L                    - 2.0*_b/2.44948974278
                 return DataBlock(_G, planeIndex, x, y)
             elif 2 == planeIndex: # B
                 _L = flowData.getBlock( 0, x, y).data # L
                 #a = flowData.getBlock( 1, x, y).data # a
                 _b = flowData.getBlock( 2, x, y).data # b
-                #R = _L + _a
-                _B = _L + _b
-                #G = 3.0 * _L - _R - _B
+                #R = _L + _a/1.41421356237 +     _b/2.44948974278
+                #G = _L - _a/1.41421356237 +     _b/2.44948974278
+                _B = _L                    - 2.0*_b/2.44948974278
                 return DataBlock(_B, planeIndex, x, y)
         elif "RGBA" == mode:
             if   0 == planeIndex: # R

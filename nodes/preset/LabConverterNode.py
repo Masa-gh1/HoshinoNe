@@ -81,17 +81,15 @@ class LabConverterLazyFlowData(LazyFlowData):
                 _G2 = flowData.getBlock( 3, x, y).data # G2
                 _G = (_G1 + _G2) / 2                   # G
             
-            # RGB/Lab変換(正規化なし)
+            # RGB/Lab変換
             if 0 == planeIndex: # L
                 _L = (_R + _G + _B) / 3.0
                 return DataBlock(_L, planeIndex, x, y)
             elif 1 == planeIndex: # a
-                _L = (_R + _G + _B) / 3.0
-                _a = _R - _L
+                _a = (_R - _G         ) / 1.41421356237
                 return DataBlock(_a, planeIndex, x, y)
             elif 2 == planeIndex: # b
-                _L = (_R + _G + _B) / 3.0
-                _b = _B - _L
+                _b = (_R + _G - 2.0*_B) / 2.44948974278
                 return DataBlock(_b, planeIndex, x, y)
     
     def getLazyHeaderkeys(self):
