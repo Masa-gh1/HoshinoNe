@@ -399,11 +399,11 @@ class ResultWindow(tk.Toplevel):
         """画像データの内容を生成"""
         headers = flowData.headers
         
-        mode = flowData.getMode()
-        planes = headers.get('planes', [])
-        width, height = flowData.getDimensions()
-        planeCount = flowData.getPlaneCount()
-        displayLevels = headers['display_levels']
+        mode            = flowData.getMode()
+        planes          = headers.get('planes', [])
+        width, height   = flowData.getDimensions()
+        planeCount      = flowData.getPlaneCount()
+        displayLevels   = headers['display_levels']
         displayLevelMin = displayLevels["min"]
         displayLevelEnd = displayLevels["exclusive_upper"]
 
@@ -524,8 +524,6 @@ class ResultWindow(tk.Toplevel):
                     plt.savefig(buf, format='png', dpi=90)
 
                     img = Image.open(buf)
-                    # 画像を拡大
-                    #enlarged_img = img.resize((int(img.width * 1.5), int(img.height * 1.5)), Image.Resampling.LANCZOS)
                     histogram_image = ImageTk.PhotoImage(img)
 
                     self._histogramImagesCahace[histogramImageKey] = (histogram_text,histogram_image)
@@ -602,113 +600,12 @@ class ResultWindow(tk.Toplevel):
                 else:
                     fit = True
                     zoom = 1
-
-                # 画像 mode を設定
-                if 'RGB' == mode and 3 <= planeCount:
-                    smode = 'RGB'
-                    dmode = 'RGB'
-                    imgW = nh.ceil(d_width , gridSize).astype(int)
-                    imgH = nh.ceil(d_height, gridSize).astype(int)
-                    imgD = 3
-                elif 'RGBG' == mode and 4 <= planeCount:
-                    smode = 'RGBG'
-                    dmode = 'RGB'
-                    imgW = nh.ceil(d_width , gridSize).astype(int)
-                    imgH = nh.ceil(d_height, gridSize).astype(int)
-                    imgD = 3
-                elif(  'L'     == mode and 1 <= planeCount
-                    or 'BAYER' == mode and 1 <= planeCount
-                    ):
-                    smode = 'L'
-                    dmode = 'L'
-                    imgW = nh.ceil(d_width , gridSize).astype(int)
-                    imgH = nh.ceil(d_height, gridSize).astype(int)
-                    imgD = 1
-                else:
-                    raise ValueError(f"サポートされていないモード: {mode}")
-
-                # 画像データを構築
-                imgArray = np.empty((imgH, imgW, imgD), dtype=np.uint8)
-
-                tmpImg = np.empty((gridSize, gridSize, imgD), dtype=np.uint8) # 作業領域は使いまわす
                 
-                for sy1,dy in zip(srcY, range(0, imgH, gridSize)): # コピー元座標
-                    for sx1,dx in zip(srcX, range(0, imgW, gridSize)):
-                        sx2 = sx1+gridSize
-                        sy2 = sy1+gridSize
-                        x1  = nh.floor(sx1, BLOCK_SIZE).astype(int) # コピー元を包含するブロック座標
-                        y1  = nh.floor(sy1, BLOCK_SIZE).astype(int)
-                        x2  = nh.ceil( sx2, BLOCK_SIZE).astype(int)
-                        y2  = nh.ceil( sy2, BLOCK_SIZE).astype(int)
+                # 画像構築
+                img, cont = self.createImage(flowData, scale, offset, d_width, d_height, srcX, srcY, gridSize, gridLline)
+                content.extend(cont)
 
-                        try:
-                            for by1 in range(y1, y2, BLOCK_SIZE): # コピー元を一部でも含むブロック座標
-                                for bx1 in range(x1, x2, BLOCK_SIZE):
-
-                                    if 'RGB' == smode:
-                                        r_block = flowData.getBlock(0, bx1, by1)
-                                        g_block = flowData.getBlock(1, bx1, by1)
-                                        b_block = flowData.getBlock(2, bx1, by1)
-                                        r_data  = r_block.data if r_block else None
-                                        g_data  = g_block.data if g_block else None
-                                        b_data  = b_block.data if b_block else None
-                                        rgb = [r_data, g_data, b_data]
-                                    elif 'RGBG' == smode:
-                                        r_block  = flowData.getBlock(0, bx1, by1)
-                                        g1_block = flowData.getBlock(1, bx1, by1)
-                                        b_block  = flowData.getBlock(2, bx1, by1)
-                                        g2_block = flowData.getBlock(3, bx1, by1)
-                                        r_data   = r_block.data  if r_block else None
-                                        g1_data  = g1_block.data if g1_block else None
-                                        b_data   = b_block.data  if b_block else None
-                                        g2_data  = g2_block.data if g1_block else None
-                                        g_data   = (    (g1_data + g2_data) / 2 if g1_data is not None and g2_data is not None
-                                                    else g1_data                if g1_data is not None
-                                                    else g2_data                if g2_data is not None
-                                                    else None
-                                                   )
-                                        rgb = [r_data, g_data, b_data]
-                                    elif 'L' == smode:
-                                        l_block = flowData.getBlock(0, bx1, by1)
-                                        l_data  = l_block.data if l_block else None
-                                        rgb = [l_data]
-                                    else:
-                                        pass # ここには来ない
-
-                                    for bd,data in enumerate(rgb):
-                                        if data is not None:
-                                            try:
-                                                cx1 = max(sx1, bx1) # コピー元座標とブロック座標 の積集合
-                                                cy1 = max(sy1, by1)
-                                                cx2 = min(sx2, bx1+data.shape[1])
-                                                cy2 = min(sy2, by1+data.shape[0])
-                                                trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
-                                                leveled = (trimed - offset) * scale              # レベル調整を適用
-                                                norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
-                                                cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
-                                                tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, bd] = cliped
-                                            except (IndexError, TypeError, ValueError) as e:
-                                                Debug.log(type(self).__name__, "error", e)
-                                                content.append(f"\nerror: {str(e)}\n\n")
-                            
-                            imgArray[dy:dy+gridSize, dx:dx+gridSize, 0:imgD] = tmpImg
-                        except (IndexError, TypeError, ValueError) as e:
-                            Debug.log(type(self).__name__, "error", e)
-                            content.append(f"\nerror: {str(e)}\n\n")
-                
-                if gridLline:
-                    for sy1 in range(0, imgH, gridSize):
-                        imgArray[sy1, 0:imgW, 0:imgD] = 128
-                    imgArray[imgH-1, 0:imgW, 0:imgD] = 128
-                    for sx1 in range(0, imgW, gridSize):
-                        imgArray[0:imgH, sx1, 0:imgD] = 128
-                    imgArray[0:imgH, imgW-1, 0:imgD] = 128
-
-                if 'RGB' == dmode:
-                    img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD], 'RGB')
-                elif 'L' == dmode:
-                    img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD].squeeze(), 'L')
-                
+                # 画像を拡縮
                 if 1 != zoom:
                     img = img.resize((int(img.width * zoom), int(img.height * zoom)), Image.Resampling.LANCZOS)
 
@@ -807,3 +704,117 @@ class ResultWindow(tk.Toplevel):
             self._selected_data_var.set(current_values[new_index])
             self.updateResult()
             return 'break'  # デフォルト動作を無効化
+
+    def createImage(self, flowData, scale, offset, d_width, d_height, srcX, srcY, gridSize, gridLline):
+        content = []
+        mode          = flowData.getMode()
+        planeCount    = flowData.getPlaneCount()
+        width, height = flowData.getDimensions()
+
+        # 画像 mode を設定
+        if 'RGB' == mode and 3 <= planeCount:
+            smode = 'RGB'
+            dmode = 'RGB'
+            imgW = nh.ceil(d_width , gridSize).astype(int)
+            imgH = nh.ceil(d_height, gridSize).astype(int)
+            imgD = 3
+        elif 'RGBG' == mode and 4 <= planeCount:
+            smode = 'RGBG'
+            dmode = 'RGB'
+            imgW = nh.ceil(d_width , gridSize).astype(int)
+            imgH = nh.ceil(d_height, gridSize).astype(int)
+            imgD = 3
+        elif(  'L'     == mode and 1 <= planeCount
+            or 'BAYER' == mode and 1 <= planeCount
+            ):
+            smode = 'L'
+            dmode = 'L'
+            imgW = nh.ceil(d_width , gridSize).astype(int)
+            imgH = nh.ceil(d_height, gridSize).astype(int)
+            imgD = 1
+        else:
+            raise ValueError(f"サポートされていないモード: {mode}")
+
+        # 画像データを構築
+        imgArray = np.empty((imgH, imgW, imgD), dtype=np.uint8)
+
+        tmpImg = np.empty((gridSize, gridSize, imgD), dtype=np.uint8) # 作業領域は使いまわす
+        
+        for sy1,dy in zip(srcY, range(0, imgH, gridSize)): # コピー元座標
+            for sx1,dx in zip(srcX, range(0, imgW, gridSize)):
+                sx2 = sx1+gridSize
+                sy2 = sy1+gridSize
+                x1  = nh.floor(sx1, BLOCK_SIZE).astype(int) # コピー元を包含するブロック座標
+                y1  = nh.floor(sy1, BLOCK_SIZE).astype(int)
+                x2  = nh.ceil( sx2, BLOCK_SIZE).astype(int)
+                y2  = nh.ceil( sy2, BLOCK_SIZE).astype(int)
+
+                try:
+                    for by1 in range(y1, y2, BLOCK_SIZE): # コピー元を一部でも含むブロック座標
+                        for bx1 in range(x1, x2, BLOCK_SIZE):
+
+                            if 'RGB' == smode:
+                                r_block = flowData.getBlock(0, bx1, by1)
+                                g_block = flowData.getBlock(1, bx1, by1)
+                                b_block = flowData.getBlock(2, bx1, by1)
+                                r_data  = r_block.data if r_block else None
+                                g_data  = g_block.data if g_block else None
+                                b_data  = b_block.data if b_block else None
+                                rgb = [r_data, g_data, b_data]
+                            elif 'RGBG' == smode:
+                                r_block  = flowData.getBlock(0, bx1, by1)
+                                g1_block = flowData.getBlock(1, bx1, by1)
+                                b_block  = flowData.getBlock(2, bx1, by1)
+                                g2_block = flowData.getBlock(3, bx1, by1)
+                                r_data   = r_block.data  if r_block else None
+                                g1_data  = g1_block.data if g1_block else None
+                                b_data   = b_block.data  if b_block else None
+                                g2_data  = g2_block.data if g1_block else None
+                                g_data   = (    (g1_data + g2_data) / 2 if g1_data is not None and g2_data is not None
+                                            else g1_data                if g1_data is not None
+                                            else g2_data                if g2_data is not None
+                                            else None
+                                            )
+                                rgb = [r_data, g_data, b_data]
+                            elif 'L' == smode:
+                                l_block = flowData.getBlock(0, bx1, by1)
+                                l_data  = l_block.data if l_block else None
+                                rgb = [l_data]
+                            else:
+                                pass # ここには来ない
+
+                            for bd,data in enumerate(rgb):
+                                if data is not None:
+                                    try:
+                                        cx1 = max(sx1, bx1) # コピー元座標とブロック座標 の積集合
+                                        cy1 = max(sy1, by1)
+                                        cx2 = min(sx2, bx1+data.shape[1])
+                                        cy2 = min(sy2, by1+data.shape[0])
+                                        trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
+                                        leveled = (trimed - offset) * scale              # レベル調整を適用
+                                        norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
+                                        cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
+                                        tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, bd] = cliped
+                                    except (IndexError, TypeError, ValueError) as e:
+                                        Debug.log(type(self).__name__, "error", e)
+                                        content.append(f"\nerror: {str(e)}\n\n")
+                    
+                    imgArray[dy:dy+gridSize, dx:dx+gridSize, 0:imgD] = tmpImg
+                except (IndexError, TypeError, ValueError) as e:
+                    Debug.log(type(self).__name__, "error", e)
+                    content.append(f"\nerror: {str(e)}\n\n")
+        
+        if gridLline:
+            for sy1 in range(0, imgH, gridSize):
+                imgArray[sy1, 0:imgW, 0:imgD] = 128
+            imgArray[imgH-1, 0:imgW, 0:imgD] = 128
+            for sx1 in range(0, imgW, gridSize):
+                imgArray[0:imgH, sx1, 0:imgD] = 128
+            imgArray[0:imgH, imgW-1, 0:imgD] = 128
+
+        if 'RGB' == dmode:
+            img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD], 'RGB')
+        elif 'L' == dmode:
+            img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD].squeeze(), 'L')
+        
+        return(img, content)
