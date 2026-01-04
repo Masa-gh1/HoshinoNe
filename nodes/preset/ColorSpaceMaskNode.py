@@ -309,31 +309,33 @@ class ColorSpaceMaskDialog(tk.Toplevel):
 
         # 列ヘッダーを色空間に応じて更新
         if "RGB" == self.tempColorSpace:
+            import numpy as np
+            from utils import colorSpace
             self.maskList.heading("x", text="R")
             self.maskList.heading("y", text="G")
             self.maskList.heading("z", text="B")
 
             # 色マスクの位置を RGB に変換する
-            for i, (x, y, z, radius, feather) in enumerate(self.tempMask3dPoints):
-                import numpy as np
-                rgb = self.canvas.labToRgb((x, y-0.5, z-0.5))
-                rgb = np.clip(rgb, 0.0, 1.0)
-                x, y, z = rgb
-                self.tempMask3dPoints[i] = (x, y, z, radius, feather)
+            for i, (l, a, b, radius, feather) in enumerate(self.tempMask3dPoints):
+                rgb = colorSpace.labToRgb(l,a,b)
+                r, g, b = np.clip(rgb, 0.0, 1.0)
+                self.tempMask3dPoints[i] = (r, g, b, radius, feather)
             
+            self.updateMaskList()
+            self.updateDisplay()
         else:  # Lab
+            from utils import colorSpace
             self.maskList.heading("x", text="L")
             self.maskList.heading("y", text="a")
             self.maskList.heading("z", text="b")
 
             # 色マスクの位置を Lab に変換する
-            for i, (x, y, z, radius, feather) in enumerate(self.tempMask3dPoints):
-                lab = self.canvas.rgbToLab((x, y, z))
-                x, y, z = lab
-                self.tempMask3dPoints[i] = (x, y+0.5, z+0.5, radius, feather)
+            for i, (r, g, b, radius, feather) in enumerate(self.tempMask3dPoints):
+                l, a, b = colorSpace.rgbToLab(r, g, b)
+                self.tempMask3dPoints[i] = (l, a, b, radius, feather)
         
-        self.updateMaskList()
-        self.updateDisplay()
+            self.updateMaskList()
+            self.updateDisplay()
 
     def updateDisplay(self):
         self.canvas.updateDisplay()
@@ -342,8 +344,7 @@ class ColorSpaceMaskDialog(tk.Toplevel):
         # リストを更新
         listCnt = len(self.maskList.get_children())
         maskCnt = len(self.tempMask3dPoints)
-        for id, mask in zip(self.maskList.get_children(), self.tempMask3dPoints):
-            x, y, z, radius, feather = mask
+        for id, (x, y, z, radius, feather) in zip(self.maskList.get_children(), self.tempMask3dPoints):
             self.maskList.item(id, values=(id, f"{x:.3f}", f"{y:.3f}", f"{z:.3f}", f"{radius:.3f}", f"{feather:.3f}"))
 
         # 余分なリストを削除
@@ -456,14 +457,14 @@ class ColorSpaceMaskDialog(tk.Toplevel):
                 if 0.01 <= newValue <= 1.0:
                     x, y, z, _, feather = self.tempMask3dPoints[itemIndex]
                     self.tempMask3dPoints[itemIndex] = (x, y, z, newValue, feather)
+                    self.updateMaskList()
+                    self.canvas.updateDisplay()
             else:  # feather
                 if 0.0 <= newValue <= 1.0:
                     x, y, z, radius, _ = self.tempMask3dPoints[itemIndex]
                     self.tempMask3dPoints[itemIndex] = (x, y, z, radius, newValue)
-            
-            # リストを更新
-            self.updateMaskList()
-            self.canvas.updateDisplay()
+                    self.updateMaskList()
+                    self.canvas.updateDisplay()
             
         except ValueError:
             pass  # 無効な値は無視
@@ -484,32 +485,34 @@ class ColorSpaceCanvas(tk.Canvas):
         super().__init__(parent, width=width, height=height, bg="black")
         self.dialog = parent
         self.node = parent.node
+
+        self.sliceZ = 0.0
         
         self.bind("<Button-1>", self.onPress)
         self.bind("<Button-3>", self.onRightPress)
         self.bind("<B1-Motion>", self.onDrag)
         self.bind("<ButtonRelease-1>", self.onRelease)
         
-        self.dragging = False
-        self.dragging_mask = False
-        self.clicked_inside_mask = False
+        self.isDragging = False
+        self.isDraggingMask = False
+        self.isClickedMask = False
         self.last_x = 0
         self.last_y = 0
     
     def onPress(self, event):
         self.last_x = event.x
         self.last_y = event.y
-        self.dragging = False
-        self.dragging_mask = False
+        self.isDragging = False
+        self.isDraggingMask = False
         
         # 選択中の色マスク円内をクリックしたかチェック
-        self.clicked_inside_mask = self.isInsideSelectedMask(event.x, event.y)
+        self.isClickedMask = self.isInsideSelectedMask(event.x, event.y)
     
     def onRightPress(self, event):
         self.last_x = event.x
         self.last_y = event.y
-        self.dragging = False
-        self.dragging_mask = False
+        self.isDragging = False
+        self.isDraggingMask = False
         
         # 選択中の色マスク円内をクリックしたかチェック
         if self.isInsideSelectedMask(event.x, event.y):
@@ -521,14 +524,14 @@ class ColorSpaceCanvas(tk.Canvas):
     def onDrag(self, event):
         from utils import numpy_helpers as nh
         
-        if self.clicked_inside_mask:
+        if self.isClickedMask:
             # 色マスク円内からドラッグなので色マスクの移動
-            self.dragging_mask = True
+            self.isDraggingMask = True
             self.moveMask(event.x, event.y)
             return
         else:
             # 色空間を回転
-            self.dragging = True
+            self.isDragging = True
             
             # 分離された X/Y 軸回転（ジンバルロック回避）
             width  = self.winfo_width()
@@ -561,41 +564,22 @@ class ColorSpaceCanvas(tk.Canvas):
             self.last_y = event.y
     
     def onRelease(self, event):
-        if self.dragging_mask:
+        if self.isDraggingMask:
             # 色マスク移動終了
-            self.clicked_inside_mask = False
-            self.dragging_mask = False
-        elif self.dragging:
+            self.isClickedMask = False
+            self.isDraggingMask = False
+        elif self.isDragging:
             # 色空間回転終了
-            self.dragging = False
+            self.isDragging = False
+        elif self.isClickedMask:
+            # なにもしない
+            self.isClickedMask = False
         else:
             # 空き領域をクリックしたので色マスク追加
             self.addPoint(event.x, event.y)
     
     def addPoint(self, screenX, screenY):
         from utils import numpy_helpers as nh
-        
-        selection = self.dialog.getSelectionMaskIndex()
-
-        # 断面位置を取得
-        if(   not selection is None 
-          and     selection < len(self.dialog.tempMask3dPoints)
-          ):
-            # 選択中の色マスクの Z 位置をカメラ目線で計算
-            selectedPoint = self.dialog.tempMask3dPoints[selection]
-            x, y, z, radius, feather = selectedPoint
-            
-            # 色空間座標を中心原点に変換
-            centered = nh.array([x - 0.5, y - 0.5, z - 0.5])
-            
-            # 回転適用
-            rotated = self.applyRotationToPoint(centered)
-            
-            # カメラ目線での Z 値を断面位置とする
-            sliceZ = rotated[2]
-        else:
-            # 選択なしの場合は中央 (Z=0)
-            sliceZ = 0.0
         
         # 画面座標 → [-1.0, 1.0] 座標系
         width  = self.winfo_width()
@@ -604,8 +588,8 @@ class ColorSpaceCanvas(tk.Canvas):
         uScreen = (screenX / width  - 0.5) * 2.0   # [-1.0, 1.0]
         vScreen = (screenY / height - 0.5) * 2.0   # [-1.0, 1.0]
         
-        # 断面上の 3D 点 (Z=sliceZ 固定)
-        screenPoint = nh.array([uScreen, vScreen, sliceZ])
+        # 断面上の 3D 点
+        screenPoint = nh.array([uScreen, vScreen, self.sliceZ])
         
         # 逆回転で色空間座標を取得
         colorPoint  = self.dialog.tempRotationMatrix.T @ screenPoint
@@ -618,9 +602,15 @@ class ColorSpaceCanvas(tk.Canvas):
            ):
             
             x, y, z = colorCoords
-            newIndex = self.dialog.addMask(x, y, z)
-            self.dialog.updateMaskList() # リストを更新
-
+            if "RGB" == self.dialog.tempColorSpace:
+                r, g, b = self.cubeToRGB(x, y, z)
+                newIndex = self.dialog.addMask(r, g, b)
+                self.dialog.updateMaskList() # リストを更新
+            else:  # Lab
+                l, a, b = self.cubeToLab(x, y, z)
+                newIndex = self.dialog.addMask(l, a, b)
+                self.dialog.updateMaskList() # リストを更新
+                
             # 新しいアイテムを選択
             self.dialog.selectMaskIndex(newIndex)
 
@@ -654,7 +644,12 @@ class ColorSpaceCanvas(tk.Canvas):
            ):
             # 選択中の色マスクの Z 位置をカメラ目線で計算
             selectedPoint = self.dialog.tempMask3dPoints[selection]
-            x, y, z, radius, feather = selectedPoint
+            if "RGB" == self.dialog.tempColorSpace:
+                r, g, b, radius, feather = selectedPoint
+                x, y, z = self.rgbToCube(r, g, b)
+            else:  # Lab
+                l, a, b, radius, feather = selectedPoint
+                x, y, z = self.labToCube(l, a, b)
             
             # 色空間座標を中心原点に変換
             centered = nh.array([x - 0.5, y - 0.5, z - 0.5])
@@ -663,10 +658,10 @@ class ColorSpaceCanvas(tk.Canvas):
             rotated = self.applyRotationToPoint(centered)
             
             # カメラ目線での Z 値を断面位置とする
-            sliceZ = rotated[2]
+            self.sliceZ = rotated[2]
         else:
             # 選択なしの場合は中央 (Z=0)
-            sliceZ = 0.0
+            self.sliceZ = 0.0
         
         # Z=sliceZ 断面の色空間を描画
         step = 4  # 描画間隔
@@ -677,8 +672,8 @@ class ColorSpaceCanvas(tk.Canvas):
                 uScreen = (x - width  / 2) * scale
                 vScreen = (y - height / 2) * scale
                 
-                # 断面上の 3D 点 (Z=sliceZ 固定)
-                screenPoint = nh.array([uScreen, vScreen, sliceZ])
+                # 断面上の 3D 点
+                screenPoint = nh.array([uScreen, vScreen, self.sliceZ])
                 
                 # 逆回転で色空間座標を取得
                 colorPoint = self.dialog.tempRotationMatrix.T @ screenPoint
@@ -693,15 +688,17 @@ class ColorSpaceCanvas(tk.Canvas):
                     
                     # RGB 色に変換
                     if "RGB" == self.dialog.tempColorSpace:
-                        rgb = colorCoords
+                        r,g,b = self.cubeToRGB(*colorCoords)
                     else:  # Lab
-                        colorCoords[1] -= 0.5 # a [-0.5,0.5)
-                        colorCoords[2] -= 0.5 # b [-0.5,0.5)
-                        rgb = self.labToRgb(colorCoords)
+                        from utils import colorSpace
+                        lab = self.cubeToLab(*colorCoords)
+                        r,g,b = colorSpace.labToRgb(*lab)
                     
                     # 色を描画
-                    rgbInt = np.clip(rgb * 256, 0, 255).astype(int)
-                    color  = f"#{rgbInt[0]:02x}{rgbInt[1]:02x}{rgbInt[2]:02x}"
+                    r = np.clip(int(r * 256), 0, 255)
+                    g = np.clip(int(g * 256), 0, 255)
+                    b = np.clip(int(b * 256), 0, 255)
+                    color  = f"#{r:02x}{g:02x}{b:02x}"
                     
                     self.create_rectangle(x, y, x+step, y+step, fill=color, outline="")
     
@@ -729,38 +726,66 @@ class ColorSpaceCanvas(tk.Canvas):
         
         return nh.eye(3) + sinA * K + (1 - cosA) * (K @ K)
     
-    def labToRgb(self, lab):
-        from utils import numpy_helpers as nh
+    def cubeToRGB(self, x, y, z):
+        """
+        色空間座標から RGB 色に変換
+
+        :param x [0.0,1.0)
+        :param y [0.0,1.0)
+        :param z [0.0,1.0)
+        :return (R, G, B) [0.0,1.0)
+        """
+        _R = x
+        _G = y
+        _B = z
         
-        _L, _a, _b = lab # L:[0.0,1.0), ab:[-0.5,0.5)
-        
-        # Lab 値を画面の座標系から変換
-        _a = _a * (2.0*1.41421356237)
-        _b = _b * (2.0*1.41421356237)
-        
-        # Lab/RGB 変換
-        _R = _L + _a/1.41421356237 +     _b/2.44948974278
-        _G = _L - _a/1.41421356237 +     _b/2.44948974278
-        _B = _L                    - 2.0*_b/2.44948974278
-        
-        return nh.array([_R, _G, _B])
+        return (_R, _G, _B)
     
-    def rgbToLab(self, rgb):
-        from utils import numpy_helpers as nh
+    def rgbToCube(self, r, g, b):
+        """
+        RGB 色から色空間座標に変換
 
-        _R, _G, _B = rgb # [0.0,1.0]
-
-        # RGB/Lab 変換
-        _L = (_R + _G + _B) / 3.0
-        _a = (_R - _G         ) / 1.41421356237
-        _b = (_R + _G - 2.0*_B) / 2.44948974278
-
-        # Lab 値を画面の座標系へ変換
-        _a = _a / (2.0*1.41421356237)
-        _b = _b / (2.0*1.41421356237)
-
-        return nh.array([_L, _a, _b]) # L:[0.0,1.0), ab:[-0.5,0.5)
+        :param r [0.0,1.0)
+        :param g [0.0,1.0)
+        :param b [0.0,1.0)
+        :return (x, y, z) [0.0,1.0)
+        """
+        _x = r
+        _y = g
+        _z = b
+        
+        return (_x, _y, _z)
     
+    def cubeToLab(self, x, y, z):
+        """
+        色空間座標から Lab 色に変換
+
+        :param x [0.0,1.0)
+        :param y [0.0,1.0)
+        :param z [0.0,1.0)
+        :return (L, a, b) [0.0,1.0), (-1.415,1.415), (-1.415,1.415)
+        """
+        _L = x
+        _a = (y-0.5)*(2.0*1.41421356237)
+        _b = (z-0.5)*(2.0*1.41421356237)
+        
+        return (_L, _a, _b)
+    
+    def labToCube(self, l, a, b):
+        """
+        Lab 色から色空間座標に変換
+
+        :param l [0.0,1.0)
+        :param a [-1.415,1.415)
+        :param b [-1.415,1.415)
+        :return (x, y, z) [0.0,1.0)
+        """
+        _x = l
+        _y = a/(2.0*1.41421356237)+0.5
+        _z = b/(2.0*1.41421356237)+0.5
+        
+        return (_x, _y, _z)
+
     def drawWireframe(self, width, height, scale):
         """色空間立方体のワイヤーフレームを描画"""
         from utils import numpy_helpers as nh
@@ -814,7 +839,12 @@ class ColorSpaceCanvas(tk.Canvas):
            and     selection < len(self.dialog.tempMask3dPoints)
            ):
             
-            x, y, z, radius, feather = self.dialog.tempMask3dPoints[selection]
+            if "RGB" == self.dialog.tempColorSpace:
+                r, g, b, radius, feather = self.dialog.tempMask3dPoints[selection]
+                x, y, z = self.rgbToCube(r, g, b)
+            else:  # Lab
+                l, a, b, radius, feather = self.dialog.tempMask3dPoints[selection]
+                x, y, z = self.labToCube(l, a, b)
             
             # 3D → 2D 投影
             screenX, screenY = self.project3DTo2D(x, y, z)
@@ -861,12 +891,19 @@ class ColorSpaceCanvas(tk.Canvas):
     def isInsideSelectedMask(self, screenX, screenY):
         """選択中の色マスク円内か判定"""
         selection = self.dialog.getSelectionMaskIndex()
-        if(   not selection is None 
-          and     selection < len(self.dialog.tempMask3dPoints)
-          ):
-            x, y, z, radius, feather = self.dialog.tempMask3dPoints[selection]
+        if selection is None:
+            return False
+        elif len(self.dialog.tempMask3dPoints) <= selection:
+            return False
+        else:
+            if "RGB" == self.dialog.tempColorSpace:
+                r, g, b, radius, feather = self.dialog.tempMask3dPoints[selection]
+                x, y, z = self.rgbToCube(r, g, b)
+            else:  # Lab
+                l, a, b, radius, feather = self.dialog.tempMask3dPoints[selection]
+                x, y, z = self.labToCube(l, a, b)
             
-            # 3D→2D 投影
+            # 3D/2D 投影
             maskScreenX, maskScreenY = self.project3DTo2D(x, y, z)
             
             # 半径に応じた円のサイズ
@@ -882,8 +919,6 @@ class ColorSpaceCanvas(tk.Canvas):
             # マウス位置が円内か判定
             distance = ((screenX - maskScreenX) ** 2 + (screenY - maskScreenY) ** 2) ** 0.5
             return distance <= circleRadius
-        
-        return False
     
     def moveMask(self, screenX, screenY):
         """選択中の色マスクを移動"""
@@ -893,16 +928,6 @@ class ColorSpaceCanvas(tk.Canvas):
         if(   not selection is None 
           and     selection < len(self.dialog.tempMask3dPoints)
           ):
-            # 断面位置を取得
-            selectedPoint = self.dialog.tempMask3dPoints[selection]
-            _, _, _, radius, feather = selectedPoint
-            
-            # カメラ目線での Z 値を断面位置とする
-            x, y, z, _, _ = selectedPoint
-            centered = nh.array([x - 0.5, y - 0.5, z - 0.5])
-            rotated = self.applyRotationToPoint(centered)
-            sliceZ = rotated[2]
-            
             # 画面座標 → [-1.0,1.0] 座標系
             width  = self.winfo_width()
             height = self.winfo_height()
@@ -911,7 +936,7 @@ class ColorSpaceCanvas(tk.Canvas):
             vScreen = (screenY / height - 0.5) * 2.0
             
             # 断面上の 3D 点
-            screenPoint = nh.array([uScreen, vScreen, sliceZ])
+            screenPoint = nh.array([uScreen, vScreen, self.sliceZ])
             
             # 逆回転で色空間座標を取得
             colorPoint  = self.dialog.tempRotationMatrix.T @ screenPoint
@@ -922,11 +947,15 @@ class ColorSpaceCanvas(tk.Canvas):
               and 0.0 <= colorCoords[1] <= 1.0 
               and 0.0 <= colorCoords[2] <= 1.0
               ):
-                
+                _, _, _, radius, feather = self.dialog.tempMask3dPoints[selection]
                 # 色マスク位置を更新
-                x, y, z = colorCoords
-                self.dialog.tempMask3dPoints[selection] = (x, y, z, radius, feather)
-                self.dialog.updateMaskList()
-                
-                # 描画更新
-                self.updateDisplay()
+                if "RGB" == self.dialog.tempColorSpace:
+                    r, g, b = self.cubeToRGB(*colorCoords)
+                    self.dialog.tempMask3dPoints[selection] = (r, g, b, radius, feather)
+                    self.dialog.updateMaskList()
+                    self.updateDisplay()
+                else:  # Lab
+                    l, a, b = self.cubeToLab(*colorCoords)
+                    self.dialog.tempMask3dPoints[selection] = (l, a, b, radius, feather)
+                    self.dialog.updateMaskList()
+                    self.updateDisplay()
