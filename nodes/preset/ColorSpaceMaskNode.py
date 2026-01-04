@@ -226,6 +226,19 @@ class ColorSpaceMaskDialog(tk.Toplevel):
         self.tempMask3dPoints.append([x, y, z, radius, feather])
         return len(self.tempMask3dPoints) - 1
 
+    def updateMask(self, index, x=None, y=None, z=None, radius=None, feather=None):
+        if index < len(self.tempMask3dPoints):
+            if x is not None:
+                self.tempMask3dPoints[index][0] = x
+            if y is not None:
+                self.tempMask3dPoints[index][1] = y
+            if z is not None:
+                self.tempMask3dPoints[index][2] = z
+            if radius is not None:
+                self.tempMask3dPoints[index][3] = radius
+            if feather is not None:
+                self.tempMask3dPoints[index][4] = feather
+
     def deleteMask(self, index):
         if index < len(self.tempMask3dPoints):
             del self.tempMask3dPoints[index]
@@ -303,7 +316,7 @@ class ColorSpaceMaskDialog(tk.Toplevel):
             for i, (l, a, b, radius, feather) in enumerate(self.tempMask3dPoints):
                 rgb = colorSpace.labToRgb(l,a,b)
                 r, g, b = np.clip(rgb, 0.0, 1.0)
-                self.tempMask3dPoints[i] = (r, g, b, radius, feather)
+                self.tempMask3dPoints[i] = [r, g, b, radius, feather]
             
             self.updateMaskList()
             self.updateDisplay()
@@ -316,7 +329,7 @@ class ColorSpaceMaskDialog(tk.Toplevel):
             # 色マスクの位置を Lab に変換する
             for i, (r, g, b, radius, feather) in enumerate(self.tempMask3dPoints):
                 l, a, b = colorSpace.rgbToLab(r, g, b)
-                self.tempMask3dPoints[i] = (l, a, b, radius, feather)
+                self.tempMask3dPoints[i] = [l, a, b, radius, feather]
         
             self.updateMaskList()
             self.updateDisplay()
@@ -439,14 +452,12 @@ class ColorSpaceMaskDialog(tk.Toplevel):
             # 範囲チェック
             if "#5" == self.editColumn:  # radius
                 if 0.01 <= newValue <= 1.0:
-                    x, y, z, _, feather = self.tempMask3dPoints[itemIndex]
-                    self.tempMask3dPoints[itemIndex] = (x, y, z, newValue, feather)
+                    self.updateMask(itemIndex, radius=newValue)
                     self.updateMaskList()
                     self.canvas.updateDisplay()
             else:  # feather
                 if 0.0 <= newValue <= 1.0:
-                    x, y, z, radius, _ = self.tempMask3dPoints[itemIndex]
-                    self.tempMask3dPoints[itemIndex] = (x, y, z, radius, newValue)
+                    self.updateMask(itemIndex, feather=newValue)
                     self.updateMaskList()
                     self.canvas.updateDisplay()
             
@@ -466,12 +477,21 @@ class ColorSpaceMaskDialog(tk.Toplevel):
 
 class ColorSpaceCanvas(tk.Canvas):
     def __init__(self, parent, width=400, height=400):
+        """
+        色空間を描画するキャンバス
+        色空間は一辺 [0.0, 1.0) の立方体
+        スクリーン座標系の width, height の短い方向をワールド座標系 [-1.0, 1.0) とする
+
+        :param parent: 親ウィジェット
+        :param width:  描画幅
+        :param height: 描画高さ
+        """
         super().__init__(parent, width=width, height=height, bg="black")
         self.dialog = parent
         self.node = parent.node
 
-        self.sliceZ = 0.0
-        self._photoimage = None
+        self.sliceZ      = 0.0  # 色空間断面の z 位置
+        self._sliceImage = None # 色空間断面画像
         
         self.bind("<Button-1>", self.onPress)
         self.bind("<Button-3>", self.onRightPress)
@@ -561,24 +581,20 @@ class ColorSpaceCanvas(tk.Canvas):
             self.isClickedMask = False
         else:
             # 空き領域をクリックしたので色マスク追加
-            self.addPoint(event.x, event.y)
+            self.addMask(event.x, event.y)
     
-    def addPoint(self, screenX, screenY):
+    def addMask(self, screenX, screenY):
         from utils import numpy_helpers as nh
         
-        # 画面座標 → [-1.0, 1.0] 座標系
-        width  = self.winfo_width()
-        height = self.winfo_height()
-        
-        uScreen = (screenX / width  - 0.5) * 2.0   # [-1.0, 1.0]
-        vScreen = (screenY / height - 0.5) * 2.0   # [-1.0, 1.0]
+        # スクリーン座標をワールド座標に変換
+        worldX, worldY = self.screenToWorld(screenX, screenY)
         
         # 断面上の 3D 点
-        screenPoint = nh.array([uScreen, vScreen, self.sliceZ])
+        screenPoint = nh.array([worldX, worldY, self.sliceZ])
         
         # 逆回転で色空間座標を取得
         colorPoint  = self.dialog.tempRotationMatrix.T @ screenPoint
-        colorCoords = colorPoint + 0.5
+        colorCoords = colorPoint + 0.5 # 原点を色空間の中心から端へ移動
         
         # 範囲チェック
         if (   0.0 <= colorCoords[0] <= 1.0 
@@ -601,26 +617,58 @@ class ColorSpaceCanvas(tk.Canvas):
 
             self.updateDisplay()
     
+    def moveMask(self, screenX, screenY):
+        """選択中の色マスクを移動"""
+        from utils import numpy_helpers as nh
+        
+        selection = self.dialog.getSelectionMaskIndex()
+        if(   not selection is None 
+          and     selection < len(self.dialog.tempMask3dPoints)
+          ):
+            # スクリーン座標をワールド座標に変換
+            worldX, worldY = self.screenToWorld(screenX, screenY)
+            
+            # 断面上の 3D 点
+            screenPoint = nh.array([worldX, worldY, self.sliceZ])
+            
+            # 逆回転で色空間座標を取得
+            colorPoint  = self.dialog.tempRotationMatrix.T @ screenPoint
+            colorCoords = colorPoint + 0.5
+            
+            # 範囲チェック
+            if(   0.0 <= colorCoords[0] <= 1.0 
+              and 0.0 <= colorCoords[1] <= 1.0 
+              and 0.0 <= colorCoords[2] <= 1.0
+              ):
+                # 色マスク位置を更新
+                if "RGB" == self.dialog.tempColorSpace:
+                    r, g, b = self.cubeToRGB(*colorCoords)
+                    self.dialog.updateMask(selection, x=r, y=g, z=b)
+                    self.dialog.updateMaskList()
+                    self.updateDisplay()
+                else:  # Lab
+                    l, a, b = self.cubeToLab(*colorCoords)
+                    self.dialog.updateMask(selection, x=l, y=a, z=b)
+                    self.dialog.updateMaskList()
+                    self.updateDisplay()
+
     def updateDisplay(self):
         self.delete("all")
         
-        width  = self.winfo_width()
-        height = self.winfo_height()
-        
-        if width <= 1 or height <= 1:
-            width = height = 400
-        
-        scale = 2.0/min(width,height)
-        
         # 色空間の立方体を描画
-        self.drawColorspaceSlice(width, height, scale)
-        self.drawWireframe(width, height, scale)
-        self.drawSelectionPoints(width, height, scale)
+        self.drawColorspaceSlice()
+        self.drawWireframe()
+        self.drawSelectionPoints()
     
-    def drawColorspaceSlice(self, width, height, scale):
+    def drawColorspaceSlice(self):
         import numpy as np
         from utils import numpy_helpers as nh
         from PIL import Image, ImageTk
+        
+        width  = self.winfo_width()
+        height = self.winfo_height()
+        if width <= 1 or height <= 1:
+            return
         
         selection = self.dialog.getSelectionMaskIndex()
 
@@ -637,11 +685,9 @@ class ColorSpaceCanvas(tk.Canvas):
                 l, a, b, radius, feather = selectedPoint
                 x, y, z = self.labToCube(l, a, b)
             
-            # 色空間座標を中心原点に変換
-            centered = nh.array([x - 0.5, y - 0.5, z - 0.5])
-            
             # 回転適用
-            rotated = self.applyRotationToPoint(centered)
+            centered = nh.array([x - 0.5, y - 0.5, z - 0.5])    # 色空間の中心で回転
+            rotated = self.dialog.tempRotationMatrix @ centered
             
             # カメラ目線での Z 値を断面位置とする
             self.sliceZ = rotated[2]
@@ -651,17 +697,16 @@ class ColorSpaceCanvas(tk.Canvas):
         
         # Z=sliceZ 断面の色空間を描画
         
-        # 画面座標のグリッドを生成
+        # スクリーン座標のグリッドを生成
         y_coords, x_coords = np.mgrid[0:height, 0:width]
-        u = (x_coords - width  / 2) * scale
-        v = (y_coords - height / 2) * scale
-        screenPoints = np.stack([u, v, np.full_like(u, self.sliceZ)], axis=-1)
+
+        # スクリーン座標をワールド座標に変換
+        worldX, worldY = self.screenToWorld(x_coords, y_coords)
+        worldPoints = np.stack([worldX, worldY, np.full_like(worldX, self.sliceZ)], axis=-1)
 
         # 逆回転で色空間座標を取得
-        colorPoints = screenPoints @ self.dialog.tempRotationMatrix
-        
-        # 色空間座標 [0.0, 1.0) に変換
-        colorCoords = colorPoints + 0.5
+        colorPoints = worldPoints @ self.dialog.tempRotationMatrix
+        colorCoords = colorPoints + 0.5 # 原点を色空間の中心から端へ移動
 
         # 範囲外のピクセルマスクを作成
         valided = np.all((0.0 <= colorCoords) & (colorCoords < 1.0), axis=-1)
@@ -691,12 +736,8 @@ class ColorSpaceCanvas(tk.Canvas):
         # PIL Imageを作成し、Tkinter PhotoImageに変換して描画
         img = Image.fromarray(imageData, 'RGB')
         
-        self._photoimage = ImageTk.PhotoImage(image=img)
-        self.create_image(0, 0, image=self._photoimage, anchor=tk.NW)
-    
-    def applyRotationToPoint(self, point):
-        # 回転行列を直接適用
-        return self.dialog.tempRotationMatrix @ point
+        self._sliceImage = ImageTk.PhotoImage(image=img)
+        self.create_image(0, 0, image=self._sliceImage, anchor=tk.NW)
     
     def createRotationMatrix(self, axis, angle):
         """ロドリゲスの回転公式で回転行列を作成"""
@@ -778,8 +819,9 @@ class ColorSpaceCanvas(tk.Canvas):
         
         return (_x, _y, _z)
 
-    def drawWireframe(self, width, height, scale):
+    def drawWireframe(self):
         """色空間立方体のワイヤーフレームを描画"""
+        import numpy as np
         from utils import numpy_helpers as nh
         
         # 立方体の 8 個の頂点 (色空間座標)
@@ -787,28 +829,20 @@ class ColorSpaceCanvas(tk.Canvas):
             [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],  # 下面
             [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]   # 上面
         ])
+
+        # 頂点を一度に回転・変換 (ベクトル化)
+        centered = vertices - 0.5 # 色空間の中心で回転
+        rotated = centered @ self.dialog.tempRotationMatrix.T
         
-        # 回転した頂点を画面座標に変換
-        screenVertices = []
-        for vertex in vertices:
-            # 中心を原点として回転適用
-            centered = vertex - 0.5
-            rotated  = self.applyRotationToPoint(centered)
-            
-            # 色空間座標系から画面座標へ変換
-            screenX = rotated[0] / scale + 0.5 * width
-            screenY = rotated[1] / scale + 0.5 * height
-            
-            screenVertices.append((screenX, screenY, rotated[2]))
+        # ワールド座標をスクリーン座標に変換
+        screen_x, screen_y = self.worldToScreen(rotated[:, 0], rotated[:, 1])
+        screenVertices = np.stack([screen_x, screen_y, rotated[:, 2]], axis=1)
         
         # 立方体の 12 本の辺を定義
         edges = [
-            # 下面の 4 辺
-            (0, 1), (1, 2), (2, 3), (3, 0),
-            # 上面の 4 辺
-            (4, 5), (5, 6), (6, 7), (7, 4),
-            # 縦の 4 辺
-            (0, 4), (1, 5), (2, 6), (3, 7)
+            (0, 1), (1, 2), (2, 3), (3, 0),  # 下面
+            (4, 5), (5, 6), (6, 7), (7, 4),  # 上面
+            (0, 4), (1, 5), (2, 6), (3, 7)   # 縦
         ]
         
         # 辺を描画
@@ -817,14 +851,12 @@ class ColorSpaceCanvas(tk.Canvas):
             x2, y2, z2 = screenVertices[endIdx]
             
             # Z 値による深度表現（手前が明るい）
-            avgZ      = (z1 + z2) / 2
-            intensity = int(200 + 55 * avgZ)  # 200-255 の範囲
-            intensity = max(100, min(255, intensity))  # 範囲制限
+            avgZ = (z1 + z2) / 2
+            intensity = np.clip(int(200 + 55 * avgZ), 100, 255)
             color     = f"#{intensity:02x}{intensity:02x}{intensity:02x}"
-            
             self.create_line(x1, y1, x2, y2, fill=color, width=2)
     
-    def drawSelectionPoints(self, width, height, scale):
+    def drawSelectionPoints(self):
         # 選択中の色マスクのみ表示
         selection = self.dialog.getSelectionMaskIndex()
         if (   not selection is None 
@@ -838,12 +870,12 @@ class ColorSpaceCanvas(tk.Canvas):
                 l, a, b, radius, feather = self.dialog.tempMask3dPoints[selection]
                 x, y, z = self.labToCube(l, a, b)
             
-            # 3D → 2D 投影
+            # 3D/2D 投影
             screenX, screenY = self.project3DTo2D(x, y, z)
             
-            # 色空間座標での半径を画面座標に変換
-            radiusPixels = self.colorSpaceRadiusToScreen(radius, width, height, scale)
-            effectivePixels = self.colorSpaceRadiusToScreen(radius + feather * 3.0, width, height, scale)
+            # 色空間座標の半径をスクリーン座標に変換
+            radiusPixels    = radius                   / self.worldPerScreen()
+            effectivePixels = (radius + feather * 3.0) / self.worldPerScreen()
             
             # ガウシアン範囲（薄い円）
             self.create_oval(
@@ -859,27 +891,53 @@ class ColorSpaceCanvas(tk.Canvas):
                 fill="", outline="white", width=2
             )
     
-    def colorSpaceRadiusToScreen(self, colorRadius, width, height, scale):
-        """色空間座標での半径を画面ピクセル半径に変換"""
-        return colorRadius / scale
-    
     def project3DTo2D(self, x, y, z):
+        """色空間座標をスクリーン座標に投影"""
         from utils import numpy_helpers as nh
         
-        # 色空間座標を中心原点に変換
-        centered = nh.array([x - 0.5, y - 0.5, z - 0.5])
-        
         # 回転適用
-        rotated = self.applyRotationToPoint(centered)
+        centered = nh.array([x - 0.5, y - 0.5, z - 0.5]) # 色空間の中心で回転
+        rotated = self.dialog.tempRotationMatrix @ centered
         
-        # 画面座標に変換
-        width  = self.winfo_width()
-        height = self.winfo_height()
-        screenX = (rotated[0] / 2.0 + 0.5) * width
-        screenY = (rotated[1] / 2.0 + 0.5) * height
+        # ワールド座標をスクリーン座標に変換
+        screenX, screenY = self.worldToScreen(rotated[0], rotated[1])
         
         return screenX, screenY
     
+    def worldPerScreen(self):
+        """スクリーン座標当たりのワールド座標の長さ"""
+        width  = self.winfo_width()
+        height = self.winfo_height()
+        if width <= 1 or height <= 1:
+            width = height = 400
+        return 2.0/min(width,height)
+
+    def screenToWorld(self, screenX, screenY):
+        """スクリーン座標をワールド座標に変換"""
+        width  = self.winfo_width()
+        height = self.winfo_height()
+        if width <= 1 or height <= 1:
+            width = height = 400
+        scale = 2.0/min(width,height)
+
+        worldX = (screenX - width  / 2) * scale
+        worldY = (screenY - height / 2) * scale
+        
+        return worldX, worldY
+    
+    def worldToScreen(self, worldX, worldY):
+        """ワールド座標をスクリーン座標に変換"""
+        width  = self.winfo_width()
+        height = self.winfo_height()
+        if width <= 1 or height <= 1:
+            width = height = 400
+        scale = 2.0/min(width,height)
+
+        screenX = worldX / scale + width  / 2
+        screenY = worldY / scale + height / 2
+        
+        return screenX, screenY
+
     def isInsideSelectedMask(self, screenX, screenY):
         """選択中の色マスク円内か判定"""
         selection = self.dialog.getSelectionMaskIndex()
@@ -899,55 +957,8 @@ class ColorSpaceCanvas(tk.Canvas):
             maskScreenX, maskScreenY = self.project3DTo2D(x, y, z)
             
             # 半径に応じた円のサイズ
-            width  = self.winfo_width()
-            height = self.winfo_height()
-            
-            if width <= 1 or height <= 1:
-                width = height = 400
-            
-            scale = 2.0/min(width,height)            
-            circleRadius = self.colorSpaceRadiusToScreen(radius, width, height, scale)
+            circleRadius = radius / self.worldPerScreen()
             
             # マウス位置が円内か判定
             distance = ((screenX - maskScreenX) ** 2 + (screenY - maskScreenY) ** 2) ** 0.5
             return distance <= circleRadius
-    
-    def moveMask(self, screenX, screenY):
-        """選択中の色マスクを移動"""
-        from utils import numpy_helpers as nh
-        
-        selection = self.dialog.getSelectionMaskIndex()
-        if(   not selection is None 
-          and     selection < len(self.dialog.tempMask3dPoints)
-          ):
-            # 画面座標 → [-1.0,1.0] 座標系
-            width  = self.winfo_width()
-            height = self.winfo_height()
-            
-            uScreen = (screenX / width  - 0.5) * 2.0
-            vScreen = (screenY / height - 0.5) * 2.0
-            
-            # 断面上の 3D 点
-            screenPoint = nh.array([uScreen, vScreen, self.sliceZ])
-            
-            # 逆回転で色空間座標を取得
-            colorPoint  = self.dialog.tempRotationMatrix.T @ screenPoint
-            colorCoords = colorPoint + 0.5
-            
-            # 範囲チェック
-            if(   0.0 <= colorCoords[0] <= 1.0 
-              and 0.0 <= colorCoords[1] <= 1.0 
-              and 0.0 <= colorCoords[2] <= 1.0
-              ):
-                _, _, _, radius, feather = self.dialog.tempMask3dPoints[selection]
-                # 色マスク位置を更新
-                if "RGB" == self.dialog.tempColorSpace:
-                    r, g, b = self.cubeToRGB(*colorCoords)
-                    self.dialog.tempMask3dPoints[selection] = (r, g, b, radius, feather)
-                    self.dialog.updateMaskList()
-                    self.updateDisplay()
-                else:  # Lab
-                    l, a, b = self.cubeToLab(*colorCoords)
-                    self.dialog.tempMask3dPoints[selection] = (l, a, b, radius, feather)
-                    self.dialog.updateMaskList()
-                    self.updateDisplay()
