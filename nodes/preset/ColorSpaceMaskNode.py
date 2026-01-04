@@ -99,16 +99,10 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
             _B = bBlock.data
 
             if "Lab" == colorSpace:
+                from utils import colorSpace
                 # RGB/Lab 変換
-                _L = (_R + _G + _B) / 3.0
-                _a = (_R - _G         ) / 1.41421356237
-                _b = (_R + _G - 2.0*_B) / 2.44948974278
-
-                # Lab 値を画面の座標系へ変換
-                _a = _a / (2.0*1.41421356237)
-                _b = _b / (2.0*1.41421356237)
-
-                colorBlock = np.stack([_L, _a+0.5, _b+0.5], axis=-1)  # (H, W, 3)
+                _L, _a, _b = colorSpace.rgbToLab(_R, _G, _B)
+                colorBlock = np.stack([_L, _a, _b], axis=-1)  # (H, W, 3)
             else:  # RGB
                 colorBlock = np.stack([_R, _G, _B], axis=-1)  # (H, W, 3)
             
@@ -127,16 +121,10 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
             _B = bBlock.data
 
             if "Lab" == colorSpace:
+                from utils import colorSpace
                 # RGB/Lab 変換
-                _L = (_R + _G + _B) / 3.0
-                _a = (_R - _G         ) / 1.41421356237
-                _b = (_R + _G - 2.0*_B) / 2.44948974278
-
-                # Lab 値を画面の座標系へ変換
-                _a = _a / (2.0*1.41421356237)
-                _b = _b / (2.0*1.41421356237)
-
-                colorBlock = np.stack([_L, _a+0.5, _b+0.5], axis=-1)  # (H, W, 3)
+                _L, _a, _b = colorSpace.rgbToLab(_R, _G, _B)
+                colorBlock = np.stack([_L, _a, _b], axis=-1)  # (H, W, 3)
             else:  # RGB
                 colorBlock = np.stack([_R, _G, _B], axis=-1)  # (H, W, 3)
             
@@ -155,15 +143,11 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
             
             if "Lab" == colorSpace:
                 # Lab 値を画面の座標系へ変換
-                _a = _a / (2.0*1.41421356237)
-                _b = _b / (2.0*1.41421356237)
-                colorBlock = np.stack([_L, _a+0.5, _b+0.5], axis=-1)
+                colorBlock = np.stack([_L, _a, _b], axis=-1)
             else:  # RGB
+                from utils import colorSpace
                 # Lab/RGB 変換
-                _R = _L + _a/1.41421356237 +     _b/2.44948974278
-                _G = _L - _a/1.41421356237 +     _b/2.44948974278
-                _B = _L                    - 2.0*_b/2.44948974278
-
+                _R, _G, _B = colorSpace.labToRgb(_L, _a, _b)
                 colorBlock = np.stack([_R, _G, _B], axis=-1)  # (H, W, 3)
         else:
             # 未対応モードは全て通す
@@ -487,6 +471,7 @@ class ColorSpaceCanvas(tk.Canvas):
         self.node = parent.node
 
         self.sliceZ = 0.0
+        self._photoimage = None
         
         self.bind("<Button-1>", self.onPress)
         self.bind("<Button-3>", self.onRightPress)
@@ -635,6 +620,7 @@ class ColorSpaceCanvas(tk.Canvas):
     def drawColorspaceSlice(self, width, height, scale):
         import numpy as np
         from utils import numpy_helpers as nh
+        from PIL import Image, ImageTk
         
         selection = self.dialog.getSelectionMaskIndex()
 
@@ -664,43 +650,49 @@ class ColorSpaceCanvas(tk.Canvas):
             self.sliceZ = 0.0
         
         # Z=sliceZ 断面の色空間を描画
-        step = 4  # 描画間隔
         
-        for y in range(0, height, step):
-            for x in range(0, width, step):
-                # 画面座標 → 色空間座標系
-                uScreen = (x - width  / 2) * scale
-                vScreen = (y - height / 2) * scale
-                
-                # 断面上の 3D 点
-                screenPoint = nh.array([uScreen, vScreen, self.sliceZ])
-                
-                # 逆回転で色空間座標を取得
-                colorPoint = self.dialog.tempRotationMatrix.T @ screenPoint
-                
-                # 色空間座標 [0.0,1.0) に変換
-                colorCoords = colorPoint + 0.5
-                
-                if(   0.0 <= colorCoords[0] < 1.0 
-                  and 0.0 <= colorCoords[1] < 1.0 
-                  and 0.0 <= colorCoords[2] < 1.0
-                  ):
-                    
-                    # RGB 色に変換
-                    if "RGB" == self.dialog.tempColorSpace:
-                        r,g,b = self.cubeToRGB(*colorCoords)
-                    else:  # Lab
-                        from utils import colorSpace
-                        lab = self.cubeToLab(*colorCoords)
-                        r,g,b = colorSpace.labToRgb(*lab)
-                    
-                    # 色を描画
-                    r = np.clip(int(r * 256), 0, 255)
-                    g = np.clip(int(g * 256), 0, 255)
-                    b = np.clip(int(b * 256), 0, 255)
-                    color  = f"#{r:02x}{g:02x}{b:02x}"
-                    
-                    self.create_rectangle(x, y, x+step, y+step, fill=color, outline="")
+        # 画面座標のグリッドを生成
+        y_coords, x_coords = np.mgrid[0:height, 0:width]
+        u = (x_coords - width  / 2) * scale
+        v = (y_coords - height / 2) * scale
+        screenPoints = np.stack([u, v, np.full_like(u, self.sliceZ)], axis=-1)
+
+        # 逆回転で色空間座標を取得
+        colorPoints = screenPoints @ self.dialog.tempRotationMatrix
+        
+        # 色空間座標 [0.0, 1.0) に変換
+        colorCoords = colorPoints + 0.5
+
+        # 範囲外のピクセルマスクを作成
+        valided = np.all((0.0 <= colorCoords) & (colorCoords < 1.0), axis=-1)
+        
+        # 画像作成
+        imageData = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        if np.any(valided):
+            validCoords = colorCoords[valided]
+            
+            # RGB 色に変換
+            if "RGB" == self.dialog.tempColorSpace:
+                r, g, b = self.cubeToRGB(validCoords[:, 0], validCoords[:, 1], validCoords[:, 2])
+            else:  # Lab
+                from utils import colorSpace
+                l, a, b = self.cubeToLab(validCoords[:, 0], validCoords[:, 1], validCoords[:, 2])
+                r, g, b = colorSpace.labToRgb(l, a, b)
+            
+            # RGB値を [0, 255] の整数に変換
+            r = np.clip(r * 256, 0, 255).astype(np.uint8)
+            g = np.clip(g * 256, 0, 255).astype(np.uint8)
+            b = np.clip(b * 256, 0, 255).astype(np.uint8)
+            
+            # マスクされた部分に色を適用
+            imageData[valided] = np.stack([r, g, b], axis=-1)
+
+        # PIL Imageを作成し、Tkinter PhotoImageに変換して描画
+        img = Image.fromarray(imageData, 'RGB')
+        
+        self._photoimage = ImageTk.PhotoImage(image=img)
+        self.create_image(0, 0, image=self._photoimage, anchor=tk.NW)
     
     def applyRotationToPoint(self, point):
         # 回転行列を直接適用
