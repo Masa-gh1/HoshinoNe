@@ -40,10 +40,6 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         
         if datas:
             return datas
-        elif self._combinedTensor:
-            datas = [self._combinedTensor]
-            self._combinedTensor = None
-            return datas
         elif self._combinedPolynomials:
             datas = [self._combinedPolynomials[0]]
             del self._combinedPolynomials[0]
@@ -91,7 +87,7 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
             result = nh.nans((blockHeight, blockWidth))
         else:
             result = None
-            # ableデータの最大（NaN対応）
+            # table の最大（NaN対応）
             for inputData in inputDatas:
                 inputBlock = inputData.getBlock(planeIndex, x, y)
                 if inputBlock:
@@ -103,7 +99,7 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                         result = nh.nans((blockHeight, blockWidth))
                         result[:minH, :minW] = inputBlock.data[:minH, :minW]
                     else:
-                        # NaN対応最大（効率的な順序）
+                        # NaN 対応最大
                         result[:minH, :minW] = np.where(
                             ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
                             np.maximum(result[:minH, :minW], inputBlock.data[:minH, :minW]),
@@ -115,7 +111,7 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                         )
         
         for polynomial in self._combinedPolynomials:
-            # polynomialデータの最大（NaN対応）
+            # polynomial の最大（NaN対応）
             polynomialValues = self.calculatePolynomialBlock(polynomial, planeIndex, x, y, result.shape)
             result = np.where(
                 np.isnan(result),

@@ -107,7 +107,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                     result = nh.nans((blockHeight, blockWidth))
                     result[:minH, :minW] = inputBlock.data[:minH, :minW]
                 else:
-                    # NaN対応加算（効率的な順序）
+                    # NaN 対応加算
                     result[:minH, :minW] = np.where(
                         ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
                         result[:minH, :minW] + inputBlock.data[:minH, :minW],
@@ -122,15 +122,18 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         if result is None:
             result = nh.nans((blockHeight, blockWidth))
         
-        # polynomialデータの加算（NaN対応）
+        # tensor 加算（NaN対応）
+        if self._combinedTensor:
+            block = self._combinedTensor.getBlock( planeIndex, x, y)
+            if block:
+                result = result + block.data
+        
+        # polynomial を加算（NaN対応）
         if self._combinedPolynomial:
             polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape)
-            result = np.where(
-                np.isnan(result),
-                polynomialValues,
-                result + polynomialValues
-            )
-        
+            if not polynomialValues is None:
+                result = result + polynomialValues
+
         return DataBlock(result, planeIndex, x, y)
     
     def _processPolynomialAddition(self, block, polynomialDatas):

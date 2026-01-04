@@ -112,7 +112,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                     result = nh.nans((blockHeight, blockWidth))
                     result[:minH, :minW] = inputBlock.data[:minH, :minW]
                 else:
-                    # NaN対応乗算（効率的な順序）
+                    # NaN対応乗算
                     result[:minH, :minW] = np.where(
                         ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
                         result[:minH, :minW] * inputBlock.data[:minH, :minW],
@@ -136,7 +136,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         # polynomial を乗算（NaN対応）
         if self._combinedPolynomial:
             polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            if block:
+            if not polynomialValues is None:
                 result = result * polynomialValues
         
         return DataBlock(result, planeIndex, x, y)

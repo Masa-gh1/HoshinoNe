@@ -518,7 +518,7 @@ class FlowEditor:
             self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
 
             from utils.Debug import Debug
-            if Debug.isTestMode() and 1==self.take:
+            if Debug.isTestMode() and 1==self.take and self.currentFlowPath:
                 # ファーストテイクかつテストモードなので結果を記録
                 filename = os.path.basename(self.currentFlowPath)
                 Debug.log(type(self).__name__, f"{filename} elapsed {self.flowControl.elapsedMs} ms")
