@@ -277,9 +277,9 @@ class ColorSpaceMaskDialog(tk.Toplevel):
         
         # 列設定
         self.maskList.heading("index", text="#")
-        self.maskList.heading("x", text="X")
-        self.maskList.heading("y", text="Y")
-        self.maskList.heading("z", text="Z")
+        self.maskList.heading("x", text="R")
+        self.maskList.heading("y", text="G")
+        self.maskList.heading("z", text="B")
         self.maskList.heading("radius", text="半径")
         self.maskList.heading("feather", text="ぼかし")
         
