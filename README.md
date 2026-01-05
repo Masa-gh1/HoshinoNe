@@ -4,7 +4,7 @@ Visual Flow-based Image Processing Tool
 
 ## Development
 
-This project was developed with assistance from Amazon Q Developer, an AI-powered coding assistant.
+This project was developed with assistance from Amazon Q Developer and Gemini Code Assist, AI-powered coding assistants.
 
 ## License
 
