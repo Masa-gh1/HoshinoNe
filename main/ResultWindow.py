@@ -426,7 +426,7 @@ class ResultWindow(tk.Toplevel):
             text += f"Mode: {mode}\n"
             text += f"Planes: {', '.join(planes)}\n"
             text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
-            text += f"Adaptive Levels: {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
+            text += f"Adaptive Levels (1-99%): {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
             text += f"All levels: {minValue:.3f} - {endValue:.3f}\n"
             text += f"Mode (Peak): {modeValue:.3f}\n"
             
