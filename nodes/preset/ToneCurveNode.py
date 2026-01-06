@@ -154,11 +154,13 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         self.boundaryCondition = boundaryCondition
         self.view.onNodeConfigChanged(self)
     
-    def setupDisplayLevels(self, outputFlowData, inputFlowData):
+    def processHeaders(self, inputData):
         """出力のdisplay_levelsを設定"""
-        outputFlowData.headers['display_levels'] = {
-            'min': self.outputMin,
-            'exclusive_upper': self.outputEnd
+        return {
+            'display_levels':{
+                'min': self.outputMin,
+                'exclusive_upper': self.outputEnd
+            }
         }
     
     def getConfigHash(self):

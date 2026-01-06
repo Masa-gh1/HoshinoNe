@@ -26,7 +26,6 @@ class N1BlockOperationNode(FlowNode):
     
     def process(self, context=None):
         from utils.ThreadPool import ProcessExecutorInNode
-        from base import FlowData
 
         self.reportProgress(context, "開始")
         
@@ -46,25 +45,15 @@ class N1BlockOperationNode(FlowNode):
         if not processedInputs:
             self.flowDatas = processedInputs
         else:
-            # 基準データとサイズを決定
-            baseDataIndex = self.getBaseDataIndex(processedInputs)
-            baseData = processedInputs[baseDataIndex]
-            width, height = self.getResultDimensions(processedInputs)
-            
-            # 結果用のFlowDataを初期化（headersをコピー）
-            headers = baseData.headers.copy() if baseData.headers else {}
-            flowData = FlowData(headers)
-            flowData.setDimensions(width, height)
-            
-            # display_levelsをheaders経由で設定
-            self.setupDisplayLevels(flowData, processedInputs)
-            
+            # 結果用の FlowData を初期化
+            flowData = self.createFlowData(processedInputs)
+
             # ブロック単位で並列処理
             futures = []
             for block in flowData.iterateBlocks():
                 planeIndex = block.planeIndex
                 x, y = block.x, block.y
-                future = ProcessExecutorInNode .submit(self, self.processBlock, processedInputs, planeIndex, x, y)
+                future = ProcessExecutorInNode.submit(self, self.processBlock, processedInputs, planeIndex, x, y)
                 futures.append(future)
             
             # 全ブロックの処理完了を待つ
@@ -80,7 +69,7 @@ class N1BlockOperationNode(FlowNode):
         self.reportProgress(context, "完了")
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理（サブクラスでオーバーライド可能）
+        """入力データの前処理 (サブクラスでオーバーライド可能)
         
         Args:
             inputDatas: 入力データのリスト
@@ -90,15 +79,59 @@ class N1BlockOperationNode(FlowNode):
         """
         return inputDatas
     
+    def createFlowData(self, inputDatas):
+        """
+        LazyFlowDataを作成 (サブクラスでオーバーライド可能)
+        
+        Args:
+            inputData: 入力FlowData
+            
+        Returns:
+            LazyFlowData
+        """
+        from base import FlowData
+
+        # 基準データを決定
+        baseDataIndex = self.getBaseDataIndex(inputDatas)
+        baseData = inputDatas[baseDataIndex]
+
+        # headers を生成
+        headers = baseData.headers.copy() if baseData.headers else {}
+        headers.update(self.processHeaders(baseData, inputDatas))
+
+        # サイズを決定
+        width, height = self.getOutputDimensions(baseData, inputDatas)
+        
+        # 結果用の FlowData を生成
+        flowData = FlowData(headers)
+        flowData.setDimensions(width, height)
+        
+        return flowData
+    
     def getBaseDataIndex(self, inputDatas):
-        """基準データのインデックスを返す（サブクラスでオーバーライド可能）"""
+        """
+        基準データのインデックスを返す (サブクラスでオーバーライド可能)
+        
+        Args:
+            inputDatas: 入力データのリスト
+            
+        Returns:
+            基準データのインデックス
+        """
         return 0  # デフォルトは最初のデータ
     
-    def getResultDimensions(self, inputDatas):
-        """結果画像のサイズを決定（サブクラスでオーバーライド可能）"""
-        if self._baseDataIndex is None:
-            self._baseDataIndex = self.getBaseDataIndex(inputDatas)
-        return inputDatas[self._baseDataIndex].getDimensions()
+    def getOutputDimensions(self, baseData, inputDatas):
+        """
+        結果画像のサイズを決定 (サブクラスでオーバーライド可能)
+        
+        Args:
+            baseData: 基準データ
+            inputDatas: 入力データのリスト
+            
+        Returns:
+            結果のサイズ
+        """
+        return baseData.getDimensions()
     
     def getUnionDimensions(self, inputDatas):
         """全入力データを包含する最大サイズを計算"""
@@ -109,9 +142,23 @@ class N1BlockOperationNode(FlowNode):
             height = max(height, h)
         return width, height
     
+    def processHeaders(self, baseData, inputDatas):
+        """
+        出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
+        
+        Args:
+            baseData: 基準データ
+            inputDatas: 入力 FlowData
+
+        Returns:
+            出力 FlowData に追記する headers
+        """
+        return {}
+    
     @abstractmethod
     def processBlock(self, inputDatas, planeIndex, x, y):
-        """単一ブロックの処理（サブクラスで実装）
+        """
+        単一ブロックの処理 (サブクラスで実装)
         
         Args:
             inputDatas: 入力データのリスト
@@ -120,17 +167,3 @@ class N1BlockOperationNode(FlowNode):
             処理結果のDataBlock
         """
         pass
-    
-    def setupDisplayLevels(self, outputFlowData, inputDatas):
-        """出力FlowDataのdisplay_levelsを設定（サブクラスでオーバーライド可能）
-        
-        Args:
-            outputFlowData: 出力FlowData
-            inputDatas: 入力FlowDataのリスト
-        """
-        # デフォルトは基準データのままコピー
-        if self._baseDataIndex is not None and inputDatas:
-            baseData = inputDatas[self._baseDataIndex]
-            if baseData.headers and 'display_levels' in baseData.headers:
-                outputFlowData.headers['display_levels'] = baseData.headers['display_levels']
-    

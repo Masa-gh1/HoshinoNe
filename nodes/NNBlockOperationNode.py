@@ -26,7 +26,6 @@ class NNBlockOperationNode(FlowNode):
 
     def process(self, context=None):
         from utils.ThreadPool import ProcessExecutorInNode
-        from base import FlowData
         
         self.reportProgress(context, "開始")
         
@@ -43,20 +42,13 @@ class NNBlockOperationNode(FlowNode):
         # 前処理
         processedInputs = self.preprocessInputs(inputDatas)
         
-        resultFlowDatas = []
-        futureToDatas = {}
+        futureToDatas       = {}
+        futureCountPerDatas = {}
         
         for inputData in processedInputs:
-            # 結果用のFlowDataを初期化
-            width, height = inputData.getDimensions()
-            headers = inputData.headers.copy() if inputData.headers else {}
-            flowData = FlowData(headers)
-            flowData.setDimensions(width, height)
-            
-            # display_levelsをheaders経由で計算
-            self.setupDisplayLevels(flowData, inputData)
-            
-            resultFlowDatas.append(flowData)
+            # 結果用の FlowData を初期化
+            flowData = self.createFlowData(inputData)
+            futureCountPerDatas[flowData] = 0
             
             # ブロック単位で並列処理
             for block in inputData.iterateBlocks():
@@ -64,21 +56,31 @@ class NNBlockOperationNode(FlowNode):
                 x, y = block.x, block.y
                 future = ProcessExecutorInNode.submit(self, self.processBlock, block, planeIndex, x, y)
                 futureToDatas[future] = flowData
+                futureCountPerDatas[flowData] += 1
         
         # 全ブロックの処理完了を待つ
         self.reportProgress(context, "処理中")
+        resultFlowDatas = []
         totalBlocks = len(futureToDatas)
         for i, future in enumerate(as_completed(futureToDatas)):
             resultBlock = future.result()
             if resultBlock:
-                futureToDatas[future].setBlock(resultBlock)
+                flowData = futureToDatas.pop(future)
+                flowData.setBlock(resultBlock)
+
+                futureCountPerDatas[flowData] -= 1
+                if futureCountPerDatas[flowData] == 0:
+                    # 全部ブロックの処理が終わった flowData を結果配列に追加
+                    futureCountPerDatas.pop(flowData)
+                    resultFlowDatas.append(flowData)
+                
             self.reportProgress(context, "処理中", i + 1, totalBlocks)
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理（サブクラスでオーバーライド可能）
+        """入力データの前処理 (サブクラスでオーバーライド可能)
         
         Args:
             inputDatas: 入力データのリスト
@@ -88,20 +90,42 @@ class NNBlockOperationNode(FlowNode):
         """
         return inputDatas
     
-    def setupDisplayLevels(self, outputFlowData, inputFlowData):
-        """出力FlowDataのdisplay_levelsを設定（サブクラスでオーバーライド可能）
+    def createFlowData(self, inputData):
+        """LazyFlowDataを作成 (サブクラスでオーバーライド可能)
         
         Args:
-            outputFlowData: 出力FlowData
+            inputData: 入力FlowData
+            
+        Returns:
+            LazyFlowData
+        """
+        from base import FlowData
+
+        # headers を生成
+        headers = inputData.headers.copy() if inputData.headers else {}
+        headers.update(self.processHeaders(inputData))
+
+        # サイズを決定
+        width, height = inputData.getDimensions()
+        
+        # 結果用の FlowData を生成
+        flowData = FlowData(headers)
+        flowData.setDimensions(width, height)
+
+        return flowData
+
+    def processHeaders(self, inputData):
+        """
+        出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
+        
+        Args:
             inputFlowData: 入力FlowData
         """
-        # デフォルトは入力のままコピー
-        if inputFlowData.headers and 'display_levels' in inputFlowData.headers:
-            outputFlowData.headers['display_levels'] = inputFlowData.headers['display_levels']
+        return {}
     
     @abstractmethod
     def processBlock(self, block, planeIndex, x, y):
-        """単一ブロックの処理（サブクラスで実装）
+        """単一ブロックの処理 (サブクラスで実装)
         
         Args:
             block: 処理対象のブロック

@@ -20,9 +20,6 @@ class CountNode(N1BlockOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
-    
     def getBaseDataIndex(self, inputDatas):
         """カウントではpolynomialがある場合は最初のtableデータを基準とする"""
         for i, data in enumerate(inputDatas):
@@ -31,16 +28,19 @@ class CountNode(N1BlockOperationNode):
                 return i
         return 0  # polynomialのみの場合は最初のpolynomialを基準とする
     
-    def getResultDimensions(self, inputDatas):
+    def getOutputDimensions(self, baseData, inputDatas):
         """カウントでは全入力データを包含するサイズを使用"""
-        return self.getUnionDimensions(inputDatas)
+        self._outputDimensions = self.getUnionDimensions(inputDatas)
+        return self._outputDimensions
     
-    def setupDisplayLevels(self, outputFlowData, inputDatas):
+    def processHeaders(self, baseData, inputDatas):
         """入力データ数に基づくdisplay_levelsを設定"""
         dataCount = len(inputDatas)
-        outputFlowData.headers['display_levels'] = {
-            'min': 0.0,
-            'exclusive_upper': float(dataCount)
+        return {
+            'display_levels':{
+                'min': 0.0,
+                'exclusive_upper': float(dataCount)
+            }
         }
     
     def processBlock(self, inputDatas, planeIndex, x, y):
@@ -66,7 +66,7 @@ class CountNode(N1BlockOperationNode):
             return self._processPolynomialCount(planeIndex, polynomialDatas)
         else:
             # table と polynomial の混在または table のみの場合
-            resultWidth, resultHeight = self.getResultDimensions(inputDatas)
+            resultWidth, resultHeight = self._outputDimensions
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
             blockWidth = min(BLOCK_SIZE, resultWidth - x)

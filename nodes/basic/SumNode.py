@@ -20,9 +20,6 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
-    
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
         import numpy as np
@@ -59,28 +56,32 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         else:
             return None
 
-    def getResultDimensions(self, inputDatas):
+    def getOutputDimensions(self, baseData, inputDatas):
         """加算では全入力データを包含するサイズを使用"""
-        return self.getUnionDimensions(inputDatas)
+        self._outputDimensions = self.getUnionDimensions(inputDatas)
+        return self._outputDimensions
     
-    def setupDisplayLevels(self, outputFlowData, inputDatas):
+    def processHeaders(self, baseData, inputDatas):
         """加算されたdisplay_levelsを設定"""
-        allLevels = []
+        minSum = 0.0
+        maxSum = 0.0
+        count = 0
         for data in inputDatas:
             if data.headers and 'display_levels' in data.headers:
                 levels = data.headers['display_levels']
-                allLevels.append((levels['min'], levels['exclusive_upper']))
+                minSum += levels['min']
+                maxSum += levels['exclusive_upper']
+                count += 1
         
-        if not allLevels:
-            return
-        
-        minSum = sum(level[0] for level in allLevels)
-        maxSum = sum(level[1] for level in allLevels)
-        
-        outputFlowData.headers['display_levels'] = {
-            'min'            : minSum,
-            'exclusive_upper': maxSum
-        }
+        if 0 == count:
+            return {}
+        else:
+            return {
+                'display_levels':{
+                    'min'            : minSum,
+                    'exclusive_upper': maxSum
+                }
+            }
     
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの加算処理"""
@@ -89,7 +90,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         from utils import numpy_helpers as nh
         from base import DataBlock
         
-        resultWidth, resultHeight = self.getResultDimensions(inputDatas)
+        resultWidth, resultHeight = self._outputDimensions
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
         blockWidth = min(BLOCK_SIZE, resultWidth - x)

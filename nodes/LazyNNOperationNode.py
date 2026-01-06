@@ -16,6 +16,8 @@ class LazyNNOperationNode(FlowNode):
     # ノードタイプ
     majorType = 'Lazy_NN_block_operation'
     minorType = 'Lazy_NN_block_operation'
+    # ノード名
+    name      = 'LazyNNOperationNode'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_PAS

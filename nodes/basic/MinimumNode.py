@@ -47,28 +47,34 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         else:
             return None
 
-    def getResultDimensions(self, inputDatas):
+    def getOutputDimensions(self, baseData, inputDatas):
         """選択大では全入力データを包含するサイズを使用"""
-        return self.getUnionDimensions(inputDatas)
+        self._outputDimensions = self.getUnionDimensions(inputDatas)
+        return self._outputDimensions
     
-    def setupDisplayLevels(self, outputFlowData, inputDatas):
+    def processHeaders(self, baseData, inputDatas):
         """選択大されたdisplay_levelsを設定"""
-        allLevels = []
+        import numpy as np
+        from utils import numpy_helpers as nh
+        minMin = np.finfo(nh.BDTYPE).max
+        maxMin = np.finfo(nh.BDTYPE).max
+        count = 0
         for data in inputDatas:
             if data.headers and 'display_levels' in data.headers:
                 levels = data.headers['display_levels']
-                allLevels.append((levels['min'], levels['exclusive_upper']))
+                minMin = min(minMin, levels['min'])
+                maxMin = min(maxMin, levels['exclusive_upper'])
+                count += 1
         
-        if not allLevels:
-            return
-        
-        levelMin = max(level[0] for level in allLevels)
-        levelMax = max(level[1] for level in allLevels)
-        
-        outputFlowData.headers['display_levels'] = {
-            'min'            : levelMin,
-            'exclusive_upper': levelMax
-        }
+        if 0 == count:
+            return {}
+        else:
+            return {
+                'display_levels':{
+                    'min'            : minMin,
+                    'exclusive_upper': maxMin
+                }
+            }
     
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの最大処理"""
@@ -77,7 +83,7 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         from utils import numpy_helpers as nh
         from base import DataBlock
         
-        resultWidth, resultHeight = self.getResultDimensions(inputDatas)
+        resultWidth, resultHeight = self._outputDimensions
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
         blockWidth  = min(BLOCK_SIZE, resultWidth - x)

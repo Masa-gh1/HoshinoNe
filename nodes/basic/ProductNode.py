@@ -59,33 +59,35 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         else:
             return None
 
-    def getResultDimensions(self, inputDatas):
+    def getOutputDimensions(self, baseData, inputDatas):
         """乗算では全入力データを包含するサイズを使用"""
-        return self.getUnionDimensions(inputDatas)
+        self._outputDimensions = self.getUnionDimensions(inputDatas)
+        return self._outputDimensions
     
-    def setupDisplayLevels(self, outputFlowData, inputDatas):
+    def processHeaders(self, baseData, inputDatas):
         """乗算されたdisplay_levelsを設定"""
-        allLevels = []
+        minProduct = 1.0
+        maxProduct = 1.0
+        count = 0
         for data in inputDatas:
             if data.headers and 'display_levels' in data.headers:
                 levels = data.headers['display_levels']
-                allLevels.append((levels['min'], levels['exclusive_upper']))
+                minVal = levels['min']
+                maxVal = levels['exclusive_upper']
+                products = [minProduct * minVal, minProduct * maxVal, maxProduct * minVal, maxProduct * maxVal]
+                minProduct = min(products)
+                maxProduct = max(products)
+                count += 1
         
-        if not allLevels:
-            return
-        
-        minProduct = 1.0
-        maxProduct = 1.0
-        
-        for minVal, maxVal in allLevels:
-            products = [minProduct * minVal, minProduct * maxVal, maxProduct * minVal, maxProduct * maxVal]
-            minProduct = min(products)
-            maxProduct = max(products)
-        
-        outputFlowData.headers['display_levels'] = {
-            'min'            : minProduct,
-            'exclusive_upper': maxProduct
-        }
+        if 0 == count:
+            return {}
+        else:
+            return {
+                'display_levels':{
+                    'min'            : minProduct,
+                    'exclusive_upper': maxProduct
+                }
+            }
     
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの乗算処理"""
@@ -94,7 +96,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         from config import BLOCK_SIZE
         from base import DataBlock
 
-        resultWidth, resultHeight = self.getResultDimensions(inputDatas)
+        resultWidth, resultHeight = self._outputDimensions
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
         blockWidth = min(BLOCK_SIZE, resultWidth - x)
