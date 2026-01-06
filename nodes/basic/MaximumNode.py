@@ -52,30 +52,6 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         self._outputDimensions = self.getUnionDimensions(inputDatas)
         return self._outputDimensions
     
-    def processHeaders(self, baseData, inputDatas):
-        """選択大されたdisplay_levelsを設定"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-        minMax = np.finfo(nh.BDTYPE).min
-        maxMax = np.finfo(nh.BDTYPE).min
-        count = 0
-        for data in inputDatas:
-            if data.headers and 'display_levels' in data.headers:
-                levels = data.headers['display_levels']
-                minMax = max(minMax, levels['min'])
-                maxMax = max(maxMax, levels['exclusive_upper'])
-                count += 1
-        
-        if 0 == count:
-            return {}
-        else:
-            return {
-                'display_levels':{
-                    'min'            : minMax,
-                    'exclusive_upper': maxMax
-                }
-            }
-        
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの最大処理"""
         import numpy as np

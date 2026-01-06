@@ -35,21 +35,3 @@ class NegateLazyFlowData(LazyFlowData):
 
         result = -block.data
         return DataBlock(result, planeIndex, x, y)
-    
-    def getLazyHeaderkeys(self):
-        return ['display_levels']
-    
-    def headerOperation(self, lazyFlowData, key):
-        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
-            return None
-        
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        return {
-            'display_levels': {
-                'min': -inputMax,
-                'exclusive_upper': -inputMin
-            }
-        }

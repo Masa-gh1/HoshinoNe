@@ -158,7 +158,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         """出力のdisplay_levelsを設定"""
         return {
             'display_levels':{
-                'min': self.outputMin,
+                'min'            : self.outputMin,
                 'exclusive_upper': self.outputEnd
             }
         }

@@ -36,25 +36,3 @@ class AbsoluteLazyFlowData(LazyFlowData):
         result = np.abs(block.data)
         
         return DataBlock(result, planeIndex, x, y)
-
-    def getLazyHeaderkeys(self):
-        return ['display_levels']    
-
-    def headerOperation(self, lazyFlowData, key):
-        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
-            return None
-        
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        # 絶対値変換: [a, b) → [0, max(|a|, |b|))
-        absMin = abs(inputMin)
-        absMax = abs(inputMax)
-        
-        return {
-            'display_levels': {
-                'min': 0.0,
-                'exclusive_upper': max(absMin, absMax)
-            }
-        }

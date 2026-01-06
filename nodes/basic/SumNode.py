@@ -61,28 +61,6 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         self._outputDimensions = self.getUnionDimensions(inputDatas)
         return self._outputDimensions
     
-    def processHeaders(self, baseData, inputDatas):
-        """加算されたdisplay_levelsを設定"""
-        minSum = 0.0
-        maxSum = 0.0
-        count = 0
-        for data in inputDatas:
-            if data.headers and 'display_levels' in data.headers:
-                levels = data.headers['display_levels']
-                minSum += levels['min']
-                maxSum += levels['exclusive_upper']
-                count += 1
-        
-        if 0 == count:
-            return {}
-        else:
-            return {
-                'display_levels':{
-                    'min'            : minSum,
-                    'exclusive_upper': maxSum
-                }
-            }
-    
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの加算処理"""
         import numpy as np

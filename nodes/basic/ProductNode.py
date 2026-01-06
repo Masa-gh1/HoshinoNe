@@ -64,31 +64,6 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         self._outputDimensions = self.getUnionDimensions(inputDatas)
         return self._outputDimensions
     
-    def processHeaders(self, baseData, inputDatas):
-        """乗算されたdisplay_levelsを設定"""
-        minProduct = 1.0
-        maxProduct = 1.0
-        count = 0
-        for data in inputDatas:
-            if data.headers and 'display_levels' in data.headers:
-                levels = data.headers['display_levels']
-                minVal = levels['min']
-                maxVal = levels['exclusive_upper']
-                products = [minProduct * minVal, minProduct * maxVal, maxProduct * minVal, maxProduct * maxVal]
-                minProduct = min(products)
-                maxProduct = max(products)
-                count += 1
-        
-        if 0 == count:
-            return {}
-        else:
-            return {
-                'display_levels':{
-                    'min'            : minProduct,
-                    'exclusive_upper': maxProduct
-                }
-            }
-    
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの乗算処理"""
         import numpy as np

@@ -39,27 +39,3 @@ class InverseLazyFlowData(LazyFlowData):
             result = np.where(arr != 0, 1.0 / arr, nh.nan)
         
         return DataBlock(result, planeIndex, x, y)
-    
-    def getLazyHeaderkeys(self):
-        return ['display_levels']
-    
-    def headerOperation(self, lazyFlowData, key):
-        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
-            return None
-        
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        # 逆数変換: [a, b) → [1/b, 1/a) (ゼロを除く)
-        if inputMin > 0 or inputMax < 0:
-            # ゼロを含まない場合
-            return {
-                'display_levels': {
-                    'min': 1.0 / inputMax,
-                    'exclusive_upper': 1.0 / inputMin
-                }
-            }
-        else:
-            # ゼロを含む場合は元の値を保持
-            return {'display_levels': inputLevels}

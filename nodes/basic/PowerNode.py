@@ -79,35 +79,3 @@ class PowerLazyFlowData(LazyFlowData, PolynomialOperationMixin):
                 result = power_result if is_complex else np.real(power_result)
         
         return DataBlock( result, planeIndex, x, y)
-    
-    def getLazyHeaderkeys(self):
-        return ['display_levels']
-    
-    def headerOperation(cls, lazyFlowData, key, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
-        import numpy as np
-        
-        if not 'display_levels' in lazyFlowData.sourceFlowData.headers:
-            return None
-        
-        inputLevels = lazyFlowData.sourceFlowData.headers['display_levels']
-        inputMin = inputLevels['min']
-        inputMax = inputLevels['exclusive_upper']
-        
-        if combinedAuxiliaryPolynomial:
-            polynomial = combinedAuxiliaryPolynomial.getBlock(0, 0, 0)
-            if polynomial:
-                width, height = lazyFlowData.sourceFlowData.getDimensions()
-                expMin, expMax = cls.calculatePolynomialRange(polynomial.data, width, height)
-                
-                # 冪乗の範囲計算（実数部のみ）
-                powers = [np.real(inputMin ** expMin), np.real(inputMin ** expMax),
-                            np.real(inputMax ** expMin), np.real(inputMax ** expMax)]
-                return {
-                    'display_levels': {
-                        'min': min(powers),
-                        'exclusive_upper': max(powers)
-                    }
-                }
-        
-        # 複雑な場合は元のdisplay_levelsをそのまま返す
-        return {'display_levels': inputLevels}
