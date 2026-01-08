@@ -59,7 +59,7 @@ class ImageReaderNode(BaseReaderNode):
         
     def processFile(self, filePath, context=None):
         from PIL import Image
-        from utils import numpy_helpers as nh
+        import numpy as np
         from utils.ThreadPool import ProcessExecutorInNode 
         from utils import exif_helper as exif
         from config import BLOCK_SIZE
@@ -110,7 +110,7 @@ class ImageReaderNode(BaseReaderNode):
         if exif_info:
             headers['exif'] = exif_info
         
-        pixels = nh.array(img)
+        pixels = np.array(img) # ここでは型変換せずそのままデータを得る
         flowData = FlowData(headers)
         flowData.setDimensions(width, height)
         
