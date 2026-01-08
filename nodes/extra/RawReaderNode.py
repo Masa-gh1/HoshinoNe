@@ -224,24 +224,22 @@ class RawReaderNode(BaseReaderNode):
             # ベイヤー配列の生データを取得
             if self.demosaicAlgorithm == "bayer":
                 # ベイヤー配列のまま1プレーンで取得
-                bayer_data = raw.raw_image
-                height, width = bayer_data.shape
+                rawData = raw.raw_image
+                height, width = rawData.shape
                 planeCount = 1
                 mode = 'BAYER'
                 plane_names = ['Bayer']
-                rgb = bayer_data.reshape(height, width, 1)  # 3次元配列に変換
             elif self.demosaicAlgorithm == "bayer crop":
                 # ベイヤー配列のまま1プレーンで取得(クロップ)
-                bayer_data = raw.raw_image_visible
-                height, width = bayer_data.shape
+                rawData = raw.raw_image_visible
+                height, width = rawData.shape
                 planeCount = 1
                 mode = 'BAYER'
                 plane_names = ['Bayer']
-                rgb = bayer_data.reshape(height, width, 1)  # 3次元配列に変換
             else:
                 # RAW 後処理
-                rgb = raw.postprocess(params)
-                height, width, planeCount = rgb.shape
+                rawData = raw.postprocess(params)
+                height, width, planeCount = rawData.shape
                 bayer_pattern = None
                 
                 # mode と plane_names を動的に設定
@@ -290,7 +288,7 @@ class RawReaderNode(BaseReaderNode):
             # ブロック単位で並列処理
             for y in range(0, height, BLOCK_SIZE):
                 for x in range(0, width, BLOCK_SIZE):
-                    future = ProcessExecutorInNode .submit(self, self._processBlock, rgb, x, y, planeCount, height, width)
+                    future = ProcessExecutorInNode .submit(self, self._processBlock, rawData, x, y, planeCount, height, width)
                     futures.append(future)
             
             # 全ブロックの処理完了を待ちながら進捗報告
