@@ -308,17 +308,13 @@ class RawReaderNode(BaseReaderNode):
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         
-        # ブロックの切り出し
-        blocks = []
-        if pixels.ndim == 2:
-            blocks.append(pixels[y:endY, x:endX])
-        else:
-            for planeIndex in range(planeCount):
-                blocks.append(pixels[y:endY, x:endX, planeIndex])
-        
-        # 各プレーンのブロック情報を返す
+        # 各プレーンのブロックの切り出し
         dataBlocks = []
-        for planeIndex, block in enumerate(blocks):
+        for planeIndex in range(planeCount):
+            if pixels.ndim == 2:
+                block = pixels[y:endY, x:endX]
+            else:
+                block = pixels[y:endY, x:endX, planeIndex]
             dataBlocks.append(DataBlock(block, planeIndex, x, y))
         return dataBlocks
     

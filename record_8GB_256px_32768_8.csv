@@ -3,13 +3,13 @@ sample/fits/standard.flow,elapsed ms,7690,8978,12526,12526
 sample/dng/standard.flow,elapsed ms,10712,11798,10712,13360
 sample/fits/sigma.flow,elapsed ms,11311,12874,16415,16415
 sample/raw/standard.flow,elapsed ms,21834,24463,28873,30966
-sample/raw/sigma.flow,elapsed ms,40114,43333,48924,48924
+sample/raw/sigma.flow,elapsed ms,40114,43098,48924,48924
 sample/fits/pixcomp.flow,elapsed ms,50321,53406,50321,58018
-sample/raw/pixcomp.flow,elapsed ms,144543,155020,162388,179656
+sample/raw/pixcomp.flow,elapsed ms,144543,154173,162388,179656
 sample/dng/standard.flow,maxObjectCount,115800,118504,115832,118680
 sample/fits/standard.flow,maxObjectCount,116176,122156,118044,127381
-sample/raw/standard.flow,maxObjectCount,117103,127537,117231,151288
+sample/raw/standard.flow,maxObjectCount,117103,125567,117238,151288
 sample/fits/pixcomp.flow,maxObjectCount,118107,124552,118545,137805
 sample/fits/sigma.flow,maxObjectCount,118339,124051,118802,129248
-sample/raw/sigma.flow,maxObjectCount,119561,132732,119630,148856
-sample/raw/pixcomp.flow,maxObjectCount,134730,147504,134730,159743
+sample/raw/sigma.flow,maxObjectCount,119540,130225,119542,148856
+sample/raw/pixcomp.flow,maxObjectCount,134033,146156,134033,159743

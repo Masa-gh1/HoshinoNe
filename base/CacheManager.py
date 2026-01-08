@@ -133,26 +133,24 @@ class CacheManager:
         if MAX_BLOCK_CACHE_SIZE <= len(cls._globalBlockCache):
             # 古いデータから削除(LRU)
             oldestKey = next(iter(cls._globalBlockCache))
-            oldPolicy, oldData = cls._globalBlockCache[oldestKey]
+            oldPolicy, oldData = cls._globalBlockCache.pop(oldestKey)
             
             if oldPolicy != CachePolicy.PERSISTENT:
                 # ポリシー persistent ではないのでキャッシュから削除
                 cls._purgeCount += 1
-                del cls._globalBlockCache[oldestKey]
             elif cls._isStoraged(oldestKey):
                 # ポリシー persistent であり、
                 # 既にストレージに保存ずみなのでキャッシュから削除
-                del cls._globalBlockCache[oldestKey]
+                pass
             elif cls._saveToStorage(oldestKey, oldData):
                 # ポリシー persistent であり、
                 # ストレージへ保存したのでキャッシュから削除
                 cls._saveCount += 1
                 cls._globalBlockSerial[oldestKey] = True
-                del cls._globalBlockCache[oldestKey]
             else:
-                # ストレージへの保存に失敗した。
+                # ストレージへの保存に失敗しのでキャッシュに戻す
                 # log は _saveToStorage に委譲
-                pass
+                cls._globalBlockCache[oldestKey] = (oldPolicy, oldData)
         cls._globalBlockCache[cacheKey] = (cachePolicy, data)
     
     @classmethod
