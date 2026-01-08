@@ -104,14 +104,7 @@ class RawReaderNode(BaseReaderNode):
                 blocksY = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
                 blocksX = (width + BLOCK_SIZE - 1) // BLOCK_SIZE
                 
-                # チャンネル数を考慮
-                if self.demosaicAlgorithm == "bayer":
-                    planeCount = 1
-                elif self.demosaicAlgorithm == "unpack":
-                    planeCount = 4
-                else:
-                    planeCount = 3
-                return blocksY * blocksX * planeCount
+                return blocksY * blocksX
         except:
             return 1
     
@@ -288,31 +281,28 @@ class RawReaderNode(BaseReaderNode):
             if exif_info:
                 headers['exif'] = exif_info
             
-            outputFlowData = FlowData(headers)
-            outputFlowData.setDimensions(width, height)
+            flowData = FlowData(headers)
+            flowData.setDimensions(width, height)
             
             # RGB各チャンネルをBLOCK_SIZEで分割してDataBlockとして設定
             futures = []
             
             # ブロック単位で並列処理
-            for planeIndex in range(planeCount):
-                channelData = rgb[:, :, planeIndex]
-                
-                for y in range(0, height, BLOCK_SIZE):
-                    for x in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutorInNode .submit(self, self._processBlock, channelData, planeIndex, x, y, height, width)
-                        futures.append(future)
+            for y in range(0, height, BLOCK_SIZE):
+                for x in range(0, width, BLOCK_SIZE):
+                    future = ProcessExecutorInNode .submit(self, self._processBlock, rgb, x, y, planeCount, height, width)
+                    futures.append(future)
             
             # 全ブロックの処理完了を待ちながら進捗報告
             for future in as_completed(futures):
-                block = future.result()
-                if block:
-                    outputFlowData.setBlock(block)
+                blocks = future.result()
+                for block in blocks:
+                    flowData.setBlock(block)
                 self.reportBlockProgress(context)
             
-            return outputFlowData
+            return flowData
     
-    def _processBlock(self, channelData, planeIndex, x, y, height, width):
+    def _processBlock(self, pixels, x, y, planeCount, height, width):
         """単一ブロックの処理"""
         from config import BLOCK_SIZE
         from base import DataBlock
@@ -320,8 +310,19 @@ class RawReaderNode(BaseReaderNode):
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         
-        blockData = channelData[y:endY, x:endX]
-        return DataBlock(blockData, planeIndex, x, y)
+        # ブロックの切り出し
+        blocks = []
+        if pixels.ndim == 2:
+            blocks.append(pixels[y:endY, x:endX])
+        else:
+            for planeIndex in range(planeCount):
+                blocks.append(pixels[y:endY, x:endX, planeIndex])
+        
+        # 各プレーンのブロック情報を返す
+        dataBlocks = []
+        for planeIndex, block in enumerate(blocks):
+            dataBlocks.append(DataBlock(block, planeIndex, x, y))
+        return dataBlocks
     
     def getFileInfo(self, filePath):
         """RAWファイルの情報を取得（生データ）"""

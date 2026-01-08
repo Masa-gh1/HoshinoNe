@@ -15,19 +15,17 @@ from .FlowData import FlowData
 
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
-    __slots__ = ('cachePolicy'        ,
-                 'sourceFlowData'     ,
-                 'instanceId'         ,
-                 'headers'            ,
-                 'args'  ,
-                 'kwargs',
+    __slots__ = ('cachePolicy'   ,
+                 'sourceFlowData',
+                 'headers'       ,
+                 'args'          ,
+                 'kwargs'        ,
                 )
     
     def __init__(self, sourceFlowData, *args, **kwargs):
         super().__init__(None)
         self.cachePolicy    = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowData = sourceFlowData
-        self.instanceId     = str(uuid.uuid4())
         self.headers        = LazyHeadersDict(self, *args, **kwargs)
         self.args           = args
         self.kwargs         = kwargs

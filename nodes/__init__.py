@@ -26,6 +26,7 @@ __all__ = [
     'BaseReaderSettingsDialog',
     'BaseWriterNode',
     'BaseWriterSettingsDialog',
+    'TensorOperationMixin',
     'PolynomialOperationMixin',
     'NodeFactory',
 ]

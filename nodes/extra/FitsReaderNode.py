@@ -327,7 +327,7 @@ class FitsReaderNode(BaseReaderNode):
         config = f"{self.minorType}_{"|".join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
-    def _processBlock(self, data, x, y, channels, width, height):
+    def _processBlock(self, data, x, y, planeCount, width, height):
         """FITSデータブロックの処理"""
         from config import BLOCK_SIZE
         from base import DataBlock
@@ -335,17 +335,19 @@ class FitsReaderNode(BaseReaderNode):
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
         
+        # ブロックの切り出し
         blocks = []
-        if channels == 1:
-            for planeIndex in range(channels):
-                blockData = data[y:endY, x:endX]
-                blocks.append(DataBlock(blockData, planeIndex, x, y))
+        if data.ndim == 2:
+            blocks.append(data[y:endY, x:endX])
         else:
-            for planeIndex in range(channels):
-                blockData = data[planeIndex, y:endY, x:endX]
-                blocks.append(DataBlock(blockData, planeIndex, x, y))
+            for planeIndex in range(planeCount):
+                blocks.append(data[planeIndex, y:endY, x:endX])
         
-        return blocks
+        # 各プレーンのブロック情報を返す
+        dataBlocks = []
+        for planeIndex, block in enumerate(blocks):
+            dataBlocks.append(DataBlock(block, planeIndex, x, y))
+        return dataBlocks
 
 class FitsSettingsDialog(BaseReaderSettingsDialog):
     def getColumns(self):

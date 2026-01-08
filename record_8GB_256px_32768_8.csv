@@ -1,15 +1,15 @@
 name,item,min,wma,latestMax,max
-sample/fits/standard.flow,elapsed ms,7690,8945,12526,12526
+sample/fits/standard.flow,elapsed ms,7690,8978,12526,12526
+sample/dng/standard.flow,elapsed ms,10712,11798,10712,13360
 sample/fits/sigma.flow,elapsed ms,11311,12874,16415,16415
-sample/dng/standard.flow,elapsed ms,11746,11919,12044,13360
-sample/raw/standard.flow,elapsed ms,23444,23937,27129,27129
+sample/raw/standard.flow,elapsed ms,21834,24589,28873,30966
 sample/raw/sigma.flow,elapsed ms,40114,43051,48924,48924
-sample/fits/pixcomp.flow,elapsed ms,50729,53749,58018,58018
-sample/raw/pixcomp.flow,elapsed ms,147727,156185,172376,179656
-sample/dng/standard.flow,maxObjectCount,115800,118504,115800,118680
+sample/fits/pixcomp.flow,elapsed ms,50321,53406,50321,58018
+sample/raw/pixcomp.flow,elapsed ms,144543,155020,144543,179656
+sample/dng/standard.flow,maxObjectCount,115800,118504,115832,118680
 sample/fits/standard.flow,maxObjectCount,116176,122156,118044,127381
-sample/raw/standard.flow,maxObjectCount,118100,134662,118100,151288
-sample/fits/pixcomp.flow,maxObjectCount,118107,125221,118545,137805
-sample/fits/sigma.flow,maxObjectCount,118339,124051,118339,129248
-sample/raw/sigma.flow,maxObjectCount,119843,137620,119843,148856
-sample/raw/pixcomp.flow,maxObjectCount,134773,150379,134773,159743
+sample/raw/standard.flow,maxObjectCount,117103,128683,117103,151288
+sample/fits/pixcomp.flow,maxObjectCount,118107,124552,118545,137805
+sample/fits/sigma.flow,maxObjectCount,118339,124051,118802,129248
+sample/raw/sigma.flow,maxObjectCount,119561,134188,119561,148856
+sample/raw/pixcomp.flow,maxObjectCount,134773,148924,135834,159743

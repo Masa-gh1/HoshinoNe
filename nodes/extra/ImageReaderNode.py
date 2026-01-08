@@ -59,6 +59,7 @@ class ImageReaderNode(BaseReaderNode):
         
     def processFile(self, filePath, context=None):
         from PIL import Image
+        from utils import numpy_helpers as nh
         from utils.ThreadPool import ProcessExecutorInNode 
         from utils import exif_helper as exif
         from config import BLOCK_SIZE
@@ -109,7 +110,7 @@ class ImageReaderNode(BaseReaderNode):
         if exif_info:
             headers['exif'] = exif_info
         
-        pixels = list(img.getdata())
+        pixels = nh.array(img)
         flowData = FlowData(headers)
         flowData.setDimensions(width, height)
         
@@ -152,33 +153,17 @@ class ImageReaderNode(BaseReaderNode):
         """プレーン毎ブロックの処理"""
         from config import BLOCK_SIZE
         from base import DataBlock
-        from utils import numpy_helpers as nh
         
         endY = min(y + BLOCK_SIZE, height)
         endX = min(x + BLOCK_SIZE, width)
-        blockWidth = endX - x
-        blockHeight = endY - y
         
-        # 各プレーンのブロックをnumpy配列で作成
+        # ブロックの切り出し
         blocks = []
-        for planeIndex in range(planeCount):
-            plane_block = nh.nans((blockHeight, blockWidth))
-            blocks.append(plane_block)
-        
-        if 1 == planeCount:
-            # グレースケールなど単一値の処理
-            for dy in range(blockHeight):
-                for dx in range(blockWidth):
-                    pixelIdx = (y + dy) * width + (x + dx)
-                    pixel = pixels[pixelIdx]
-                    blocks[0][dy, dx] = float(pixel)
+        if pixels.ndim == 2:
+            blocks.append(pixels[y:endY, x:endX])
         else:
-            for dy in range(blockHeight):
-                for dx in range(blockWidth):
-                    pixelIdx = (y + dy) * width + (x + dx)
-                    pixel = pixels[pixelIdx]
-                    for planeIndex in range(planeCount):
-                        blocks[planeIndex][dy, dx] = float(pixel[planeIndex])
+            for planeIndex in range(planeCount):
+                blocks.append(pixels[y:endY, x:endX, planeIndex])
         
         # 各プレーンのブロック情報を返す
         dataBlocks = []
