@@ -380,10 +380,6 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             'size': size_str
         }
     
-    def createSortButton(self, parent):
-        """ソートボタンを作成（サブクラスでオーバーライド）"""
-        return tk.Button(parent, text="ファイル名ソート", command=self.sortByFilename)
-    
     def sortByFilename(self):
         if len(self.selectedFilePaths) <= 1:
             return
@@ -393,6 +389,10 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             self.updateFileList()
         except Exception as e:
             messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
+    
+    def createSortButton(self, parent):
+        """ソートボタンを作成（サブクラスでオーバーライド）"""
+        return tk.Button(parent, text="ファイル名ソート", command=self.sortByFilename)
     
     def onClose(self):
         self.destroy()

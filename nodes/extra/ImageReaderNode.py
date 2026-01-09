@@ -7,6 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from fractions import Fraction
 import hashlib
 import datetime
 import os
@@ -174,25 +175,22 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
     def getColumnHeaders(self):
         return {
             'filename': 'ファイル名',
-            'datetime': '撮影日時',
-            'size': '画像サイズ',
-            'exposure': '露出',
-            'fnumber': 'F値',
-            'iso': 'ISO'
+            'datetime': '撮影日時'  ,
+            'size'    : '画像サイズ',
+            'exposure': '時間'      ,
+            'fnumber' : 'F値'       ,
+            'iso'     : 'ISO'
         }
     
     def getColumnWidths(self):
         return {
-            'filename': {'width': 40, 'stretch': True},
-            'datetime': {'width': 120, 'stretch': False},
-            'size': {'width': 80, 'stretch': False, 'anchor': 'e'},
-            'exposure': {'width': 40, 'stretch': False, 'anchor': 'e'},
-            'fnumber': {'width': 40, 'stretch': False, 'anchor': 'e'},
-            'iso': {'width': 40, 'stretch': False, 'anchor': 'e'}
+            'filename': {'width':  40, 'stretch': True                },
+            'datetime': {'width': 120, 'stretch': False               },
+            'size'    : {'width':  80, 'stretch': False, 'anchor': 'e'},
+            'exposure': {'width':  40, 'stretch': False, 'anchor': 'e'},
+            'fnumber' : {'width':  40, 'stretch': False, 'anchor': 'e'},
+            'iso'     : {'width':  40, 'stretch': False, 'anchor': 'e'},
         }
-    
-    def createSortButton(self, parent):
-        return tk.Button(parent, text="撮影時刻ソート", command=self.sortByTimestamp)
     
     def getFormalFileInfo(self, filePath):
         """ファイルの表示用文字列を取得"""
@@ -205,7 +203,7 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
             datetime_str = '時刻不明'
         
         # 画像サイズ
-        width = fileInfo.get('width')
+        width  = fileInfo.get('width')
         height = fileInfo.get('height')
         if width and height:
             size_str = f"{width}x{height}"
@@ -214,23 +212,23 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
         
         # 露出時間
         exposure = fileInfo.get('exposure')
-        if exposure:
-            if exposure >= 1:
-                exposure_str = f"{exposure:.1f}"
-            else:
-                exposure_str = f"1/{int(1/exposure)}"
-        else:
+        if not exposure:
             exposure_str = ''
+        elif isinstance(exposure,Fraction) and 1 != exposure.denominator:
+            exposure_str = f"{exposure.numerator}/{exposure.denominator}"
+        elif isinstance(exposure,Fraction):
+            exposure_str = f"{exposure.numerator}"
+        else:
+            exposure_str = f"{exposure:.1f}"
         
         # F値
         fnumber = fileInfo.get('fnumber')
-        if fnumber:
-            if fnumber >= 1:
-                fnumber_str = f"{fnumber:.1f}"
-            else:
-                fnumber_str = f"{fnumber:.2f}"
-        else:
+        if not fnumber:
             fnumber_str = ''
+        elif 1 <= fnumber:
+            fnumber_str = f"{fnumber:.1f}"
+        else:
+            fnumber_str = f"{fnumber:.2f}"
         
         # ISO感度
         iso = fileInfo.get('iso')
@@ -239,10 +237,10 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
         return {
             'filename': os.path.basename(fileInfo.get('filePath', filePath)),
             'datetime': datetime_str,
-            'size': size_str,
+            'size'    : size_str,
             'exposure': exposure_str,
-            'fnumber': fnumber_str,
-            'iso': iso_str
+            'fnumber' : fnumber_str,
+            'iso'     : iso_str
         }
     
     def sortByTimestamp(self):
@@ -261,3 +259,6 @@ class ImageSettingsDialog(BaseReaderSettingsDialog):
             self.updateFileList()
         except Exception as e:
             messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
+    
+    def createSortButton(self, parent):
+        return tk.Button(parent, text="撮影時刻ソート", command=self.sortByTimestamp)

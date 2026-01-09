@@ -12,6 +12,7 @@ https://letmaik.github.io/rawpy/api/index.html
 https://www.libraw.org/docs/API-datastruct.html
 '''
 
+from fractions import Fraction
 import hashlib
 import datetime
 import os
@@ -254,17 +255,17 @@ class RawReaderNode(BaseReaderNode):
             info, exif_info = exif.getExif(filePath)
             
             headers = {
-                'type': 'image',
-                'mode': mode,
-                'width': width,
-                'height': height,
-                'planes': plane_names,
-                'datetime': info['datetime'],
+                'type'          : 'image',
+                'mode'          : mode,
+                'width'         : width,
+                'height'        : height,
+                'planes'        : plane_names,
+                'datetime'      : info['datetime'],
                 'display_levels': display_levels,
-                'source_file': self.getRelativePath(filePath),
-                'demosaic': self.demosaicAlgorithm,
-                'colorspace': self.outputColorspace,
-                'white_balance': self.whiteBalance,
+                'source_file'   : self.getRelativePath(filePath),
+                'demosaic'      : self.demosaicAlgorithm,
+                'colorspace'    : self.outputColorspace,
+                'white_balance' : self.whiteBalance,
             }
             
             # bayer 情報を追加
@@ -350,7 +351,7 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
             'filename': 'ファイル名',
             'datetime': '撮影日時',
             'size'    : '画像サイズ',
-            'exposure': '露出',
+            'exposure': '時間',
             'fnumber' : 'F値',
             'iso'     : 'ISO'
         }
@@ -364,7 +365,75 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
             'fnumber' : {'width':  40, 'stretch': False, 'anchor': 'e'},
             'iso'     : {'width':  40, 'stretch': False, 'anchor': 'e'}
         }
+
+    def getFormalFileInfo(self, filePath):
+        """ファイルの表示用文字列を取得"""
+        fileInfo = self.node.getFileInfo(filePath)
+        
+        # 撮影日時
+        if fileInfo.get('datetime'):
+            datetime_str = fileInfo['datetime']
+        else:
+            datetime_str = '時刻不明'
+        
+        # 画像サイズ
+        width  = fileInfo.get('width')
+        height = fileInfo.get('height')
+        if width and height:
+            size_str = f"{width}x{height}"
+        else:
+            size_str = ''
+        
+        # 露出時間
+        exposure = fileInfo.get('exposure')
+        if not exposure:
+            exposure_str = ''
+        elif isinstance(exposure,Fraction) and 1 != exposure.denominator:
+            exposure_str = f"{exposure.numerator}/{exposure.denominator}"
+        elif isinstance(exposure,Fraction):
+            exposure_str = f"{exposure.numerator}"
+        else:
+            exposure_str = f"{exposure:.1f}"
+        
+        # F値
+        fnumber = fileInfo.get('fnumber')
+        if not fnumber:
+            fnumber_str = ''
+        elif 1 <= fnumber:
+            fnumber_str = f"{fnumber:.1f}"
+        else:
+            fnumber_str = f"{fnumber:.2f}"
+        
+        # ISO感度
+        iso = fileInfo.get('iso')
+        iso_str = f"{iso}" if iso else ''
+        
+        return {
+            'filename': os.path.basename(filePath),
+            'datetime': datetime_str,
+            'size'    : size_str,
+            'exposure': exposure_str,
+            'fnumber' : fnumber_str,
+            'iso'     : iso_str
+        }
     
+    def sortByTimestamp(self):
+        if len(self.selectedFilePaths) <= 1:
+            return
+        
+        try:
+            def get_timestamp(filePath):
+                fileInfo = self.node.getFileInfo(filePath)
+                if fileInfo and fileInfo.get('datetime'):
+                    dt = datetime.datetime.fromisoformat(fileInfo['datetime'])
+                    return dt.timestamp()
+                return 0
+            
+            self.selectedFilePaths.sort(key=get_timestamp)
+            self.updateFileList()
+        except Exception as e:
+            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
+
     def createSortButton(self, parent):
         return tk.Button(parent, text="撮影時刻ソート", command=self.sortByTimestamp)
     
@@ -462,71 +531,3 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         self.node.whiteBalance = self.wbVar.get().split(' - ')[0]
         self.node.gammaPower = self.gammaPowerVar.get()
         self.node.gammaSlope = self.gammaSlopeVar.get()
-    
-    def getFormalFileInfo(self, filePath):
-        """ファイルの表示用文字列を取得"""
-        fileInfo = self.node.getFileInfo(filePath)
-        
-        # 撮影日時
-        if fileInfo.get('datetime'):
-            datetime_str = fileInfo['datetime']
-        else:
-            datetime_str = '時刻不明'
-        
-        # 画像サイズ
-        width = fileInfo.get('width')
-        height = fileInfo.get('height')
-        if width and height:
-            size_str = f"{width}x{height}"
-        else:
-            size_str = ''
-        
-        # 露出時間
-        exposure = fileInfo.get('exposure')
-        if exposure:
-            if exposure >= 1:
-                exposure_str = f"{exposure:.1f}"
-            else:
-                exposure_str = f"1/{int(1/exposure)}"
-        else:
-            exposure_str = ''
-        
-        # F値
-        fnumber = fileInfo.get('fnumber')
-        if fnumber:
-            if fnumber >= 1:
-                fnumber_str = f"{fnumber:.1f}"
-            else:
-                fnumber_str = f"{fnumber:.2f}"
-        else:
-            fnumber_str = ''
-        
-        # ISO感度
-        iso = fileInfo.get('iso')
-        iso_str = f"{iso}" if iso else ''
-        
-        return {
-            'filename': os.path.basename(filePath),
-            'datetime': datetime_str,
-            'size': size_str,
-            'exposure': exposure_str,
-            'fnumber': fnumber_str,
-            'iso': iso_str
-        }
-    
-    def sortByTimestamp(self):
-        if len(self.selectedFilePaths) <= 1:
-            return
-        
-        try:
-            def get_timestamp(filePath):
-                fileInfo = self.node.getFileInfo(filePath)
-                if fileInfo and fileInfo.get('datetime'):
-                    dt = datetime.datetime.fromisoformat(fileInfo['datetime'])
-                    return dt.timestamp()
-                return 0
-            
-            self.selectedFilePaths.sort(key=get_timestamp)
-            self.updateFileList()
-        except Exception as e:
-            messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")

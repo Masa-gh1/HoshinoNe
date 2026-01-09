@@ -351,35 +351,32 @@ class FitsSettingsDialog(BaseReaderSettingsDialog):
     
     def getColumnHeaders(self):
         return {
-            'filename': 'ファイル名',
-            'obs_date': '観測日時',
-            'hdu_count': 'HDU数',
+            'filename'  : 'ファイル名',
+            'obs_date'  : '観測日時',
+            'hdu_count' : 'HDU数',
             'dimensions': '画像サイズ',
-            'data_type': 'データ型'
+            'data_type' : 'データ型'
         }
     
     def getColumnWidths(self):
         return {
-            'filename': {'width': 40, 'stretch': True},
-            'obs_date': {'width': 120, 'stretch': False},
-            'hdu_count': {'width': 60, 'stretch': False, 'anchor': 'e'},
-            'dimensions': {'width': 80, 'stretch': False, 'anchor': 'e'},
-            'data_type': {'width': 60, 'stretch': False, 'anchor': 'e'}
+            'filename'  : {'width':  40, 'stretch': True                },
+            'obs_date'  : {'width': 120, 'stretch': False               },
+            'hdu_count' : {'width':  60, 'stretch': False, 'anchor': 'e'},
+            'dimensions': {'width':  80, 'stretch': False, 'anchor': 'e'},
+            'data_type' : {'width':  60, 'stretch': False, 'anchor': 'e'}
         }
-    
-    def createSortButton(self, parent):
-        return tk.Button(parent, text="観測日時ソート", command=self.sortByObsDate)
     
     def getFormalFileInfo(self, filePath):
         """ファイルの表示用文字列を取得"""
         fileInfo = self.node.getFileInfo(filePath)
         
         return {
-            'filename': os.path.basename(filePath),
-            'obs_date': fileInfo.get('obs_date', '日時不明') if fileInfo.get('obs_date') else '日時不明',
-            'hdu_count': str(fileInfo.get('hdu_count', 0)) if fileInfo.get('hdu_count') is not None else '',
-            'dimensions': fileInfo.get('dimensions', '') if fileInfo.get('dimensions') else '',
-            'data_type': fileInfo.get('data_type', '') if fileInfo.get('data_type') else ''
+            'filename'  : os.path.basename(filePath),
+            'obs_date'  : fileInfo.get('obs_date', '日時不明') if fileInfo.get('obs_date') else '日時不明',
+            'hdu_count' : str(fileInfo.get('hdu_count', 0))   if fileInfo.get('hdu_count') is not None else '',
+            'dimensions': fileInfo.get('dimensions', '')      if fileInfo.get('dimensions') else '',
+            'data_type' : fileInfo.get('data_type', '')       if fileInfo.get('data_type') else ''
         }
     
     def sortByObsDate(self):
@@ -398,3 +395,5 @@ class FitsSettingsDialog(BaseReaderSettingsDialog):
         except Exception as e:
             messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
     
+    def createSortButton(self, parent):
+        return tk.Button(parent, text="観測日時ソート", command=self.sortByObsDate)
