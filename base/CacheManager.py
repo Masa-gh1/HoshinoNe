@@ -246,20 +246,20 @@ class CacheManager:
     @classmethod
     def elapsed(cls, func, *args, **kwargs):
         """ func の処理時間を計測する"""
-        start = time.time()
+        start = time.perf_counter_ns()
         result = func(*args, **kwargs)
-        elapsed = int((time.time() - start)*1000)
+        elapsed = (time.perf_counter_ns() - start)//1000
         elapsed = min( elapsed , 8191)
 
         globalBlockCacheCount = len(cls._globalBlockCache)
-        name = f"{MAX_BLOCK_CACHE_SIZE//16384*16384}+:{func.__qualname__}"
+        name = f"{func.__qualname__}:{MAX_BLOCK_CACHE_SIZE//16384*16384}+"
         for x in range(16384,MAX_BLOCK_CACHE_SIZE+1,16384):
-            if globalBlockCacheCount <= x-1:
-                name = f"{x}:{func.__qualname__}"
+            if globalBlockCacheCount < x-1:
+                name = f"{func.__qualname__}:{x}"
                 break
         
-        his = cls._elapsedHis.setdefault( name, {1:0, 2:0, 4:0, 8:0, 16:0, 32:0, 64:0, 128:0, 256:0, 512:0, 1024:0, 2048:0, 4096:0, 8192:0})
-        x = 1
+        his = cls._elapsedHis.setdefault( name, {10:0, 20:0, 40:0, 80:0, 160:0, 320:0, 640:0, 1280:0, 2560:0, 5120:0, 10240:0, 20480:0, 40960:0, 81920:0})
+        x = 10
         while x<=8192:
             if elapsed < x:
                 his[x] += 1

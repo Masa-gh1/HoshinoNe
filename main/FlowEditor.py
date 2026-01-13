@@ -937,11 +937,19 @@ class FlowEditor:
             print(f"setCount: {setCount}")
             print(f"purgeCount: {purgeCount}")
             print(f"saveCount: {saveCount}")
-            for name, his in elapsedHis.items():
-                print("------------------------")
-                print(name)
-                for ms in sorted(his):
-                    print(f"{ms} ms: {his[ms]}")
+            print("------------------------")
+            label = 'times it n [us]'
+            maxlen = max([len(s) for s in [label] + list(elapsedHis.keys())])
+            print(f"{label:{maxlen}s}", end="\t")
+            labels = next(iter(elapsedHis.values()))
+            for label in labels:
+                print(label, end="\t")
+            print()
+            for name,values in elapsedHis.items():
+                print(f"{name:{maxlen}s}", end="\t")
+                for value in values.values():
+                    print(value, end="\t")
+                print()
             print("========================")
 
     def toggleDebugMode(self, event):
