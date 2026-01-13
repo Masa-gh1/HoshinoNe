@@ -306,21 +306,21 @@ class FitsReaderNode(BaseReaderNode):
                         break
                 
                 return {
-                    'filePath': filePath,
-                    'obs_date': obs_date,
+                    'filePath'     : filePath,
+                    'obs_date'     : obs_date,
                     'obs_timestamp': obs_timestamp,
-                    'hdu_count': hdu_count,
-                    'dimensions': dimensions,
-                    'data_type': data_type
+                    'hdu_count'    : hdu_count,
+                    'dimensions'   : dimensions,
+                    'data_type'    : data_type
                 }
         except Exception:
             return {
-                'filePath': filePath,
-                'obs_date': None,
+                'filePath'     : filePath,
+                'obs_date'     : None,
                 'obs_timestamp': None,
-                'hdu_count': None,
-                'dimensions': None,
-                'data_type': None
+                'hdu_count'    : None,
+                'dimensions'   : None,
+                'data_type'    : None
             }
     
     def getConfigHash(self):

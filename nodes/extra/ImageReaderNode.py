@@ -97,14 +97,14 @@ class ImageReaderNode(BaseReaderNode):
         norm, exif_info = exif.getExif(filePath)
         
         headers = {
-            'type': 'image',
-            'mode': img.mode,
-            'width': width,
-            'height': height,
-            'planes': plane_names,
-            'datetime': norm['datetime'],
+            'type'          : 'image',
+            'mode'          : img.mode,
+            'width'         : width,
+            'height'        : height,
+            'planes'        : plane_names,
+            'datetime'      : norm['datetime'],
             'display_levels': display_levels,
-            'source_file': self.getRelativePath(filePath),
+            'source_file'   : self.getRelativePath(filePath),
         }
 
         # EXIF 追加
