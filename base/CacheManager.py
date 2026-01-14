@@ -15,25 +15,35 @@ import tempfile
 import shutil
 import atexit
 
-from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK
+from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK, BLOCK_SIZE
 from base.Constants import CachePolicy
+
+# キャッシュ用巨大配列の一枚当たりサイズ bytes = CACHE_ARRAY_SIZE * BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
+CACHE_ARRAY_SIZE = 1024
+# キャッシュ用巨大配列の最大数
+MAX_CACHE_ARRAY = MAX_BLOCK_CACHE_SIZE // 1024
 
 class CacheManager:
     """統一キャッシュ管理"""
-    _globalBlockCache  = {} # メモリキャッシュ
-    _globalBlockSerial = {} # ストレージ保存目次
+    _globalCacheArray  = [None] * MAX_CACHE_ARRAY
+                                # キャッシュ用巨大配列のリスト {page:numpy配列}
+    _globalCacheIndex  = {}     # メモリキャッシュ目次 {id:(page,index,policy,dims)}
+    _globalCacheLast   = (-1,CACHE_ARRAY_SIZE)
+                                # キャッシュで最後に使った位置 (page,index)
+    _globalSerialIndex = {}     # ストレージ保存目次 {id:boolean}
     _cacheLock = threading.Lock()
-    _globalTempDir = None
-    _cleanup_registered = False
+    _globalTempDir     = None   # 一時ディレクトリ
+    _cleanupRegistered = False  # 後始末関数登録状態
     
-    _setCount         = 0 # メモリに保存した回数
-    _purgeCount       = 0 # メモリから破棄された回数
-    _saveCount        = 0 # メモリからストレージに保存された回数
-    _getCount         = 0 # メモリから取得した回数
-    _cacheMissCount   = 0 # メモリでキャッシュミスした回数
-    _recalculateCount = 0 # メモリに無く再計算となった回数
-    _loadCount        = 0 # メモリに無くストレージから復元した回数
-    _elapsedHis = {}
+    # 統計情報
+    _setCount         = 0  # メモリに保存した回数
+    _purgeCount       = 0  # メモリから破棄された回数
+    _saveCount        = 0  # メモリからストレージに保存された回数
+    _getCount         = 0  # メモリから取得した回数
+    _cacheMissCount   = 0  # メモリでキャッシュミスした回数
+    _recalculateCount = 0  # メモリに無く再計算となった回数
+    _loadCount        = 0  # メモリに無くストレージから復元した回数
+    _elapsedHis       = {} # 処理時間ヒストグラム
     
     @classmethod
     def _getGlobelTempDir(cls):
@@ -42,7 +52,7 @@ class CacheManager:
             # 初回だけクリーンアップの実施と終了時の登録を行う
             atexit.register(cls._cleanupOldTempDirs)
             cls._cleanupOldTempDirs()
-            cls._cleanup_registered = True
+            cls._cleanupRegistered = True
 
             # 初回だけテンポラリディレクトリを作製する
             cahedir = os.path.join(os.path.expanduser("~"), ".hoshinone", "cache")
@@ -94,10 +104,14 @@ class CacheManager:
     def _get(cls, cacheKey):
         cls._getCount += 1
 
-        cache = cls._globalBlockCache.pop(cacheKey,None)
+        cache = cls._globalCacheIndex.pop(cacheKey,None)
         if not cache is None:
-            cls._globalBlockCache[cacheKey] = cache # 最後尾に再追加(LRU)
-            _, data = cache
+            page, index, cachePolicy, dims = cache
+            data = cls._globalCacheArray[page][index,:dims[0],:dims[1]]
+            if page == cls._globalCacheLast[0]:
+                cls._globalCacheIndex[cacheKey] = cache # 最新ページにいるので目次だけ最後尾に追加(LRU)
+            else:
+                cls._set(cacheKey, data, cachePolicy) # 最新ページに居ないので最後尾に追加
         else:
             cls._cacheMissCount += 1
             data = None
@@ -108,6 +122,7 @@ class CacheManager:
             # ストレージに在るので復元
             cls._loadCount += 1
             data = cls._loadFromStorage(cacheKey)
+            
             if not data is None:
                 # ストレージから読み込んだので最後尾に追加
                 cls._set(cacheKey, data, CachePolicy.PERSISTENT)
@@ -130,34 +145,57 @@ class CacheManager:
     def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
         cls._setCount += 1
 
-        if MAX_BLOCK_CACHE_SIZE <= len(cls._globalBlockCache):
-            # 古いデータから削除(LRU)
-            oldestKey = next(iter(cls._globalBlockCache))
-            oldPolicy, oldData = cls._globalBlockCache.pop(oldestKey)
+        if cacheKey in cls._globalCacheIndex:
+            # 既にあるので一度削除
+            del cls._globalCacheIndex[cacheKey]
+
+        page, index = cls._globalCacheLast
+        index += 1
+        if CACHE_ARRAY_SIZE <= index:
+            index = 0
+            page += 1
+            page %= MAX_CACHE_ARRAY
+            if not cls._globalCacheArray[page] is None:
+                # 古いデータを破棄又はストレージへ保存
+                oldArray = cls._globalCacheArray[page]
+                while True:
+                    oldKey = next(iter(cls._globalCacheIndex))
+                    oldPage, oldIndex, oldPolicy, oldDims = cls._globalCacheIndex[oldKey]
+                    if page != oldPage:
+                        # 古いデータの処理終了
+                        break
+                    elif oldPolicy != CachePolicy.PERSISTENT:
+                        # ポリシー persistent ではないのでキャッシュから削除
+                        cls._purgeCount += 1
+                        del cls._globalCacheIndex[oldKey]
+                    elif cls._isStoraged(oldKey):
+                        # ポリシー persistent であり、
+                        # 既にストレージに保存ずみなのでキャッシュから削除
+                        del cls._globalCacheIndex[oldKey]
+                    elif cls._saveToStorage(oldKey, oldArray[oldIndex,:oldDims[0],:oldDims[1]]):
+                        # ポリシー persistent であり、
+                        # ストレージへ保存したのでキャッシュから削除
+                        cls._saveCount += 1
+                        cls._globalSerialIndex[oldKey] = True
+                        del cls._globalCacheIndex[oldKey]
+                    else:
+                        # ストレージへの保存に失敗
+                        # log は _saveToStorage に委譲
+                        pass
             
-            if oldPolicy != CachePolicy.PERSISTENT:
-                # ポリシー persistent ではないのでキャッシュから削除
-                cls._purgeCount += 1
-            elif cls._isStoraged(oldestKey):
-                # ポリシー persistent であり、
-                # 既にストレージに保存ずみなのでキャッシュから削除
-                pass
-            elif cls._saveToStorage(oldestKey, oldData):
-                # ポリシー persistent であり、
-                # ストレージへ保存したのでキャッシュから削除
-                cls._saveCount += 1
-                cls._globalBlockSerial[oldestKey] = True
-            else:
-                # ストレージへの保存に失敗しのでキャッシュに戻す
-                # log は _saveToStorage に委譲
-                cls._globalBlockCache[oldestKey] = (oldPolicy, oldData)
-        cls._globalBlockCache[cacheKey] = (cachePolicy, data)
-    
+            from utils import numpy_helpers as nh
+            # 新しい配列を用意(配列を再利用すると numpy 配列に view が在る場合に破壊してしまう)
+            cls._globalCacheArray[page] = nh.empty((CACHE_ARRAY_SIZE,BLOCK_SIZE,BLOCK_SIZE))
+        
+        cls._globalCacheArray[page][index,:data.shape[0],:data.shape[1]] = data
+        cls._globalCacheIndex[cacheKey] = (page, index, cachePolicy, data.shape)
+        cls._globalCacheLast = (page, index)
+
     @classmethod
     def isCached(cls, cacheKey):
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock:
-            return cacheKey in cls._globalBlockCache
+            return cacheKey in cls._globalCacheIndex
 
     @classmethod
     def isStoraged(cls, cacheKey):
@@ -167,7 +205,7 @@ class CacheManager:
 
     @classmethod
     def _isStoraged(cls, cacheKey):
-        return cacheKey in cls._globalBlockSerial
+        return cacheKey in cls._globalSerialIndex
 
     @classmethod
     def _saveToStorage(cls, cacheKey, data):
@@ -227,8 +265,8 @@ class CacheManager:
         
         with cls._cacheLock:
             # キャッシュを削除
-            cls._clearByPartialKey(cls._globalBlockSerial, cacheKey)
-            cls._clearByPartialKey(cls._globalBlockCache, cacheKey)
+            cls._clearByPartialKey(cls._globalSerialIndex, cacheKey)
+            cls._clearByPartialKey(cls._globalCacheIndex, cacheKey)
     
     @classmethod
     def _clearByPartialKey(cls, cache, cacheKey):
@@ -251,7 +289,7 @@ class CacheManager:
         elapsed = (time.perf_counter_ns() - start)//1000
         elapsed = min( elapsed , 8191)
 
-        globalBlockCacheCount = len(cls._globalBlockCache)
+        globalBlockCacheCount = len(cls._globalCacheIndex)
         name = f"{func.__qualname__}:{MAX_BLOCK_CACHE_SIZE//16384*16384}+"
         for x in range(16384,MAX_BLOCK_CACHE_SIZE+1,16384):
             if globalBlockCacheCount < x-1:
@@ -270,8 +308,8 @@ class CacheManager:
     @classmethod
     def getCacheStats(cls):
         """キャッシュ量とストレージ使用量を取得"""
-        cacheCount = len(cls._globalBlockCache)
+        cacheCount = len(cls._globalCacheIndex)
         cacheSize = cacheCount * ESTIMATE_SIZE_PER_BLOCK
-        storageCount = len(cls._globalBlockSerial)
+        storageCount = len(cls._globalSerialIndex)
         storageSize = storageCount * ESTIMATE_SIZE_PER_BLOCK
         return cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis

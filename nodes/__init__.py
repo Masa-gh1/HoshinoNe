@@ -11,6 +11,7 @@ from .LazyNNOperationNode import LazyNNOperationNode
 from .ConfigurableNode import ConfigurableNode
 from .BaseReaderNode import BaseReaderNode
 from .BaseReaderNode import BaseReaderSettingsDialog
+from .LazyReaderNode import LazyReaderNode
 from .BaseWriterNode import BaseWriterNode
 from .BaseWriterNode import BaseWriterSettingsDialog
 from .TensorOperationMixin import TensorOperationMixin
@@ -24,6 +25,7 @@ __all__ = [
     'ConfigurableNode',
     'BaseReaderNode',
     'BaseReaderSettingsDialog',
+    'LazyReaderNode',
     'BaseWriterNode',
     'BaseWriterSettingsDialog',
     'TensorOperationMixin',
