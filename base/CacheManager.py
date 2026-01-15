@@ -337,7 +337,9 @@ class CacheManager:
             his = cls._elapsedHis.setdefault( key, {})
             x = 10
             while True:
-                his.setdefault(x,0)
+                for values in cls._elapsedHis.values():
+                    values.setdefault(x,0)
+                
                 if elapsed < x:
                     his[x] += 1
                     break
