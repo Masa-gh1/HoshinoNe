@@ -16,19 +16,18 @@ import tempfile
 import shutil
 import atexit
 
-from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_PER_BLOCK, BLOCK_SIZE
+from config import MAX_BLOCK_CACHE_SIZE, ESTIMATE_SIZE_BYTES_PER_BLOCK, BLOCK_SIZE, BLOCK_CACHE_PAGE_SIZE
+from utils.ThreadPool import CoalescingExecutor
 from base.Constants import CachePolicy
 
-# キャッシュ用巨大配列の一枚当たりサイズ bytes = CACHE_ARRAY_SIZE * BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
-CACHE_ARRAY_SIZE = 1024
-# キャッシュ用巨大配列の最大数
-MAX_CACHE_ARRAY = MAX_BLOCK_CACHE_SIZE // CACHE_ARRAY_SIZE
+# キャッシュページの最大数
+MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 
 class CacheManager:
     """統一キャッシュ管理"""
-    _globalCacheArray  = [None] * MAX_CACHE_ARRAY
-                                # キャッシュ用巨大配列のリスト {page:numpy配列}
-    _globalCacheFree   = deque([(i,j) for i in range(MAX_CACHE_ARRAY-1,-1,-1) for j in range(CACHE_ARRAY_SIZE-1,-1,-1)])
+    _globalCacheArray  = [None] * MAX_BLOCK_CACHE_PAGE
+                                # キャッシュ用ページのリスト {page:numpy配列}
+    _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
                                 # 空いているキャッシュ目次 [(page,index)]
     _globalCacheUsed   = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
     _globalSerialized  = {}     # ストレージ保存目次 {id:boolean}
@@ -44,6 +43,7 @@ class CacheManager:
     _cacheMissCount   = 0  # メモリでキャッシュミスした回数
     _recalculateCount = 0  # メモリに無く再計算となった回数
     _loadCount        = 0  # メモリに無くストレージから復元した回数
+    _elapsedLog       = [] # 処理時間ログ
     _elapsedHis       = {} # 処理時間ヒストグラム
     
     @classmethod
@@ -143,6 +143,10 @@ class CacheManager:
     def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
         cls._setCount += 1
 
+        if cacheKey in cls._globalCacheUsed:
+            # 既にキャッシュにあるので何もしない
+            return
+
         if cls._globalCacheFree:
             pos = cls._globalCacheFree.pop()
             page, index = pos
@@ -170,7 +174,7 @@ class CacheManager:
 
         if cls._globalCacheArray[page] is None:
             from utils import numpy_helpers as nh
-            cls._globalCacheArray[page] = nh.empty((CACHE_ARRAY_SIZE,BLOCK_SIZE,BLOCK_SIZE))
+            cls._globalCacheArray[page] = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE))
         
         cls._globalCacheArray[page][index,:data.shape[0],:data.shape[1]] = data
         cls._globalCacheUsed[cacheKey] = (pos, cachePolicy, data.shape)
@@ -250,8 +254,9 @@ class CacheManager:
         with cls._cacheLock:
             # キャッシュを削除
             cls._clearByPartialKey(cls._globalSerialized, cacheKey)
-            pos = cls._clearByPartialKey(cls._globalCacheUsed, cacheKey)
-            cls._globalCacheFree.extend(pos)
+            values = cls._clearByPartialKey(cls._globalCacheUsed, cacheKey)
+            for pos, _, _ in values:
+                cls._globalCacheFree.append(pos)
     
     @classmethod
     def _clearByPartialKey(cls, cache, cacheKey):
@@ -274,29 +279,42 @@ class CacheManager:
         start = time.perf_counter_ns()
         result = func(*args, **kwargs)
         elapsed = (time.perf_counter_ns() - start)//1000
-        elapsed = min( elapsed , 8191)
+        cls._elapsedLog.append((func.__qualname__, elapsed, len(cls._globalCacheUsed)))
 
-        globalBlockCacheCount = len(cls._globalCacheUsed)
-        name = f"{func.__qualname__}:{MAX_BLOCK_CACHE_SIZE//16384*16384}+"
-        for x in range(16384,MAX_BLOCK_CACHE_SIZE+1,16384):
-            if globalBlockCacheCount < x-1:
-                name = f"{func.__qualname__}:{x}"
-                break
-        
-        his = cls._elapsedHis.setdefault( name, {10:0, 20:0, 40:0, 80:0, 160:0, 320:0, 640:0, 1280:0, 2560:0, 5120:0, 10240:0, 20480:0, 40960:0, 81920:0})
-        x = 10
-        while x<=8192:
-            if elapsed < x:
-                his[x] += 1
-                break
-            x = x*2
+        if 1000 <= len(cls._elapsedLog):
+            tmp = cls._elapsedLog
+            cls._elapsedLog = []
+            CoalescingExecutor.submit( cls, cls._updateElapsedHis, tmp)
+
         return result
     
+    @classmethod
+    def _updateElapsedHis(cls, elapsedLog):
+        for elapsed in elapsedLog:
+            name, elapsed, cacheCount = elapsed
+
+            elapsed = min( elapsed , 8191)
+            x = 4096
+            while True:
+                if cacheCount < (x-3):
+                    key = f"{name}:{x}"
+                    break
+                x = x*2
+            
+            his = cls._elapsedHis.setdefault( key, {})
+            x = 10
+            while True:
+                if elapsed < x:
+                    his.setdefault(x,0)
+                    his[x] += 1
+                    break
+                x = x*2
+
     @classmethod
     def getCacheStats(cls):
         """キャッシュ量とストレージ使用量を取得"""
         cacheCount = len(cls._globalCacheUsed)
-        cacheSize = cacheCount * ESTIMATE_SIZE_PER_BLOCK
+        cacheSize = cacheCount * ESTIMATE_SIZE_BYTES_PER_BLOCK
         storageCount = len(cls._globalSerialized)
-        storageSize = storageCount * ESTIMATE_SIZE_PER_BLOCK
+        storageSize = storageCount * ESTIMATE_SIZE_BYTES_PER_BLOCK
         return cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis

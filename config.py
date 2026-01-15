@@ -22,20 +22,23 @@ MAX_WORKERS = 8
 DEFAULT_BLOCK_TYPE = np.float32
 DEFAULT_BLOCK_TYPE_BYTES = DEFAULT_BLOCK_TYPE().itemsize
 
-# ブロックキャッシュサイズ設定(GB)
+# ブロックキャッシュサイズ設定[GB]
 MAX_BLOCK_CACHE_SIZE_GB = 8
+MAX_BLOCK_CACHE_SIZE_BYTES = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024
 
 # ブロックサイズ設定
 # ベイヤーを処理する場合、ベイヤーのサイズの倍数にしてください
 BLOCK_SIZE = 256
 
-# ブロック当たりの推定 byte 数 (画像なら)
-ESTIMATE_SIZE_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
+# ブロック当たりの推定サイズ[byte] (画像なら 縦x横x型)
+ESTIMATE_SIZE_BYTES_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE * DEFAULT_BLOCK_TYPE_BYTES
 
-# ブロックキャッシュサイズ設定(ブロック数)
-# キャッシュサイズが 32768 を超えるとパフォーマンスが下がる PC 構成があります。
-# 恐らく CPU キャッシュサイズと python の dict の実装に関係していると思われます。
-MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_GB*1024*1024*1024//ESTIMATE_SIZE_PER_BLOCK
+# ブロックキャッシュサイズ設定[ブロック数]
+MAX_BLOCK_CACHE_SIZE = MAX_BLOCK_CACHE_SIZE_BYTES//ESTIMATE_SIZE_BYTES_PER_BLOCK
+
+# ブロックキャッシュページサイズ [ブロック数]
+BLOCK_CACHE_PAGE_SIZE = 1024
+BLOCK_CACHE_PAGE_SIZE_BYTES = BLOCK_CACHE_PAGE_SIZE * ESTIMATE_SIZE_BYTES_PER_BLOCK
 
 #
 # データヘッダ用ヘルパー関数
