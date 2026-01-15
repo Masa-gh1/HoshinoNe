@@ -25,14 +25,15 @@ MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 
 class CacheManager:
     """統一キャッシュ管理"""
-    _globalCacheArray  = [None] * MAX_BLOCK_CACHE_PAGE
-                                # キャッシュ用ページのリスト {page:numpy配列}
-    _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
-                                # 空いているキャッシュ目次 [(page,index)]
+    _globalCachedObj   = {}     # オブジェクトキャッシュ目次 {id:data}
     _globalCached      = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
     _globalSerialized  = {}     # ストレージ保存目次 {id:boolean}
     _globalCachedAll   = {}     # 全キャッシュ保存目次 {id:boolean}
     _cacheLock = threading.Lock()
+    _globalCachePage   = [None] * MAX_BLOCK_CACHE_PAGE
+                                # メモリキャッシュページ {page:numpy配列[BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE]}
+    _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
+                                # 空いているメモリキャッシュ目次 [(page,index)]
     _globalTempDir     = None   # 一時ディレクトリ
     _cleanupRegistered = False  # 後始末関数登録状態
     
@@ -110,7 +111,10 @@ class CacheManager:
         if not cache is None:
             cls._globalCached[cacheKey] = cache # 最後尾に追加(LRU)
             (page, index), cachePolicy, dims = cache
-            data = cls._globalCacheArray[page][index,:dims[0],:dims[1]]
+            if cacheKey in cls._globalCachedObj:
+                data = cls._globalCachedObj[cacheKey]
+            else:
+                data = cls._globalCachePage[page][index,:dims[0],:dims[1]]
         else:
             cls._cacheMissCount += 1
             data = None
@@ -147,7 +151,7 @@ class CacheManager:
         if cacheKey in cls._globalCached:
             # 既にキャッシュにあるので何もしない
             return
-
+        
         if cls._globalCacheFree:
             pos = cls._globalCacheFree.pop()
             page, index = pos
@@ -156,7 +160,11 @@ class CacheManager:
             oldKey = next(iter(cls._globalCached))
             pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
             page, index = pos
-            if oldPolicy != CachePolicy.PERSISTENT:
+            if oldKey is cls._globalCachedObj:
+                oldData = cls._globalCachedObj[oldKey]
+            else:
+                oldData = cls._globalCachePage[page][index,:oldDims[0],:oldDims[1]]
+            if CachePolicy.PERSISTENT != oldPolicy:
                 # ポリシー persistent ではないのでキャッシュから削除
                 cls._globalCachedAll.pop(oldKey)
                 cls._purgeCount += 1
@@ -164,7 +172,7 @@ class CacheManager:
                 # ポリシー persistent であり、
                 # 既にストレージに保存ずみなのでキャッシュから削除
                 pass
-            elif cls._saveToStorage(oldKey, cls._globalCacheArray[page][index,:oldDims[0],:oldDims[1]]):
+            elif cls._saveToStorage(oldKey, oldData):
                 # ポリシー persistent であり、
                 # ストレージへ保存したのでキャッシュから削除
                 cls._saveCount += 1
@@ -174,13 +182,36 @@ class CacheManager:
                 # log は _saveToStorage に委譲
                 pass
 
-        if cls._globalCacheArray[page] is None:
+        if cls._globalCachePage[page] is None:
             from utils import numpy_helpers as nh
-            cls._globalCacheArray[page] = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE))
+            cls._globalCachePage[page] = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE))
         
-        cls._globalCacheArray[page][index,:data.shape[0],:data.shape[1]] = data
+        cls._globalCachedObj[cacheKey] = data
         cls._globalCached[cacheKey] = (pos, cachePolicy, data.shape)
         cls._globalCachedAll[cacheKey] = True
+
+        CoalescingExecutor.submit(cls._lazySave, cls._lazySave) # キャッシュへの遅延書き込み
+
+    @classmethod
+    def _lazySave(cls):
+        """キャッシュへの遅延書き込み"""
+        with cls._cacheLock:
+            tmplist = []
+            for cacheKey, data in cls._globalCachedObj.items():
+                pos, cachePolicy, dims = cls._globalCached[cacheKey]
+                tmplist.append((cacheKey, pos, cachePolicy, dims, data))
+        
+        for cacheKey, pos, cachePolicy, dims, data in tmplist:
+            page, index = pos
+
+            cls._globalCachePage[page][index,:data.shape[0],:data.shape[1]] = data
+            if CachePolicy.PERSISTENT == cachePolicy:
+                cls._saveToStorage(cacheKey, data)
+            
+            with cls._cacheLock:
+                cls._globalCachedObj.pop(cacheKey)
+                if CachePolicy.PERSISTENT == cachePolicy:
+                    cls._globalSerialized[cacheKey] = True
 
     @classmethod
     def isCached(cls, cacheKey):
@@ -195,7 +226,7 @@ class CacheManager:
 
     @classmethod
     def _saveToStorage(cls, cacheKey, data):
-        """ストレージに退避（永続化データのみ）"""
+        """ストレージに退避"""
         import numpy as np
 
         try:
@@ -205,7 +236,7 @@ class CacheManager:
             pre = filename[:2]
             subDir = os.path.join( cls._globalTempDir, pre)
             os.makedirs(subDir, exist_ok=True)
-
+            
             fileName = os.path.join(subDir, f"{filename}.npy")
             cls.elapsed(np.save, fileName, data, allow_pickle=False)
             
@@ -216,7 +247,7 @@ class CacheManager:
     
     @classmethod
     def _loadFromStorage(cls, cacheKey):
-        """ストレージから読み込み（永続化データのみ）"""
+        """ストレージから復元"""
         import numpy as np
         
         try:
@@ -226,7 +257,7 @@ class CacheManager:
             filename = f"{cacheKey}".replace("/", "_").replace("\\", "_").replace(":", "_")
             pre = filename[:2]
             subDir = os.path.join( cls._globalTempDir, pre)
-
+            
             fileName = os.path.join(subDir, f"{filename}.npy")
             data = cls.elapsed(np.load, fileName, allow_pickle=False)
             
@@ -278,24 +309,25 @@ class CacheManager:
         start = time.perf_counter_ns()
         result = func(*args, **kwargs)
         elapsed = (time.perf_counter_ns() - start)//1000
-        cls._elapsedLog.append((func.__qualname__, elapsed, len(cls._globalCachedAll)))
+        cls._elapsedLog.append((func.__qualname__, elapsed))
 
         if 1000 <= len(cls._elapsedLog):
             tmp = cls._elapsedLog
             cls._elapsedLog = []
-            CoalescingExecutor.submit( cls, cls._updateElapsedHis, tmp)
+            CoalescingExecutor.submit(cls._updateElapsedHis, cls._updateElapsedHis, tmp)
 
         return result
     
     @classmethod
     def _updateElapsedHis(cls, elapsedLog):
-        for elapsed in elapsedLog:
-            name, elapsed, cacheCount = elapsed
+        for log in elapsedLog:
+            name, elapsed = log
+            cacheCount = len(cls._globalCachedAll)
 
             elapsed = min( elapsed , 8191)
             x = 4096
             while True:
-                if cacheCount < (x-3):
+                if cacheCount < x:
                     key = f"{name}:{x}"
                     break
                 x = x*2
@@ -303,8 +335,8 @@ class CacheManager:
             his = cls._elapsedHis.setdefault( key, {})
             x = 10
             while True:
+                his.setdefault(x,0)
                 if elapsed < x:
-                    his.setdefault(x,0)
                     his[x] += 1
                     break
                 x = x*2

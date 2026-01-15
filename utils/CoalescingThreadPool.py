@@ -19,7 +19,7 @@ class CoalescingThreadPool:
         self._pending_tasks: Dict[Any, Tuple[Callable, tuple, dict, Future]] = {}  # 待機中タスク
         self._running_tasks: Dict[Any, Future] = {}  # 実行中タスク
         self._lock = threading.Lock()
-        
+    
     def submit(self, resourceKey: Any, func: Callable, *args, **kwargs) -> Future:
         """
         同一 resourceKey からの実行要求は1つだけ実行し、待機中は最新のみ保持
