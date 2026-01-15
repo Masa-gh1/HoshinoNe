@@ -161,7 +161,7 @@ class CacheManager:
             pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
             page, index = pos
             if oldKey in cls._globalCachedObj:
-                oldData = cls._globalCachedObj[oldKey]
+                oldData = cls._globalCachedObj.pop(oldKey)
             else:
                 oldData = cls._globalCachePage[page][index,:oldDims[0],:oldDims[1]]
             if CachePolicy.PERSISTENT != oldPolicy:
@@ -206,11 +206,13 @@ class CacheManager:
 
             cls._globalCachePage[page][index,:data.shape[0],:data.shape[1]] = data
             if CachePolicy.PERSISTENT == cachePolicy:
-                cls._saveToStorage(cacheKey, data)
+                saved = cls._saveToStorage(cacheKey, data)
+            else:
+                saved = False
             
             with cls._cacheLock:
                 cls._globalCachedObj.pop(cacheKey)
-                if CachePolicy.PERSISTENT == cachePolicy:
+                if saved:
                     cls._globalSerialized[cacheKey] = True
 
     @classmethod
