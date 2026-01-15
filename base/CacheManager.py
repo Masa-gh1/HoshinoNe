@@ -29,8 +29,9 @@ class CacheManager:
                                 # キャッシュ用ページのリスト {page:numpy配列}
     _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
                                 # 空いているキャッシュ目次 [(page,index)]
-    _globalCacheUsed   = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
+    _globalCached      = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
     _globalSerialized  = {}     # ストレージ保存目次 {id:boolean}
+    _globalCachedAll   = {}     # 全キャッシュ保存目次 {id:boolean}
     _cacheLock = threading.Lock()
     _globalTempDir     = None   # 一時ディレクトリ
     _cleanupRegistered = False  # 後始末関数登録状態
@@ -105,9 +106,9 @@ class CacheManager:
     def _get(cls, cacheKey):
         cls._getCount += 1
 
-        cache = cls._globalCacheUsed.pop(cacheKey,None)
+        cache = cls._globalCached.pop(cacheKey,None)
         if not cache is None:
-            cls._globalCacheUsed[cacheKey] = cache # 最後尾に追加(LRU)
+            cls._globalCached[cacheKey] = cache # 最後尾に追加(LRU)
             (page, index), cachePolicy, dims = cache
             data = cls._globalCacheArray[page][index,:dims[0],:dims[1]]
         else:
@@ -143,7 +144,7 @@ class CacheManager:
     def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
         cls._setCount += 1
 
-        if cacheKey in cls._globalCacheUsed:
+        if cacheKey in cls._globalCached:
             # 既にキャッシュにあるので何もしない
             return
 
@@ -152,11 +153,12 @@ class CacheManager:
             page, index = pos
         else:
             # 空が無いので古いデータから削除(LRU)
-            oldKey = next(iter(cls._globalCacheUsed))
-            pos, oldPolicy, oldDims = cls._globalCacheUsed.pop(oldKey)
+            oldKey = next(iter(cls._globalCached))
+            pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
             page, index = pos
             if oldPolicy != CachePolicy.PERSISTENT:
                 # ポリシー persistent ではないのでキャッシュから削除
+                cls._globalCachedAll.pop(oldKey)
                 cls._purgeCount += 1
             elif cls._isStoraged(oldKey):
                 # ポリシー persistent であり、
@@ -177,22 +179,18 @@ class CacheManager:
             cls._globalCacheArray[page] = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE))
         
         cls._globalCacheArray[page][index,:data.shape[0],:data.shape[1]] = data
-        cls._globalCacheUsed[cacheKey] = (pos, cachePolicy, data.shape)
+        cls._globalCached[cacheKey] = (pos, cachePolicy, data.shape)
+        cls._globalCachedAll[cacheKey] = True
 
     @classmethod
     def isCached(cls, cacheKey):
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock:
-            return cacheKey in cls._globalCacheUsed
-
-    @classmethod
-    def isStoraged(cls, cacheKey):
-        """ストレージ保存されているかどうかを判定"""
-        with cls._cacheLock:
-            return cls._isStoraged(cacheKey)
+            return cacheKey in cls._globalCachedAll
 
     @classmethod
     def _isStoraged(cls, cacheKey):
+        """ストレージ保存されているかどうかを判定"""
         return cacheKey in cls._globalSerialized
 
     @classmethod
@@ -254,9 +252,10 @@ class CacheManager:
         with cls._cacheLock:
             # キャッシュを削除
             cls._clearByPartialKey(cls._globalSerialized, cacheKey)
-            values = cls._clearByPartialKey(cls._globalCacheUsed, cacheKey)
+            values = cls._clearByPartialKey(cls._globalCached, cacheKey)
             for pos, _, _ in values:
                 cls._globalCacheFree.append(pos)
+            cls._clearByPartialKey(cls._globalCachedAll, cacheKey)
     
     @classmethod
     def _clearByPartialKey(cls, cache, cacheKey):
@@ -279,7 +278,7 @@ class CacheManager:
         start = time.perf_counter_ns()
         result = func(*args, **kwargs)
         elapsed = (time.perf_counter_ns() - start)//1000
-        cls._elapsedLog.append((func.__qualname__, elapsed, len(cls._globalCacheUsed)))
+        cls._elapsedLog.append((func.__qualname__, elapsed, len(cls._globalCachedAll)))
 
         if 1000 <= len(cls._elapsedLog):
             tmp = cls._elapsedLog
@@ -313,7 +312,7 @@ class CacheManager:
     @classmethod
     def getCacheStats(cls):
         """キャッシュ量とストレージ使用量を取得"""
-        cacheCount = len(cls._globalCacheUsed)
+        cacheCount = len(cls._globalCached)
         cacheSize = cacheCount * ESTIMATE_SIZE_BYTES_PER_BLOCK
         storageCount = len(cls._globalSerialized)
         storageSize = storageCount * ESTIMATE_SIZE_BYTES_PER_BLOCK
