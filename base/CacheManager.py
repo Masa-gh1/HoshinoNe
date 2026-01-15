@@ -160,7 +160,7 @@ class CacheManager:
             oldKey = next(iter(cls._globalCached))
             pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
             page, index = pos
-            if oldKey is cls._globalCachedObj:
+            if oldKey in cls._globalCachedObj:
                 oldData = cls._globalCachedObj[oldKey]
             else:
                 oldData = cls._globalCachePage[page][index,:oldDims[0],:oldDims[1]]
