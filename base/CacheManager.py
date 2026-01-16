@@ -25,11 +25,11 @@ MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 
 class CacheManager:
     """統一キャッシュ管理"""
-    _globalCachedObj   = {}     # オブジェクトキャッシュ目次 {id:data}
     _globalCached      = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
     _globalSerialized  = {}     # ストレージ保存目次 {id:boolean}
     _globalCachedAll   = {}     # 全キャッシュ保存目次 {id:boolean}
     _cacheLock = threading.Lock()
+    _globalObjCache    = {}     # オブジェクトキャッシュ {id:data}
     _globalCachePage   = [None] * MAX_BLOCK_CACHE_PAGE
                                 # メモリキャッシュページ {page:numpy配列[BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE]}
     _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
@@ -111,8 +111,8 @@ class CacheManager:
         if not cache is None:
             cls._globalCached[cacheKey] = cache # 最後尾に追加(LRU)
             (page, index), cachePolicy, dims = cache
-            if cacheKey in cls._globalCachedObj:
-                data = cls._globalCachedObj[cacheKey]
+            if cacheKey in cls._globalObjCache:
+                data = cls._globalObjCache[cacheKey]
             else:
                 data = cls._globalCachePage[page][index,:dims[0],:dims[1]]
         else:
@@ -160,8 +160,8 @@ class CacheManager:
             oldKey = next(iter(cls._globalCached))
             pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
             page, index = pos
-            if oldKey in cls._globalCachedObj:
-                oldData = cls._globalCachedObj.pop(oldKey)
+            if oldKey in cls._globalObjCache:
+                oldData = cls._globalObjCache.pop(oldKey)
             else:
                 oldData = cls._globalCachePage[page][index,:oldDims[0],:oldDims[1]]
             if CachePolicy.PERSISTENT != oldPolicy:
@@ -186,7 +186,7 @@ class CacheManager:
             from utils import numpy_helpers as nh
             cls._globalCachePage[page] = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE))
         
-        cls._globalCachedObj[cacheKey] = data
+        cls._globalObjCache[cacheKey] = data
         cls._globalCached[cacheKey] = (pos, cachePolicy, data.shape)
         cls._globalCachedAll[cacheKey] = True
 
@@ -197,7 +197,7 @@ class CacheManager:
         """キャッシュへの遅延書き込み"""
         with cls._cacheLock:
             tmplist = []
-            for cacheKey, data in cls._globalCachedObj.items():
+            for cacheKey, data in cls._globalObjCache.items():
                 pos, cachePolicy, dims = cls._globalCached[cacheKey]
                 tmplist.append((cacheKey, pos, cachePolicy, dims, data))
         
@@ -211,7 +211,7 @@ class CacheManager:
                 saved = False
             
             with cls._cacheLock:
-                cls._globalCachedObj.pop(cacheKey)
+                cls._globalObjCache.pop(cacheKey)
                 if saved:
                     cls._globalSerialized[cacheKey] = True
 
@@ -337,7 +337,9 @@ class CacheManager:
             his = cls._elapsedHis.setdefault( key, {})
             x = 10
             while True:
-                his.setdefault(x,0)
+                for values in cls._elapsedHis.values():
+                    values.setdefault(x,0)
+                
                 if elapsed < x:
                     his[x] += 1
                     break
