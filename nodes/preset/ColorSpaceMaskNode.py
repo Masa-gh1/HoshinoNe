@@ -174,12 +174,12 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
             if np.any(isFeather):
                 maskValues = np.where(
                     isFeather,
-                    np.exp(-(((distances - radius) / sigma) ** 2)),
-                    1.0
+                    1.0 - np.exp(-(((distances - radius) / sigma) ** 2)),
+                    0.0
                 )
-                mask = np.maximum(0.0, mask - np.where(isValid, maskValues, 0.0))
+                mask *= np.where(isValid, maskValues, 1.0)
             elif np.any(isValid):
-                mask = np.maximum(0.0, mask - np.where(isValid, 1.0, 0.0))
+                mask *= np.where(isValid, 0.0, 1.0)
             else:
                 pass # なにもしない
         
