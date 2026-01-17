@@ -197,9 +197,8 @@ class FlowData:
             arr = dataBlock.data
         elif dataBlock.data.dtype != nh.BDTYPE:
             arr = dataBlock.data.astype(nh.BDTYPE)
-        elif (   hasattr(dataBlock.data, 'base')
-             and dataBlock.data.base is not None
-             and dataBlock.data.nbytes < dataBlock.data.base.nbytes
+        elif (   not dataBlock.data.base is None
+             and     dataBlock.data.nbytes < dataBlock.data.base.nbytes
              ):
             # numpy 配列が view で実体がより大きいので copy して実体にする。(元の実体を開放する為)
             arr = dataBlock.data.copy()
