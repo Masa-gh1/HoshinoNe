@@ -201,8 +201,7 @@ class CacheManager:
             
             with cls._cacheLock:
                 cls._globalCached[cacheKey] = (pos, cachePolicy, data.shape)
-                if cacheKey in cls._globalObjCache:
-                    cls._globalObjCache.pop(cacheKey)
+                cls._globalObjCache.pop(cacheKey, None)
                 if CachePolicy.PERSISTENT == cachePolicy:
                     cls._globalStorageWait[cacheKey] = data
                     if 100 <= len(cls._globalStorageWait):
@@ -212,6 +211,9 @@ class CacheManager:
     def _lazySave2(cls):
         """ストレージキャッシュへの遅延書き込み"""
         while True:
+            # メインスレッドを可能な限り止めない為に、
+            # このスレッドではロック時間を最小にする。
+            # ストレージ操作などはロックの外で行う。
             with cls._cacheLock:
                 if not cls._globalStorageWait:
                     break
@@ -222,8 +224,7 @@ class CacheManager:
                 with cls._cacheLock:
                     cls._saveCount += 1
                     cls._globalStoraged[cacheKey] = True
-                    if cacheKey in cls._globalStorageWait:
-                        cls._globalStorageWait.pop(cacheKey)
+                    cls._globalStorageWait.pop(cacheKey, None)
 
     @classmethod
     def isCached(cls, cacheKey):
