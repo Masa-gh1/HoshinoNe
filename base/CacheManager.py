@@ -152,12 +152,16 @@ class CacheManager:
         cls._globalCachedAll[cacheKey] = cachePolicy
         cls._globalObjCache[cacheKey] = data
         
-        CoalescingExecutor.submit(cls._lazySave1, cls._lazySave1) # メモリキャッシュへの遅延書き込み
+        if 100 <= len(cls._globalObjCache):
+            CoalescingExecutor.submit(cls._lazySave1, cls._lazySave1) # メモリキャッシュへの遅延書き込み
 
     @classmethod
     def _lazySave1(cls):
         """メモリキャッシュへの遅延書き込み"""
         while True:
+            # メインスレッドを可能な限り止めない為に、
+            # このスレッドではロック時間を最小にする。
+            # 大きなメモリ操作などはロックの外で行う。
             with cls._cacheLock:
                 if not cls._globalObjCache:
                     break
@@ -166,39 +170,32 @@ class CacheManager:
                 cachePolicy = cls._globalCachedAll[cacheKey]
 
                 if cls._globalCacheFree:
+                    # ページに空が在るので採用
                     pos = cls._globalCacheFree.pop()
-                else:
-                    pos = None
+                    page, index = pos
 
-            if pos:
-                # ページに空が在るので採用
-                page, index = pos
-
-                with cls._cacheLock:
                     if page < len(cls._globalCachePage):
                         pageBody = cls._globalCachePage[page]
                     else:
                         pageBody = None
-                
-                if pageBody is None:
-                    from utils import numpy_helpers as nh
-                    # 新しいページなので、新規作成
-                    pageBody = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE))
-                    with cls._cacheLock:
-                        cls._globalCachePage.append(pageBody)
-            else:
-                # ページに空が無いので古いデータから削除(LRU)
-                with cls._cacheLock:
+                else:
+                    # ページに空が無いので古いデータから削除(LRU)
                     oldKey = next(iter(cls._globalCached))
                     pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
                     page, index = pos
                     pageBody = cls._globalCachePage[page]
                 
-                if CachePolicy.PERSISTENT != oldPolicy:
-                    # ポリシー persistent ではないのでキャッシュから削除
-                    with cls._cacheLock:
+                    if CachePolicy.PERSISTENT != oldPolicy:
+                        # ポリシー persistent ではないのでキャッシュから削除
                         cls._purgeCount += 1
                         cls._globalCachedAll.pop(oldKey)
+            
+            if pageBody is None:
+                from utils import numpy_helpers as nh
+                # 新しいページなので、新規作成
+                pageBody = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE)) # ページ作成
+                with cls._cacheLock:
+                    cls._globalCachePage.append(pageBody)
             
             pageBody[index,:data.shape[0],:data.shape[1]] = data # メモリキャッシュへ書き込み
             
@@ -208,7 +205,8 @@ class CacheManager:
                     cls._globalObjCache.pop(cacheKey)
                 if CachePolicy.PERSISTENT == cachePolicy:
                     cls._globalStorageWait[cacheKey] = data
-                    CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
+                    if 100 <= len(cls._globalStorageWait):
+                        CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
 
     @classmethod
     def _lazySave2(cls):
