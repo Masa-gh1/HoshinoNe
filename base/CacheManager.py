@@ -26,7 +26,8 @@ MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 class CacheManager:
     """統一キャッシュ管理"""
     _globalCached      = {}     # 全キャッシュ目次 {id:policy}
-    _globalCacheUsed   = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
+    _globalCacheUsed   = {}     # メモリキャッシュ目次 {id:((page,index),dims)}
+    _globalRemovable   = {}     # 削除可能キャッシュ目次 {id:boolean}
     _globalStorageWait = {}     # ストレージキャッシュ保存待ち目次 {id:data}
     _globalStoraged    = {}     # ストレージキャッシュ目次 {id:boolean}
     _cacheLock = threading.Lock()
@@ -36,6 +37,7 @@ class CacheManager:
     _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
                                 # 空いているメモリキャッシュ目次 [(page,index)]
     _globalStorageDir  = None   # ストレージキャッシュディレクトリ
+    _globalStorageReq  = 0      # ストレージキャッシュ要求数
 
     _cleanupRegistered = False  # 後始末関数登録状態
     
@@ -113,16 +115,11 @@ class CacheManager:
             data = cls._globalObjCache[cacheKey]
             return data
         elif cacheKey in cls._globalCacheUsed:
-            # メモリキャッシュにあるので取り出して再追加(LRU)
+            # メモリキャッシュにあるので採用
             cache = cls._globalCacheUsed.pop(cacheKey)
             cls._globalCacheUsed[cacheKey] = cache # 最後尾に追加(LRU)
-            (page, index), cachePolicy, dims = cache
+            (page, index), dims = cache
             data = cls._globalCachePage[page][index,:dims[0],:dims[1]]
-            return data
-        elif cacheKey in cls._globalStorageWait:
-            # ストレージ保存待ちなので取り出してメモリキャッシュに復帰
-            data = cls._globalStorageWait.pop(cacheKey)
-            cls._set(cacheKey, data, CachePolicy.PERSISTENT) # メモリキャッシュに復帰
             return data
         elif cacheKey in cls._globalStoraged:
             # ストレージに在るので復元してメモリキャッシュに復帰
@@ -137,7 +134,7 @@ class CacheManager:
                 pass
             return data
         else:
-            # ストレージに無いので、残念なら要再計算
+            # キャッシュに無いので、残念なら要再計算
             cls._cacheMissCount += 1
             cls._recalculateCount += 1
             return None
@@ -182,9 +179,11 @@ class CacheManager:
                         pageBody = None
                 else:
                     # ページに空が無いので古いデータから削除(LRU)
-                    oldKey = next(iter(cls._globalCacheUsed))
-                    pos, oldPolicy, oldDims = cls._globalCacheUsed.pop(oldKey)
+                    oldKey = next(iter(cls._globalRemovable))
+                    cls._globalRemovable.pop(oldKey)
+                    pos, oldDims = cls._globalCacheUsed.pop(oldKey)
                     page, index = pos
+                    oldPolicy = cls._globalCached[oldKey]
                     pageBody = cls._globalCachePage[page]
                 
                     if CachePolicy.PERSISTENT != oldPolicy:
@@ -202,32 +201,58 @@ class CacheManager:
             pageBody[index,:data.shape[0],:data.shape[1]] = data # メモリキャッシュへ書き込み
             
             with cls._cacheLock:
-                cls._globalCacheUsed[cacheKey] = (pos, cachePolicy, data.shape)
+                cls._globalCacheUsed[cacheKey] = (pos, data.shape)
                 cls._globalObjCache.pop(cacheKey, None)
-                if CachePolicy.PERSISTENT == cachePolicy:
-                    cls._globalStorageWait[cacheKey] = data
-                    if 100 <= len(cls._globalStorageWait):
+                if CachePolicy.PERSISTENT != cachePolicy:
+                    cls._globalRemovable[cacheKey] = True
+                else:
+                    cls._globalStorageWait[cacheKey] = True
+                    if(   not cls._globalCacheFree
+                      and 100 <= len(cls._globalStorageWait)
+                      ):
+                        cls._globalStorageReq += 1
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
 
     @classmethod
     def _lazySave2(cls):
         """ストレージキャッシュへの遅延書き込み"""
+        if 0 == cls._saveCount % 131:
+            with cls._cacheLock:
+                # _globalStorageWait の順序を _globalCacheUsed に合わせる。
+                cls._globalStorageWait = {x:True for x in cls._globalCacheUsed if x in cls._globalStorageWait}
+        
         while True:
             # メインスレッドを可能な限り止めない為に、
             # このスレッドではロック時間を最小にする。
             # ストレージ操作などはロックの外で行う。
             with cls._cacheLock:
-                if not cls._globalStorageWait:
+                if 0 == cls._globalStorageReq or not cls._globalStorageWait:
+                    cls._globalStorageReq = 0
                     break
-
-                cacheKey, data = next(iter(cls._globalStorageWait.items()))
-
-            if cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
+                cls._globalStorageReq -= 1
+                cacheKey = next(iter(cls._globalStorageWait))
+                pos, dims = cls._globalCacheUsed[cacheKey]
+                page, index = pos
+                data = cls._globalCachePage[page][index,:dims[0],:dims[1]]
+            
+            if cacheKey in cls._globalStoraged:
+                # 既に保存済みなので何もしない
+                with cls._cacheLock:
+                    cls._globalRemovable[cacheKey] = True
+                    cls._globalStorageWait.pop(cacheKey, None)
+            elif cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
+                # 書き込み成功
                 with cls._cacheLock:
                     cls._saveCount += 1
                     cls._globalStoraged[cacheKey] = True
+                    cls._globalRemovable[cacheKey] = True
                     cls._globalStorageWait.pop(cacheKey, None)
-
+        
+        if 0 == cls._saveCount % 101:
+            with cls._cacheLock:
+                # _globalRemovable の順序を _globalCacheUsed に合わせる。
+                cls._globalRemovable = {x:True for x in cls._globalCacheUsed if x in cls._globalRemovable}
+        
     @classmethod
     def isCached(cls, cacheKey):
         """キャッシュされているかどうかを判定"""
@@ -293,10 +318,13 @@ class CacheManager:
         with cls._cacheLock:
             # キャッシュを削除
             cls._clearByPartialKey(cls._globalStoraged, cacheKey)
+            cls._clearByPartialKey(cls._globalStorageWait, cacheKey)
             values = cls._clearByPartialKey(cls._globalCacheUsed, cacheKey)
-            for pos, _, _ in values:
+            for pos, dims in values:
                 cls._globalCacheFree.append(pos)
+            cls._clearByPartialKey(cls._globalRemovable, cacheKey)
             cls._clearByPartialKey(cls._globalCached, cacheKey)
+            cls._clearByPartialKey(cls._globalObjCache, cacheKey)
     
     @classmethod
     def _clearByPartialKey(cls, cache, cacheKey):
