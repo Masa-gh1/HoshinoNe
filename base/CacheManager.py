@@ -25,17 +25,19 @@ MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 
 class CacheManager:
     """統一キャッシュ管理"""
-    _globalCachedAll   = {}     # 全キャッシュ目次 {id:policy}
-    _globalCached      = {}     # メモリキャッシュ目次 {id:((page,index),policy,dims)}
-    _globalStoraged    = {}     # ストレージキャッシュ目次 {id:boolean}
+    _cachedIndex       = {}     # 全キャッシュ目次 {id:policy}
+    _memCachedIndex    = {}     # メモリキャッシュ目次 {id:((page,index),dims)}
+    _memCacheRemovable = {}     # 削除可能キャッシュ目次 {id:boolean}
+    _storageWait       = {}     # ストレージキャッシュ保存待ち目次 {id:data}
+    _storagedIndex     = {}     # ストレージキャッシュ目次 {id:boolean}
     _cacheLock = threading.Lock()
 
-    _globalObjCache    = {}     # オブジェクトキャッシュ {id:data}
-    _globalCachePage   = []     # メモリキャッシュページ {page:numpy配列[BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE]}
-    _globalCacheFree   = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
+    _objectCache       = {}     # オブジェクトキャッシュ {id:data}
+    _memCachePage      = []     # メモリキャッシュページ {page:numpy配列[BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE]}
+    _memCacheFree      = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
                                 # 空いているメモリキャッシュ目次 [(page,index)]
-    _globalStorageWait = {}     # ストレージキャッシュ待ち {id:data}
-    _globalStorageDir  = None   # ストレージキャッシュディレクトリ
+    _storageDir        = None   # ストレージキャッシュディレクトリ
+    _storageReq        = 0      # ストレージキャッシュ要求数
 
     _cleanupRegistered = False  # 後始末関数登録状態
     
@@ -53,7 +55,7 @@ class CacheManager:
     @classmethod
     def _getGlobelTempDir(cls):
         """キャッシュディレクトリを取得"""
-        if cls._globalStorageDir is None:
+        if cls._storageDir is None:
             # 初回だけクリーンアップの実施と終了時の登録を行う
             atexit.register(cls._cleanupOldTempDirs)
             cls._cleanupOldTempDirs()
@@ -62,18 +64,9 @@ class CacheManager:
             # 初回だけテンポラリディレクトリを作製する
             cahedir = os.path.join(os.path.expanduser("~"), ".hoshinone", "cache")
             os.makedirs( cahedir, exist_ok=True)
-            cls._globalStorageDir = tempfile.mkdtemp( dir=cahedir, prefix="FlowData_")
+            cls._storageDir = tempfile.mkdtemp( dir=cahedir, prefix="FlowData_")
         
-        # platformdirs 使う場合
-        #if cls._globalStorageDir is None:
-        #    try:
-        #        from platformdirs import user_cache_dir
-        #        cls._globalStorageDir = user_cache_dir("HoshinoNe")
-        #    except ImportError:
-        #        # フォールバック: 一時ディレクトリ使用
-        #        cls._globalStorageDir = tempfile.mkdtemp(prefix="FlowData_")
-        #    os.makedirs(cls._globalStorageDir, exist_ok=True)
-        return cls._globalStorageDir
+        return cls._storageDir
     
     @classmethod
     def _cleanupOldTempDirs(cls):
@@ -82,8 +75,8 @@ class CacheManager:
             tempRoot = os.path.join(os.path.expanduser("~"), ".hoshinone", "cache")
             currentTime = time.time()
             
-            if cls._globalStorageDir:
-                shutil.rmtree(cls._globalStorageDir, ignore_errors=True) # 現在のテンポラリディレクトリを削除
+            if cls._storageDir:
+                shutil.rmtree(cls._storageDir, ignore_errors=True) # 現在のテンポラリディレクトリを削除
 
             for item in os.listdir(tempRoot):
                 itemPath = os.path.join(tempRoot, item)
@@ -108,23 +101,18 @@ class CacheManager:
 
     @classmethod
     def _get(cls, cacheKey):
-        if cacheKey in cls._globalObjCache:
+        if cacheKey in cls._objectCache:
             # オブジェクトキャッシュにあるので採用
-            data = cls._globalObjCache[cacheKey]
+            data = cls._objectCache[cacheKey]
             return data
-        elif cacheKey in cls._globalCached:
-            # メモリキャッシュにあるので取り出して再追加(LRU)
-            cache = cls._globalCached.pop(cacheKey)
-            cls._globalCached[cacheKey] = cache # 最後尾に追加(LRU)
-            (page, index), cachePolicy, dims = cache
-            data = cls._globalCachePage[page][index,:dims[0],:dims[1]]
+        elif cacheKey in cls._memCachedIndex:
+            # メモリキャッシュにあるので採用
+            cache = cls._memCachedIndex.pop(cacheKey)
+            cls._memCachedIndex[cacheKey] = cache # 最後尾に追加(LRU)
+            (page, index), dims = cache
+            data = cls._memCachePage[page][index,:dims[0],:dims[1]]
             return data
-        elif cacheKey in cls._globalStorageWait:
-            # ストレージ保存待ちなので取り出してメモリキャッシュに復帰
-            data = cls._globalStorageWait.pop(cacheKey)
-            cls._set(cacheKey, data, CachePolicy.PERSISTENT) # メモリキャッシュに復帰
-            return data
-        elif cacheKey in cls._globalStoraged:
+        elif cacheKey in cls._storagedIndex:
             # ストレージに在るので復元してメモリキャッシュに復帰
             cls._cacheMissCount += 1
             cls._loadCount += 1
@@ -137,7 +125,7 @@ class CacheManager:
                 pass
             return data
         else:
-            # ストレージに無いので、残念なら要再計算
+            # キャッシュに無いので、残念なら要再計算
             cls._cacheMissCount += 1
             cls._recalculateCount += 1
             return None
@@ -151,10 +139,10 @@ class CacheManager:
 
     @classmethod
     def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
-        cls._globalCachedAll[cacheKey] = cachePolicy
-        cls._globalObjCache[cacheKey] = data
+        cls._cachedIndex[cacheKey] = cachePolicy
+        cls._objectCache[cacheKey] = data
         
-        if 100 <= len(cls._globalObjCache):
+        if 100 <= len(cls._objectCache):
             CoalescingExecutor.submit(cls._lazySave1, cls._lazySave1) # メモリキャッシュへの遅延書き込み
 
     @classmethod
@@ -165,74 +153,102 @@ class CacheManager:
             # このスレッドではロック時間を最小にする。
             # 大きなメモリ操作などはロックの外で行う。
             with cls._cacheLock:
-                if not cls._globalObjCache:
+                if not cls._objectCache:
                     break
 
-                cacheKey, data = next(iter(cls._globalObjCache.items()))
-                cachePolicy = cls._globalCachedAll[cacheKey]
+                cacheKey, data = next(iter(cls._objectCache.items()))
+                cachePolicy = cls._cachedIndex[cacheKey]
 
-                if cls._globalCacheFree:
+                if cls._memCacheFree:
                     # ページに空が在るので採用
-                    pos = cls._globalCacheFree.pop()
+                    pos = cls._memCacheFree.pop()
                     page, index = pos
 
-                    if page < len(cls._globalCachePage):
-                        pageBody = cls._globalCachePage[page]
+                    if page < len(cls._memCachePage):
+                        pageBody = cls._memCachePage[page]
                     else:
                         pageBody = None
                 else:
                     # ページに空が無いので古いデータから削除(LRU)
-                    oldKey = next(iter(cls._globalCached))
-                    pos, oldPolicy, oldDims = cls._globalCached.pop(oldKey)
+                    oldKey = next(iter(cls._memCacheRemovable))
+                    cls._memCacheRemovable.pop(oldKey)
+                    pos, oldDims = cls._memCachedIndex.pop(oldKey)
                     page, index = pos
-                    pageBody = cls._globalCachePage[page]
+                    oldPolicy = cls._cachedIndex[oldKey]
+                    pageBody = cls._memCachePage[page]
                 
                     if CachePolicy.PERSISTENT != oldPolicy:
                         # ポリシー persistent ではないのでキャッシュから削除
                         cls._purgeCount += 1
-                        cls._globalCachedAll.pop(oldKey)
+                        cls._cachedIndex.pop(oldKey)
             
             if pageBody is None:
                 from utils import numpy_helpers as nh
                 # 新しいページなので、新規作成
                 pageBody = nh.empty((BLOCK_CACHE_PAGE_SIZE,BLOCK_SIZE,BLOCK_SIZE)) # ページ作成
                 with cls._cacheLock:
-                    cls._globalCachePage.append(pageBody)
+                    cls._memCachePage.append(pageBody)
             
             pageBody[index,:data.shape[0],:data.shape[1]] = data # メモリキャッシュへ書き込み
             
             with cls._cacheLock:
-                cls._globalCached[cacheKey] = (pos, cachePolicy, data.shape)
-                cls._globalObjCache.pop(cacheKey, None)
-                if CachePolicy.PERSISTENT == cachePolicy:
-                    cls._globalStorageWait[cacheKey] = data
-                    if 100 <= len(cls._globalStorageWait):
+                cls._memCachedIndex[cacheKey] = (pos, data.shape)
+                cls._objectCache.pop(cacheKey, None)
+                if CachePolicy.PERSISTENT != cachePolicy:
+                    cls._memCacheRemovable[cacheKey] = True
+                else:
+                    cls._storageWait[cacheKey] = True
+                    if(   not cls._memCacheFree
+                      and 100 <= len(cls._storageWait)
+                      ):
+                        cls._storageReq += 1
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
 
     @classmethod
     def _lazySave2(cls):
         """ストレージキャッシュへの遅延書き込み"""
+        if 0 == cls._saveCount % 131:
+            with cls._cacheLock:
+                # _storageWait の順序を _memCachedIndex に合わせる。
+                cls._storageWait = {x:True for x in cls._memCachedIndex if x in cls._storageWait}
+        
         while True:
             # メインスレッドを可能な限り止めない為に、
             # このスレッドではロック時間を最小にする。
             # ストレージ操作などはロックの外で行う。
             with cls._cacheLock:
-                if not cls._globalStorageWait:
+                if 0 == cls._storageReq or not cls._storageWait:
+                    cls._storageReq = 0
                     break
-
-                cacheKey, data = next(iter(cls._globalStorageWait.items()))
-
-            if cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
+                cls._storageReq -= 1
+                cacheKey = next(iter(cls._storageWait))
+                pos, dims = cls._memCachedIndex[cacheKey]
+                page, index = pos
+                data = cls._memCachePage[page][index,:dims[0],:dims[1]]
+            
+            if cacheKey in cls._storagedIndex:
+                # 既に保存済みなので何もしない
+                with cls._cacheLock:
+                    cls._memCacheRemovable[cacheKey] = True
+                    cls._storageWait.pop(cacheKey, None)
+            elif cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
+                # 書き込み成功
                 with cls._cacheLock:
                     cls._saveCount += 1
-                    cls._globalStoraged[cacheKey] = True
-                    cls._globalStorageWait.pop(cacheKey, None)
-
+                    cls._storagedIndex[cacheKey] = True
+                    cls._memCacheRemovable[cacheKey] = True
+                    cls._storageWait.pop(cacheKey, None)
+        
+        if 0 == cls._saveCount % 101:
+            with cls._cacheLock:
+                # _memCacheRemovable の順序を _memCachedIndex に合わせる。
+                cls._memCacheRemovable = {x:True for x in cls._memCachedIndex if x in cls._memCacheRemovable}
+        
     @classmethod
     def isCached(cls, cacheKey):
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock:
-            return cacheKey in cls._globalCachedAll
+            return cacheKey in cls._cachedIndex
 
     @classmethod
     def _saveToStorage(cls, cacheKey, data):
@@ -244,7 +260,7 @@ class CacheManager:
 
             filename = f"{cacheKey}".replace("/", "_").replace("\\", "_").replace(":", "_")
             pre = filename[:2]
-            subDir = os.path.join( cls._globalStorageDir, pre)
+            subDir = os.path.join( cls._storageDir, pre)
             os.makedirs(subDir, exist_ok=True)
             
             fileName = os.path.join(subDir, f"{filename}.npy")
@@ -261,12 +277,12 @@ class CacheManager:
         import numpy as np
         
         try:
-            if cls._globalStorageDir is None:
+            if cls._storageDir is None:
                 return None
             
             filename = f"{cacheKey}".replace("/", "_").replace("\\", "_").replace(":", "_")
             pre = filename[:2]
-            subDir = os.path.join( cls._globalStorageDir, pre)
+            subDir = os.path.join( cls._storageDir, pre)
             
             fileName = os.path.join(subDir, f"{filename}.npy")
             data = cls.elapsed(np.load, fileName, allow_pickle=False)
@@ -280,9 +296,9 @@ class CacheManager:
     def clearByPartialKey(cls, cacheKey):
         """key の部分一致でデータを削除"""
         # ストレージを削除
-        if cls._globalStorageDir and os.path.exists(cls._globalStorageDir):
+        if cls._storageDir and os.path.exists(cls._storageDir):
             pre = cacheKey[:2]
-            subDir = os.path.join( cls._globalStorageDir, pre)
+            subDir = os.path.join( cls._storageDir, pre)
             if os.path.exists(subDir):
                 for fileName in os.listdir(subDir):
                     basename, ext = os.path.splitext(fileName)
@@ -292,11 +308,14 @@ class CacheManager:
         
         with cls._cacheLock:
             # キャッシュを削除
-            cls._clearByPartialKey(cls._globalStoraged, cacheKey)
-            values = cls._clearByPartialKey(cls._globalCached, cacheKey)
-            for pos, _, _ in values:
-                cls._globalCacheFree.append(pos)
-            cls._clearByPartialKey(cls._globalCachedAll, cacheKey)
+            cls._clearByPartialKey(cls._storagedIndex, cacheKey)
+            cls._clearByPartialKey(cls._storageWait, cacheKey)
+            values = cls._clearByPartialKey(cls._memCachedIndex, cacheKey)
+            for pos, dims in values:
+                cls._memCacheFree.append(pos)
+            cls._clearByPartialKey(cls._memCacheRemovable, cacheKey)
+            cls._clearByPartialKey(cls._cachedIndex, cacheKey)
+            cls._clearByPartialKey(cls._objectCache, cacheKey)
     
     @classmethod
     def _clearByPartialKey(cls, cache, cacheKey):
@@ -332,7 +351,7 @@ class CacheManager:
     def _updateElapsedHis(cls, elapsedLog):
         for log in elapsedLog:
             name, elapsed = log
-            cacheCount = len(cls._globalCachedAll)
+            cacheCount = len(cls._cachedIndex)
 
             elapsed = min( elapsed , 8191)
             x = 4096
@@ -356,8 +375,10 @@ class CacheManager:
     @classmethod
     def getCacheStats(cls):
         """キャッシュ量とストレージ使用量を取得"""
-        cacheCount = len(cls._globalCached)
-        cacheSize = cacheCount * MAX_BLOCK_SIZE_BYTES
-        storageCount = len(cls._globalStoraged)
-        storageSize = storageCount * MAX_BLOCK_SIZE_BYTES
-        return cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
+        objCacheCount    = len(cls._objectCache)
+        cacheCount       = len(cls._memCachedIndex)
+        cacheSize        = cacheCount * MAX_BLOCK_SIZE_BYTES
+        storageWaitCount = len(cls._storageWait)
+        storageCount     = len(cls._storagedIndex)
+        storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
+        return objCacheCount, cacheCount, cacheSize, storageWaitCount, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
