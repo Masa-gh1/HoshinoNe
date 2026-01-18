@@ -5,11 +5,11 @@ sample/fits/sigma.flow,elapsed ms,11311,13064,16415,16415
 sample/raw/standard.flow,elapsed ms,20367,22901,20390,30966
 sample/fits/pixcomp.flow,elapsed ms,26807,46336,27719,58018
 sample/raw/sigma.flow,elapsed ms,28622,37240,28622,48924
-sample/raw/pixcomp.flow,elapsed ms,64056,69566,73525,213447
+sample/raw/pixcomp.flow,elapsed ms,64056,69123,73525,213447
 sample/dng/standard.flow,maxObjectCount,115800,118504,116948,118680
 sample/fits/standard.flow,maxObjectCount,116176,122156,127430,127430
 sample/raw/standard.flow,maxObjectCount,117103,123406,118705,151288
 sample/fits/pixcomp.flow,maxObjectCount,118107,123919,127563,137805
 sample/fits/sigma.flow,maxObjectCount,118339,124051,120880,129248
 sample/raw/sigma.flow,maxObjectCount,119540,125234,131211,148856
-sample/raw/pixcomp.flow,maxObjectCount,134033,147493,162363,162363
+sample/raw/pixcomp.flow,maxObjectCount,134033,146563,162363,162363
