@@ -136,8 +136,7 @@ class FlowEditor:
         self.usageLabel.pack(side=tk.RIGHT)
         
         # キャッシュ統計の定期更新
-        self.updateCacheStats()
-        self.root.after(5000, self.updateCacheStats)
+        self.startUpdateCacheStats()
     
     def bringChildWindowsToFront(self):
         """子画面を最前面に持ち上げる"""
@@ -816,6 +815,11 @@ class FlowEditor:
             progressInfo['bar'].config(value=0)
         self.activeProgressBars.clear()
     
+    def startUpdateCacheStats(self):
+        self.updateCacheStats()
+        # 5秒後に再度更新
+        self.root.after(5000, self.startUpdateCacheStats)
+
     def updateCacheStats(self):
         """キャッシュ統計を更新"""
         import gc
@@ -827,7 +831,7 @@ class FlowEditor:
         flowNodeCount = f"{len(self.nodes)}個"
         trayCount = f"{len(self.trays)}個"
         
-        cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
+        objCacheCount, cacheCount, cacheSize, storageWaitCount, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
         
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 10*1024:
@@ -859,14 +863,11 @@ class FlowEditor:
             cacheNodeCount = f"{self.getNodeCount()}個"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = f"Cache[MissCount: {cacheMissCount} {cacheMissCount/getCount:.3f} RecalculateCount: {recalculateCount} {recalculateCount/getCount:.3f} LoadCount: {loadCount} {loadCount/getCount:.3f} PurgeCount: {purgeCount} {purgeCount/setCount:.3f} SaveCount:{saveCount} {saveCount/setCount:.3f}]" if 0!=getCount and 0!=setCount else ""
-            dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheStr}) Storage: {storageCount}({storageStr})"
+            dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheStr}) Wait: {storageWaitCount} Storage: {storageCount}({storageStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
         info = f"{objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
         self.usageLabel.config(text=info)
-        
-        # 5秒後に再度更新
-        self.root.after(5000, self.updateCacheStats)
 
     def getNodeCount(self):
         import gc
@@ -886,14 +887,14 @@ class FlowEditor:
         
         # 実行前のメモリ使用量を取得
         b_nodeCount = self.getNodeCount()
-        b_cacheCount, b_cacheSize, b_storageCount, b_storageSize, b_getCount, b_cacheMissCount, b_loadCount, b_recalculateCount, b_setCount, b_purgeCount, b_saveCount, b_elapsedHis = CacheManager.getCacheStats()
+        b_objCacheCount, b_cacheCount, b_cacheSize, b_storageWaitCount, b_storageCount, b_storageSize, b_getCount, b_cacheMissCount, b_loadCount, b_recalculateCount, b_setCount, b_purgeCount, b_saveCount, b_elapsedHis = CacheManager.getCacheStats()
         
         # ガベージコレクションを実行
         collected = gc.collect()
         
         # 実行後のメモリ使用量を取得
         a_nodeCount = self.getNodeCount()
-        a_cacheCount, a_cacheSize, a_storageCount, a_storageSize, a_getCount, a_cacheMissCount, a_loadCount, a_recalculateCount, a_setCount, a_purgeCount, a_saveCount, a_elapsedHis = CacheManager.getCacheStats()
+        a_objCacheCount, a_cacheCount, a_cacheSize, a_storageWaitCount, a_storageCount, a_storageSize, a_getCount, a_cacheMissCount, a_loadCount, a_recalculateCount, a_setCount, a_purgeCount, a_saveCount, a_elapsedHis = CacheManager.getCacheStats()
         
         # 結果を表示
         freedNodeCount = b_nodeCount - a_nodeCount
@@ -925,9 +926,11 @@ class FlowEditor:
             for text in Debug.getDebugReport():
                 print(text)
             print("========================")
-            cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
+            objCacheCount, cacheCount, cacheSize, storageWaitCount, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
+            print(f"objCacheCount: {objCacheCount}")
             print(f"cacheCount: {cacheCount}")
             print(f"cacheSize: {cacheSize}")
+            print(f"storageWaitCount: {storageWaitCount}")
             print(f"storageCount: {storageCount}")
             print(f"storageSize: {storageSize}")
             print(f"getCount: {getCount}")

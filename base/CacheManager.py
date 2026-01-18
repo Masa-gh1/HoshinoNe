@@ -356,8 +356,10 @@ class CacheManager:
     @classmethod
     def getCacheStats(cls):
         """キャッシュ量とストレージ使用量を取得"""
-        cacheCount = len(cls._globalCached)
-        cacheSize = cacheCount * MAX_BLOCK_SIZE_BYTES
-        storageCount = len(cls._globalStoraged)
-        storageSize = storageCount * MAX_BLOCK_SIZE_BYTES
-        return cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
+        objCacheCount    = len(cls._globalObjCache)
+        cacheCount       = len(cls._globalCached)
+        cacheSize        = cacheCount * MAX_BLOCK_SIZE_BYTES
+        storageWaitCount = len(cls._globalStorageWait)
+        storageCount     = len(cls._globalStoraged)
+        storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
+        return objCacheCount, cacheCount, cacheSize, storageWaitCount, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
