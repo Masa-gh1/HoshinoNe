@@ -28,7 +28,6 @@ class CacheManager:
     _cachedIndex       = {}     # 全キャッシュ目次 {id:policy}
     _memCachedIndex    = {}     # メモリキャッシュ目次 {id:((page,index),dims)}
     _memCacheRemovable = {}     # 削除可能キャッシュ目次 {id:boolean}
-    _storageWait       = {}     # ストレージキャッシュ保存待ち目次 {id:data}
     _storagedIndex     = {}     # ストレージキャッシュ目次 {id:boolean}
     _cacheLock = threading.Lock()
 
@@ -37,7 +36,6 @@ class CacheManager:
     _memCacheFree      = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)])
                                 # 空いているメモリキャッシュ目次 [(page,index)]
     _storageDir        = None   # ストレージキャッシュディレクトリ
-    _storageReq        = 0      # ストレージキャッシュ要求数
 
     _cleanupRegistered = False  # 後始末関数登録状態
     
@@ -197,52 +195,49 @@ class CacheManager:
                 if CachePolicy.PERSISTENT != cachePolicy:
                     cls._memCacheRemovable[cacheKey] = True
                 else:
-                    cls._storageWait[cacheKey] = True
-                    if(   not cls._memCacheFree
-                      and 100 <= len(cls._storageWait)
-                      ):
-                        cls._storageReq += 1
+                    if not cls._memCacheFree:
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
 
     @classmethod
     def _lazySave2(cls):
         """ストレージキャッシュへの遅延書き込み"""
-        if 0 == cls._saveCount % 131:
-            with cls._cacheLock:
-                # _storageWait の順序を _memCachedIndex に合わせる。
-                cls._storageWait = {x:True for x in cls._memCachedIndex if x in cls._storageWait}
-        
-        while True:
+        with cls._cacheLock:
+            # 古いデータから連続する PERSISTENT を抽出する
+            req = []
+            for key in cls._memCachedIndex:
+                if CachePolicy.PERSISTENT == cls._cachedIndex[key]:
+                    req.append(key)
+                else:
+                    break
+
+        for cacheKey in req:
             # メインスレッドを可能な限り止めない為に、
             # このスレッドではロック時間を最小にする。
             # ストレージ操作などはロックの外で行う。
             with cls._cacheLock:
-                if 0 == cls._storageReq or not cls._storageWait:
-                    cls._storageReq = 0
-                    break
-                cls._storageReq -= 1
-                cacheKey = next(iter(cls._storageWait))
-                pos, dims = cls._memCachedIndex[cacheKey]
-                page, index = pos
-                data = cls._memCachePage[page][index,:dims[0],:dims[1]]
+                if cacheKey in cls._storagedIndex:
+                    # 既に保存済みなので何もしない
+                    data = None
+                else:
+                    pos, dims = cls._memCachedIndex[cacheKey]
+                    page, index = pos
+                    data = cls._memCachePage[page][index,:dims[0],:dims[1]]
             
-            if cacheKey in cls._storagedIndex:
+            if data is None:
                 # 既に保存済みなので何もしない
                 with cls._cacheLock:
                     cls._memCacheRemovable[cacheKey] = True
-                    cls._storageWait.pop(cacheKey, None)
             elif cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
                 # 書き込み成功
                 with cls._cacheLock:
                     cls._saveCount += 1
                     cls._storagedIndex[cacheKey] = True
                     cls._memCacheRemovable[cacheKey] = True
-                    cls._storageWait.pop(cacheKey, None)
-        
-        if 0 == cls._saveCount % 101:
-            with cls._cacheLock:
-                # _memCacheRemovable の順序を _memCachedIndex に合わせる。
-                cls._memCacheRemovable = {x:True for x in cls._memCachedIndex if x in cls._memCacheRemovable}
+
+            if 0 == cls._saveCount % 100:
+                with cls._cacheLock:
+                    # _memCacheRemovable の順序を _memCachedIndex に合わせる。
+                    cls._memCacheRemovable = {x:True for x in cls._memCachedIndex if x in cls._memCacheRemovable}
         
     @classmethod
     def isCached(cls, cacheKey):
@@ -309,7 +304,6 @@ class CacheManager:
         with cls._cacheLock:
             # キャッシュを削除
             cls._clearByPartialKey(cls._storagedIndex, cacheKey)
-            cls._clearByPartialKey(cls._storageWait, cacheKey)
             values = cls._clearByPartialKey(cls._memCachedIndex, cacheKey)
             for pos, dims in values:
                 cls._memCacheFree.append(pos)
@@ -378,7 +372,6 @@ class CacheManager:
         objCacheCount    = len(cls._objectCache)
         cacheCount       = len(cls._memCachedIndex)
         cacheSize        = cacheCount * MAX_BLOCK_SIZE_BYTES
-        storageWaitCount = len(cls._storageWait)
         storageCount     = len(cls._storagedIndex)
         storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
-        return objCacheCount, cacheCount, cacheSize, storageWaitCount, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
+        return objCacheCount, cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
