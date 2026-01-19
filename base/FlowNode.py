@@ -79,14 +79,23 @@ class FlowNode(AbstractBaseClass):
     def getOutputCategory(self):
         """ノードへの入力を考慮した出力カテゴリを取得"""
         catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
-        i = len(catList) - 1
         if _OUT_CAT_PAS in self.outputCat:
-            for inputNode in self.inputNodes:
-                cat = inputNode.getOutputCategory()
-                i = min(i,catList.index(cat))
-            return catList[i]
+            return catList[min([catList.index(x.getOutputCategory()) for x in self.inputNodes])]
         else:
             return self.outputCat
+    
+    def getOutputCount(self):
+        """ノードへの入力を考慮した出力数を取得"""
+        if   _IO_TYPE_N0 == self.ioType:
+            return 0
+        elif _IO_TYPE_N1 == self.ioType:
+            return 1
+        elif(  _IO_TYPE_0N == self.ioType
+            or _IO_TYPE_NN == self.ioType
+            ):
+            return sum([x.getOutputCount() for x in self.inputNodes if _OUT_CAT_PRI == x.getOutputCategory()])
+        else:
+            return 0
     
     @abstractmethod
     def process(self, context=None):

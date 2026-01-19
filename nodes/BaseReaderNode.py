@@ -47,6 +47,9 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
             displayText = f"{self.name}\n未選択"
         return displayText
     
+    def getOutputCount(self):
+        return len(self.filePaths)
+
     def setFilePaths(self, filePaths):
         self.filePaths = filePaths
     

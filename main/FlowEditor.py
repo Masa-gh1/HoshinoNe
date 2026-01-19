@@ -300,19 +300,28 @@ class FlowEditor:
         x1, y1 = fromNode.view.getConnectionPoint(dx, dy)
         x2, y2 = toNode.view.getConnectionPoint(-dx, -dy)
 
-        if _OUT_CAT_PRI == fromNode.getOutputCategory():
+        cat = fromNode.getOutputCategory()
+        if _OUT_CAT_PRI == cat:
             color = "red"
-        elif _OUT_CAT_AUX == fromNode.getOutputCategory():
+        elif _OUT_CAT_AUX == cat:
             color = "black"
         else:
             color = "gray"
         
-        return x1, y1, x2, y2, color
+        count = fromNode.getOutputCount()
+        if count <= 1:
+            arrowshape=(8, 12, 4) # 中央の長さ,端の長さ,半幅
+        elif count <= 5:
+            arrowshape=(8, 8, 2+count)
+        else:
+            arrowshape=(8, 8, 8)
+
+        return x1, y1, x2, y2, color, arrowshape
     
     def createConnections(self, fromNode, toNode):
         """接続線を作成"""
-        x1, y1, x2, y2, color = self._getConnectionPoints(fromNode, toNode)
-        line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill=color)
+        x1, y1, x2, y2, color, arrowshape = self._getConnectionPoints(fromNode, toNode)
+        line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill=color, arrowshape=arrowshape)
         self.connectionLines.append((fromNode, toNode, line))
         return line
     
@@ -331,9 +340,9 @@ class FlowEditor:
     def updateConnections(self):
         """接続線の位置を更新"""
         for fromNode, toNode, line in self.connectionLines:
-            x1, y1, x2, y2, color = self._getConnectionPoints(fromNode, toNode)
+            x1, y1, x2, y2, color, arrowshape = self._getConnectionPoints(fromNode, toNode)
             self.canvas.coords(line, x1, y1, x2, y2)
-            self.canvas.itemconfig(line, fill=color)
+            self.canvas.itemconfig(line, fill=color, arrowshape=arrowshape)
     
     def selectNode(self, node):
         self.statusLabel.config(text=f"ノードクリック: {node.name}")
