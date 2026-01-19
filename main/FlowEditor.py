@@ -317,7 +317,7 @@ class FlowEditor:
         return line
     
     def removeConnections(self, node, nodeB=None):
-        """接続線からノードを削除"""
+        """接続線を削除"""
         for i, (fromNode, toNode, line) in reversed(list(enumerate(self.connectionLines))):
             if nodeB:
                 if node == fromNode and nodeB == toNode:
