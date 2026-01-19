@@ -14,6 +14,7 @@ import os
 import traceback
 
 from Version import VERSION
+from base.FlowNode_CONST import *
 from base import FlowControl
 from base import FlowFile
 from nodes import NodeFactory
@@ -298,14 +299,28 @@ class FlowEditor:
         
         x1, y1 = fromNode.view.getConnectionPoint(dx, dy)
         x2, y2 = toNode.view.getConnectionPoint(-dx, -dy)
+
+        if _OUT_CAT_PRI == fromNode.getOutputCategory():
+            color = "red"
+        elif _OUT_CAT_AUX == fromNode.getOutputCategory():
+            color = "black"
+        else:
+            color = "gray"
         
-        return x1, y1, x2, y2
+        return x1, y1, x2, y2, color
     
+    def createConnections(self, fromNode, toNode):
+        """接続線を作成"""
+        x1, y1, x2, y2, color = self._getConnectionPoints(fromNode, toNode)
+        line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill=color)
+        return line
+
     def updateConnections(self):
         """接続線の位置を更新"""
         for fromNode, toNode, line in self.connectionLines:
-            x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
+            x1, y1, x2, y2, color = self._getConnectionPoints(fromNode, toNode)
             self.canvas.coords(line, x1, y1, x2, y2)
+            self.canvas.itemconfig(line, fill=color)
     
     def selectNode(self, node):
         self.statusLabel.config(text=f"ノードクリック: {node.name}")
@@ -349,8 +364,7 @@ class FlowEditor:
                 # 新規接続を作成
                 self.selectedNode.outputNodes.append(node)
                 node.inputNodes.append(self.selectedNode)
-                x1, y1, x2, y2 = self._getConnectionPoints(self.selectedNode, node)
-                line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
+                line = self.createConnections(self.selectedNode, node)
                 self.connectionLines.append((self.selectedNode, node, line))
                 # 接続情報を表示
                 self.resultText.delete(1.0, tk.END)
@@ -612,8 +626,7 @@ class FlowEditor:
             for connection in connections:
                 fromNode = connection[0]
                 toNode = connection[1]
-                x1, y1, x2, y2 = self._getConnectionPoints(fromNode, toNode)
-                line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill='red')
+                line = self.createConnections(fromNode, toNode)
                 self.connectionLines.append((fromNode, toNode, line))
             
             # Z-orderで表示順を再現

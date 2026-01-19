@@ -75,7 +75,19 @@ class FlowNode(AbstractBaseClass):
     def getText(self):
         """ノードのテキストを取得（サブクラスでオーバーライド）"""
         return self.name
-
+    
+    def getOutputCategory(self):
+        """ノードへの入力を考慮した出力カテゴリを取得"""
+        catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
+        i = len(catList) - 1
+        if _OUT_CAT_PAS in self.outputCat:
+            for inputNode in self.inputNodes:
+                cat = inputNode.getOutputCategory()
+                i = min(i,catList.index(cat))
+            return catList[i]
+        else:
+            return self.outputCat
+    
     @abstractmethod
     def process(self, context=None):
         """ノードの処理を実行（サブクラスで実装）
@@ -88,7 +100,9 @@ class FlowNode(AbstractBaseClass):
     def execute(self, context=None):
         """ノードの処理を実行"""
         self.process(context)
-        self.updateExecutionHashes()
+        # 実行時設定ハッシュの更新
+        self._lastInputHash = self.getInputHashe()
+        self._lastConfigHash = self.getConfigHash()
         self.view.editor.root.after(0,self.view.updateResult)
     
     def reportProgress(self, context, message, current=None, total=None):
@@ -122,12 +136,6 @@ class FlowNode(AbstractBaseClass):
                 or self._lastConfigHash != configHash
                )
     
-    def updateExecutionHashes(self):
-        """実行後にハッシュを更新"""
-        # ハッシュを更新
-        self._lastInputHash = self.getInputHashe()
-        self._lastConfigHash = self.getConfigHash()
-    
     def getInputHashe(self):
         inputHashes = []
         for node in self.inputNodes:
@@ -160,7 +168,7 @@ class FlowNode(AbstractBaseClass):
         self.view.onNodeConfigChanged(self)
 
     def store(self, nodeData):
-        """ノード固有の設定 nodeData に保存（サブクラスでオーバーライド）
+        """ノード固有の設定を nodeData に保存（サブクラスでオーバーライド）
         
         Args:
             nodeData: 保存先
@@ -168,7 +176,7 @@ class FlowNode(AbstractBaseClass):
         pass
     
     def restore(self, nodeData):
-        """ノード固有の設定 nodeData から復元（サブクラスでオーバーライド）
+        """ノード固有の設定を nodeData から復元（サブクラスでオーバーライド）
         
         Args:
             nodeData: 復元元
