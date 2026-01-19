@@ -315,7 +315,19 @@ class FlowEditor:
         line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill=color)
         self.connectionLines.append((fromNode, toNode, line))
         return line
-
+    
+    def removeConnections(self, node, nodeB=None):
+        """接続線からノードを削除"""
+        for i, (fromNode, toNode, line) in reversed(list(enumerate(self.connectionLines))):
+            if nodeB:
+                if node == fromNode and nodeB == toNode:
+                    self.canvas.delete(line)
+                    del self.connectionLines[i]
+            else:
+                if node == fromNode or node == toNode:
+                    self.canvas.delete(line)
+                    del self.connectionLines[i]
+    
     def updateConnections(self):
         """接続線の位置を更新"""
         for fromNode, toNode, line in self.connectionLines:
@@ -336,11 +348,7 @@ class FlowEditor:
                 self.selectedNode.outputNodes.remove(node)
                 node.inputNodes.remove(self.selectedNode)
                 # 接続線を削除
-                for i, (f, t, l) in enumerate(self.connectionLines):
-                    if f == self.selectedNode and t == node:
-                        self.canvas.delete(l)
-                        del self.connectionLines[i]
-                        break
+                self.removeConnections(self.selectedNode, node)
                 self.updateConnections()
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
@@ -352,11 +360,7 @@ class FlowEditor:
                 node.outputNodes.remove(self.selectedNode)
                 self.selectedNode.inputNodes.remove(node)
                 # 接続線を削除
-                for i, (f, t, l) in enumerate(self.connectionLines):
-                    if f == node and t == self.selectedNode:
-                        self.canvas.delete(l)
-                        del self.connectionLines[i]
-                        break
+                self.removeConnections(node, self.selectedNode)
                 self.updateConnections()
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
@@ -715,13 +719,7 @@ class FlowEditor:
         self.canvas.delete(node.view.label)
         
         # 削除対象ノードに関連する接続線を削除
-        newConnectionLines = []
-        for fromNode, toNode, line in self.connectionLines:
-            if fromNode == node or toNode == node:
-                self.canvas.delete(line)
-            else:
-                newConnectionLines.append((fromNode, toNode, line))
-        self.connectionLines = newConnectionLines
+        self.removeConnections(node)
         self.updateConnections()
         
         # 強調表示更新
