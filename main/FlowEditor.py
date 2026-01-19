@@ -313,6 +313,7 @@ class FlowEditor:
         """接続線を作成"""
         x1, y1, x2, y2, color = self._getConnectionPoints(fromNode, toNode)
         line = self.canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, width=2, fill=color)
+        self.connectionLines.append((fromNode, toNode, line))
         return line
 
     def updateConnections(self):
@@ -340,6 +341,7 @@ class FlowEditor:
                         self.canvas.delete(l)
                         del self.connectionLines[i]
                         break
+                self.updateConnections()
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
                 self.resultText.insert(tk.END, f"接続削除: {self.selectedNode.name} → {node.name}\n")
@@ -355,6 +357,7 @@ class FlowEditor:
                         self.canvas.delete(l)
                         del self.connectionLines[i]
                         break
+                self.updateConnections()
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
                 self.resultText.insert(tk.END, f"逆向き接続削除: {node.name} → {self.selectedNode.name}\n")
@@ -364,8 +367,8 @@ class FlowEditor:
                 # 新規接続を作成
                 self.selectedNode.outputNodes.append(node)
                 node.inputNodes.append(self.selectedNode)
-                line = self.createConnections(self.selectedNode, node)
-                self.connectionLines.append((self.selectedNode, node, line))
+                self.createConnections(self.selectedNode, node)
+                self.updateConnections()
                 # 接続情報を表示
                 self.resultText.delete(1.0, tk.END)
                 self.resultText.insert(tk.END, f"接続: {self.selectedNode.name} → {node.name}\n")
@@ -626,8 +629,7 @@ class FlowEditor:
             for connection in connections:
                 fromNode = connection[0]
                 toNode = connection[1]
-                line = self.createConnections(fromNode, toNode)
-                self.connectionLines.append((fromNode, toNode, line))
+                self.createConnections(fromNode, toNode)
             
             # Z-orderで表示順を再現
             for obj in zOrderObj:
@@ -685,19 +687,6 @@ class FlowEditor:
         self.selectedNode = None
         
     def deleteNode(self, node):
-        # ノードをキャンバスから削除
-        self.canvas.delete(node.view.rect)
-        self.canvas.delete(node.view.label)
-        
-        # 削除対象ノードに関連する接続線を削除
-        newConnectionLines = []
-        for fromNode, toNode, line in self.connectionLines:
-            if fromNode == node or toNode == node:
-                self.canvas.delete(line)
-            else:
-                newConnectionLines.append((fromNode, toNode, line))
-        self.connectionLines = newConnectionLines
-        
         # ノードの接続をクリア（双方向）
         for n in self.nodes:
             if node in n.outputNodes:
@@ -720,6 +709,20 @@ class FlowEditor:
         if self.selectedNode == node:
             self.clearSelectedHighlight()
             self.selectedNode = None
+        
+        # ノードをキャンバスから削除
+        self.canvas.delete(node.view.rect)
+        self.canvas.delete(node.view.label)
+        
+        # 削除対象ノードに関連する接続線を削除
+        newConnectionLines = []
+        for fromNode, toNode, line in self.connectionLines:
+            if fromNode == node or toNode == node:
+                self.canvas.delete(line)
+            else:
+                newConnectionLines.append((fromNode, toNode, line))
+        self.connectionLines = newConnectionLines
+        self.updateConnections()
         
         # 強調表示更新
         self.highlightReprocessingNodes()
