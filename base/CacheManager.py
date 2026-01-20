@@ -192,8 +192,8 @@ class CacheManager:
             pageBody[index,:data.shape[0],:data.shape[1]] = data # メモリキャッシュへ書き込み
             
             with cls._cacheLock:
-                cls._memCachedIndex[cacheKey] = (pos, data.shape)
                 cls._objectCache.pop(cacheKey, None)
+                cls._memCachedIndex[cacheKey] = (pos, data.shape)
                 if CachePolicy.PERSISTENT != cachePolicy:
                     cls._memCacheRemovable[cacheKey] = True
                 else:
