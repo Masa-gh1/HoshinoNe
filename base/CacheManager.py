@@ -105,6 +105,8 @@ class CacheManager:
             return data
         elif cacheKey in cls._memCachedIndex:
             # メモリキャッシュにあるので採用
+            if not cls._memCacheRemovable.pop(cacheKey,None) is None:
+                cls._memCacheRemovable[cacheKey] = True # 最後尾に追加(LRU)
             cache = cls._memCachedIndex.pop(cacheKey)
             cls._memCachedIndex[cacheKey] = cache # 最後尾に追加(LRU)
             (page, index), dims = cache
