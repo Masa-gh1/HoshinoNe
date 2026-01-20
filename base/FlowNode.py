@@ -80,7 +80,11 @@ class FlowNode(AbstractBaseClass):
         """ノードへの入力を考慮した出力カテゴリを取得"""
         catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
         if _OUT_CAT_PAS in self.outputCat:
-            return catList[min([catList.index(x.getOutputCategory()) for x in self.inputNodes])]
+            inNodes = [catList.index(x.getOutputCategory()) for x in self.inputNodes]
+            if inNodes:
+                return catList[min(inNodes)]
+            else:
+                return _OUT_CAT_NON
         else:
             return self.outputCat
     

@@ -269,7 +269,7 @@ def configRawParams(params):
     #params.output_color       = 1            # int:   1
     #params.bad_pixels         = None         # -:     None
     params.output_bps          = 16           # int:   8
-    #params.user_flip          = -1           # int:   -1
+    params.user_flip           = 0            # int:   -1
     #params.user_qual          = -1           # int:   -1
     params.user_black          = 0            # int:   -1
     #params.user_sat           = -1           # int:   -1
