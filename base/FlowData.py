@@ -53,46 +53,6 @@ class FlowData:
         except Exception as e:
             Debug.log(type(self).__name__, f"Warning: cleanup: {str(e)}")
 
-    def _updateStatistics(self, blockData):
-        """統計情報を更新"""
-        import numpy as np
-        
-        if self._existingBlocks is None:
-            planeCount = self.getPlaneCount()
-            width, height = self._dimensions
-            blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
-            blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
-            self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
-        
-        planeIndex = blockData.planeIndex
-        x = blockData.x
-        y = blockData.y
-        blockX = x // BLOCK_SIZE
-        blockY = y // BLOCK_SIZE
-
-        if self._existingBlocks[planeIndex, blockY, blockX]:
-            # ブロック上書き検出
-            if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
-                from utils.Debug import Debug
-                Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
-        else:
-            self._existingBlocks[planeIndex, blockY, blockX] = True
-            data = blockData.data
-            if 0 < data.size:
-                # 最大値・最小値を更新し、キャッシュをクリア
-                blockMax = np.nanmax(data)
-                blockMin = np.nanmin(data)
-                
-                if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
-                    self._maxValue = blockMax
-                if not np.isnan(blockMin) and (self._minValue is None or blockMin < self._minValue):
-                    self._minValue = blockMin
-                
-                # データ更新時にキャッシュをクリア
-                self._percentileCache.clear()
-                self._histogramCache.clear()
-                self._highResHistCache = None
-    
     def setDimensions(self, width, height):
         """次元を設定"""
         self._dimensions = (width, height)
@@ -210,6 +170,46 @@ class FlowData:
         # 統計情報更新
         self._updateStatistics(dataBlock)
         
+    def _updateStatistics(self, blockData):
+        """統計情報を更新"""
+        import numpy as np
+        
+        if self._existingBlocks is None:
+            planeCount = self.getPlaneCount()
+            width, height = self._dimensions
+            blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
+            blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
+            self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
+        
+        planeIndex = blockData.planeIndex
+        x = blockData.x
+        y = blockData.y
+        blockX = x // BLOCK_SIZE
+        blockY = y // BLOCK_SIZE
+
+        if self._existingBlocks[planeIndex, blockY, blockX]:
+            # ブロック上書き検出
+            if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
+                from utils.Debug import Debug
+                Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
+        else:
+            self._existingBlocks[planeIndex, blockY, blockX] = True
+            data = blockData.data
+            if 0 < data.size:
+                # 最大値・最小値を更新し、キャッシュをクリア
+                blockMax = np.nanmax(data)
+                blockMin = np.nanmin(data)
+                
+                if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
+                    self._maxValue = blockMax
+                if not np.isnan(blockMin) and (self._minValue is None or blockMin < self._minValue):
+                    self._minValue = blockMin
+                
+                # データ更新時にキャッシュをクリア
+                self._percentileCache.clear()
+                self._histogramCache.clear()
+                self._highResHistCache = None
+    
     def getMaxValue(self):
         """最大値を取得"""
         return self._maxValue
