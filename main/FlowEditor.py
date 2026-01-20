@@ -776,6 +776,9 @@ class FlowEditor:
             text = f"{node._loadIndex} {text}"
         self.canvas.itemconfig(node.view.label, text=text)
 
+        # 接続線の更新
+        self.updateConnections()
+        
         # 強調表示更新
         self.highlightReprocessingNodes()
         
