@@ -26,7 +26,7 @@ MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 class CacheManager:
     """統一キャッシュ管理"""
     _cachedIndex       = {}     # 全キャッシュ目次 {id:policy}
-    _memCachedIndex    = {}     # メモリキャッシュ目次 {id:((page,index),dims,dtype,size)}
+    _memCachedIndex    = {}     # メモリキャッシュ目次 {id:((page,index),(dims,dtype,size))}
     _memCacheRemovable = {}     # 削除可能キャッシュ目次 {id:boolean}
     _storagedIndex     = {}     # ストレージキャッシュ目次 {id:boolean}
     _cacheLock = threading.Lock()
@@ -109,8 +109,9 @@ class CacheManager:
                 cls._memCacheRemovable[cacheKey] = True # 最後尾に追加(LRU)
             cache = cls._memCachedIndex.pop(cacheKey)
             cls._memCachedIndex[cacheKey] = cache # 最後尾に追加(LRU)
-            pos, dims, dtype, size = cache
+            pos, meta = cache
             page, index = pos
+            dims, dtype, size = meta
             data = cls._memCachePage[page][index,:size].view(dtype).reshape(dims)
             return data
         elif cacheKey in cls._storagedIndex:
@@ -159,11 +160,15 @@ class CacheManager:
                     break
 
                 cacheKey, data = next(iter(cls._objectCache.items()))
+                dims  = data.shape
+                dtype = data.dtype
+                size  = data.nbytes
+                meta = (dims, dtype, size)
                 cachePolicy = cls._cachedIndex[cacheKey]
 
                 if cls._memCacheFree:
                     # ページに空が在るので採用
-                    pos = cls._memCacheFree.pop()
+                    pos  = cls._memCacheFree.pop()
                     page, index = pos
 
                     if page < len(cls._memCachePage):
@@ -174,7 +179,7 @@ class CacheManager:
                     # ページに空が無いので古いデータから削除(LRU)
                     oldKey = next(iter(cls._memCacheRemovable))
                     cls._memCacheRemovable.pop(oldKey)
-                    pos, oldDims, oldType, oldSize = cls._memCachedIndex.pop(oldKey)
+                    pos, oldMeta = cls._memCachedIndex.pop(oldKey)
                     page, index = pos
                     oldPolicy = cls._cachedIndex[oldKey]
                     pageBody = cls._memCachePage[page]
@@ -190,11 +195,11 @@ class CacheManager:
                 with cls._cacheLock:
                     cls._memCachePage.append(pageBody)
             
-            pageBody[index, :data.nbytes] = data.reshape(-1).view(np.uint8) # メモリキャッシュへ書き込み
+            pageBody[index, :size] = data.reshape(-1).view(np.uint8) # メモリキャッシュへ書き込み
             
             with cls._cacheLock:
                 cls._objectCache.pop(cacheKey, None)
-                cls._memCachedIndex[cacheKey] = (pos, data.shape, data.dtype, data.nbytes)
+                cls._memCachedIndex[cacheKey] = (pos, meta)
                 if CachePolicy.PERSISTENT != cachePolicy:
                     cls._memCacheRemovable[cacheKey] = True
                 else:
@@ -222,8 +227,9 @@ class CacheManager:
                     # 既に保存済みなので何もしない
                     data = None
                 else:
-                    pos, dims, dtype, size = cls._memCachedIndex[cacheKey]
+                    pos, meta = cls._memCachedIndex[cacheKey]
                     page, index = pos
+                    dims, dtype, size = meta
                     data = cls._memCachePage[page][index,:size].view(dtype).reshape(dims)
             
             if data is None:
@@ -308,7 +314,7 @@ class CacheManager:
             # キャッシュを削除
             cls._clearByPartialKey(cls._storagedIndex, cacheKey)
             values = cls._clearByPartialKey(cls._memCachedIndex, cacheKey)
-            for pos, dims, dtype, size in values:
+            for pos, meta in values:
                 cls._memCacheFree.append(pos)
             cls._clearByPartialKey(cls._memCacheRemovable, cacheKey)
             cls._clearByPartialKey(cls._cachedIndex, cacheKey)

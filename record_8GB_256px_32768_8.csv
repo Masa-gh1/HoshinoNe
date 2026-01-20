@@ -12,4 +12,4 @@ sample/raw/standard.flow,maxObjectCount,117103,123406,118705,151288
 sample/fits/pixcomp.flow,maxObjectCount,118107,123919,127563,137805
 sample/fits/sigma.flow,maxObjectCount,118339,124051,120880,129248
 sample/raw/sigma.flow,maxObjectCount,119540,125234,131211,148856
-sample/raw/pixcomp.flow,maxObjectCount,134033,148445,162363,162363
+sample/raw/pixcomp.flow,maxObjectCount,134033,150489,168889,168889
