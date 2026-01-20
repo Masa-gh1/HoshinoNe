@@ -33,7 +33,7 @@ class FlowControl:
         if not reportProgress:
             reportProgress = lambda id, text, msg, current=None, total=None: ""
 
-        nodes = nodes.copy()
+        nodes = self._getNodes(nodes)
 
         startTime = time.time()
         try:
@@ -101,7 +101,16 @@ class FlowControl:
         elapsedMs = int((endTime - startTime) * 1000)
         self.elapsedMs = elapsedMs
         sendMessage(f"フロー実行完了: ({elapsedMs} ms)\n")
-
+    
+    def _getNodes(self, nodes):
+        """ノードを入力方向に再帰的検索"""
+        inNodes = set()
+        for node in nodes:
+            if not node in inNodes:
+                inNodes.add(node)
+                inNodes.update(self._getNodes([x for x in node.inputNodes if not x in inNodes]))
+        return list(inNodes)
+    
     def _executeNode(self, node, context):
         """ノード実行"""
         try:

@@ -262,8 +262,8 @@ class FlowEditor:
         for node in self.nodes:
             items.extend([node.view.x - 60, node.view.x + 60, node.view.y - 30, node.view.y + 30])
         for tray in self.trays:
-            items.extend([tray.x - tray.width//2, tray.x + tray.width//2,
-                         tray.y - tray.height//2, tray.y + tray.height//2])
+            items.extend([tray.x - tray.width //2, tray.x + tray.width //2,
+                          tray.y - tray.height//2, tray.y + tray.height//2])
         
         if not items:
             return
@@ -373,9 +373,9 @@ class FlowEditor:
                 self.updateConnections()
                 # 削除情報を表示
                 self.resultText.delete(1.0, tk.END)
-                self.resultText.insert(tk.END, f"逆向き接続削除: {node.name} → {self.selectedNode.name}\n")
+                self.resultText.insert(tk.END, f"接続削除: {node.name} → {self.selectedNode.name}\n")
                 self.resultText.see(tk.END)
-                self.statusLabel.config(text=f"逆向き接続削除: {node.name} → {self.selectedNode.name}")
+                self.statusLabel.config(text=f"接続削除: {node.name} → {self.selectedNode.name}")
             else:
                 # 新規接続を作成
                 self.selectedNode.outputNodes.append(node)
@@ -392,10 +392,6 @@ class FlowEditor:
             
             # 強調表示更新
             self.highlightReprocessingNodes()
-            
-            # 自動実行が有効な場合、自動で実行開始
-            if self.autoExecute.get():
-                self.executeFlow()
         else:
             # ノードを選択
             self.selectedNode = node
@@ -533,22 +529,28 @@ class FlowEditor:
             return
         
         # フロー実行を別スレッドで実行
-        CoalescingExecutor.submit( self, self.executeFlowAsync)
+        CoalescingExecutor.submit( self, self._executeFlowAsync)
     
-    def executeFlowAsync(self):
+    def _executeFlowAsync(self):
+        """指定されたノードまでを実行する"""
         try:
             self.take += 1
             self.maxObjectCount = 0
             self.resultText.delete(1.0, tk.END)
-
+            
             import gc
             gc.collect()
-
-            self.flowControl.execute( self.nodes, self.showMessage, self.showProgress)
-
+            
+            if not self.selectedNode is None:
+                nodes = [self.selectedNode]
+            else:
+                nodes = self.nodes
+            
+            self.flowControl.execute( nodes, self.showMessage, self.showProgress)
+            
             from utils.Debug import Debug
-            if Debug.isTestMode() and 1==self.take and self.currentFlowPath:
-                # ファーストテイクかつテストモードなので結果を記録
+            if Debug.isTestMode() and 1==self.take and self.currentFlowPath and self.selectedNode is None:
+                # テストモード and ファーストテイク and 全実行なので結果を記録
                 filename = os.path.basename(self.currentFlowPath)
                 Debug.log(type(self).__name__, f"{filename} elapsed {self.flowControl.elapsedMs} ms")
                 Debug.log(type(self).__name__, f"{filename} maxObjectCount {self.maxObjectCount}")
