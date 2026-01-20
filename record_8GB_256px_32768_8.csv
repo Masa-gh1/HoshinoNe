@@ -4,12 +4,12 @@ sample/dng/standard.flow,elapsed ms,10559,11581,10559,13360
 sample/fits/sigma.flow,elapsed ms,11311,12951,16415,16415
 sample/raw/standard.flow,elapsed ms,19780,22588,19780,30966
 sample/fits/pixcomp.flow,elapsed ms,26382,44340,26382,58018
-sample/raw/sigma.flow,elapsed ms,28622,35896,31096,48924
-sample/raw/pixcomp.flow,elapsed ms,64056,69568,73574,213447
+sample/raw/sigma.flow,elapsed ms,28622,35214,31096,48924
+sample/raw/pixcomp.flow,elapsed ms,64056,69184,73574,213447
 sample/dng/standard.flow,maxObjectCount,115800,118504,116948,118680
 sample/fits/standard.flow,maxObjectCount,116176,122156,127430,127430
 sample/raw/standard.flow,maxObjectCount,117103,123406,118705,151288
 sample/fits/pixcomp.flow,maxObjectCount,118107,123919,127563,137805
 sample/fits/sigma.flow,maxObjectCount,118339,124051,120880,129248
 sample/raw/sigma.flow,maxObjectCount,119540,125234,131211,148856
-sample/raw/pixcomp.flow,maxObjectCount,134033,146563,162363,162363
+sample/raw/pixcomp.flow,maxObjectCount,134033,150489,168889,168889
