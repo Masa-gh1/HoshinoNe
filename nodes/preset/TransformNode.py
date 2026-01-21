@@ -128,7 +128,7 @@ class TransformNode(LazyNNOperationNode):
                 dx = transform_params['dx']
                 dy = transform_params['dy']
                 rotation = transform_params['rotation']
-                corners = self._calculateTransformedCorners(width, height, dx, dy, -rotation)
+                corners = self._calculateTransformedCorners(width, height, dx, dy, rotation)
                 all_corners.extend(corners)
         
         if not all_corners:
@@ -214,9 +214,10 @@ class TransformLazyFlowData(LazyFlowData):
         if rotation != 0:
             # 回転ありの場合は逆変換行列で計算
             center = (orig_width / 2, orig_height / 2)
-            M_inv = cv2.getRotationMatrix2D(center, -rotation, 1.0)
-            M_inv[0, 2] -= dx
-            M_inv[1, 2] -= dy
+            M = cv2.getRotationMatrix2D(center, -rotation, 1.0)
+            M[0, 2] += dx
+            M[1, 2] += dy
+            M_inv = cv2.invertAffineTransform(M)
             source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
         else:
             # 平行移動のみ
