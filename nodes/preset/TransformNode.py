@@ -211,18 +211,17 @@ class TransformLazyFlowData(LazyFlowData):
         # 出力ブロックの4隅を逆変換して必要な入力範囲を計算
         corners = nh.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]])
         
-        if rotation != 0:
-            # 回転ありの場合は逆変換行列で計算
-            center = (orig_width / 2, orig_height / 2)
-            M = cv2.getRotationMatrix2D(center, -rotation, 1.0)
-            M[0, 2] += dx
-            M[1, 2] += dy
-            M_inv = cv2.invertAffineTransform(M)
-            source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
-        else:
-            # 平行移動のみ
-            source_corners = corners - nh.array([dx, dy])
-        
+        # 順変換行列（target -> ref）を作成
+        center = (orig_width / 2, orig_height / 2)
+        # cv2.getRotationMatrix2Dは正の角度で時計回り(CW)の回転行列を返すため、
+        # 反時計回り(CCW)の回転角である rotation を負にして渡すことでCCW回転を適用する
+        M = cv2.getRotationMatrix2D(center, -rotation, 1.0)
+        M[0, 2] += dx
+        M[1, 2] += dy
+        # 逆変換行列（ref -> target）を計算
+        M_inv = cv2.invertAffineTransform(M)
+        source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
+
         # 必要な入力範囲を計算
         min_x = int(np.floor(np.min(source_corners[:, 0])))
         max_x = int(np.ceil(np.max(source_corners[:, 0])))
@@ -269,18 +268,14 @@ class TransformLazyFlowData(LazyFlowData):
                         if np.isnan(block_data).any():
                             # 必要なブロックに NaN が含まれていた
                             isAnyNaN = True
-            
-            # 変換行列を作成（部分画像座標系）
-            if rotation != 0:
-                # 元画像の中心を部分画像座標系に変換
-                orig_center_x = orig_width  / 2 - min_block_x
-                orig_center_y = orig_height / 2 - min_block_y
-                M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), -rotation, 1.0)
-                M[0, 2] += dx
-                M[1, 2] += dy
-            else:
-                M = nh.BDTYPE([[1, 0, dx], [0, 1, dy]])
-            
+
+            # 元画像の中心を部分画像座標系に変換
+            orig_center_x = orig_width  / 2 - min_block_x
+            orig_center_y = orig_height / 2 - min_block_y
+            M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), -rotation, 1.0)
+            M[0, 2] += dx
+            M[1, 2] += dy
+
             # 変換後に必要なサイズを計算
             transform_output_width = min(region_width, new_width - (x - min_block_x))
             transform_output_height = min(region_height, new_height - (y - min_block_y))

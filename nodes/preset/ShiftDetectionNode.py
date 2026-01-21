@@ -679,13 +679,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in inlier_matches])
             extra_info["aspectRatioMedian"] = aspectRatioMedian
             
-            if len(inlier_matches) >= 3:
-                transform_result = self._calculateAffineTransform(inlier_matches, currentImageShape)
-                if isinstance(transform_result, tuple):
-                    dx, dy = transform_result
-                else:
-                    dx, dy = transform_result[0, 2], transform_result[1, 2]
-                    rotation = np.arctan2(transform_result[1, 0], transform_result[0, 0]) * 180 / np.pi
+            if 3 <= len(inlier_matches):
+                dx, dy, rotation = self._calculateAffineTransform(inlier_matches, currentImageShape)
             
             from utils.Debug import Debug
             degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
@@ -721,31 +716,20 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         if M is not None:
             # 回転角を計算
-            rotation_angle = np.arctan2(M[1, 0], M[0, 0]) * 180 / np.pi
+            cos_r = M[0, 0]
+            sin_r = M[1, 0]
+            rotation_angle = np.arctan2(sin_r, cos_r) * 180 / np.pi
             
-            # 小さな回転のみ適用（天体写真では通常数度以内）
-            if abs(rotation_angle) < 10.0:
-                # 画像中心回転用の変換行列を作成
-                cos_r = M[0, 0]
-                sin_r = M[1, 0]
-                
-                # 平行移動成分を画像中心回転に合わせて調整
-                dx = M[0, 2] + image_center[0] * (1 - cos_r) + image_center[1] * sin_r
-                dy = M[1, 2] + image_center[1] * (1 - cos_r) - image_center[0] * sin_r
-                
-                # 画像中心回転の変換行列を返す
-                M_centered = nh.array([[cos_r, -sin_r, dx], [sin_r, cos_r, dy]])
-                return M_centered
-            else:
-                # 大きな回転は平行移動のみ適用
-                dx = M[0, 2]
-                dy = M[1, 2]
-                return (dx, dy)
-        
-        # アフィン変換が失敗した場合は平行移動のみ
-        dx_sum = sum(ref_pt[0] - target_pt[0] for ref_pt, target_pt in matches)
-        dy_sum = sum(ref_pt[1] - target_pt[1] for ref_pt, target_pt in matches)
-        return (dx_sum / len(matches), dy_sum / len(matches))
+            # 平行移動成分
+            dx = M[0, 2]
+            dy = M[1, 2]
+            
+            return (dx, dy, rotation_angle)
+        else:
+            # アフィン変換が失敗した場合は平行移動のみ
+            dx_sum = sum(ref_pt[0] - target_pt[0] for ref_pt, target_pt in matches)
+            dy_sum = sum(ref_pt[1] - target_pt[1] for ref_pt, target_pt in matches)
+            return (dx_sum / len(matches), dy_sum / len(matches), 0.0)
     
     def _calculateGridMatches(self, matches, offset, image_shape):
         """グリッド別のマッチ数を計算"""
