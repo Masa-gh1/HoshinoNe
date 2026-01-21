@@ -580,13 +580,15 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             return AlignmentResult(success=False, method="star", extra_info=extra_info)
         
         # 画像全体に分散した星を選択
-        ref_bright, ref_grid_counts = self._selectDistributedStars(ref_stars, refImage.shape)
+        ref_bright,    ref_grid_counts    = self._selectDistributedStars(ref_stars, refImage.shape)
         target_bright, target_grid_counts = self._selectDistributedStars(target_stars, targetImage.shape)
         
         aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in target_bright])
-        extra_info["ref_grid_counts"] = ref_grid_counts
-        extra_info["target_grid_counts"] = target_grid_counts
-        extra_info["aspectRatioMedian"] = aspectRatioMedian
+        extra_info["ref_bright_count"]    = len(ref_bright)
+        extra_info["ref_grid_counts"]     = ref_grid_counts
+        extra_info["target_bright_count"] = len(target_bright)
+        extra_info["target_grid_counts"]  = target_grid_counts
+        extra_info["aspectRatioMedian"]   = aspectRatioMedian
         
         # 前画像のオフセット・回転を考慮した対応点探索
         matches = []
@@ -658,41 +660,41 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         extra_info["inliers"] = inliers
         extra_info["inliers_min_required"] = 5
         
-        if inliers >= 5:  # 5個以上のインライア
-            # グリッド別マッチ数を計算
-            grid_match_counts = self._calculateGridMatches(matches, offset, refImage.shape)
-            extra_info["grid_match_counts"] = grid_match_counts
-            
-            # インライアを使って回転も含めた変換を計算
-            inlier_matches = []
-            for ref_pt, target_pt, brightness, aspectRatio  in matches:
-                expected_x = target_pt[0] + offset[0]
-                expected_y = target_pt[1] + offset[1]
-                error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
-                if error < 2.0:
-                    inlier_matches.append((ref_pt, target_pt, brightness, aspectRatio))
-            
-            dx, dy = offset
-            rotation = 0
-            confidence = min(1.0, inliers / 20.0)  # 正規化した信頼度
-            
-            aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in inlier_matches])
-            extra_info["aspectRatioMedian"] = aspectRatioMedian
-            
-            if 3 <= len(inlier_matches):
-                dx, dy, rotation = self._calculateAffineTransform(inlier_matches, currentImageShape)
-            
-            from utils.Debug import Debug
-            degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f}"
-            degug += " " + f"len(target_bright):{len(extra_info['target_bright'])}" if 'target_bright' in extra_info else ""
-            degug += " " + f"aspectRatioMedian:{extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian' in extra_info else ""
-            degug += " " + f"inliers:{extra_info['inliers']}" if 'inliers' in extra_info else ""
-            degug += " " + f"ransac_iteration:{extra_info['ransac_iteration']}" if 'ransac_iteration' in extra_info else ""
-            Debug.log(type(self).__name__,f"{degug}")
-            
-            return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
+        if inliers < 5:  # 5個未満のインライア
+            return AlignmentResult(success=False, method="star", extra_info=extra_info)
         
-        return AlignmentResult(success=False, method="star", extra_info=extra_info)
+        # グリッド別マッチ数を計算
+        grid_match_counts = self._calculateGridMatches(matches, offset, refImage.shape)
+        extra_info["grid_match_counts"] = grid_match_counts
+        
+        # インライアを使って回転も含めた変換を計算
+        inlier_matches = []
+        for ref_pt, target_pt, brightness, aspectRatio  in matches:
+            expected_x = target_pt[0] + offset[0]
+            expected_y = target_pt[1] + offset[1]
+            error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
+            if error < 2.0:
+                inlier_matches.append((ref_pt, target_pt, brightness, aspectRatio))
+        
+        dx, dy = offset
+        rotation = 0
+        confidence = min(1.0, inliers / 20.0)  # 正規化した信頼度
+        
+        aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in inlier_matches])
+        extra_info["aspectRatioMedian"] = aspectRatioMedian
+        
+        if 3 <= len(inlier_matches):
+            dx, dy, rotation = self._calculateAffineTransform(inlier_matches, currentImageShape)
+        
+        from utils.Debug import Debug
+        degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f} confidence:{confidence:.3f}"
+        degug += f" target_bright_count:{extra_info['target_bright_count']  }" if 'target_bright_count' in extra_info else ""
+        degug += f" aspectRatioMedian:{  extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian'   in extra_info else ""
+        degug += f" inliers:{            extra_info['inliers']              }" if 'inliers'             in extra_info else ""
+        degug += f" ransac_iteration:{   extra_info['ransac_iteration']     }" if 'ransac_iteration'    in extra_info else ""
+        Debug.log(type(self).__name__, f"{degug}")
+        
+        return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
     
     def _calculateAffineTransform(self, matches, shape):
         """対応点からアフィン変換を計算（画像中心回転）"""
