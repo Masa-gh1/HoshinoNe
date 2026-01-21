@@ -136,6 +136,13 @@ class CacheManager:
     def set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
         """キャッシュに保存"""
         with cls._cacheLock:
+            cnt = len(cls._objectCache)
+        
+        if 1000 <= cnt:
+            # メモリキャッシュへの遅延書き込みが間に合っていないので少し待つ
+            time.sleep((1.1**(cnt/1000))-1.0)
+        
+        with cls._cacheLock:
             cls._setCount += 1
             return cls.elapsed( cls._set, cacheKey, data, cachePolicy)
 
@@ -158,7 +165,7 @@ class CacheManager:
             with cls._cacheLock:
                 if not cls._objectCache:
                     break
-
+                
                 cacheKey, data = next(iter(cls._objectCache.items()))
                 dims  = data.shape
                 dtype = data.dtype
@@ -175,7 +182,7 @@ class CacheManager:
                         pageBody = cls._memCachePage[page]
                     else:
                         pageBody = None
-                else:
+                elif cls._memCacheRemovable:
                     # ページに空が無いので古いデータから削除(LRU)
                     oldKey = next(iter(cls._memCacheRemovable))
                     cls._memCacheRemovable.pop(oldKey)
@@ -188,22 +195,33 @@ class CacheManager:
                         # ポリシー persistent ではないのでキャッシュから削除
                         cls._purgeCount += 1
                         cls._cachedIndex.pop(oldKey)
-            
-            if pageBody is None:
-                # 新しいページなので、新規作成
-                pageBody = np.empty((BLOCK_CACHE_PAGE_SIZE,MAX_BLOCK_SIZE_BYTES), dtype=np.uint8) # ページ作成
-                with cls._cacheLock:
-                    cls._memCachePage.append(pageBody)
-            
-            pageBody[index, :size] = data.reshape(-1).view(np.uint8) # メモリキャッシュへ書き込み
-            
-            with cls._cacheLock:
-                cls._objectCache.pop(cacheKey, None)
-                cls._memCachedIndex[cacheKey] = (pos, meta)
-                if CachePolicy.PERSISTENT != cachePolicy:
-                    cls._memCacheRemovable[cacheKey] = True
                 else:
-                    if not cls._memCacheFree:
+                    # ページに空きが無く、削除出来るデータもないので、メモリキャッシュへの遅延書き込みを保留
+                    # ストレージキャッシュへの遅延書き込みが進むのを待つ
+                    pos      = None
+                    page     = None
+                    index    = None
+                    pageBody = None
+            
+            if index is None:
+                # ストレージキャッシュへの遅延書き込みが進むのを待つ
+                time.sleep(0.1)
+            else:
+                if pageBody is None:
+                    # 新しいページなので、新規作成
+                    pageBody = np.empty((BLOCK_CACHE_PAGE_SIZE,MAX_BLOCK_SIZE_BYTES), dtype=np.uint8) # ページ作成
+                    with cls._cacheLock:
+                        cls._memCachePage.append(pageBody)
+                
+                pageBody[index, :size] = data.reshape(-1).view(np.uint8) # メモリキャッシュへ書き込み
+                
+                with cls._cacheLock:
+                    cls._objectCache.pop(cacheKey, None)
+                    cls._memCachedIndex[cacheKey] = (pos, meta)
+                    if CachePolicy.PERSISTENT != cachePolicy:
+                        cls._memCacheRemovable[cacheKey] = True
+                    elif not cls._memCacheFree:
+                        # ページに空きが在る間はストレージキャッシュを使わない
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
 
     @classmethod
@@ -212,33 +230,33 @@ class CacheManager:
         with cls._cacheLock:
             # 古いデータから連続する PERSISTENT を抽出する
             req = []
-            for key in cls._memCachedIndex:
-                if CachePolicy.PERSISTENT == cls._cachedIndex[key]:
-                    req.append(key)
-                else:
+            for cacheKey in cls._memCachedIndex:
+                if CachePolicy.PERSISTENT != cls._cachedIndex[cacheKey]:
                     break
+                elif cacheKey in cls._memCacheRemovable:
+                    # 既に削除可能なので何もしない
+                    pass
+                elif cacheKey in cls._storagedIndex:
+                    # 既に保存済みなので削除可能
+                    cls._memCacheRemovable[cacheKey] = True
+                else:
+                    req.append(cacheKey)
 
         for cacheKey in req:
             # メインスレッドを可能な限り止めない為に、
             # このスレッドではロック時間を最小にする。
             # ストレージ操作などはロックの外で行う。
             with cls._cacheLock:
-                if cacheKey in cls._storagedIndex:
-                    # 既に保存済みなので何もしない
-                    data = None
-                else:
-                    pos, meta = cls._memCachedIndex[cacheKey]
-                    page, index = pos
-                    dims, dtype, size = meta
-                    data = cls._memCachePage[page][index,:size].view(dtype).reshape(dims)
+                pos, meta = cls._memCachedIndex[cacheKey]
+                page, index = pos
+                dims, dtype, size = meta
+                data = cls._memCachePage[page][index,:size].view(dtype).reshape(dims)
             
-            if data is None:
-                # 既に保存済みなので何もしない
-                with cls._cacheLock:
-                    cls._memCacheRemovable[cacheKey] = True
-            elif cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
+            if cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
                 # 書き込み成功
                 with cls._cacheLock:
+                    if not cacheKey in cls._memCachedIndex:
+                        pass
                     cls._saveCount += 1
                     cls._storagedIndex[cacheKey] = True
                     cls._memCacheRemovable[cacheKey] = True

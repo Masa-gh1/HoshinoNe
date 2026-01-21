@@ -816,10 +816,15 @@ class FlowEditor:
         self.activeProgressBars.clear()
     
     def startUpdateCacheStats(self):
+        self._setCount = 0
+        self._getCount = 0
+        self._startUpdateCacheStats()
+    
+    def _startUpdateCacheStats(self):
         self.updateCacheStats()
-        # 5秒後に再度更新
-        self.root.after(5000, self.startUpdateCacheStats)
-
+        # 5秒毎に更新
+        self.root.after(5000, self._startUpdateCacheStats)
+    
     def updateCacheStats(self):
         """キャッシュ統計を更新"""
         import gc
@@ -832,6 +837,10 @@ class FlowEditor:
         trayCount = f"{len(self.trays)}個"
         
         objCacheCount, cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
+        setps = (setCount - self._setCount)//5
+        getps = (getCount - self._getCount)//5
+        self._setCount = setCount
+        self._getCount = getCount
         
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 10*1024:
@@ -855,18 +864,21 @@ class FlowEditor:
         
         # 使用量ラベルを更新
         if Debug.LEVEL_NONE == Debug.LEVEL:
+            blockInfo = f"Block: {getps}r/s, {setps}w/s"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = ""
             dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheStr}) Storage: {storageStr}"
             nodeInfo  = f"Node: {flowNodeCount}"
         else:
             cacheNodeCount = f"{self.getNodeCount()}個"
+
+            blockInfo = f"Block: {getps}r/s, {setps}w/s"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = f"Cache[MissCount: {cacheMissCount} {cacheMissCount/getCount:.3f} RecalculateCount: {recalculateCount} {recalculateCount/getCount:.3f} LoadCount: {loadCount} {loadCount/getCount:.3f} PurgeCount: {purgeCount} {purgeCount/setCount:.3f} SaveCount:{saveCount} {saveCount/setCount:.3f}]" if 0!=getCount and 0!=setCount else ""
             dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheStr}) Storage: {storageCount}({storageStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
-        info = f"{objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
+        info = f"{blockInfo} {objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
         self.usageLabel.config(text=info)
 
     def getNodeCount(self):
