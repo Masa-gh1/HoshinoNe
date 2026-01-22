@@ -136,11 +136,12 @@ class CacheManager:
     def set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
         """キャッシュに保存"""
         with cls._cacheLock:
-            cnt = len(cls._objectCache)
+            objectCacheCount = len(cls._objectCache)
         
-        if 1000 <= cnt:
+        if 1000 <= objectCacheCount:
             # メモリキャッシュへの遅延書き込みが間に合っていないので少し待つ
-            time.sleep((1.1**(cnt/1000))-1.0)
+            # 1000:0.10s, 3000:0.33s, 9000:1.35s
+            time.sleep((1.1**(objectCacheCount/1000))-1.0)
         
         with cls._cacheLock:
             cls._setCount += 1
@@ -255,8 +256,6 @@ class CacheManager:
             if cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
                 # 書き込み成功
                 with cls._cacheLock:
-                    if not cacheKey in cls._memCachedIndex:
-                        pass
                     cls._saveCount += 1
                     cls._storagedIndex[cacheKey] = True
                     cls._memCacheRemovable[cacheKey] = True
