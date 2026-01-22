@@ -367,31 +367,46 @@ class ResultWindow(tk.Toplevel):
             length = max([len(label) for label in lines])
             content += "\t"*(length//8+1) + "\t".join(columns) + "\n"
         
-        # データ行 (最初の10行,10列のみ表示)
+        # データ行
         width, height = flowData.getDimensions()
-        displayRows = min(height, 10)  # 最初の10行のみ
-        displayCols = min(width , 10)  # 最初の10列のみ
+        displayRows = min(height, 1000)  # 最初の1000行のみ表示
+        displayCols = min(width ,   10)  # 最初の10列のみ表示
         
-        if 0 < displayRows and 0 < displayCols:
-            block = flowData.getBlock(0, 0, 0)
-            if block and block.data is not None:
-                h, w = block.data.shape
-                for dy in range(h):
-                    row_data = [lines[dy] if dy < len(lines) else f"row_{dy}"]
-                    for dx in range(w):
-                        try:
-                            value = block.data[dy][dx]
-                            row_data.append(sh.dispL(value))
-                        except (IndexError, TypeError):
-                            row_data.append("_")
-
-                    if width > displayCols:
-                        row_data.append("...")
-                
-                    content += "\t".join(row_data) + "\n"
+        block = None
+        blockX = 0
+        blockY = 0
+        blockW = 0
+        blockH = 0
+        cols = []
+        for x in range(displayCols):
+            cells = []
+            for y in range(displayRows):
+                if(  x < blockX or blockX + blockW <= x
+                  or y < blockY or blockY + blockH <= y
+                  ):
+                    block = flowData.getBlock(0, x//BLOCK_SIZE, y//BLOCK_SIZE)
+                    if block and not block.data is None:
+                        blockX = x//BLOCK_SIZE
+                        blockY = y//BLOCK_SIZE
+                        blockH, blockW = block.data.shape
+                    else:
+                        blockX = 0
+                        blockY = 0
+                        blockW = 0
+                        blockH = 0
+                value = block.data[y-blockY][x-blockX]
+                cells.append(value)
+            cols.append(sh.dispL(cells))
         
-                if height > displayRows:
-                    content += "...\n"
+        for y in range(displayRows):
+            row = [lines[y] if y < len(lines) else f"row_{y}"]
+            for x in range(displayCols):
+                row.append(cols[x][y])
+            if width > displayCols:
+                row.append("...")
+            content += "\t".join(row) + "\n"
+        if height > displayRows:
+            content += "...\n"
         
         return content
     
