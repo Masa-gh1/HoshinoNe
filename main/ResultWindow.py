@@ -249,10 +249,10 @@ class ResultWindow(tk.Toplevel):
         text += f"Dimensions: {width} x {height}\n"
         content.append(text)
         
-        if   dataType == 'polynomial': result = self._generatePolynomialContent(flowData)
-        elif dataType == 'table': result = self._generateTableContent(flowData)
-        elif dataType == 'image' : result = self._generateImageContent(flowData)
-        else:                      result = self._generateGenericContent(flowData)
+        if   dataType == 'image'     : result = self._generateImageContent(flowData)
+        elif dataType == 'polynomial': result = self._generatePolynomialContent(flowData)
+        elif dataType == 'table'     : result = self._generateTableContent(flowData)
+        else:                          result = self._generateGenericContent(flowData)
         
         if isinstance(result, list):
             content.extend(result)
@@ -319,41 +319,6 @@ class ResultWindow(tk.Toplevel):
         
         return content
         
-    def _generatePolynomialContent(self, flowData):
-        """Polynomialデータの内容を生成"""
-        headers = flowData.headers
-        content = "\n"
-        
-        columns = headers.get('columns', [])
-        lines = headers.get('lines', [])
-        planes = headers.get('planes', [])
-        
-        for planeIndex, planeName in enumerate(planes):
-            content += f"\n[plane: {planeName}]\n"
-            
-            # ヘッダー行
-            if columns:
-                content += "\t" + "\t".join(columns) + "\n"
-            
-            # データ行
-            width, height = flowData.getDimensions()
-            block = flowData.getBlock(planeIndex, 0, 0)
-            for y in range(height):
-                lineLabel = lines[y] if y < len(lines) else f"row_{y}"
-                content += f"{lineLabel}\t"
-                
-                row_data = []
-                for x in range(width):
-                    try:
-                        value = block.data[y][x]
-                        row_data.append(sh.dispL(value))
-                    except (IndexError, TypeError):
-                        row_data.append("_")
-                
-                content += "\t".join(row_data) + "\n"
-        
-        return content
-    
     def _generateTableContent(self, flowData):
         """マトリックスデータの内容を生成"""
         headers = flowData.headers
@@ -407,6 +372,41 @@ class ResultWindow(tk.Toplevel):
             content += "\t".join(row) + "\n"
         if height > displayRows:
             content += "...\n"
+        
+        return content
+    
+    def _generatePolynomialContent(self, flowData):
+        """Polynomialデータの内容を生成"""
+        headers = flowData.headers
+        content = "\n"
+        
+        columns = headers.get('columns', [])
+        lines = headers.get('lines', [])
+        planes = headers.get('planes', [])
+        
+        for planeIndex, planeName in enumerate(planes):
+            content += f"\n[plane: {planeName}]\n"
+            
+            # ヘッダー行
+            if columns:
+                content += "\t" + "\t".join(columns) + "\n"
+            
+            # データ行
+            width, height = flowData.getDimensions()
+            block = flowData.getBlock(planeIndex, 0, 0)
+            for y in range(height):
+                lineLabel = lines[y] if y < len(lines) else f"row_{y}"
+                content += f"{lineLabel}\t"
+                
+                row_data = []
+                for x in range(width):
+                    try:
+                        value = block.data[y][x]
+                        row_data.append(sh.dispL(value))
+                    except (IndexError, TypeError):
+                        row_data.append("_")
+                
+                content += "\t".join(row_data) + "\n"
         
         return content
     
