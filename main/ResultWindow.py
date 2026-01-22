@@ -290,12 +290,7 @@ class ResultWindow(tk.Toplevel):
         
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
-        
-            # ヘッダー行
-            if width:
-                content += "\t" + "\t".join([f"x:{x}" for x in range(width)]) + "\n"
-            
-            # データ行
+
             block = None
             blockX = 0
             blockY = 0
@@ -322,6 +317,14 @@ class ResultWindow(tk.Toplevel):
                     cells.append(value)
                 cols.append(sh.dispL(cells))
             
+            # ヘッダー行
+            if width:
+                for x in  range(width):
+                    content += "\t"
+                    content += f"x:{x}".ljust(max([len(t) for t in cols[x]]))
+                content += "\n"
+            
+            # データ行
             for y in range(displayRows):
                 row = [f"y:{y}"]
                 for x in range(displayCols):
@@ -339,9 +342,9 @@ class ResultWindow(tk.Toplevel):
         headers = flowData.headers
         content = "\n"
         
-        columns = headers.get('columns', [])
-        lines   = headers.get('lines', [])
         planes  = headers.get('planes', [])
+        lines   = headers.get('lines', [])
+        columns = headers.get('columns', [])
         
         width, height = flowData.getDimensions()
         displayRows = min(height, 1000)  # 最初の1000行のみ表示
@@ -350,12 +353,6 @@ class ResultWindow(tk.Toplevel):
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
         
-            # ヘッダー行
-            if columns:
-                length = max([len(label) for label in lines])
-                content += "\t"*(length//8+1) + "\t".join(columns) + "\n"
-            
-            # データ行
             block = None
             blockX = 0
             blockY = 0
@@ -382,6 +379,16 @@ class ResultWindow(tk.Toplevel):
                     cells.append(value)
                 cols.append(sh.dispL(cells))
             
+            # ヘッダー行
+            if columns:
+                length = max([len(label) for label in lines])
+                content += "\t"*(length//8)
+                for x, column in enumerate(columns):
+                    content += "\t"
+                    content += column.ljust(max([len(t) for t in cols[x]]))
+                content += "\n"
+            
+            # データ行
             for y in range(displayRows):
                 row = [lines[y] if y < len(lines) else f"row_{y}"]
                 for x in range(displayCols):
@@ -399,33 +406,62 @@ class ResultWindow(tk.Toplevel):
         headers = flowData.headers
         content = "\n"
         
+        planes  = headers.get('planes', [])
+        lines   = headers.get('lines', [])
         columns = headers.get('columns', [])
-        lines = headers.get('lines', [])
-        planes = headers.get('planes', [])
+        
+        width, height = flowData.getDimensions()
         
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
             
+            median = flowData.getPercentile(50)
+
+            block = None
+            blockX = 0
+            blockY = 0
+            blockW = 0
+            blockH = 0
+            cols = []
+            for x in range(width):
+                cells = []
+                for y in range(height):
+                    if(  x < blockX or blockX + blockW <= x
+                    or y < blockY or blockY + blockH <= y
+                    ):
+                        block = flowData.getBlock(0, x//BLOCK_SIZE, y//BLOCK_SIZE)
+                        if block and not block.data is None:
+                            blockX = x//BLOCK_SIZE
+                            blockY = y//BLOCK_SIZE
+                            blockH, blockW = block.data.shape
+                        else:
+                            blockX = 0
+                            blockY = 0
+                            blockW = 0
+                            blockH = 0
+                    value = block.data[y-blockY][x-blockX]
+                    cells.append(value)
+                cols.append(sh.dispL(cells, representative=median))
+            
             # ヘッダー行
             if columns:
-                content += "\t" + "\t".join(columns) + "\n"
+                length = max([len(label) for label in lines])
+                content += "\t"*(length//8)
+                for x, column in enumerate(columns):
+                    content += "\t"
+                    content += column.ljust(max([len(t) for t in cols[x]]))
+                content += "\n"
             
             # データ行
-            width, height = flowData.getDimensions()
-            block = flowData.getBlock(planeIndex, 0, 0)
             for y in range(height):
-                lineLabel = lines[y] if y < len(lines) else f"row_{y}"
-                content += f"{lineLabel}\t"
-                
-                row_data = []
+                row = [lines[y] if y < len(lines) else f"row_{y}"]
                 for x in range(width):
-                    try:
-                        value = block.data[y][x]
-                        row_data.append(sh.dispL(value))
-                    except (IndexError, TypeError):
-                        row_data.append("_")
-                
-                content += "\t".join(row_data) + "\n"
+                    row.append(cols[x][y])
+                if width > width:
+                    row.append("...")
+                content += "\t".join(row) + "\n"
+            if height > height:
+                content += "...\n"
         
         return content
     

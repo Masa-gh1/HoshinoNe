@@ -22,20 +22,23 @@ def dispS(value):
                 break
         return f"{value:{f}}"
 
-def dispL(value):
+def dispL(value, representative = None):
     """数値を表示に適した長さで文字列化(長)する"""
     if isinstance(value,(list,tuple)):
         values = value
     else:
         values = [value]
     
-    abss   = [abs(v) for v in values]
-    absMin = min(abss)
-    absMax = max(abss)
+    if representative:
+        abss   = [abs(representative)]
+        absMax = max(abss)
+    else:
+        abss   = [abs(v) for v in values]
+        absMax = max(abss)
     
     threshold = [100.0,  0.1, 0.0001, 0.0000001]
     format    = [".0f",".3f",  ".6f",     ".9f"]
-    if 0.0 == absMin or 0.0 == absMax:
+    if 0.0 == absMax:
         fm = ".3f"
     else:
         fm = format[-1]
