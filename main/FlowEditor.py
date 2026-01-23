@@ -36,8 +36,9 @@ class FlowEditor:
         self.connectionLines = [] # (fromNode, toNode, line)
         self.flowControl     = FlowControl()
 
-        self.currentFlowPath = None
         self.applicationHome = None
+        self.currentFlowPath = None
+        self.lastDirectory   = None
         
         self.take           = 0
         self.maxObjectCount = 0
@@ -198,7 +199,7 @@ class FlowEditor:
         clickY = self.canvas.canvasy(self.rightClickY)
         
         # 追加モードで読み込み
-        self.loadFlow(targetX=clickX, targetY=clickY, appendMode=True)
+        self.loadFlow(targetX=clickX, targetY=clickY, appendMode=True, initialdir=os.path.join(self.applicationHome, "subFlow"))
 
     def updateAllTrayAppearance(self):
         """全トレイの外観を更新"""
@@ -492,17 +493,59 @@ class FlowEditor:
                 break
 
     def onSelectFiles(self, node):
-        filePaths = filedialog.askopenfilenames(filetypes=node.fileTypes)
+        filePaths = self.openFilesSelector(title=f"{node.name} - ファイルを選択", filetypes=node.fileTypes)
         if filePaths:
             node.setFilePaths(filePaths)
             node.view.onNodeConfigChanged(node)
         
     def onSelectOutputFile(self, node):
-        outputPath = filedialog.asksaveasfilename( defaultextension=node.defaultOutputExtension, filetypes=node.outputFileTypes)
+        outputPath = self.openOutputFileSelector(title=f"{node.name} - 出力ファイルを選択", defaultextension=node.defaultOutputExtension, filetypes=node.outputFileTypes)
         if outputPath:
             node.setOutputFilePath(outputPath)
             node.view.onNodeConfigChanged(node)
     
+    def openFilesSelector(self, *args, **kwargs):
+        newKwargs = kwargs.copy()
+        if kwargs.get("initialdir",None) is None:
+            newKwargs["initialdir"] = self.lastDirectory
+
+        filePaths = filedialog.askopenfilenames( *args, **newKwargs)
+        if not filePaths:
+            return []
+
+        if kwargs.get("initialdir",None) is None:
+            self.lastDirectory = os.path.dirname(filePaths[0])
+
+        return filePaths
+    
+    def openFileSelector(self, *args, **kwargs):
+        newKwargs = kwargs.copy()
+        if kwargs.get("initialdir",None) is None:
+            newKwargs["initialdir"] = self.lastDirectory
+        
+        filePath = filedialog.askopenfilename( *args, **newKwargs)
+        if not filePath:
+            return None
+        
+        if kwargs.get("initialdir",None) is None:
+            self.lastDirectory = os.path.dirname(filePath)
+        
+        return filePath
+    
+    def openOutputFileSelector(self, *args, **kwargs):
+        newKwargs = kwargs.copy()
+        if kwargs.get("initialdir",None) is None:
+            newKwargs["initialdir"] = self.lastDirectory
+        
+        filePath = filedialog.asksaveasfilename(*args, **newKwargs)
+        if not filePath:
+            return None
+        
+        if kwargs.get("initialdir",None) is None:
+            self.lastDirectory = os.path.dirname(filePath)
+        
+        return filePath
+
     def goHome(self):
         """キャンバスをホームポジションに戻す"""
         if self.nodes or self.trays:
@@ -570,7 +613,10 @@ class FlowEditor:
             messagebox.showwarning("警告", "保存するフローがありません")
             return
         
-        filePath = filedialog.asksaveasfilename(
+        filePath = self.openOutputFileSelector(
+            title="フローを保存",
+            initialfile=self.currentFlowPath,
+            initialdir=os.path.dirname(self.currentFlowPath) if self.currentFlowPath else None,
             defaultextension=".flow",
             filetypes=[("flow files", "*.flow"), ("All files", "*.*")]
         )
@@ -593,9 +639,11 @@ class FlowEditor:
             print(tb,file=sys.stderr)
             messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
-    def loadFlow(self, targetX=0, targetY=0, appendMode=False, filePath=None):
+    def loadFlow(self, targetX=0, targetY=0, appendMode=False, filePath=None, initialdir=None):
         if not filePath:
-            filePath = filedialog.askopenfilename(
+            filePath = self.openFileSelector(
+                title="フローをインポート" if appendMode else "フローを読み込む",
+                initialdir=initialdir,
                 filetypes=[("flow files", "*.flow"), ("All files", "*.*")]
             )
         

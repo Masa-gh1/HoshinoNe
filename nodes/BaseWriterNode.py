@@ -12,7 +12,6 @@ import hashlib
 import os
 import threading
 import tkinter as tk
-from tkinter import filedialog
 
 from base.FlowNode_CONST import *
 from base import FlowNode
@@ -202,13 +201,15 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.onClose)
     
     def browseFile(self):
-        dialog = filedialog.asksaveasfilename(
+        filepath = self.node.view.editor.openOutputFileSelector(
+            parent=self,
             title=f"{self.node.name} - 出力ファイルを選択",
             filetypes=self.node.outputFileTypes,
             defaultextension=self.node.defaultOutputExtension
         )
-        if dialog:
-            self.pathVar.set(dialog)
+
+        if filepath:
+            self.pathVar.set(filepath)
     
     def createCustomSettings(self, parent):
         """カスタム設定項目を作成（サブクラスでオーバーライド）
