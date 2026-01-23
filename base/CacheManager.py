@@ -44,7 +44,7 @@ class CacheManager:
     _purgeCount       = 0  # メモリから破棄された回数
     _saveCount        = 0  # メモリからストレージに保存された回数
     _getCount         = 0  # メモリから取得した回数
-    _cacheMissCount   = 0  # メモリでキャッシュミスした回数
+    _cacheHitCount    = 0  # メモリでキャッシュヒットした回数
     _recalculateCount = 0  # メモリに無く再計算となった回数
     _loadCount        = 0  # メモリに無くストレージから復元した回数
     _elapsedLog       = [] # 処理時間ログ
@@ -101,10 +101,12 @@ class CacheManager:
     def _get(cls, cacheKey):
         if cacheKey in cls._objectCache:
             # オブジェクトキャッシュにあるので採用
+            cls._cacheHitCount += 1
             data = cls._objectCache[cacheKey]
             return data
         elif cacheKey in cls._memCachedIndex:
             # メモリキャッシュにあるので採用
+            cls._cacheHitCount += 1
             if not cls._memCacheRemovable.pop(cacheKey,None) is None:
                 cls._memCacheRemovable[cacheKey] = True # 最後尾に追加(LRU)
             cache = cls._memCachedIndex.pop(cacheKey)
@@ -116,7 +118,6 @@ class CacheManager:
             return data
         elif cacheKey in cls._storagedIndex:
             # ストレージに在るので復元してメモリキャッシュに復帰
-            cls._cacheMissCount += 1
             cls._loadCount += 1
             data = cls._loadFromStorage(cacheKey)
             
@@ -128,7 +129,6 @@ class CacheManager:
             return data
         else:
             # キャッシュに無いので、残念なら要再計算
-            cls._cacheMissCount += 1
             cls._recalculateCount += 1
             return None
     
@@ -401,6 +401,6 @@ class CacheManager:
         storageCount     = len(cls._storagedIndex)
         storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
         return (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
-                cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount,
+                cls._getCount, cls._cacheHitCount, cls._recalculateCount, cls._loadCount,
                 cls._setCount, cls._purgeCount, cls._saveCount,
                 cls._elapsedHis)
