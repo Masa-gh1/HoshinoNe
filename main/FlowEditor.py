@@ -837,7 +837,7 @@ class FlowEditor:
         trayCount = f"{len(self.trays)}個"
         
         (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
-         getCount, cacheMissCount, loadCount, recalculateCount,
+         getCount, cacheHitCount, recalculateCount, loadCount,
          setCount, purgeCount, saveCount,
          elapsedHis) = CacheManager.getCacheStats()
         setps = (setCount - self._setCount)//5
@@ -881,7 +881,7 @@ class FlowEditor:
 
             blockInfo = f"Block: {getpsStr}, {setpsStr}"
             objInfo   = f"Object: {ObjectCount}"
-            CacheInfo = f"Cache[MissCount: {cacheMissCount} {cacheMissCount/getCount:.3f} RecalculateCount: {recalculateCount} {recalculateCount/getCount:.3f} LoadCount: {loadCount} {loadCount/getCount:.3f} PurgeCount: {purgeCount} {purgeCount/setCount:.3f} SaveCount:{saveCount} {saveCount/setCount:.3f}]" if 0!=getCount and 0!=setCount else ""
+            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount} {purgeCount/setCount:.3f} Save:{saveCount}({saveCount/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
             dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageCount}({storageSizeStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
@@ -907,7 +907,7 @@ class FlowEditor:
         # 実行前のメモリ使用量を取得
         b_nodeCount = self.getNodeCount()
         (b_objCacheCount, b_cacheCount, b_cacheSize, b_storageCount, b_storageSize,
-         b_getCount, b_cacheMissCount, b_loadCount, b_recalculateCount,
+         b_getCount, b_cacheHitCount, b_recalculateCount, b_loadCount,
          b_setCount, b_purgeCount, b_saveCount,
          b_elapsedHis) = CacheManager.getCacheStats()
         
@@ -917,7 +917,7 @@ class FlowEditor:
         # 実行後のメモリ使用量を取得
         a_nodeCount = self.getNodeCount()
         (a_objCacheCount, a_cacheCount, a_cacheSize, a_storageCount, a_storageSize,
-         a_getCount, a_cacheMissCount, a_loadCount, a_recalculateCount,
+         a_getCount, a_cacheHitCount, a_recalculateCount, a_loadCount,
          a_setCount, a_purgeCount, a_saveCount,
          a_elapsedHis) = CacheManager.getCacheStats()
         
@@ -952,7 +952,7 @@ class FlowEditor:
                 print(text)
             print("========================")
             (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
-             getCount, cacheMissCount, loadCount, recalculateCount,
+             getCount, cacheHitCount, recalculateCount, loadCount,
              setCount, purgeCount, saveCount,
              elapsedHis) = CacheManager.getCacheStats()
             print(f"objCacheCount: {objCacheCount}")
@@ -961,9 +961,9 @@ class FlowEditor:
             print(f"storageCount: {storageCount}")
             print(f"storageSize: {storageSize}")
             print(f"getCount: {getCount}")
-            print(f"cacheMissCount: {cacheMissCount}")
-            print(f"loadCount: {loadCount}")
+            print(f"cacheHitCount: {cacheHitCount}")
             print(f"recalculateCount: {recalculateCount}")
+            print(f"loadCount: {loadCount}")
             print(f"setCount: {setCount}")
             print(f"purgeCount: {purgeCount}")
             print(f"saveCount: {saveCount}")
