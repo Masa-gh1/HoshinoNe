@@ -864,46 +864,53 @@ class FlowEditor:
         flowNodeCount = f"{len(self.nodes)}個"
         trayCount = f"{len(self.trays)}個"
         
-        objCacheCount, cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
+        (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
+         getCount, cacheMissCount, loadCount, recalculateCount,
+         setCount, purgeCount, saveCount,
+         elapsedHis) = CacheManager.getCacheStats()
         setps = (setCount - self._setCount)//5
         getps = (getCount - self._getCount)//5
         self._setCount = setCount
         self._getCount = getCount
         
+        # set/get 回数に単位を表示
+        setpsStr = f"{setps}set/s"
+        getpsStr = f"{getps}get/s"
+        
         # キャッシュサイズを適切な単位で表示
         if cacheSize < 10*1024:
-            cacheStr = f"{int(cacheSize)}B"
+            cacheSizeStr = f"{int(cacheSize)}B"
         elif cacheSize < 10*1024*1024:
-            cacheStr = f"{int(cacheSize/1024)}KB"
+            cacheSizeStr = f"{int(cacheSize/1024)}KB"
         elif cacheSize < 10*1024*1024*1024:
-            cacheStr = f"{int(cacheSize/1024/1024)}MB"
+            cacheSizeStr = f"{int(cacheSize/1024/1024)}MB"
         else:
-            cacheStr = f"{int(cacheSize/1024/1024/1024)}GB"
+            cacheSizeStr = f"{int(cacheSize/1024/1024/1024)}GB"
         
         # ディスクサイズを適切な単位で表示
         if storageSize < 10*1024:
-            storageStr = f"{int(storageSize)}B"
+            storageSizeStr = f"{int(storageSize)}B"
         elif storageSize < 10*1024*1024:
-            storageStr = f"{int(storageSize/1024)}KB"
+            storageSizeStr = f"{int(storageSize/1024)}KB"
         elif storageSize < 10*1024*1024*1024:
-            storageStr = f"{int(storageSize/1024/1024)}MB"
+            storageSizeStr = f"{int(storageSize/1024/1024)}MB"
         else:
-            storageStr = f"{int(storageSize/1024/1024/1024)}GB"
+            storageSizeStr = f"{int(storageSize/1024/1024/1024)}GB"
         
         # 使用量ラベルを更新
         if Debug.LEVEL_NONE == Debug.LEVEL:
-            blockInfo = f"Block: {getps}r/s, {setps}w/s"
+            blockInfo = f"Block: {getpsStr}, {setpsStr}"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = ""
-            dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheStr}) Storage: {storageStr}"
+            dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageSizeStr}"
             nodeInfo  = f"Node: {flowNodeCount}"
         else:
             cacheNodeCount = f"{self.getNodeCount()}個"
 
-            blockInfo = f"Block: {getps}r/s, {setps}w/s"
+            blockInfo = f"Block: {getpsStr}r/s, {setpsStr}w/s"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = f"Cache[MissCount: {cacheMissCount} {cacheMissCount/getCount:.3f} RecalculateCount: {recalculateCount} {recalculateCount/getCount:.3f} LoadCount: {loadCount} {loadCount/getCount:.3f} PurgeCount: {purgeCount} {purgeCount/setCount:.3f} SaveCount:{saveCount} {saveCount/setCount:.3f}]" if 0!=getCount and 0!=setCount else ""
-            dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheStr}) Storage: {storageCount}({storageStr})"
+            dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageCount}({storageSizeStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
         info = f"{blockInfo} {objInfo} {CacheInfo} {dataInfo} {nodeInfo}"
@@ -927,14 +934,20 @@ class FlowEditor:
         
         # 実行前のメモリ使用量を取得
         b_nodeCount = self.getNodeCount()
-        b_objCacheCount, b_cacheCount, b_cacheSize, b_storageCount, b_storageSize, b_getCount, b_cacheMissCount, b_loadCount, b_recalculateCount, b_setCount, b_purgeCount, b_saveCount, b_elapsedHis = CacheManager.getCacheStats()
+        (b_objCacheCount, b_cacheCount, b_cacheSize, b_storageCount, b_storageSize,
+         b_getCount, b_cacheMissCount, b_loadCount, b_recalculateCount,
+         b_setCount, b_purgeCount, b_saveCount,
+         b_elapsedHis) = CacheManager.getCacheStats()
         
         # ガベージコレクションを実行
         collected = gc.collect()
         
         # 実行後のメモリ使用量を取得
         a_nodeCount = self.getNodeCount()
-        a_objCacheCount, a_cacheCount, a_cacheSize, a_storageCount, a_storageSize, a_getCount, a_cacheMissCount, a_loadCount, a_recalculateCount, a_setCount, a_purgeCount, a_saveCount, a_elapsedHis = CacheManager.getCacheStats()
+        (a_objCacheCount, a_cacheCount, a_cacheSize, a_storageCount, a_storageSize,
+         a_getCount, a_cacheMissCount, a_loadCount, a_recalculateCount,
+         a_setCount, a_purgeCount, a_saveCount,
+         a_elapsedHis) = CacheManager.getCacheStats()
         
         # 結果を表示
         freedNodeCount = b_nodeCount - a_nodeCount
@@ -966,7 +979,10 @@ class FlowEditor:
             for text in Debug.getDebugReport():
                 print(text)
             print("========================")
-            objCacheCount, cacheCount, cacheSize, storageCount, storageSize, getCount, cacheMissCount, loadCount, recalculateCount, setCount, purgeCount, saveCount, elapsedHis = CacheManager.getCacheStats()
+            (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
+             getCount, cacheMissCount, loadCount, recalculateCount,
+             setCount, purgeCount, saveCount,
+             elapsedHis) = CacheManager.getCacheStats()
             print(f"objCacheCount: {objCacheCount}")
             print(f"cacheCount: {cacheCount}")
             print(f"cacheSize: {cacheSize}")

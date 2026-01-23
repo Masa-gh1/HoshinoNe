@@ -400,4 +400,7 @@ class CacheManager:
         cacheSize        = cacheCount * MAX_BLOCK_SIZE_BYTES
         storageCount     = len(cls._storagedIndex)
         storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
-        return objCacheCount, cacheCount, cacheSize, storageCount, storageSize, cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount, cls._setCount, cls._purgeCount, cls._saveCount, cls._elapsedHis
+        return (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
+                cls._getCount, cls._cacheMissCount, cls._loadCount, cls._recalculateCount,
+                cls._setCount, cls._purgeCount, cls._saveCount,
+                cls._elapsedHis)
