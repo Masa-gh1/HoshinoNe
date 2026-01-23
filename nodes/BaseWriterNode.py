@@ -46,16 +46,42 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         self.outputFilePath = outputPath
     
     def store(self, nodeData):
-        """相対パスで保存"""
-        flowDir = os.path.dirname(self.view.editor.currentFlowPath)
-        relativePath = os.path.relpath(self.outputFilePath, flowDir)
-        nodeData["outputFilePath"] = relativePath
-    
+        """ノード固有の設定 nodeData に保存"""
+        if not self.outputFilePath:
+            filepath = None
+        else:
+            relapath = self.getRelativePath(self.outputFilePath)
+            if relapath:
+                filepath = relapath
+            else:
+                filepath = self.outputFilePath
+        nodeData["outputFilePath"] = filepath
+        
     def restore(self, nodeData):
-        """絶対パスに復元"""
+        """ノード固有の設定 nodeData から復元"""
         if "outputFilePath" in nodeData:
+            filepath = nodeData["outputFilePath"]
+            abspath = self.getAbsolutePath(filepath)
+            if abspath:
+                filepath = abspath
+
+            self.filePaths = filepath
+    
+    def getRelativePath(self, filePath):
+        """相対パスを取得"""
+        if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
-            self.outputFilePath = os.path.abspath(os.path.join(flowDir, nodeData["outputFilePath"]))
+            return os.path.relpath(filePath, flowDir)
+        else:
+            return None
+    
+    def getAbsolutePath(self, filePath):
+        """絶対パスを取得"""
+        if self.view.editor.currentFlowPath:
+            flowDir = os.path.dirname(self.view.editor.currentFlowPath)
+            return os.path.abspath(os.path.join(flowDir, filePath))
+        else:
+            return None
     
     def getConfigHash(self):
         config = f"{self.minorType}_{self.outputFilePath}"
