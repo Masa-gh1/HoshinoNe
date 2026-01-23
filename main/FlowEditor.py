@@ -480,47 +480,31 @@ class FlowEditor:
             node.view.onNodeConfigChanged(node)
     
     def openFilesSelector(self, *args, **kwargs):
-        newKwargs = kwargs.copy()
-        if kwargs.get("initialdir",None) is None:
-            newKwargs["initialdir"] = self.lastDirectory
-
-        filePaths = filedialog.askopenfilenames( *args, **newKwargs)
-        if not filePaths:
-            return []
-
-        if kwargs.get("initialdir",None) is None:
-            self.lastDirectory = os.path.dirname(filePaths[0])
-
-        return filePaths
+        return self._openFileSelector(filedialog.askopenfilenames, *args, **kwargs)
     
     def openFileSelector(self, *args, **kwargs):
-        newKwargs = kwargs.copy()
-        if kwargs.get("initialdir",None) is None:
-            newKwargs["initialdir"] = self.lastDirectory
-        
-        filePath = filedialog.askopenfilename( *args, **newKwargs)
-        if not filePath:
-            return None
-        
-        if kwargs.get("initialdir",None) is None:
-            self.lastDirectory = os.path.dirname(filePath)
-        
-        return filePath
+        return self._openFileSelector(filedialog.askopenfilename, *args, **kwargs)
     
     def openOutputFileSelector(self, *args, **kwargs):
+        return self._openFileSelector(filedialog.asksaveasfilename, *args, **kwargs)
+    
+    def _openFileSelector(self, func, *args, **kwargs):
         newKwargs = kwargs.copy()
         if kwargs.get("initialdir",None) is None:
             newKwargs["initialdir"] = self.lastDirectory
-        
-        filePath = filedialog.asksaveasfilename(*args, **newKwargs)
-        if not filePath:
-            return None
-        
-        if kwargs.get("initialdir",None) is None:
-            self.lastDirectory = os.path.dirname(filePath)
-        
-        return filePath
 
+        filePath = func( *args, **newKwargs)
+        if not filePath:
+            return filePath
+        elif isinstance(filePath, (list, tuple)):
+            if kwargs.get("initialdir",None) is None:
+                self.lastDirectory = os.path.dirname(filePath[0])
+            return filePath
+        else:
+            if kwargs.get("initialdir",None) is None:
+                self.lastDirectory = os.path.dirname(filePath)
+            return filePath
+    
     def goHome(self):
         """キャンバスをホームポジションに戻す"""
         if self.nodes or self.trays:
