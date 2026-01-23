@@ -907,7 +907,7 @@ class FlowEditor:
         else:
             cacheNodeCount = f"{self.getNodeCount()}個"
 
-            blockInfo = f"Block: {getpsStr}r/s, {setpsStr}w/s"
+            blockInfo = f"Block: {getpsStr}, {setpsStr}"
             objInfo   = f"Object: {ObjectCount}"
             CacheInfo = f"Cache[MissCount: {cacheMissCount} {cacheMissCount/getCount:.3f} RecalculateCount: {recalculateCount} {recalculateCount/getCount:.3f} LoadCount: {loadCount} {loadCount/getCount:.3f} PurgeCount: {purgeCount} {purgeCount/setCount:.3f} SaveCount:{saveCount} {saveCount/setCount:.3f}]" if 0!=getCount and 0!=setCount else ""
             dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageCount}({storageSizeStr})"
