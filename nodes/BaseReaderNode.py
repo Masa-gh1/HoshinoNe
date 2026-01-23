@@ -79,7 +79,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
     
     def getRelativePath(self, filePath):
         """相対パスを取得"""
-        if hasattr(self.view.editor, 'currentFlowPath') and self.view.editor.currentFlowPath:
+        if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.relpath(filePath, flowDir)
         else:
@@ -87,7 +87,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
     
     def getAbsolutePath(self, filePath):
         """絶対パスを取得"""
-        if hasattr(self.view.editor, 'currentFlowPath') and self.view.editor.currentFlowPath:
+        if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.abspath(os.path.join(flowDir, filePath))
         else:

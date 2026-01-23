@@ -517,7 +517,7 @@ class FlowEditor:
         newKwargs = kwargs.copy()
         if kwargs.get("initialdir",None) is None:
             newKwargs["initialdir"] = self.lastDirectory
-
+        
         filePath = func( *args, **newKwargs)
         if not filePath:
             return filePath
