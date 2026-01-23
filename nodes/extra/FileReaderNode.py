@@ -9,7 +9,7 @@ All rights reserved.
 
 import csv
 import os
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 import tkinter
 
 from config import BLOCK_SIZE

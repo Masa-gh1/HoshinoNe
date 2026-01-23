@@ -13,7 +13,7 @@ import hashlib
 import os
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk, filedialog
+from tkinter import messagebox, ttk
 
 from base.FlowNode_CONST import *
 from base import FlowNode
@@ -287,7 +287,11 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             self.fileTreeview.insert('', 'end', values=values)
     
     def addFiles(self):
-        filePaths = filedialog.askopenfilenames(parent=self, title=f"{self.node.name}ファイルを追加", filetypes=self.node.fileTypes)
+        filePaths = self.node.view.editor.openFilesSelector(
+            parent=self,
+            title=f"{self.node.name} - ファイルを追加",
+            filetypes=self.node.fileTypes
+        )
         
         if filePaths:
             # 重複を除いて追加
