@@ -65,7 +65,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
             if abspath:
                 filepath = abspath
 
-            self.filePaths = filepath
+            self.outputFilePath = filepath
     
     def getRelativePath(self, filePath):
         """相対パスを取得"""
