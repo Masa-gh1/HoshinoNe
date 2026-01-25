@@ -38,7 +38,7 @@ class FlowData:
         self._minValue = None
         self._percentileCache  = {}   # パーセンタイルキャッシュ
         self._histogramCache   = {}   # ヒストグラムキャッシュ
-        self._highResHistCache = None # 高解像度ヒストグラムキャッシュ
+        self._highResHistCache = {}   # 高解像度ヒストグラムキャッシュ
         self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
         
         import importlib.util
@@ -203,7 +203,7 @@ class FlowData:
                 # データ更新時にキャッシュをクリア
                 self._percentileCache.clear()
                 self._histogramCache.clear()
-                self._highResHistCache = None
+                self._highResHistCache.clear()
     
     def getMaxValue(self):
         """最大値を取得"""
@@ -213,13 +213,13 @@ class FlowData:
         """最小値を取得"""
         return self._minValue
     
-    def _getHighResHistograms(self):
-        """高解像度ヒストグラムを取得（中間生成物キャッシュ）"""
+    def _getHighResHistograms(self, bins=1024):
+        """高解像度ヒストグラム(不等間隔)を取得（キャッシュ用の中間生成物）"""
         import numpy as np
         from utils import numpy_helpers as nh
 
-        if self._highResHistCache:
-            return self._highResHistCache
+        if bins in self._highResHistCache:
+            return self._highResHistCache[bins]
         
         planeCount = self.getPlaneCount()
         
@@ -240,69 +240,69 @@ class FlowData:
                 if len(sortedData) <= 0:
                     planeHistograms.append(None)
                 else:
-                    min_val = sortedData[0]
-                    max_val = sortedData[-1]
-                    min2_val = min_val
-                    max2_val = max_val
+                    minVal = sortedData[0]
+                    maxVal = sortedData[-1]
+                    minEdge = minVal
+                    maxEdge = maxVal
                     
-                    while min2_val < max2_val:
+                    while minEdge < maxEdge:
                         # linear bins
-                        linear_edges = np.linspace(min2_val, max2_val, 1024+1)
+                        linear_edges = np.linspace(minEdge, maxEdge, bins+1)
                         
                         # log bins (getHistogram と同じ正規化をする)
-                        log_edges = np.logspace(np.log10(0.1), np.log10(1.0), 1024+1)
-                        scale = 0.9 / (max2_val - min2_val)
-                        offset = -min2_val + 0.1 / scale
+                        log_edges = np.logspace(np.log10(0.1), np.log10(1.0), bins+1)
+                        scale = 0.9 / (maxEdge - minEdge)
+                        offset = -minEdge + 0.1 / scale
                         log_edges = log_edges / scale - offset
                         
-                        min2_val_new = min2_val
-                        max2_val_new = max2_val
+                        newMinEdge = minEdge
+                        newMaxEdge = maxEdge
                         
-                        # log_edges の先頭から連続する空ビンの最後を探す
+                        # log_edges の先頭から連続する空ビン(1以下)の最後を探す
                         log_indices = np.searchsorted(sortedData, log_edges)
                         log_diffs = np.diff(log_indices)
                         non_empty = np.where(log_diffs > 1)[0]
                         if 0 < len(non_empty) and 0 < non_empty[0]:
-                            min2_val_new = log_edges[non_empty[0]]
+                            newMinEdge = log_edges[non_empty[0]]
                         
-                        # linear_edges の末尾から連続する空ビンの最初を探す
+                        # linear_edges の末尾から連続する空ビン(1以下)の最初を探す
                         linear_indices = np.searchsorted(sortedData, linear_edges)
                         linear_diffs = np.diff(linear_indices)
                         non_empty = np.where(linear_diffs > 1)[0]
                         if 0 < len(non_empty) and non_empty[-1] < len(linear_diffs) - 1:
-                            max2_val_new = linear_edges[non_empty[-1] + 1]
+                            newMaxEdge = linear_edges[non_empty[-1] + 1]
                         
-                        if min2_val < min2_val_new or max2_val_new < max2_val:
-                            min2_val = min2_val_new
-                            max2_val = max2_val_new
+                        if minEdge < newMinEdge or newMaxEdge < maxEdge:
+                            minEdge = newMinEdge
+                            maxEdge = newMaxEdge
                         else:
                             break
                     
-                    if min2_val < max2_val:
+                    if minEdge < maxEdge:
                         # マージして重複除去
-                        merged_edges = np.unique(np.concatenate([[min_val,max_val], linear_edges, log_edges]))
+                        merged_edges = np.unique(np.concatenate([[minVal,maxVal], linear_edges, log_edges]))
 
                         # histogram計算はこの一回だけ
-                        hist, _ = np.histogram(validData, bins=merged_edges)
+                        bin_counts, _ = np.histogram(validData, bins=merged_edges)
                     
                         planeHistograms.append({
-                            'min': min_val,
-                            'max': max_val,
+                            'min': minVal,
+                            'max': maxVal,
                             'total_samples': len(validData),
-                            'hist': hist,
-                            'edges': merged_edges
+                            'bin_counts': bin_counts,
+                            'bin_edges': merged_edges
                         })
                     else:
                         planeHistograms.append({
-                            'min': min_val,
-                            'max': max_val,
+                            'min': minVal,
+                            'max': maxVal,
                             'total_samples': len(validData),
-                            'hist': nh.array([len(validData)]),
-                            'edges': nh.array([min_val,max2_val])
+                            'bin_counts': nh.array([len(validData)]),
+                            'bin_edges': nh.array([minVal,maxEdge])
                         })
 
         
-        self._highResHistCache = planeHistograms
+        self._highResHistCache[bins] = planeHistograms
         return planeHistograms
     
     def getModeValue(self):
@@ -319,21 +319,21 @@ class FlowData:
         mode_value = 0.0
         
         for hist_data in planeHistograms:
-            if 0 < hist_data['hist'].size:
-                max_idx = np.argmax(hist_data['hist'])
-                if hist_data['hist'][max_idx] > max_count:
-                    max_count = hist_data['hist'][max_idx]
+            if 0 < hist_data['bin_counts'].size:
+                max_idx = np.argmax(hist_data['bin_counts'])
+                if hist_data['bin_counts'][max_idx] > max_count:
+                    max_count = hist_data['bin_counts'][max_idx]
                     # ビンの中央値を最頻値とする
-                    mode_value = (hist_data['edges'][max_idx] + hist_data['edges'][max_idx + 1]) / 2
+                    mode_value = (hist_data['bin_edges'][max_idx] + hist_data['bin_edges'][max_idx + 1]) / 2
         
         return mode_value
     
-    def getPercentile(self, percentile):
-        """指定したパーセンタイル値を取得（キャッシュ付き）"""
+    def getQuantile(self, per):
+        """指定したクォンタイル値(分位数)を取得（キャッシュ付き）"""
         import numpy as np
         
-        if percentile in self._percentileCache:
-            return self._percentileCache[percentile]
+        if per in self._percentileCache:
+            return self._percentileCache[per]
         
         # 高解像度ヒストグラムで全プレーンを取得
         planeCount = self.getPlaneCount()
@@ -346,9 +346,9 @@ class FlowData:
             
             for hist_data in planeHistograms:
                 if hist_data is not None:
-                    centers = (hist_data['edges'][:-1] + hist_data['edges'][1:]) / 2
+                    centers = (hist_data['bin_edges'][:-1] + hist_data['bin_edges'][1:]) / 2
                     all_centers.append(centers)
-                    all_counts.append(hist_data['hist'])
+                    all_counts.append(hist_data['bin_counts'])
             
             # 結合
             combined_centers = np.concatenate(all_centers)
@@ -361,14 +361,14 @@ class FlowData:
             
             total_samples = np.sum(sorted_counts)
             if total_samples > 0:
-                target_count = (percentile / 100.0) * total_samples
+                target_count = (per) * total_samples
                 cumsum = np.cumsum(sorted_counts)
                 
                 bin_idx = np.searchsorted(cumsum, target_count)
                 bin_idx = min(bin_idx, len(sorted_centers) - 1)
                 
                 result = sorted_centers[bin_idx]
-                self._percentileCache[percentile] = result
+                self._percentileCache[per] = result
                 return result
         return 0.0
     
@@ -398,7 +398,7 @@ class FlowData:
                     'total_samples': 0,
                 })
             elif(  planeHighResHists[planeIndex]['max'] <= planeHighResHists[planeIndex]['min']
-                or len(planeHighResHists[planeIndex]['edges']) <= 2
+                or len(planeHighResHists[planeIndex]['bin_edges']) <= 2
                 ):
                 min = planeHighResHists[planeIndex]['max'] # 大小が逆かも知れないので入れ替え
                 max = planeHighResHists[planeIndex]['min'] # 大小が逆かも知れないので入れ替え
@@ -411,8 +411,8 @@ class FlowData:
             else:
                 hist_data = planeHighResHists[planeIndex]
                 
-                range_min = hist_data['edges'][1]  # 両端に count 1 の集約があるので捨てる
-                range_max = hist_data['edges'][-2] # 両端に count 1 の集約があるので捨てる
+                range_min = hist_data['bin_edges'][1]  # 両端に count 1 の集約があるので捨てる
+                range_max = hist_data['bin_edges'][-2] # 両端に count 1 の集約があるので捨てる
                 
                 # 目標ビンエッジを作成
                 if log_scale:
@@ -424,8 +424,8 @@ class FlowData:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 
                 # 高解像度ヒストグラムを目標解像度にリサンプリング(近似)
-                source_edges = hist_data['edges'][1:-2] # 両端に count 1 の集約があるので捨てる
-                source_counts = hist_data['hist'][1:-2] # 両端に count 1 の集約があるので捨てる
+                source_edges = hist_data['bin_edges'][1:-2] # 両端に count 1 の集約があるので捨てる
+                source_counts = hist_data['bin_counts'][1:-2] # 両端に count 1 の集約があるので捨てる
                 bin_indices = np.searchsorted(bin_edges[1:], source_edges[:-1])
                 resampled_hist = np.zeros(len(bin_edges) - 1, dtype=int)
                 np.add.at(resampled_hist, bin_indices, source_counts)

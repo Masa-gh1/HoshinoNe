@@ -415,7 +415,7 @@ class ResultWindow(tk.Toplevel):
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
             
-            median = flowData.getPercentile(50)
+            median = flowData.getQuantile(0.5)
 
             block = None
             blockX = 0
@@ -480,8 +480,8 @@ class ResultWindow(tk.Toplevel):
         modeValue = flowData.getModeValue() # 最頻値
 
         # パーセンタイルベースの適応的スケーリング
-        adpLevelMin = flowData.getPercentile(1)
-        adpLevelEnd = flowData.getPercentile(99)
+        adpLevelMin = flowData.getQuantile(0.01)
+        adpLevelEnd = flowData.getQuantile(0.99)
         
         # All levels
         minValue = flowData.getMinValue()

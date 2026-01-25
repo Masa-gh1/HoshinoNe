@@ -179,6 +179,8 @@ class ToneCurveDialog(tk.Toplevel):
         self.dragging = False
         self.dragStarted = False
         self.pressedPoint = None
+
+        self._histogramsCache = {}
         
         # プレビュー用 元の設定を保存
         self.originalSettings = {
@@ -217,16 +219,17 @@ class ToneCurveDialog(tk.Toplevel):
         basicFrame.pack(fill=tk.X, padx=10, pady=5)
         
         # 表示範囲行
+        from utils import string_helper as sh
         displayFrame = tk.Frame(basicFrame)
         displayFrame.pack(fill=tk.X, pady=2)
         tk.Label(displayFrame, text="表示範囲:").pack(side=tk.LEFT, padx=(0,5))
         self.displayMinEntry = tk.Entry(displayFrame, width=10)
-        self.displayMinEntry.insert(0, str(self.node.displayMin))
+        self.displayMinEntry.insert(0, sh.dispS(self.node.displayMin))
         self.displayMinEntry.pack(side=tk.LEFT, padx=(0,2))
         self.displayMinEntry.bind('<Return>', self.onRangeChange)
         tk.Label(displayFrame, text="～").pack(side=tk.LEFT, padx=2)
         self.displayEndEntry = tk.Entry(displayFrame, width=10)
-        self.displayEndEntry.insert(0, str(self.node.displayEnd))
+        self.displayEndEntry.insert(0, sh.dispS(self.node.displayEnd))
         self.displayEndEntry.pack(side=tk.LEFT, padx=(2,5))
         self.displayEndEntry.bind('<Return>', self.onRangeChange)
         tk.Button(displayFrame, text="入力元フィット", command=self.fitDisplayToInput).pack(side=tk.LEFT, padx=5)
@@ -343,56 +346,113 @@ class ToneCurveDialog(tk.Toplevel):
         self.canvas.draw()
     
     def plotHistogram(self, flowData):
+        import numpy as np
         from utils import numpy_helpers as nh
 
         # ヒストグラム軸をクリア
         self.histAxes.clear()
-        
+
         # 軸スケール設定を取得
         yScale = self.yScaleVar.get()
+        if yScale == "log":
+            self.histAxes.set_yscale('log')
+        else:
+            self.histAxes.set_yscale('linear')
+        
+        # UI入力値を取得
+        try:
+            displayMin = float(self.displayMinEntry.get())
+            displayEnd = float(self.displayEndEntry.get())
+        except ValueError:
+            displayMin = self.node.displayMin
+            displayEnd = self.node.displayEnd
+        
+        # プレーン用の色を定義
+        colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
         
         # flowData.getHistogramを使用してヒストグラムデータを取得
-        histogramData = flowData.getHistogram()
+        if id(flowData) in self._histogramsCache:
+            histograms = self._histogramsCache[id(flowData)]
+        else:
+            planes = []
+            for planeIndex in range(flowData.getPlaneCount()):
+                blockArrays = []
+                for block in flowData.iterateBlocks(planeIndex):
+                    blockArrays.append(block.data.flatten())
+                planeData = np.concatenate(blockArrays)
+                validData = planeData[~np.isnan(planeData)]
+                sortedData = np.sort(validData)
+                planes.append(sortedData)
+
+            histograms = []
+            for planeData in planes:
+                if len(planeData) <= 0:
+                    histograms.append(None)
+                else:
+                    # ヒストグラム中間生成物(不等間隔)の計算
+                    binEdges = np.linspace(flowData.getMinValue(), flowData.getMaxValue(), 256 + 1)
+                    binCounts, _ = np.histogram(planeData, bins=binEdges)
+                    # count 100 以上の bin を分割する
+                    while np.any(100 <= binCounts):
+                        mask = 100 <= binCounts
+                        split_indices = np.where(mask)[0]
+
+                        aEdges = binEdges[split_indices]
+                        bEdges = binEdges[split_indices + 1]
+                        mEdges = (aEdges + bEdges) / 2
+
+                        valid_mask = (mEdges > aEdges) & (mEdges < bEdges)
+                        if not np.any(valid_mask):
+                            break
+                        if not np.all(valid_mask):
+                            split_indices = split_indices[valid_mask]
+                            mEdges = mEdges[valid_mask]
+
+                        binEdges = np.insert(binEdges, split_indices + 1, mEdges)
+                        edge_indices = planeData.searchsorted(binEdges)
+                        edge_indices[-1] = len(planeData)
+                        binCounts = np.diff(edge_indices)
+                    
+                    histograms.append({
+                        'bin_counts': binCounts,
+                        'bin_edges' : binEdges,
+                    })
+            
+            histograms = {'planes': histograms}
+            self._histogramsCache[id(flowData)] = histograms
         
-        if histogramData and 'planes' in histogramData:
-            # プレーン用の色を定義
-            colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
-            
-            # Y軸スケールを設定
-            if yScale == "log":
-                self.histAxes.set_yscale('log')
-            else:
-                self.histAxes.set_yscale('linear')
-            
-            # UI入力値を取得
-            try:
-                displayMin = float(self.displayMinEntry.get())
-                displayEnd = float(self.displayEndEntry.get())
-            except ValueError:
-                displayMin = self.node.displayMin
-                displayEnd = self.node.displayEnd
-            
+        if histograms and 'planes' in histograms:
             # 全プレーンのヒストグラムを重ねて表示
-            for planeIndex, planeHist in enumerate(histogramData['planes']):
+            for planeIndex, planeHist in enumerate(histograms['planes']):
                 binCounts = planeHist['bin_counts']
                 binEdges = planeHist['bin_edges']
                 
-                # ビン中心を計算
-                binCenters = (binEdges[:-1] + binEdges[1:]) / 2
-
                 # 入力範囲内のビンのみをフィルタリング
-                mask = (binCenters >= displayMin) & (binCenters <= displayEnd)
-                filteredCenters = binCenters[mask]
-                filteredCounts = nh.array(binCounts)[mask]
-
-                if filteredCounts.any():
+                mask = (displayMin <= binEdges) & (binEdges < displayEnd)
+                binCounts  = binCounts[mask[:-1]]
+                binEdges   = binEdges[mask]
+                if len(binEdges) <= len(binCounts):
+                    binCounts = binCounts[:-1]
+                
+                if 256 + 1 < len(binEdges):
+                    # binの数が多いので目標解像度にリサンプリング(近似)
+                    newEdges = np.linspace(displayMin, displayEnd, 256 + 1)
+                    newIndices = np.searchsorted(newEdges[1:], binEdges[:-1])
+                    filteredCounts = np.zeros(len(newEdges) - 1, dtype=int)
+                    np.add.at(filteredCounts, newIndices, binCounts)
+                    binCounts = filteredCounts
+                    binEdges = newEdges
+                
+                binCenters = (binEdges[:-1] + binEdges[1:]) / 2
+                
+                if binCounts.any():
                     # Y軸がログスケールの場合は1を加算
                     if yScale == "log":
-                        filteredCounts = nh.array(filteredCounts) + 1
+                        binCounts = nh.array(binCounts) + 1
                     
                     # プレーン別の色で表示
                     color = colors[planeIndex % len(colors)]
-                    self.histAxes.plot(filteredCenters, filteredCounts, alpha=0.4, color=color, linewidth=1)
+                    self.histAxes.plot(binCenters, binCounts, alpha=0.4, color=color, linewidth=1)
 
             self.histAxes.set_xlim(displayMin, displayEnd)
             
@@ -592,25 +652,26 @@ class ToneCurveDialog(tk.Toplevel):
         
         currentMin = float(self.displayMinEntry.get())
         currentEnd = float(self.displayEndEntry.get())
-        currentRange = currentEnd - currentMin
         
         # ズーム倍率
-        zoomFactor = 0.9 if event.step > 0 else 1.1
-        newRange = currentRange * zoomFactor
+        if 0 < event.step:
+            rato = 1 / 1.1
+        else:
+            rato = 1.1
         
-        # マウス位置を中心にズーム
+        # マウス位置を中心にx軸をズーム(桁落ちを防止)
         mouseX = event.xdata
-        centerRatio = (mouseX - currentMin) / currentRange
-        
-        newMin = mouseX - newRange * centerRatio
-        newEnd = newMin + newRange
+        newMin = mouseX + (currentMin - mouseX) * rato
+        newEnd = mouseX + (currentEnd - mouseX) * rato
+        newRange = newEnd - newMin
         
         # 最小範囲制限
-        if newRange > 1e-10:
+        if 1e-10 < newRange:
+            from utils import string_helper as sh
             self.displayMinEntry.delete(0, tk.END)
-            self.displayMinEntry.insert(0, f"{newMin:.3f}")
+            self.displayMinEntry.insert(0, sh.dispS(newMin, representative=newRange))
             self.displayEndEntry.delete(0, tk.END)
-            self.displayEndEntry.insert(0, f"{newEnd:.3f}")
+            self.displayEndEntry.insert(0, sh.dispS(newEnd, representative=newRange))
             
             self.updatePlot()
 
@@ -666,7 +727,8 @@ class ToneCurveDialog(tk.Toplevel):
     
     def fitDisplayToInput(self):
         # 入力データから最大最小値を取得してUIに設定
-        from utils.interval_helper import createHalfOpenEnd
+        from utils import interval_helper as ih
+        from utils import string_helper as sh
 
         if self.node.inputNodes and self.node.inputNodes[0].flowDatas:
             
@@ -675,12 +737,12 @@ class ToneCurveDialog(tk.Toplevel):
             maxValue = flowData.getMaxValue()
             
             if minValue is not None and maxValue is not None:
-                endValue = createHalfOpenEnd(minValue, maxValue)
+                endValue = ih.createHalfOpenEnd(minValue, maxValue)
                 
                 self.displayMinEntry.delete(0, tk.END)
-                self.displayMinEntry.insert(0, f"{minValue:.3f}")
+                self.displayMinEntry.insert(0, sh.dispS(minValue))
                 self.displayEndEntry.delete(0, tk.END)
-                self.displayEndEntry.insert(0, f"{endValue:.3f}")
+                self.displayEndEntry.insert(0, sh.dispS(endValue))
                 
                 self.updatePlot()
     
@@ -689,7 +751,7 @@ class ToneCurveDialog(tk.Toplevel):
         if self.node.inputNodes and self.node.inputNodes[0].flowDatas:
             
             flowData = self.node.inputNodes[0].flowDatas[0]
-            histogramData = flowData.getHistogram(log_scale=False)
+            histogramData = flowData.getHistogram()
             
             if histogramData and 'planes' in histogramData:
                 # 全プレーンのヒストグラムを統合してパーセンタイルを計算
@@ -723,10 +785,11 @@ class ToneCurveDialog(tk.Toplevel):
                     zoomMin = p001_value - margin
                     zoomMax = p999_value + margin
                     
+                    from utils import string_helper as sh
                     self.displayMinEntry.delete(0, tk.END)
-                    self.displayMinEntry.insert(0, f"{zoomMin:.3f}")
+                    self.displayMinEntry.insert(0, sh.dispS(zoomMin))
                     self.displayEndEntry.delete(0, tk.END)
-                    self.displayEndEntry.insert(0, f"{zoomMax:.3f}")
+                    self.displayEndEntry.insert(0, sh.dispS(zoomMax))
                     
                     self.updatePlot()
     
@@ -738,10 +801,11 @@ class ToneCurveDialog(tk.Toplevel):
             pointEnd = self.tempControlPoints[-1][0]
 
             # UIに設定
+            from utils import string_helper as sh
             self.displayMinEntry.delete(0, tk.END)
-            self.displayMinEntry.insert(0, str(pointMin))
+            self.displayMinEntry.insert(0, sh.dispS(pointMin))
             self.displayEndEntry.delete(0, tk.END)
-            self.displayEndEntry.insert(0, str(pointEnd))
+            self.displayEndEntry.insert(0, sh.dispS(pointEnd))
 
             self.updatePlot()
 

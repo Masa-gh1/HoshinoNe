@@ -69,8 +69,8 @@ class FlowDataWrapper(FlowData):
     def getModeValue(self):
         return self.orgFlowData.getModeValue()
 
-    def getPercentile(self, percentile):
-        return self.orgFlowData.getPercentile(percentile)
+    def getQuantile(self, percentile):
+        return self.orgFlowData.getQuantile(percentile)
     
     def getHistogram(self, bins=256, log_scale=False):
         return self.orgFlowData.getHistogram(bins, log_scale)
