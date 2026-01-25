@@ -526,11 +526,13 @@ class ToneCurveDialog(tk.Toplevel):
         outputMin = float(self.outputMinEntry.get())
         outputEnd = float(self.outputEndEntry.get())
         
-        for i, (x, y) in enumerate(self.tempControlPoints):
+        sortedPoints = sorted(self.tempControlPoints, key=lambda p: p[0])
+
+        for i, (x, y) in enumerate(sortedPoints):
             # 実際の値で制御点を表示
             yActual = y * (outputEnd - outputMin) + outputMin
             
-            color = 'red' if i in [0, len(self.tempControlPoints)-1] else 'dimgray'
+            color = 'red' if i in [0, len(sortedPoints)-1] else 'dimgray'
             self.axes.plot(x, yActual, 'o', color=color, markersize=8)
     
     def findNearestPoint(self, x, y):
@@ -633,6 +635,7 @@ class ToneCurveDialog(tk.Toplevel):
             # 制御点をプレスしていた場合
             if self.dragStarted:
                 # ドラッグした場合：移動完了
+                self.tempControlPoints.sort(key=lambda p: p[0])
                 self.triggerPreview()
             else:
                 # ドラッグせずに離した場合：削除（始点・終点以外）
@@ -696,7 +699,7 @@ class ToneCurveDialog(tk.Toplevel):
             # プレビュー無効：確定値を適用して実行
             self.restoreConfirmedSettings()
         
-        CoalescingExecutor.submit( self, self.node.preview)
+        self.node.preview()
     
     def restoreTemporarySettings(self):
         # 一時保存値をノードに適用
@@ -723,7 +726,7 @@ class ToneCurveDialog(tk.Toplevel):
         if self.previewVariable.get():
             # プレビュー有効：一時保存値を適用
             self.restoreTemporarySettings()
-            CoalescingExecutor.submit( self, self.node.preview)
+            self.node.preview()
     
     def fitDisplayToInput(self):
         # 入力データから最大最小値を取得してUIに設定
@@ -814,15 +817,15 @@ class ToneCurveDialog(tk.Toplevel):
         displayEnd = float(self.displayEndEntry.get())
         
         if displayMin < displayEnd:
+            import numpy as np
             # 始点・終点を更新
-            self.tempControlPoints[0] = (displayMin, 0.0)
-            self.tempControlPoints[-1] = (displayEnd, 1.0)
+            xMin = self.tempControlPoints[1][0]
+            xMax = self.tempControlPoints[-2][0]
+            xMin -= np.finfo(xMin).eps
+            xMax += np.finfo(xMax).eps
             
-            # 中間の制御点を範囲内に調整
-            for i in range(1, len(self.tempControlPoints) - 1):
-                x, y = self.tempControlPoints[i]
-                x = max(displayMin, min(displayEnd, x))
-                self.tempControlPoints[i] = (x, y)
+            self.tempControlPoints[0]  = (min(xMin, displayMin), 0.0)
+            self.tempControlPoints[-1] = (max(xMax, displayEnd), 1.0)
             
             self.updatePlot()
             self.triggerPreview()
@@ -854,6 +857,6 @@ class ToneCurveDialog(tk.Toplevel):
         # プレビュー表示を解除して閉じる
         if self.previewVariable.get():
             self.restoreConfirmedSettings()
-            CoalescingExecutor.submit( self, self.node.preview)
+            self.node.preview()
         
         self.destroy()

@@ -80,9 +80,9 @@ class FlowNode(AbstractBaseClass):
         """ノードへの入力を考慮した出力カテゴリを取得"""
         catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
         if _OUT_CAT_PAS in self.outputCat:
-            inNodes = [catList.index(x.getOutputCategory()) for x in self.inputNodes]
-            if inNodes:
-                return catList[min(inNodes)]
+            inCats = [catList.index(x.getOutputCategory()) for x in self.inputNodes]
+            if inCats:
+                return catList[min(inCats)]
             else:
                 return _OUT_CAT_NON
         else:
@@ -125,18 +125,7 @@ class FlowNode(AbstractBaseClass):
 
     def preview(self):
         """プレビュー専用処理（ノード個別実行）"""
-        if not self.inputNodes or not self.inputNodes[0].flowDatas:
-            return
-        
-        try:
-            with(ThreadPoolExecutor(max_workers=MAX_WORKERS) as processExecutor):
-                ProcessExecutorInNode .setExecutor(processExecutor) # グローバルにスレッドプールを提供
-                context = {}
-                self.process(context)
-            self.view.editor.root.after(0,self.view.updateResult)
-        except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
+        self.view.editor.executeFlow(self)
     
     def needsReprocessing(self):
         """再処理が必要かどうかを判定"""

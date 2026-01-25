@@ -550,15 +550,15 @@ class FlowEditor:
             self.canvas.xview_moveto(0)
             self.canvas.yview_moveto(0)
     
-    def executeFlow(self):
+    def executeFlow(self, node=None):
         if not self.nodes:
             messagebox.showwarning("警告", "フローが空です")
             return
         
         # フロー実行を別スレッドで実行
-        CoalescingExecutor.submit( self, self._executeFlowAsync)
+        CoalescingExecutor.submit( self, self._executeFlowAsync, node)
     
-    def _executeFlowAsync(self):
+    def _executeFlowAsync(self, node=None):
         """指定されたノードまでを実行する"""
         try:
             self.take += 1
@@ -568,7 +568,9 @@ class FlowEditor:
             import gc
             gc.collect()
             
-            if not self.selectedNode is None:
+            if node:
+                nodes = [node]
+            if self.selectedNode:
                 nodes = [self.selectedNode]
             else:
                 nodes = self.nodes
