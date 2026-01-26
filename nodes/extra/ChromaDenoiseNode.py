@@ -106,41 +106,39 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         """FlowDataからRGB画像を再構築"""
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
+        from utils.order import zOrderGenerator
 
         rgb_image = nh.zeros((height, width, 3))
         
         if 4 <= flowData.getPlaneCount():
-            for y in range(0, height, BLOCK_SIZE):
-                for x in range(0, width, BLOCK_SIZE):
-                    r_block  = flowData.getBlock(0, x, y)
-                    g1_block = flowData.getBlock(1, x, y)
-                    b_block  = flowData.getBlock(2, x, y)
-                    g2_block = flowData.getBlock(3, x, y)
-                    if r_block and g1_block and b_block and g2_block:
-                        blockHeight = min(r_block.getHeight(), height - y)
-                        blockWidth = min(r_block.getWidth(), width - x)
-                        endY = y + blockHeight
-                        endX = x + blockWidth
-                        
-                        # G1とG2の平均をGチャンネルとして使用
-                        g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
-                        
-                        # 指定bit深度に変換
-                        rgb_image[y:endY, x:endX, 0] = r_block.data[:blockHeight, :blockWidth]
-                        rgb_image[y:endY, x:endX, 1] = g_avg
-                        rgb_image[y:endY, x:endX, 2] = b_block.data[:blockHeight, :blockWidth]
+            for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                r_block  = flowData.getBlock(0, x, y)
+                g1_block = flowData.getBlock(1, x, y)
+                b_block  = flowData.getBlock(2, x, y)
+                g2_block = flowData.getBlock(3, x, y)
+                if r_block and g1_block and b_block and g2_block:
+                    blockHeight = min(r_block.getHeight(), height - y)
+                    blockWidth = min(r_block.getWidth(), width - x)
+                    endY = y + blockHeight
+                    endX = x + blockWidth
+                    
+                    # G1とG2の平均をGチャンネルとして使用
+                    g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
+                    
+                    # 指定bit深度に変換
+                    rgb_image[y:endY, x:endX, 0] = r_block.data[:blockHeight, :blockWidth]
+                    rgb_image[y:endY, x:endX, 1] = g_avg
+                    rgb_image[y:endY, x:endX, 2] = b_block.data[:blockHeight, :blockWidth]
         else:
             for c in range(3):
-                for y in range(0, height, BLOCK_SIZE):
-                    for x in range(0, width, BLOCK_SIZE):
-                        block = flowData.getBlock(c, x, y)
-                        if block:
-                            blockHeight = min(block.getHeight(), height - y)
-                            blockWidth = min(block.getWidth(), width - x)
-                            endY = y + blockHeight
-                            endX = x + blockWidth
-                            rgb_image[y:endY, x:endX, c] = block.data[:blockHeight, :blockWidth]
-
+                for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                    block = flowData.getBlock(c, x, y)
+                    if block:
+                        blockHeight = min(block.getHeight(), height - y)
+                        blockWidth = min(block.getWidth(), width - x)
+                        endY = y + blockHeight
+                        endX = x + blockWidth
+                        rgb_image[y:endY, x:endX, c] = block.data[:blockHeight, :blockWidth]
         
         return rgb_image
     

@@ -127,19 +127,19 @@ class FlowData:
         if planeCount == 0:
             return
         
+        # Z階数曲線でブロックを返す
+        from utils.order import zOrderGenerator
         if planeIndex is None:
             for planeIndex in range(planeCount):
-                for y in range(0, height, BLOCK_SIZE):
-                    for x in range(0, width, BLOCK_SIZE):
-                        block = self.getBlock(planeIndex, x, y)
-                        if block:
-                            yield block
-        else:
-            for y in range(0, height, BLOCK_SIZE):
-                for x in range(0, width, BLOCK_SIZE):
+                for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
                     block = self.getBlock(planeIndex, x, y)
                     if block:
                         yield block
+        else:
+            for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                block = self.getBlock(planeIndex, x, y)
+                if block:
+                    yield block
     
     def setBlock(self, dataBlock):
         """ブロックデータを保存"""

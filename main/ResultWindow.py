@@ -625,33 +625,33 @@ class ResultWindow(tk.Toplevel):
                 # グリッド分割を設定
                 displaygrids = self._display_grid_var.get()
                 if "full" == displaygrids:
-                    gridLline=False
-                    gridSize =BLOCK_SIZE
-                    d_width  = width
-                    d_height = height
-                    srcX = list(range(0, d_width , BLOCK_SIZE))
-                    srcY = list(range(0, d_height, BLOCK_SIZE))
+                    gridLline = False
+                    gridSize  = max(width, height)
+                    d_width   = width
+                    d_height  = height
+                    srcX = [0]
+                    srcY = [0]
                 elif "3x3 grid" == displaygrids:
-                    gridLline=True
-                    gridSize =160
-                    d_width  = 3*gridSize
-                    d_height = 3*gridSize
+                    gridLline = True
+                    gridSize  = 160
+                    d_width   = 3*gridSize
+                    d_height  = 3*gridSize
                     srcX = [0, (width -gridSize)//2, (width -gridSize)]
                     srcY = [0, (height-gridSize)//2, (height-gridSize)]
                 elif "5x5 grid" == displaygrids:
-                    gridLline=True
-                    gridSize =96
-                    d_width  = 5*gridSize
-                    d_height = 5*gridSize
+                    gridLline = True
+                    gridSize  = 96
+                    d_width   = 5*gridSize
+                    d_height  = 5*gridSize
                     srcX = [0, (width -gridSize)//4*1, (width -gridSize)//4*2, (width -gridSize)//4*3, (width -gridSize)]
                     srcY = [0, (height-gridSize)//4*1, (height-gridSize)//4*2, (height-gridSize)//4*3, (height-gridSize)]
                 else:
-                    gridLline=False
-                    gridSize =BLOCK_SIZE
-                    d_width  = width
-                    d_height = height
-                    srcX = list(range(0, d_width , BLOCK_SIZE))
-                    srcY = list(range(0, d_height, BLOCK_SIZE))
+                    gridLline = False
+                    gridSize  = max(width, height)
+                    d_width   = width
+                    d_height  = height
+                    srcX = [0]
+                    srcY = [0]
 
                 # ズームを設定
                 displayzooms = self._display_zoom_var.get()
@@ -820,9 +820,9 @@ class ResultWindow(tk.Toplevel):
                 y2  = nh.ceil( sy2, BLOCK_SIZE).astype(int)
 
                 try:
-                    for by1 in range(y1, y2, BLOCK_SIZE): # コピー元を一部でも含むブロック座標
-                        for bx1 in range(x1, x2, BLOCK_SIZE):
-
+                    # Z階数曲線でブロックを収集
+                    from utils.order import zOrderGenerator
+                    for bx1, by1 in zOrderGenerator(x1, y1, x2, y2, BLOCK_SIZE, BLOCK_SIZE): # コピー元を含むブロックの座標
                             if 'RGB' == smode:
                                 r_block = flowData.getBlock(0, bx1, by1)
                                 g_block = flowData.getBlock(1, bx1, by1)
