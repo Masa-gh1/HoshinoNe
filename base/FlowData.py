@@ -130,8 +130,8 @@ class FlowData:
         # Z階数曲線でブロックを返す
         from utils.order import zOrderGenerator
         if planeIndex is None:
-            for planeIndex in range(planeCount):
-                for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+            for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                for planeIndex in range(planeCount):
                     block = self.getBlock(planeIndex, x, y)
                     if block:
                         yield block

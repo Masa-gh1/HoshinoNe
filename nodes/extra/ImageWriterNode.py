@@ -91,7 +91,7 @@ class ImageWriterNode(BaseWriterNode):
                     r_data = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                     g_data = np.nan_to_num((g_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                     b_data = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                
+                    
                     if None != max_out:
                         r_data = np.clip(np.round(r_data), 0, max_out)
                         g_data = np.clip(np.round(g_data), 0, max_out)
@@ -112,9 +112,9 @@ class ImageWriterNode(BaseWriterNode):
             
             from utils.order import zOrderGenerator
             for x,y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
-                r_block = flowData.getBlock(0, x, y)   # R
+                r_block  = flowData.getBlock(0, x, y)   # R
                 g1_block = flowData.getBlock(1, x, y)  # G1
-                b_block = flowData.getBlock(2, x, y)   # B
+                b_block  = flowData.getBlock(2, x, y)   # B
                 g2_block = flowData.getBlock(3, x, y)  # G2
                 
                 if r_block and g1_block and b_block and g2_block:
