@@ -76,33 +76,32 @@ class ImageWriterNode(BaseWriterNode):
             imgMode = 'RGB'
             imgArray = np.zeros((height, width, 3), dtype=dtype)
             
-            for y in range(0, height, BLOCK_SIZE):
-                for x in range(0, width, BLOCK_SIZE):
+            from utils.order import zOrderGenerator
+            for x,y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                r_block = flowData.getBlock(0, x, y)
+                g_block = flowData.getBlock(1, x, y)
+                b_block = flowData.getBlock(2, x, y)
+                
+                if r_block and g_block and b_block:
+                    blockHeight = min(r_block.getHeight(), height - y)
+                    blockWidth = min(r_block.getWidth(), width - x)
+                    endY = y + blockHeight
+                    endX = x + blockWidth
                     
-                    r_block = flowData.getBlock(0, x, y)
-                    g_block = flowData.getBlock(1, x, y)
-                    b_block = flowData.getBlock(2, x, y)
+                    r_data = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                    g_data = np.nan_to_num((g_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                    b_data = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                
+                    if None != max_out:
+                        r_data = np.clip(np.round(r_data), 0, max_out)
+                        g_data = np.clip(np.round(g_data), 0, max_out)
+                        b_data = np.clip(np.round(b_data), 0, max_out)
                     
-                    if r_block and g_block and b_block:
-                        blockHeight = min(r_block.getHeight(), height - y)
-                        blockWidth = min(r_block.getWidth(), width - x)
-                        endY = y + blockHeight
-                        endX = x + blockWidth
-                        
-                        r_data = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                        g_data = np.nan_to_num((g_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                        b_data = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                    
-                        if None != max_out:
-                            r_data = np.clip(np.round(r_data), 0, max_out)
-                            g_data = np.clip(np.round(g_data), 0, max_out)
-                            b_data = np.clip(np.round(b_data), 0, max_out)
-                        
-                        imgArray[y:endY, x:endX, 0] = r_data.astype(dtype)
-                        imgArray[y:endY, x:endX, 1] = g_data.astype(dtype)
-                        imgArray[y:endY, x:endX, 2] = b_data.astype(dtype)
-                    
-                    self.reportBlockProgress(context)
+                    imgArray[y:endY, x:endX, 0] = r_data.astype(dtype)
+                    imgArray[y:endY, x:endX, 1] = g_data.astype(dtype)
+                    imgArray[y:endY, x:endX, 2] = b_data.astype(dtype)
+                
+                self.reportBlockProgress(context)
             
         elif(  type == 'image'  and mode == 'RGBG' and 4 <= planeCount
             or type == 'table' and mode == '2D'   and 4 <= planeCount
@@ -111,38 +110,37 @@ class ImageWriterNode(BaseWriterNode):
             imgMode = 'RGB'
             imgArray = np.zeros((height, width, 3), dtype=dtype)
             
-            for y in range(0, height, BLOCK_SIZE):
-                for x in range(0, width, BLOCK_SIZE):
+            from utils.order import zOrderGenerator
+            for x,y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                r_block = flowData.getBlock(0, x, y)   # R
+                g1_block = flowData.getBlock(1, x, y)  # G1
+                b_block = flowData.getBlock(2, x, y)   # B
+                g2_block = flowData.getBlock(3, x, y)  # G2
+                
+                if r_block and g1_block and b_block and g2_block:
+                    blockHeight = min(r_block.getHeight(), height - y)
+                    blockWidth = min(r_block.getWidth(), width - x)
+                    endY = y + blockHeight
+                    endX = x + blockWidth
                     
-                    r_block = flowData.getBlock(0, x, y)   # R
-                    g1_block = flowData.getBlock(1, x, y)  # G1
-                    b_block = flowData.getBlock(2, x, y)   # B
-                    g2_block = flowData.getBlock(3, x, y)  # G2
+                    # G1とG2の平均をGチャンネルとして使用
+                    g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
                     
-                    if r_block and g1_block and b_block and g2_block:
-                        blockHeight = min(r_block.getHeight(), height - y)
-                        blockWidth = min(r_block.getWidth(), width - x)
-                        endY = y + blockHeight
-                        endX = x + blockWidth
-                        
-                        # G1とG2の平均をGチャンネルとして使用
-                        g_avg = (g1_block.data[:blockHeight, :blockWidth] + g2_block.data[:blockHeight, :blockWidth]) / 2
-                        
-                        # 指定bit深度に変換
-                        r_data = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                        g_data = np.nan_to_num((g_avg                                   - offset) * scale, nan=0.0)
-                        b_data = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                        
-                        if None != max_out:
-                            r_data = np.clip(np.round(r_data), 0, max_out)
-                            g_data = np.clip(np.round(g_data), 0, max_out)
-                            b_data = np.clip(np.round(b_data), 0, max_out)
-                        
-                        imgArray[y:endY, x:endX, 0] = r_data.astype(dtype)
-                        imgArray[y:endY, x:endX, 1] = g_data.astype(dtype)
-                        imgArray[y:endY, x:endX, 2] = b_data.astype(dtype)
+                    # 指定bit深度に変換
+                    r_data = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                    g_data = np.nan_to_num((g_avg                                   - offset) * scale, nan=0.0)
+                    b_data = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
                     
-                    self.reportBlockProgress(context)
+                    if None != max_out:
+                        r_data = np.clip(np.round(r_data), 0, max_out)
+                        g_data = np.clip(np.round(g_data), 0, max_out)
+                        b_data = np.clip(np.round(b_data), 0, max_out)
+                    
+                    imgArray[y:endY, x:endX, 0] = r_data.astype(dtype)
+                    imgArray[y:endY, x:endX, 1] = g_data.astype(dtype)
+                    imgArray[y:endY, x:endX, 2] = b_data.astype(dtype)
+                
+                self.reportBlockProgress(context)
             
         elif(  type == 'image'  and mode == 'L'  and 1 <= planeCount
             or type == 'table' and mode == '2D' and 1 <= planeCount
@@ -151,24 +149,24 @@ class ImageWriterNode(BaseWriterNode):
             imgMode = 'L'
             imgArray = np.zeros((height, width), dtype=dtype)
             
-            for y in range(0, height, BLOCK_SIZE):
-                for x in range(0, width, BLOCK_SIZE):
-                    block = flowData.getBlock(0, x, y)
+            from utils.order import zOrderGenerator
+            for x,y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
+                block = flowData.getBlock(0, x, y)
+                
+                if block:
+                    blockHeight = min(block.getHeight(), height - y)
+                    blockWidth = min(block.getWidth(), width - x)
+                    endY = y + blockHeight
+                    endX = x + blockWidth
                     
-                    if block:
-                        blockHeight = min(block.getHeight(), height - y)
-                        blockWidth = min(block.getWidth(), width - x)
-                        endY = y + blockHeight
-                        endX = x + blockWidth
-                        
-                        data = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                    data = np.nan_to_num((block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
 
-                        if None != max_out:
-                            data = np.clip(np.round(data), 0, max_out)
-                        
-                        imgArray[y:endY, x:endX] = data.astype(dtype)
+                    if None != max_out:
+                        data = np.clip(np.round(data), 0, max_out)
                     
-                    self.reportBlockProgress(context)
+                    imgArray[y:endY, x:endX] = data.astype(dtype)
+                
+                self.reportBlockProgress(context)
             
         else:
             raise Exception(f"サポートされていないタイプ: {type} {mode}")
