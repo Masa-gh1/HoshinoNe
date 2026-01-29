@@ -61,18 +61,16 @@ class TransformNode(LazyNNOperationNode):
             return inputData  # パラメータ未設定時はそのまま
         
         image_id = self._generateImageId(inputData)
-        transform_params = self._getTransformParams(image_id, self._tableData)
+        transformParams = self._getTransformParams(image_id, self._tableData)
         
-        if not transform_params:
+        if not transformParams:
             result = inputData
         else:
             expand_left, expand_top, new_width, new_height = self._extendParams
-            dx = transform_params['dx'] + expand_left
-            dy = transform_params['dy'] + expand_top
-            rotation = transform_params['rotation']
-            result = TransformLazyFlowData(inputData, dx, dy, rotation, new_width, new_height)
-            result.setDimensions(new_width, new_height)
-        
+            dx, dy, rotation, scale = transformParams
+            dx += expand_left
+            dy += expand_top
+            result = TransformLazyFlowData(inputData, dx, dy, rotation, scale, new_width, new_height)
         return result
         
     def _loadTableData(self, auxiliaryDatas):
@@ -122,13 +120,11 @@ class TransformNode(LazyNNOperationNode):
         # table データから各画像の変換パラメータを取得
         for inputData in inputDatas:
             image_id = self._generateImageId(inputData)
-            transform_params = self._getTransformParams(image_id, tableData)
+            transformParams = self._getTransformParams(image_id, tableData)
             
-            if transform_params:
-                dx = transform_params['dx']
-                dy = transform_params['dy']
-                rotation = transform_params['rotation']
-                corners = self._calculateTransformedCorners(width, height, dx, dy, rotation)
+            if transformParams:
+                dx, dy, rotation, scale = transformParams
+                corners  = self._calculateTransformedCorners(width, height, dx, dy, rotation, scale)
                 all_corners.extend(corners)
         
         if not all_corners:
@@ -140,13 +136,13 @@ class TransformNode(LazyNNOperationNode):
         max_y = max(corner[1] for corner in all_corners)
         
         expand_left = int(max(0, -min_x))
-        expand_top = int(max(0, -min_y))
-        new_width = int(np.ceil(max_x - min_x))
-        new_height = int(np.ceil(max_y - min_y))
+        expand_top  = int(max(0, -min_y))
+        new_width   = int(np.ceil(max_x - min_x))
+        new_height  = int(np.ceil(max_y - min_y))
         
         return (expand_left, expand_top, new_width, new_height)
     
-    def _calculateTransformedCorners(self, width, height, dx, dy, rotation):
+    def _calculateTransformedCorners(self, width, height, dx, dy, rotation, scale):
         """画像の4隅の変換後座標を計算（画像中心回転）"""
         import cv2
         from utils import numpy_helpers as nh
@@ -154,10 +150,7 @@ class TransformNode(LazyNNOperationNode):
         corners = nh.array([[0, 0], [width, 0], [width, height], [0, height]])
         
         if rotation != 0:
-            center = (width / 2, height / 2)
-            M = cv2.getRotationMatrix2D(center, -rotation, 1.0)
-            M[0, 2] += dx
-            M[1, 2] += dy
+            M = TransformLazyFlowData.createAffine( width, height, 0, 0, dx, dy, rotation, scale)
             transformed = cv2.transform(corners.reshape(-1, 1, 2), M).reshape(-1, 2)
         else:
             transformed = corners + nh.array([dx, dy])
@@ -177,27 +170,34 @@ class TransformNode(LazyNNOperationNode):
         data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
         return f"hash_{data_hash}"
     
-    def _getTransformParams(self, image_id, tableData):
+    def _getTransformParams(self, image_id, tableData)  :
         """画像識別子から変換パラメータを取得"""
         lines = tableData['lines']
         columns = tableData['columns']
         data = tableData['data']
         
-        row_index = lines.index(image_id)
-        row_data = data[row_index]
+        if 1 == len(lines):
+            row_data  = data[0]
+        elif image_id in lines:
+            row_data  = data[lines.index(image_id)]
+        elif "" in lines:
+            row_data  = data[lines.index("")]
+        else:
+            return None
         
-        dx_idx = columns.index('dx') if 'dx' in columns else 0
-        dy_idx = columns.index('dy') if 'dy' in columns else 1
-        rotation_idx = columns.index('rotation') if 'rotation' in columns else 2
+        dx       = row_data[columns.index('dx'      )] if 'dx'       in columns else 0
+        dy       = row_data[columns.index('dy'      )] if 'dy'       in columns else 0
+        rotation = row_data[columns.index('rotation')] if 'rotation' in columns else 0
+        scale    = row_data[columns.index('scale'   )] if 'scale'    in columns else 1
         
-        return {
-            'dx': float(row_data[dx_idx]),
-            'dy': float(row_data[dy_idx]),
-            'rotation': float(row_data[rotation_idx])
-        }
+        return( float(dx), float(dy), float(rotation), float(scale))
 
 class TransformLazyFlowData(LazyFlowData):
-    def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, new_width, new_height):
+    def __init__(self, flowData, dx, dy, rotation, scale, new_width, new_height):
+        super().__init__(flowData, dx, dy, rotation, scale, new_width, new_height)
+        self.setDimensions(new_width, new_height)
+    
+    def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, scale, new_width, new_height):
         """変形 + 拡張を一度に実行"""
         import numpy as np
         import cv2
@@ -212,13 +212,7 @@ class TransformLazyFlowData(LazyFlowData):
         corners = nh.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]])
         
         # 順変換行列（target -> ref）を作成
-        center = (orig_width / 2, orig_height / 2)
-        # cv2.getRotationMatrix2Dは正の角度で時計回り(CW)の回転行列を返すため、
-        # 反時計回り(CCW)の回転角である rotation を負にして渡すことでCCW回転を適用する
-        M = cv2.getRotationMatrix2D(center, -rotation, 1.0)
-        M[0, 2] += dx
-        M[1, 2] += dy
-        # 逆変換行列（ref -> target）を計算
+        M = TransformLazyFlowData.createAffine( orig_width, orig_height, 0, 0, dx, dy, rotation, scale)
         M_inv = cv2.invertAffineTransform(M)
         source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
 
@@ -269,18 +263,12 @@ class TransformLazyFlowData(LazyFlowData):
                             # 必要なブロックに NaN が含まれていた
                             isAnyNaN = True
 
-            # 元画像の中心を部分画像座標系に変換
-            orig_center_x = orig_width  / 2 - min_block_x
-            orig_center_y = orig_height / 2 - min_block_y
-            M = cv2.getRotationMatrix2D((orig_center_x, orig_center_y), -rotation, 1.0)
-            M[0, 2] += dx
-            M[1, 2] += dy
-
             # 変換後に必要なサイズを計算
-            transform_output_width = min(region_width, new_width - (x - min_block_x))
+            transform_output_width  = min(region_width,  new_width  - (x - min_block_x))
             transform_output_height = min(region_height, new_height - (y - min_block_y))
             
             # 部分画像を変形
+            M = TransformLazyFlowData.createAffine( orig_width, orig_height, min_block_x, min_block_y, dx, dy, rotation, scale)
             if not isAnyNaN:
                 transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
                                                     flags=cv2.INTER_LINEAR,
@@ -325,3 +313,19 @@ class TransformLazyFlowData(LazyFlowData):
                 result = padded_block
             
             return DataBlock(result, planeIndex, x, y)
+    
+    @staticmethod
+    def createAffine(worldW, worldH, objectX, objectY, dx, dy, rotation, scale):
+        """Affine変換行列を作成"""
+        import cv2
+        from utils import numpy_helpers as nh
+
+        # 中央を原点としオブジェクトの回転=>拡大=>平行移動する
+        # cv2.getRotationMatrix2Dは正の角度で時計回り(CW)の回転行列を返すため、
+        # 反時計回り(CCW)の回転角である rotation を負にして渡すことでCCW回転を適用する
+        centerX = worldW / 2 - objectX
+        centerY = worldH / 2 - objectY
+        M = cv2.getRotationMatrix2D((centerX, centerY), -rotation, scale)
+        M[0, 2] += dx
+        M[1, 2] += dy
+        return M
