@@ -218,9 +218,9 @@ class TransformLazyFlowData(LazyFlowData):
 
         # 必要な入力範囲を計算
         min_x = int(np.floor(np.min(source_corners[:, 0])))
-        max_x = int(np.ceil(np.max(source_corners[:, 0])))
+        max_x = int(np.ceil( np.max(source_corners[:, 0])))
         min_y = int(np.floor(np.min(source_corners[:, 1])))
-        max_y = int(np.ceil(np.max(source_corners[:, 1])))
+        max_y = int(np.ceil( np.max(source_corners[:, 1])))
         
         # ブロック境界に拡張
         min_block_x = (min_x // BLOCK_SIZE) * BLOCK_SIZE
