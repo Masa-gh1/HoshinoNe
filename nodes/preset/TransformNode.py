@@ -225,27 +225,34 @@ class TransformLazyFlowData(LazyFlowData):
         src_corners = cv2.transform(dst_corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
 
         # 必要な入力範囲を計算
-        src_min_x = int(np.floor(np.min(src_corners[:, 0])))
-        src_max_x = int(np.ceil( np.max(src_corners[:, 0])))
-        src_min_y = int(np.floor(np.min(src_corners[:, 1])))
-        src_max_y = int(np.ceil( np.max(src_corners[:, 1])))
+        src_min_x = np.min(src_corners[:, 0])
+        src_max_x = np.max(src_corners[:, 0])
+        src_min_y = np.min(src_corners[:, 1])
+        src_max_y = np.max(src_corners[:, 1])
+        
+        # サブピクセルの場合、隣のピクセルを含める
+        src_min_x = int(np.floor(src_min_x - np.ceil(src_min_x % 1)))
+        src_max_x = int(np.ceil( src_max_x + np.ceil(src_max_x % 1)))
+        src_min_y = int(np.floor(src_min_y - np.ceil(src_min_y % 1)))
+        src_max_y = int(np.ceil( src_max_y + np.ceil(src_max_y % 1)))
         
         # ブロック境界に拡張
-        src_min_blockX = (src_min_x // BLOCK_SIZE) * BLOCK_SIZE
-        src_max_blockX = (src_max_x // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
-        src_min_blockY = (src_min_y // BLOCK_SIZE) * BLOCK_SIZE
-        src_max_blockY = (src_max_y // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
+        src_min_blockX = ((src_min_x                 ) // BLOCK_SIZE) * BLOCK_SIZE
+        src_max_blockX = ((src_max_x + BLOCK_SIZE - 1) // BLOCK_SIZE) * BLOCK_SIZE
+        src_min_blockY = ((src_min_y                 ) // BLOCK_SIZE) * BLOCK_SIZE
+        src_max_blockY = ((src_max_y + BLOCK_SIZE - 1) // BLOCK_SIZE) * BLOCK_SIZE
         
+        # オリジナルのサイズに切り詰め
         src_min_blockX = max(src_min_blockX, 0)
         src_max_blockX = min(src_max_blockX, orig_width)
         src_min_blockY = max(src_min_blockY, 0)
         src_max_blockY = min(src_max_blockY, orig_height)
 
         if src_max_blockX <= src_min_blockX or src_max_blockY <= src_min_blockY:
-            # 移動元が画像外なので NaN を返す
+            # 変形元が画像外なので NaN を返す
             return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
         else:
-            # 移動に必要な範囲の部分画像を構築
+            # 変形に必要な範囲の部分画像を構築
             region_min_x = min(dst_min_x, src_min_blockX)
             region_max_x = max(dst_max_x, src_max_blockX)
             region_min_y = min(dst_min_y, src_min_blockY)

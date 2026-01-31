@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 import numpy as np
-from config import DEFAULT_BLOCK_TYPE
+from utils import numpy_helpers as nh
 
 def createHalfOpenEnd(minValue, maxValue):
     """
@@ -28,4 +28,4 @@ def createHalfOpenEnd(minValue, maxValue):
         return float(maxValue) + 1.0
     else:
         # 浮動小数点値の場合は微小値を加算
-        return float(maxValue) + maxValue * np.finfo(DEFAULT_BLOCK_TYPE).eps
+        return float(maxValue) + maxValue * nh.epsilon

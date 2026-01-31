@@ -817,12 +817,12 @@ class ToneCurveDialog(tk.Toplevel):
         displayEnd = float(self.displayEndEntry.get())
         
         if displayMin < displayEnd:
-            import numpy as np
+            from utils import numpy_helpers as nh
             # 始点・終点を更新
             xMin = self.tempControlPoints[1][0]
             xMax = self.tempControlPoints[-2][0]
-            xMin -= np.finfo(xMin).eps
-            xMax += np.finfo(xMax).eps
+            xMin -= nh.epsilon
+            xMax += nh.epsilon
             
             self.tempControlPoints[0]  = (min(xMin, displayMin), 0.0)
             self.tempControlPoints[-1] = (max(xMax, displayEnd), 1.0)

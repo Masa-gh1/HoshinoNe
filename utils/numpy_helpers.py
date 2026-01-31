@@ -22,6 +22,7 @@ euler_gamma = BDTYPE(np.euler_gamma)
 pi          = BDTYPE(np.pi)
 inf         = BDTYPE(np.inf)
 nan         = BDTYPE(np.nan)
+epsilon     = np.finfo(BDTYPE).eps
 
 def array(*args, **kwargs):
     """np.arrayのデフォルトdtype版"""
