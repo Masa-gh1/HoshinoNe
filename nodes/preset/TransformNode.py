@@ -135,8 +135,8 @@ class TransformNode(LazyNNOperationNode):
         max_x = max(corner[0] for corner in all_corners)
         max_y = max(corner[1] for corner in all_corners)
         
-        expand_left = int(max(0, -min_x))
-        expand_top  = int(max(0, -min_y))
+        expand_left = int(-min_x)
+        expand_top  = int(-min_y)
         new_width   = int(np.ceil(max_x - min_x))
         new_height  = int(np.ceil(max_y - min_y))
         
@@ -149,7 +149,7 @@ class TransformNode(LazyNNOperationNode):
 
         corners = nh.array([[0, 0], [width, 0], [width, height], [0, height]])
         
-        if rotation != 0:
+        if rotation != 0 or scale != 1.0:
             M = TransformLazyFlowData.createAffine( width, height, 0, 0, dx, dy, rotation, scale)
             transformed = cv2.transform(corners.reshape(-1, 1, 2), M).reshape(-1, 2)
         else:
@@ -201,51 +201,63 @@ class TransformLazyFlowData(LazyFlowData):
         """変形 + 拡張を一度に実行"""
         import numpy as np
         import cv2
-
+        
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
         from base import DataBlock
-
+        
         orig_width, orig_height = flowData.getDimensions()
         
         # 出力ブロックの4隅を逆変換して必要な入力範囲を計算
-        corners = nh.array([[x, y], [x+BLOCK_SIZE, y], [x+BLOCK_SIZE, y+BLOCK_SIZE], [x, y+BLOCK_SIZE]])
+        dst_min_x = x
+        dst_max_x = x + BLOCK_SIZE
+        dst_min_y = y
+        dst_max_y = y + BLOCK_SIZE
+        dst_corners = nh.array([[dst_min_x, dst_min_y],
+                                [dst_max_x, dst_min_y],
+                                [dst_max_x, dst_max_y],
+                                [dst_min_x, dst_max_y]]
+                              )
         
         # 順変換行列（target -> ref）を作成
         M = TransformLazyFlowData.createAffine( orig_width, orig_height, 0, 0, dx, dy, rotation, scale)
         M_inv = cv2.invertAffineTransform(M)
-        source_corners = cv2.transform(corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
+        src_corners = cv2.transform(dst_corners.reshape(-1, 1, 2), M_inv).reshape(-1, 2)
 
         # 必要な入力範囲を計算
-        min_x = int(np.floor(np.min(source_corners[:, 0])))
-        max_x = int(np.ceil( np.max(source_corners[:, 0])))
-        min_y = int(np.floor(np.min(source_corners[:, 1])))
-        max_y = int(np.ceil( np.max(source_corners[:, 1])))
+        src_min_x = int(np.floor(np.min(src_corners[:, 0])))
+        src_max_x = int(np.ceil( np.max(src_corners[:, 0])))
+        src_min_y = int(np.floor(np.min(src_corners[:, 1])))
+        src_max_y = int(np.ceil( np.max(src_corners[:, 1])))
         
         # ブロック境界に拡張
-        min_block_x = (min_x // BLOCK_SIZE) * BLOCK_SIZE
-        max_block_x = (max_x // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
-        min_block_y = (min_y // BLOCK_SIZE) * BLOCK_SIZE
-        max_block_y = (max_y // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
+        src_min_blockX = (src_min_x // BLOCK_SIZE) * BLOCK_SIZE
+        src_max_blockX = (src_max_x // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
+        src_min_blockY = (src_min_y // BLOCK_SIZE) * BLOCK_SIZE
+        src_max_blockY = (src_max_y // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
         
-        min_block_x = max(min_block_x, 0)
-        max_block_x = min(max_block_x, orig_width)
-        min_block_y = max(min_block_y, 0)
-        max_block_y = min(max_block_y, orig_height)
+        src_min_blockX = max(src_min_blockX, 0)
+        src_max_blockX = min(src_max_blockX, orig_width)
+        src_min_blockY = max(src_min_blockY, 0)
+        src_max_blockY = min(src_max_blockY, orig_height)
 
-        if max_block_x <= min_block_x or max_block_y <= min_block_y:
+        if src_max_blockX <= src_min_blockX or src_max_blockY <= src_min_blockY:
             # 移動元が画像外なので NaN を返す
             return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
         else:
             # 移動に必要な範囲の部分画像を構築
-            region_width  = max(x+BLOCK_SIZE, max_block_x) - min(x, min_block_x)
-            region_height = max(y+BLOCK_SIZE, max_block_y) - min(y, min_block_y)
+            region_min_x = min(dst_min_x, src_min_blockX)
+            region_max_x = max(dst_max_x, src_max_blockX)
+            region_min_y = min(dst_min_y, src_min_blockY)
+            region_max_y = max(dst_max_y, src_max_blockY)
+            region_width  = region_max_x - region_min_x
+            region_height = region_max_y - region_min_y
             region_image = nh.nans((region_height, region_width))
             
             # 必要なブロックを取得して部分画像に配置
             isAnyNaN = False # 必要なブロックに NaN が含まれているか
-            for by in range(min_block_y, max_block_y, BLOCK_SIZE):
-                for bx in range(min_block_x, max_block_x, BLOCK_SIZE):
+            for by in range(src_min_blockY, src_max_blockY, BLOCK_SIZE):
+                for bx in range(src_min_blockX, src_max_blockX, BLOCK_SIZE):
                     block = flowData.getBlock(planeIndex, bx, by)
                     if block and block.data is not None:
                         if len(block.data.shape) == 3:
@@ -254,8 +266,8 @@ class TransformLazyFlowData(LazyFlowData):
                             block_data = block.data
                         
                         # 部分画像内の位置に配置
-                        rel_x = bx - min_block_x
-                        rel_y = by - min_block_y
+                        rel_x = bx - region_min_x
+                        rel_y = by - region_min_y
                         h, w = block_data.shape
                         region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
 
@@ -264,13 +276,13 @@ class TransformLazyFlowData(LazyFlowData):
                             isAnyNaN = True
 
             # 変換後に必要なサイズを計算
-            transform_output_width  = min(region_width,  new_width  - (x - min_block_x))
-            transform_output_height = min(region_height, new_height - (y - min_block_y))
+            transformd_width  = region_width
+            transformd_height = region_height
             
             # 部分画像を変形
-            M = TransformLazyFlowData.createAffine( orig_width, orig_height, min_block_x, min_block_y, dx, dy, rotation, scale)
+            M = TransformLazyFlowData.createAffine( orig_width, orig_height, region_min_x, region_min_y, dx, dy, rotation, scale)
             if not isAnyNaN:
-                transformed_region = cv2.warpAffine(region_image, M, (transform_output_width, transform_output_height),
+                transformed_region = cv2.warpAffine(region_image, M, (transformd_width, transformd_height),
                                                     flags=cv2.INTER_LINEAR,
                                                     borderMode=cv2.BORDER_CONSTANT,
                                                     borderValue=np.nan)
@@ -279,29 +291,29 @@ class TransformLazyFlowData(LazyFlowData):
                 validMask = ~np.isnan(region_image)              # 有効データマスクを作成
                 imageData = np.where(validMask, region_image, 0) # 無効データを 0 にした画像
                 imageMask = np.where(validMask, nh.nan, 0)       # 有効データを NaN に、無効データを 0 にした画像
-                transformed_data = cv2.warpAffine(imageData, M, (transform_output_width, transform_output_height),  # データを変形
-                                                flags=cv2.INTER_LINEAR,
-                                                borderMode=cv2.BORDER_CONSTANT,
-                                                borderValue=0)
-                transformed_mask = cv2.warpAffine(imageMask, M, (transform_output_width, transform_output_height),  # 重みを変形
-                                                flags=cv2.INTER_LINEAR,
-                                                borderMode=cv2.BORDER_CONSTANT,
-                                                borderValue=0)
+                transformed_data = cv2.warpAffine(imageData, M, (transformd_width, transformd_height),  # データを変形
+                                                  flags=cv2.INTER_LINEAR,
+                                                  borderMode=cv2.BORDER_CONSTANT,
+                                                  borderValue=0)
+                transformed_mask = cv2.warpAffine(imageMask, M, (transformd_width, transformd_height),  # 重みを変形
+                                                  flags=cv2.INTER_LINEAR,
+                                                  borderMode=cv2.BORDER_CONSTANT,
+                                                  borderValue=0)
                 # 有効データを NaN に、無効データを 0 にしたマスク画像を用いているから
                 # NaN = NaN * 0 なので NaN のある場所が有効なデータとなる
                 transformed_region =  np.where( np.isnan(transformed_mask), transformed_data, nh.nan)
             
             # 出力ブロック位置を部分画像座標系に変換
-            output_x_in_region = x - min_block_x
-            output_y_in_region = y - min_block_y
+            output_x_in_region = dst_min_x - region_min_x
+            output_y_in_region = dst_min_y - region_min_y
             
             # 画面端での適切なブロックサイズを計算
-            actual_block_width = min(BLOCK_SIZE, new_width - x)
-            actual_block_height = min(BLOCK_SIZE, new_height - y)
+            actual_block_width  = min(BLOCK_SIZE, new_width  - dst_min_x)
+            actual_block_height = min(BLOCK_SIZE, new_height - dst_min_y)
             
             # 出力ブロック部分を切り出し
+            end_x = min(output_x_in_region + actual_block_width , transformed_region.shape[1])
             end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
-            end_x = min(output_x_in_region + actual_block_width, transformed_region.shape[1])
             
             result = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
             
@@ -318,8 +330,7 @@ class TransformLazyFlowData(LazyFlowData):
     def createAffine(worldW, worldH, objectX, objectY, dx, dy, rotation, scale):
         """Affine変換行列を作成"""
         import cv2
-        from utils import numpy_helpers as nh
-
+        
         # 中央を原点としオブジェクトの回転=>拡大=>平行移動する
         # cv2.getRotationMatrix2Dは正の角度で時計回り(CW)の回転行列を返すため、
         # 反時計回り(CCW)の回転角である rotation を負にして渡すことでCCW回転を適用する

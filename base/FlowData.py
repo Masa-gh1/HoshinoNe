@@ -190,14 +190,14 @@ class FlowData:
         else:
             self._existingBlocks[planeIndex, blockY, blockX] = True
             data = blockData.data
-            if 0 < data.size:
+            if 0 < data.size and not np.isnan(data).all():
                 # 最大値・最小値を更新し、キャッシュをクリア
                 blockMax = np.nanmax(data)
                 blockMin = np.nanmin(data)
                 
-                if not np.isnan(blockMax) and (self._maxValue is None or blockMax > self._maxValue):
+                if self._maxValue is None or self._maxValue < blockMax:
                     self._maxValue = blockMax
-                if not np.isnan(blockMin) and (self._minValue is None or blockMin < self._minValue):
+                if self._minValue is None or blockMin < self._minValue:
                     self._minValue = blockMin
                 
                 # データ更新時にキャッシュをクリア
