@@ -193,9 +193,6 @@ class TransformNode(LazyNNOperationNode):
         return( float(dx), float(dy), float(rotation), float(scale))
 
 class TransformLazyFlowData(LazyFlowData):
-    import threading
-    local = threading.local()
-
     def __init__(self, flowData, dx, dy, rotation, scale, new_width, new_height):
         super().__init__(flowData, dx, dy, rotation, scale, new_width, new_height)
         self.setDimensions(new_width, new_height)
@@ -260,17 +257,20 @@ class TransformLazyFlowData(LazyFlowData):
             return DataBlock(nh.nans((output_height, output_width)), planeIndex, x, y)
         else:
             # スレッドローカルに作業用メモリを確保
-            if not hasattr(self.local, 'src_image'):
-                self.local.src_image = nh.empty((src_blockH, src_blockW))
-            elif(  self.local.src_image.shape[0] <= src_blockH
-                or self.local.src_image.shape[1] <= src_blockW
+            src_image = self.getLocal('src_image')
+            if src_image is None:
+                src_image = nh.empty((src_blockH, src_blockW))
+                self.setLocal('src_image', src_image)
+            elif(  src_image.shape[0] <= src_blockH
+                or src_image.shape[1] <= src_blockW
                 ):
-                w = max(self.local.src_image.shape[1], src_blockW)
-                h = max(self.local.src_image.shape[0], src_blockH)
-                self.local.src_image = nh.empty((h, w))
+                h = max(src_image.shape[0], src_blockH)
+                w = max(src_image.shape[1], src_blockW)
+                src_image = nh.empty((h, w))
+                self.setLocal('src_image', src_image)
             
             # 変形に必要な範囲の部分元画像を構築
-            src_image = self.local.src_image[:src_blockH, :src_blockW]
+            src_image = src_image[:src_blockH, :src_blockW]
             
             # 必要なブロックを取得して部分元画像に配置
             isAnyNaN = False # 必要なブロックに NaN が含まれているか
@@ -308,20 +308,26 @@ class TransformLazyFlowData(LazyFlowData):
                                                   borderValue=np.nan)
             else:
                 # スレッドローカルに作業用メモリを確保
-                if not hasattr(self.local, 'transformed_mask'):
-                    self.local.transformed_mask = nh.empty((BLOCK_SIZE, BLOCK_SIZE))
-                if not hasattr(self.local, 'invalidMask'):
-                    self.local.invalidMask      = np.empty((src_blockH, src_blockW), dtype=bool)
-                elif(  self.local.invalidMask.shape[0] <= src_blockH
-                    or self.local.invalidMask.shape[1] <= src_blockW
-                    ):
-                    w = max(self.local.invalidMask.shape[1], src_blockW)
-                    h = max(self.local.invalidMask.shape[0], src_blockH)
-                    self.local.invalidMask = np.empty((h, w), dtype=bool)
+                transformed_mask = self.getLocal('transformed_mask')
+                bool_mask        = self.getLocal('bool_mask')
 
-                transformed_mask = self.local.transformed_mask
-                invalidMask      = self.local.invalidMask[:src_blockH, :src_blockW]
-                validMask        = self.local.invalidMask[:BLOCK_SIZE, :BLOCK_SIZE]
+                if transformed_mask is None:
+                    transformed_mask = nh.empty((BLOCK_SIZE, BLOCK_SIZE))
+                    self.setLocal('transformed_mask', transformed_mask)
+                
+                if bool_mask is None:
+                    bool_mask = np.empty((src_blockH, src_blockW), dtype=bool)
+                    self.setLocal('bool_mask', bool_mask)
+                elif(  bool_mask.shape[0] <= src_blockH
+                    or bool_mask.shape[1] <= src_blockW
+                    ):
+                    h = max(bool_mask.shape[0], src_blockH)
+                    w = max(bool_mask.shape[1], src_blockW)
+                    bool_mask = np.empty((h, w), dtype=bool)
+                    self.setLocal('bool_mask', bool_mask)
+
+                invalidMask = bool_mask[:src_blockH, :src_blockW]
+                validMask   = bool_mask[:BLOCK_SIZE, :BLOCK_SIZE]
                 
                 # NaN対応の補間変形
                 invalidMask = np.isnan(src_image, out=invalidMask)                        # 無効データマスクを作成
@@ -364,3 +370,20 @@ class TransformLazyFlowData(LazyFlowData):
         M[0, 2] += dx
         M[1, 2] += dy
         return M
+
+    import threading
+    local = threading.local()
+
+    @staticmethod
+    def setLocal(name, value):
+        if not hasattr(TransformLazyFlowData.local, "TransformLazyFlowData"):
+            TransformLazyFlowData.local.TransformLazyFlowData = {}
+        TransformLazyFlowData.local.TransformLazyFlowData[name] = value
+    
+    @staticmethod
+    def getLocal(name):
+        if not hasattr(TransformLazyFlowData.local, "TransformLazyFlowData"):
+            return None
+        else:
+            return TransformLazyFlowData.local.TransformLazyFlowData.get(name)
+    
