@@ -287,39 +287,35 @@ class TransformLazyFlowData(LazyFlowData):
             
             if not isAnyNaN:
                 # 部分画像を変形
-                transformed_region = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE),
+                transformed_data = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE),
                                                     flags=cv2.INTER_LINEAR,
                                                     borderMode=cv2.BORDER_CONSTANT,
                                                     borderValue=np.nan)
             else:
                 # NaN対応の補間変形
-                validMask = ~np.isnan(src_image)              # 有効データマスクを作成
-                imageData = np.where(validMask, src_image, 0) # 無効データを 0 にした画像
-                imageMask = np.where(validMask, nh.nan, 0)    # 有効データを NaN に、無効データを 0 にした画像
-                transformed_data = cv2.warpAffine(imageData, M, (BLOCK_SIZE, BLOCK_SIZE),  # データを変形
+                invalidMask = np.isnan(src_image)                                         # 無効データマスクを作成
+                src_image[invalidMask] = 0                                                # 無効データを 0 に書き換え
+                transformed_data = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE), # データを変形
                                                   flags=cv2.INTER_LINEAR,
                                                   borderMode=cv2.BORDER_CONSTANT,
                                                   borderValue=0)
-                transformed_mask = cv2.warpAffine(imageMask, M, (BLOCK_SIZE, BLOCK_SIZE),  # 2値マスクを変形
+                np.logical_not(invalidMask, out=invalidMask)                              # 無効データマスク反転
+                src_image[invalidMask] = nh.nan                                           # 有効データを NaN に、無効データを 0 に書き換え
+                transformed_mask = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE), # マスクを変形
                                                   flags=cv2.INTER_LINEAR,
                                                   borderMode=cv2.BORDER_CONSTANT,
                                                   borderValue=0)
                 # 有効データを NaN に、無効データを 0 にしたマスク画像を用いているから
-                # NaN = NaN * 0 なので NaN のある場所が有効なデータとなる
-                transformed_region =  np.where( np.isnan(transformed_mask), transformed_data, nh.nan)
+                # NaN = NaN + 0 なので NaN のある場所が有効なデータとなる
+                validMask = invalidMask[:BLOCK_SIZE, :BLOCK_SIZE]                         # (配列の再利用)
+                np.isnan(transformed_mask, out=validMask)                                 # 有効データマスクを作成
+                np.logical_not(validMask, out=validMask)                                  # 有効データマスク反転
+                transformed_data[validMask] = nh.nan                                      # 無効データを NaN に書き換え
             
             # 画面端での適切なブロックサイズを計算
             output_width  = min(BLOCK_SIZE, new_width  - dst_min_x)
             output_height = min(BLOCK_SIZE, new_height - dst_min_y)
-            
-            result = transformed_region[0:output_height, 0:output_width]
-            
-            # サイズが足りない場合はNaNでパディング
-            if result.shape != (output_height, output_width):
-                padded_block = nh.nans((output_height, output_width))
-                h, w = result.shape
-                padded_block[:h, :w] = result
-                result = padded_block
+            result = transformed_data[0:output_height, 0:output_width]
             
             return DataBlock(result, planeIndex, x, y)
     
