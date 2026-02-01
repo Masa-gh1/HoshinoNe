@@ -255,10 +255,22 @@ class TransformLazyFlowData(LazyFlowData):
 
         if src_blockW <= 0 or src_blockH <= 0:
             # 変形元が画像外なので NaN を返す
-            return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
+            output_width  = min(BLOCK_SIZE, new_width  - dst_min_x)
+            output_height = min(BLOCK_SIZE, new_height - dst_min_y)
+            return DataBlock(nh.nans((output_height, output_width)), planeIndex, x, y)
         else:
+            # スレッドローカルに作業用メモリを確保
+            if not hasattr(self.local, 'src_image'):
+                self.local.src_image = nh.empty((src_blockH, src_blockW))
+            elif(  self.local.src_image.shape[0] <= src_blockH
+                or self.local.src_image.shape[1] <= src_blockW
+                ):
+                w = max(self.local.src_image.shape[1], src_blockW)
+                h = max(self.local.src_image.shape[0], src_blockH)
+                self.local.src_image = nh.empty((h, w))
+            
             # 変形に必要な範囲の部分元画像を構築
-            src_image = nh.nans((src_blockH, src_blockW))
+            src_image = self.local.src_image[:src_blockH, :src_blockW]
             
             # 必要なブロックを取得して部分元画像に配置
             isAnyNaN = False # 必要なブロックに NaN が含まれているか

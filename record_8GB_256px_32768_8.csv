@@ -5,7 +5,7 @@ sample/fits/sigma.flow,elapsed ms,11311,12556,16415,16415
 sample/raw/standard.flow,elapsed ms,19094,20989,19094,30966
 sample/fits/pixcomp.flow,elapsed ms,22590,35361,22590,58018
 sample/raw/sigma.flow,elapsed ms,26928,30827,26928,48924
-sample/raw/pixcomp.flow,elapsed ms,53837,58254,53837,213447
+sample/raw/pixcomp.flow,elapsed ms,53837,57256,54933,213447
 sample/dng/standard.flow,maxObjectCount,115800,118504,121572,121572
 sample/fits/standard.flow,maxObjectCount,116176,125147,143190,143190
 sample/raw/standard.flow,maxObjectCount,117103,123406,123353,151288
