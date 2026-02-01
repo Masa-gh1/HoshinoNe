@@ -247,21 +247,17 @@ class TransformLazyFlowData(LazyFlowData):
         src_max_blockX = min(src_max_blockX, orig_width)
         src_min_blockY = max(src_min_blockY, 0)
         src_max_blockY = min(src_max_blockY, orig_height)
+        src_blockW = src_max_blockX - src_min_blockX
+        src_blockH = src_max_blockY - src_min_blockY
 
-        if src_max_blockX <= src_min_blockX or src_max_blockY <= src_min_blockY:
+        if src_blockW <= 0 or src_blockH <= 0:
             # 変形元が画像外なので NaN を返す
             return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
         else:
-            # 変形に必要な範囲の部分画像を構築
-            region_min_x = min(dst_min_x, src_min_blockX)
-            region_max_x = max(dst_max_x, src_max_blockX)
-            region_min_y = min(dst_min_y, src_min_blockY)
-            region_max_y = max(dst_max_y, src_max_blockY)
-            region_width  = region_max_x - region_min_x
-            region_height = region_max_y - region_min_y
-            region_image = nh.nans((region_height, region_width))
+            # 変形に必要な範囲の部分元画像を構築
+            src_image = nh.nans((src_blockH, src_blockW))
             
-            # 必要なブロックを取得して部分画像に配置
+            # 必要なブロックを取得して部分元画像に配置
             isAnyNaN = False # 必要なブロックに NaN が含まれているか
             for by in range(src_min_blockY, src_max_blockY, BLOCK_SIZE):
                 for bx in range(src_min_blockX, src_max_blockX, BLOCK_SIZE):
@@ -272,37 +268,39 @@ class TransformLazyFlowData(LazyFlowData):
                         else:
                             block_data = block.data
                         
-                        # 部分画像内の位置に配置
-                        rel_x = bx - region_min_x
-                        rel_y = by - region_min_y
+                        # 部分元画像内の位置に配置
+                        x1 = bx - src_min_blockX
+                        y1 = by - src_min_blockY
                         h, w = block_data.shape
-                        region_image[rel_y:rel_y+h, rel_x:rel_x+w] = block_data
+                        src_image[y1:y1+h, x1:x1+w] = block_data
 
                         if np.isnan(block_data).any():
                             # 必要なブロックに NaN が含まれていた
                             isAnyNaN = True
 
-            # 変換後に必要なサイズを計算
-            transformd_width  = region_width
-            transformd_height = region_height
+            # 部分画像を変形するアフィンを計算
+            M = TransformLazyFlowData.createAffine( orig_width, orig_height, src_min_blockX, src_min_blockY, dx, dy, rotation, scale)
             
-            # 部分画像を変形
-            M = TransformLazyFlowData.createAffine( orig_width, orig_height, region_min_x, region_min_y, dx, dy, rotation, scale)
+            # アフィン変形後を出力座標系にする
+            M[0, 2] += src_min_blockX - dst_min_x
+            M[1, 2] += src_min_blockY - dst_min_y
+            
             if not isAnyNaN:
-                transformed_region = cv2.warpAffine(region_image, M, (transformd_width, transformd_height),
+                # 部分画像を変形
+                transformed_region = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE),
                                                     flags=cv2.INTER_LINEAR,
                                                     borderMode=cv2.BORDER_CONSTANT,
                                                     borderValue=np.nan)
             else:
                 # NaN対応の補間変形
-                validMask = ~np.isnan(region_image)              # 有効データマスクを作成
-                imageData = np.where(validMask, region_image, 0) # 無効データを 0 にした画像
-                imageMask = np.where(validMask, nh.nan, 0)       # 有効データを NaN に、無効データを 0 にした画像
-                transformed_data = cv2.warpAffine(imageData, M, (transformd_width, transformd_height),  # データを変形
+                validMask = ~np.isnan(src_image)              # 有効データマスクを作成
+                imageData = np.where(validMask, src_image, 0) # 無効データを 0 にした画像
+                imageMask = np.where(validMask, nh.nan, 0)    # 有効データを NaN に、無効データを 0 にした画像
+                transformed_data = cv2.warpAffine(imageData, M, (BLOCK_SIZE, BLOCK_SIZE),  # データを変形
                                                   flags=cv2.INTER_LINEAR,
                                                   borderMode=cv2.BORDER_CONSTANT,
                                                   borderValue=0)
-                transformed_mask = cv2.warpAffine(imageMask, M, (transformd_width, transformd_height),  # 重みを変形
+                transformed_mask = cv2.warpAffine(imageMask, M, (BLOCK_SIZE, BLOCK_SIZE),  # 2値マスクを変形
                                                   flags=cv2.INTER_LINEAR,
                                                   borderMode=cv2.BORDER_CONSTANT,
                                                   borderValue=0)
@@ -310,23 +308,15 @@ class TransformLazyFlowData(LazyFlowData):
                 # NaN = NaN * 0 なので NaN のある場所が有効なデータとなる
                 transformed_region =  np.where( np.isnan(transformed_mask), transformed_data, nh.nan)
             
-            # 出力ブロック位置を部分画像座標系に変換
-            output_x_in_region = dst_min_x - region_min_x
-            output_y_in_region = dst_min_y - region_min_y
-            
             # 画面端での適切なブロックサイズを計算
-            actual_block_width  = min(BLOCK_SIZE, new_width  - dst_min_x)
-            actual_block_height = min(BLOCK_SIZE, new_height - dst_min_y)
+            output_width  = min(BLOCK_SIZE, new_width  - dst_min_x)
+            output_height = min(BLOCK_SIZE, new_height - dst_min_y)
             
-            # 出力ブロック部分を切り出し
-            end_x = min(output_x_in_region + actual_block_width , transformed_region.shape[1])
-            end_y = min(output_y_in_region + actual_block_height, transformed_region.shape[0])
-            
-            result = transformed_region[output_y_in_region:end_y, output_x_in_region:end_x]
+            result = transformed_region[0:output_height, 0:output_width]
             
             # サイズが足りない場合はNaNでパディング
-            if result.shape != (actual_block_height, actual_block_width):
-                padded_block = nh.nans((actual_block_height, actual_block_width))
+            if result.shape != (output_height, output_width):
+                padded_block = nh.nans((output_height, output_width))
                 h, w = result.shape
                 padded_block[:h, :w] = result
                 result = padded_block
