@@ -193,6 +193,9 @@ class TransformNode(LazyNNOperationNode):
         return( float(dx), float(dy), float(rotation), float(scale))
 
 class TransformLazyFlowData(LazyFlowData):
+    import threading
+    local = threading.local()
+
     def __init__(self, flowData, dx, dy, rotation, scale, new_width, new_height):
         super().__init__(flowData, dx, dy, rotation, scale, new_width, new_height)
         self.setDimensions(new_width, new_height)
@@ -293,16 +296,20 @@ class TransformLazyFlowData(LazyFlowData):
                                                   borderValue=np.nan)
             else:
                 # スレッドローカルに作業用メモリを確保
-                import threading
-                local = threading.local()
-                if not hasattr(local, 'invalidMask') or src_blockH <= local.invalidMask.shape[0] or src_blockW <= local.invalidMask.shape[1]:
-                    local.invalidMask      = np.empty((src_blockH, src_blockW), dtype=bool)
-                if not hasattr(local, 'transformed_mask'):
-                    local.transformed_mask = nh.empty((BLOCK_SIZE, BLOCK_SIZE))
-                
-                invalidMask      = local.invalidMask[:src_blockH, :src_blockW]
-                validMask        = local.invalidMask[:BLOCK_SIZE, :BLOCK_SIZE]
-                transformed_mask = local.transformed_mask
+                if not hasattr(self.local, 'transformed_mask'):
+                    self.local.transformed_mask = nh.empty((BLOCK_SIZE, BLOCK_SIZE))
+                if not hasattr(self.local, 'invalidMask'):
+                    self.local.invalidMask      = np.empty((src_blockH, src_blockW), dtype=bool)
+                elif(  self.local.invalidMask.shape[0] <= src_blockH
+                    or self.local.invalidMask.shape[1] <= src_blockW
+                    ):
+                    w = max(self.local.invalidMask.shape[1], src_blockW)
+                    h = max(self.local.invalidMask.shape[0], src_blockH)
+                    self.local.invalidMask = np.empty((h, w), dtype=bool)
+
+                transformed_mask = self.local.transformed_mask
+                invalidMask      = self.local.invalidMask[:src_blockH, :src_blockW]
+                validMask        = self.local.invalidMask[:BLOCK_SIZE, :BLOCK_SIZE]
                 
                 # NaN対応の補間変形
                 invalidMask = np.isnan(src_image, out=invalidMask)                        # 無効データマスクを作成
@@ -314,7 +321,7 @@ class TransformLazyFlowData(LazyFlowData):
                 np.logical_not(invalidMask, out=invalidMask)                              # 無効データマスク反転
                 src_image[invalidMask] = nh.nan                                           # 有効データを NaN に、無効データを 0 に書き換え
                 transformed_mask = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE), # マスクを変形
-                                                  dst=local.transformed_mask,
+                                                  dst=transformed_mask,
                                                   flags=cv2.INTER_LINEAR,
                                                   borderMode=cv2.BORDER_CONSTANT,
                                                   borderValue=0)
