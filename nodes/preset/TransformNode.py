@@ -288,12 +288,24 @@ class TransformLazyFlowData(LazyFlowData):
             if not isAnyNaN:
                 # 部分画像を変形
                 transformed_data = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE),
-                                                    flags=cv2.INTER_LINEAR,
-                                                    borderMode=cv2.BORDER_CONSTANT,
-                                                    borderValue=np.nan)
+                                                  flags=cv2.INTER_LINEAR,
+                                                  borderMode=cv2.BORDER_CONSTANT,
+                                                  borderValue=np.nan)
             else:
+                # スレッドローカルに作業用メモリを確保
+                import threading
+                local = threading.local()
+                if not hasattr(local, 'invalidMask') or src_blockH <= local.invalidMask.shape[0] or src_blockW <= local.invalidMask.shape[1]:
+                    local.invalidMask      = np.empty((src_blockH, src_blockW), dtype=bool)
+                if not hasattr(local, 'transformed_mask'):
+                    local.transformed_mask = nh.empty((BLOCK_SIZE, BLOCK_SIZE))
+                
+                invalidMask      = local.invalidMask[:src_blockH, :src_blockW]
+                validMask        = local.invalidMask[:BLOCK_SIZE, :BLOCK_SIZE]
+                transformed_mask = local.transformed_mask
+                
                 # NaN対応の補間変形
-                invalidMask = np.isnan(src_image)                                         # 無効データマスクを作成
+                invalidMask = np.isnan(src_image, out=invalidMask)                        # 無効データマスクを作成
                 src_image[invalidMask] = 0                                                # 無効データを 0 に書き換え
                 transformed_data = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE), # データを変形
                                                   flags=cv2.INTER_LINEAR,
@@ -302,12 +314,12 @@ class TransformLazyFlowData(LazyFlowData):
                 np.logical_not(invalidMask, out=invalidMask)                              # 無効データマスク反転
                 src_image[invalidMask] = nh.nan                                           # 有効データを NaN に、無効データを 0 に書き換え
                 transformed_mask = cv2.warpAffine(src_image, M, (BLOCK_SIZE, BLOCK_SIZE), # マスクを変形
+                                                  dst=local.transformed_mask,
                                                   flags=cv2.INTER_LINEAR,
                                                   borderMode=cv2.BORDER_CONSTANT,
                                                   borderValue=0)
                 # 有効データを NaN に、無効データを 0 にしたマスク画像を用いているから
                 # NaN = NaN + 0 なので NaN のある場所が有効なデータとなる
-                validMask = invalidMask[:BLOCK_SIZE, :BLOCK_SIZE]                         # (配列の再利用)
                 np.isnan(transformed_mask, out=validMask)                                 # 有効データマスクを作成
                 np.logical_not(validMask, out=validMask)                                  # 有効データマスク反転
                 transformed_data[validMask] = nh.nan                                      # 無効データを NaN に書き換え
