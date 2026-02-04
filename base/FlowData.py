@@ -8,6 +8,7 @@ All rights reserved.
 '''
 
 import uuid
+import threading
 from tkinter import messagebox
 
 from config import BLOCK_SIZE
@@ -27,6 +28,7 @@ class FlowData:
                  '_histogramCache'  ,
                  '_highResHistCache',
                  '_existingBlocks'  ,
+                 '_lock'            ,
                 )
     def __init__(self, headers={}):
         self.instanceId = str(uuid.uuid4())
@@ -34,12 +36,15 @@ class FlowData:
         self.cachePolicy = CachePolicy.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
         self.headers = headers
         self._dimensions = (0, 0)
+        
         self._maxValue = None
         self._minValue = None
         self._percentileCache  = {}   # パーセンタイルキャッシュ
         self._histogramCache   = {}   # ヒストグラムキャッシュ
         self._highResHistCache = {}   # 高解像度ヒストグラムキャッシュ
         self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
+        self._lock             = threading.Lock()
+        
         
         import importlib.util
         import sys
@@ -170,12 +175,14 @@ class FlowData:
         import numpy as np
         
         if self._existingBlocks is None:
-            planeCount = self.getPlaneCount()
-            width, height = self._dimensions
-            blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
-            blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
-            self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
-        
+            with self._lock:
+                if self._existingBlocks is None:
+                    planeCount = self.getPlaneCount()
+                    width, height = self._dimensions
+                    blockW = (width  + BLOCK_SIZE - 1) // BLOCK_SIZE
+                    blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
+                    self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
+            
         planeIndex = blockData.planeIndex
         x = blockData.x
         y = blockData.y
@@ -195,15 +202,16 @@ class FlowData:
                 blockMax = np.nanmax(data)
                 blockMin = np.nanmin(data)
                 
-                if self._maxValue is None or self._maxValue < blockMax:
-                    self._maxValue = blockMax
-                if self._minValue is None or blockMin < self._minValue:
-                    self._minValue = blockMin
-                
-                # データ更新時にキャッシュをクリア
-                self._percentileCache.clear()
-                self._histogramCache.clear()
-                self._highResHistCache.clear()
+                with self._lock:
+                    if self._maxValue is None or self._maxValue < blockMax:
+                        self._maxValue = blockMax
+                    if self._minValue is None or blockMin < self._minValue:
+                        self._minValue = blockMin
+                    
+                    # データ更新時にキャッシュをクリア
+                    self._percentileCache.clear()
+                    self._histogramCache.clear()
+                    self._highResHistCache.clear()
     
     def getMaxValue(self):
         """最大値を取得"""

@@ -25,6 +25,7 @@ class NNBlockOperationNode(FlowNode):
     outputCat = _OUT_CAT_PAS
 
     def process(self, context=None):
+        from utils import measurement as mes
         from utils.ThreadPool import ProcessExecutorInNode
         
         self.reportProgress(context, "開始")
@@ -54,7 +55,7 @@ class NNBlockOperationNode(FlowNode):
             for block in inputData.iterateBlocks():
                 planeIndex = block.planeIndex
                 x, y = block.x, block.y
-                future = ProcessExecutorInNode.submit(self, self.processBlock, block, planeIndex, x, y)
+                future = ProcessExecutorInNode.submit(self, mes.elapsedThreading, self.processBlock, block, planeIndex, x, y)
                 futureToDatas[future] = flowData
                 futureCountPerDatas[flowData] += 1
         

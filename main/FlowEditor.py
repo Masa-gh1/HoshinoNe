@@ -55,7 +55,9 @@ class FlowEditor:
         tk.Button(toolbar, text="保存", command=self.saveFlow, bg='lightgreen').pack(side=tk.LEFT, padx=2)
         tk.Checkbutton(toolbar, text="自動実行", variable=self.autoExecute).pack(side=tk.RIGHT, padx=2)
         tk.Button(toolbar, text="中断", command=self.stopFlow, bg='pink').pack(side=tk.RIGHT, padx=2)
-        tk.Button(toolbar, text="実行", command=self.executeFlow, bg='lightblue').pack(side=tk.RIGHT, padx=2)
+        execButton = tk.Button(toolbar, text="実行", command=self.executeFlow, bg='lightblue')
+        execButton.pack(side=tk.RIGHT, padx=2)
+        execButton.bind('<Double-Button-3>', self.printExecuteReport)
         
         # キャンバスフレーム
         canvasFrame = tk.Frame(self.root)
@@ -129,8 +131,7 @@ class FlowEditor:
         self.statusLabel = tk.Label(statusFrame, text="状態: 待機中", bg='lightgray', anchor=tk.W)
         self.statusLabel.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        self.gcButton = tk.Button(statusFrame, text="ゴミ掃除", command=self.forceGarbageCollection,
-                                 bg='lightgray', relief=tk.FLAT, padx=5)
+        self.gcButton = tk.Button(statusFrame, text="ゴミ掃除", command=self.forceGarbageCollection, bg='lightgray', relief=tk.FLAT, padx=5)
         self.gcButton.bind('<Double-Button-3>', self.toggleDebugMode)
         self.gcButton.pack(side=tk.RIGHT, padx=(5, 0))
         
@@ -1009,40 +1010,48 @@ class FlowEditor:
             print(f"References report")
             self._debugReferencesReport()
             print("========================")
-            print(f"Debug report")
-            for text in Debug.getDebugReport():
-                print(text)
-            print("========================")
-            (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
-             getCount, cacheHitCount, recalculateCount, loadCount,
-             setCount, purgeCount, saveCount,
-             elapsedHis) = CacheManager.getCacheStats()
-            print(f"objCacheCount: {objCacheCount}")
-            print(f"cacheCount: {cacheCount}")
-            print(f"cacheSize: {cacheSize}")
-            print(f"storageCount: {storageCount}")
-            print(f"storageSize: {storageSize}")
-            print(f"getCount: {getCount}")
-            print(f"cacheHitCount: {cacheHitCount}")
-            print(f"recalculateCount: {recalculateCount}")
-            print(f"loadCount: {loadCount}")
-            print(f"setCount: {setCount}")
-            print(f"purgeCount: {purgeCount}")
-            print(f"saveCount: {saveCount}")
+    
+    def printExecuteReport(self, evant):
+        """実行レポートをコンソールに出力"""
+        from utils.Debug import Debug
+        from utils import measurement as mes
+        from base import CacheManager
+        
+        print("========================")
+        print(f"Debug report")
+        for text in Debug.getDebugReport():
+            print(text)
+        print("========================")
+        (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
+            getCount, cacheHitCount, recalculateCount, loadCount,
+            setCount, purgeCount, saveCount,
+            elapsedHis) = CacheManager.getCacheStats()
+        print(f"objCacheCount: {objCacheCount}")
+        print(f"cacheCount: {cacheCount}")
+        print(f"cacheSize: {cacheSize}")
+        print(f"storageCount: {storageCount}")
+        print(f"storageSize: {storageSize}")
+        print(f"getCount: {getCount}")
+        print(f"cacheHitCount: {cacheHitCount}")
+        print(f"recalculateCount: {recalculateCount}")
+        print(f"loadCount: {loadCount}")
+        print(f"setCount: {setCount}")
+        print(f"purgeCount: {purgeCount}")
+        print(f"saveCount: {saveCount}")
+        for label,hist in (('cache count vs process time [us]', elapsedHis), ('call times vs process time [us]', mes.getHistgram())):
             print("------------------------")
-            label = 'times it n [us]'
-            maxlen = max([len(s) for s in [label] + list(elapsedHis.keys())])
+            maxlen = max([len(s) for s in [label] + list(hist.keys())])
             print(f"{label:{maxlen}s}", end="\t")
-            labels = next(iter(elapsedHis.values()))
+            labels = next(iter(hist.values()))
             for label in labels:
                 print(label, end="\t")
             print()
-            for name,values in elapsedHis.items():
+            for name,values in hist.items():
                 print(f"{name:{maxlen}s}", end="\t")
                 for value in values.values():
                     print(value, end="\t")
                 print()
-            print("========================")
+        print("========================")
 
     def toggleDebugMode(self, event):
         """デバッグモードを切り替える"""

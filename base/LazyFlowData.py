@@ -7,7 +7,6 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-import uuid
 from collections import UserDict
 
 from .Constants import CachePolicy
@@ -29,27 +28,33 @@ class LazyFlowData(FlowData):
         self.headers        = LazyHeadersDict(self, *args, **kwargs)
         self.args           = args
         self.kwargs         = kwargs
-
+        
         self.setDimensions(*sourceFlowData.getDimensions())
-    
+        
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
+        from utils import measurement as mes
         block = super().getBlock(planeIndex, x, y)
         if not block:
             return None
         elif block.isValid():
             return block
-        else:
+        elif type(self).operation == LazyFlowData.operation:
             block = self.operation(self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
+            self.setBlock(block)
+            return block
+        else:
+            block = mes.elapsedThreading(self.operation, self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
             self.setBlock(block)
             return block
     
     def operation(self, flowData, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
+        from utils import measurement as mes
         block = flowData.getBlock(planeIndex, x, y)
         if not block:
             return block
-        return self.blockOperation(block, planeIndex, x, y, *args, **kwargs)
+        return mes.elapsedThreading(self.blockOperation, block, planeIndex, x, y, *args, **kwargs)
 
     def blockOperation(self, block, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
