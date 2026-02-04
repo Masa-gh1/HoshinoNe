@@ -7,8 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import threading
 from collections import UserDict
 
+from config import MAX_WORKERS
 from .Constants import CachePolicy
 from .FlowData import FlowData
 
@@ -19,6 +21,7 @@ class LazyFlowData(FlowData):
                  'headers'       ,
                  'args'          ,
                  'kwargs'        ,
+                 '_block_locks'  ,
                 )
     
     def __init__(self, sourceFlowData, *args, **kwargs):
@@ -31,6 +34,8 @@ class LazyFlowData(FlowData):
         
         self.setDimensions(*sourceFlowData.getDimensions())
         
+        self._block_locks = [threading.Lock() for _ in range(MAX_WORKERS*2)]
+    
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
         from utils import measurement as mes
@@ -39,14 +44,20 @@ class LazyFlowData(FlowData):
             return None
         elif block.isValid():
             return block
-        elif type(self).operation == LazyFlowData.operation:
-            block = self.operation(self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
-            self.setBlock(block)
-            return block
         else:
-            block = mes.elapsedThreading(self.operation, self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
-            self.setBlock(block)
-            return block
+            # 遅延評価
+            lock_index = hash((planeIndex, x, y)) % len(self._block_locks)
+            with self._block_locks[lock_index]:
+                if block.isValid():
+                    return block
+                elif type(self).operation == LazyFlowData.operation:
+                    block = self.operation(self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
+                    self.setBlock(block)
+                    return block
+                else:
+                    block = mes.elapsedThreading(self.operation, self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
+                    self.setBlock(block)
+                    return block
     
     def operation(self, flowData, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
