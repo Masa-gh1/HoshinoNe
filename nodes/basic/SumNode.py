@@ -71,31 +71,52 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         resultWidth, resultHeight = self._outputDimensions
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
-        blockWidth = min(BLOCK_SIZE, resultWidth - x)
+        blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
         result = None
+        
+        # スレッドローカルに作業用メモリを確保
+        _invalidA = self.getLocal('_invalidA')
+        _invalidB = self.getLocal('_invalidB')
+        _invalidC = self.getLocal('_invalidC')
+        
+        if _invalidA is None:
+            _invalidA = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+            self.setLocal('_invalidA', _invalidA)
+        if _invalidB is None:
+            _invalidB = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+            self.setLocal('_invalidB', _invalidB)
+        if _invalidC is None:
+            _invalidC = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+            self.setLocal('_invalidC', _invalidC)
         
         # tableデータの加算（NaN対応）
         for inputData in inputDatas:
             inputBlock = inputData.getBlock(planeIndex, x, y)
             if inputBlock:
                 minH = min(blockHeight, inputBlock.data.shape[0])
-                minW = min(blockWidth, inputBlock.data.shape[1])
+                minW = min(blockWidth , inputBlock.data.shape[1])
                 
                 if result is None:
                     # 最初のブロックで初期化
                     result = nh.nans((blockHeight, blockWidth))
                     result[:minH, :minW] = inputBlock.data[:minH, :minW]
                 else:
+                    # スレッドローカルに作業用メモリを確保
+                    invalidA = _invalidA[:minH, :minW]
+                    invalidB = _invalidB[:minH, :minW]
+                    invalidC = _invalidC[:minH, :minW]
+
                     # NaN 対応加算
-                    result[:minH, :minW] = np.where(
-                        ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
-                        result[:minH, :minW] + inputBlock.data[:minH, :minW],
-                        np.where(
-                            np.isnan(result[:minH, :minW]),
-                            inputBlock.data[:minH, :minW],
-                            result[:minH, :minW]
-                        )
-                    )
+                    np.isnan(result[:minH, :minW]         , out=invalidA)
+                    np.isnan(inputBlock.data[:minH, :minW], out=invalidB)
+                    np.logical_not(invalidB               , out=invalidB)
+                    np.logical_and(invalidA, invalidB     , out=invalidC)
+                    if invalidC.any():
+                        result[invalidC] = inputBlock.data[invalidC]
+                    np.logical_not(invalidA               , out=invalidA)
+                    np.logical_and(invalidA, invalidB     , out=invalidC)
+                    if invalidC.any():
+                        result[invalidC] += inputBlock.data[invalidC]
         
         # tableデータがない場合の初期化
         if result is None:
@@ -105,13 +126,13 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         if self._combinedTensor:
             block = self._combinedTensor.getBlock( planeIndex, x, y)
             if block:
-                result = result + block.data
+                result += block.data
         
         # polynomial を加算（NaN対応）
         if self._combinedPolynomial:
             polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape)
             if not polynomialValues is None:
-                result = result + polynomialValues
+                result += polynomialValues
 
         return DataBlock(result, planeIndex, x, y)
     
@@ -140,3 +161,18 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         return DataBlock(result, planeIndex, 0, 0)
     
+    import threading
+    local = threading.local()
+
+    @staticmethod
+    def setLocal(name, value):
+        if not hasattr(SumNode.local, "SumNode"):
+            SumNode.local.SumNode = {}
+        SumNode.local.SumNode[name] = value
+    
+    @staticmethod
+    def getLocal(name):
+        if not hasattr(SumNode.local, "SumNode"):
+            return None
+        else:
+            return SumNode.local.SumNode.get(name)

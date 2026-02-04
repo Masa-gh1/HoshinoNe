@@ -386,4 +386,3 @@ class TransformLazyFlowData(LazyFlowData):
             return None
         else:
             return TransformLazyFlowData.local.TransformLazyFlowData.get(name)
-    

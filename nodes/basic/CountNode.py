@@ -69,18 +69,30 @@ class CountNode(N1BlockOperationNode):
             resultWidth, resultHeight = self._outputDimensions
             
             blockHeight = min(BLOCK_SIZE, resultHeight - y)
-            blockWidth = min(BLOCK_SIZE, resultWidth - x)
+            blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
             result = nh.zeros((blockHeight, blockWidth))
+            
+            # スレッドローカルに作業用メモリを確保
+            _invalidA = self.getLocal('_invalidA')
+            
+            if _invalidA is None:
+                _invalidA = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+                self.setLocal('_invalidA', _invalidA)
             
             # table データのカウント（NaN対応）
             for inputData in tableDatas:
                 inputBlock = inputData.getBlock(planeIndex, x, y)
                 if inputBlock:
                     minH = min(blockHeight, inputBlock.data.shape[0])
-                    minW = min(blockWidth, inputBlock.data.shape[1])
+                    minW = min(blockWidth , inputBlock.data.shape[1])
+
+                    # スレッドローカルに作業用メモリを確保
+                    invalidA = _invalidA[:minH, :minW]
+                    
                     # NaNでない有効なピクセルのみカウント
-                    valid_mask = ~np.isnan(inputBlock.data[:minH, :minW])
-                    result[:minH, :minW] += valid_mask
+                    np.isnan(inputBlock.data[:minH, :minW], out=invalidA)
+                    np.logical_not(invalidA               , out=invalidA)
+                    result[:minH, :minW] += invalidA
             
             # polynomialは全領域に影響するので全体にpolynomial数を加算
             if polynomialDatas:
@@ -103,3 +115,19 @@ class CountNode(N1BlockOperationNode):
         result = np.full_like(coeffBlock.data, len(polynomialDatas))
         
         return DataBlock(result, planeIndex, 0, 0)
+    
+    import threading
+    local = threading.local()
+
+    @staticmethod
+    def setLocal(name, value):
+        if not hasattr(CountNode.local, "CountNode"):
+            CountNode.local.CountNode = {}
+        CountNode.local.CountNode[name] = value
+    
+    @staticmethod
+    def getLocal(name):
+        if not hasattr(CountNode.local, "CountNode"):
+            return None
+        else:
+            return CountNode.local.CountNode.get(name)

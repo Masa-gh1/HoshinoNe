@@ -34,8 +34,8 @@ class InverseLazyFlowData(LazyFlowData):
         from utils import numpy_helpers as nh
         from base import DataBlock
         
-        arr = block.data
-        with np.errstate(divide='ignore', invalid='ignore'):
-            result = np.where(arr != 0, 1.0 / arr, nh.nan)
+        data = block.data
+        result = np.where(data != 0, nh.BDTYPE(1.0), nh.nan)
+        np.divide(result, data, out=result)
         
         return DataBlock(result, planeIndex, x, y)
