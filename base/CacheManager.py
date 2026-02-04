@@ -131,10 +131,10 @@ class CacheManager:
             elif cacheKey in cls._memCachedIndex:
                 # メモリキャッシュにあるので採用
                 cls._cacheHitCount += 1
-                if not cls._memCacheRemovable.pop(cacheKey,None) is None:
-                    cls._memCacheRemovable[cacheKey] = True # 最後尾に追加(LRU)
                 cache = cls._memCachedIndex.pop(cacheKey)
                 cls._memCachedIndex[cacheKey] = cache # 最後尾に追加(LRU)
+                if cacheKey in cls._memCacheRemovable:
+                    cls._memCacheRemovable.move_to_end(cacheKey) # 最後尾に移動(LRU)
                 pos, meta = cache
                 page, index = pos
                 dims, dtype, size = meta
@@ -265,10 +265,11 @@ class CacheManager:
         # 古いデータから連続する PERSISTENT を抽出する
         end = False
         req = {}
-        for s in range(0, BLOCK_CACHE_PAGE_SIZE, BLOCK_CACHE_PAGE_SIZE // 8): # 古いデータから1ページ分を検索する
+        step = BLOCK_CACHE_PAGE_SIZE // 8
+        for s in range(0, BLOCK_CACHE_PAGE_SIZE, step): # 古いデータから1ページ分を検索する
             with cls._cacheLock("_lazySave2.locked.A"):
-                for i, cacheKey in enumerate(cls._memCachedIndex):
-                    if s + (BLOCK_CACHE_PAGE_SIZE // 8) <= i:
+                for i, cacheKey in enumerate(cls._memCachedIndex.keys()):
+                    if s + step <= i:
                         end = True
                         break
                     elif i < s:
@@ -295,7 +296,7 @@ class CacheManager:
             if isRemovable:
                 with cls._cacheLock("_lazySave2.locked.B"):
                     cls._memCacheRemovable[cacheKey] = True
-                    cls._memCacheRemovable.move_to_end(cacheKey, last=False)
+                    cls._memCacheRemovable.move_to_end(cacheKey, last=False) # 先頭に移動
             else:
                 with cls._cacheLock("_lazySave2.locked.C"):
                     pos, meta = cls._memCachedIndex[cacheKey]
@@ -309,14 +310,23 @@ class CacheManager:
                         cls._saveCount += 1
                         cls._storagedIndex[cacheKey] = True
                         cls._memCacheRemovable[cacheKey] = True
-                        cls._memCacheRemovable.move_to_end(cacheKey, last=False)
+                        cls._memCacheRemovable.move_to_end(cacheKey, last=False) # 先頭に移動
             time.sleep(0) # 連続的にロックするのを抑制する
 
     @classmethod
     def isCached(cls, cacheKey):
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock():
-            return cacheKey in cls._cachedIndex
+            if cacheKey in cls._cachedIndex:
+                # LRU の順序を操作
+                if cacheKey in cls._memCachedIndex:
+                    cache = cls._memCachedIndex.pop(cacheKey)
+                    cls._memCachedIndex[cacheKey] = cache # 最後尾に追加(LRU)
+                    if cacheKey in cls._memCacheRemovable:
+                        cls._memCacheRemovable.move_to_end(cacheKey) # 最後尾に移動(LRU)
+                return True
+            else:
+                return False
 
     @classmethod
     def _saveToStorage(cls, cacheKey, data):
@@ -405,6 +415,7 @@ class CacheManager:
         start = time.perf_counter_ns()
         result = func(*args, **kwargs)
         elapsed_ns = (time.perf_counter_ns() - start)
+
         cls._elapsedLog.append((func.__qualname__, elapsed_ns))
 
         if 1000 <= len(cls._elapsedLog):
@@ -427,25 +438,27 @@ class CacheManager:
         for log in logs:
             name, elapsed = log
             cacheCount = len(cls._cachedIndex)
-
-            elapsed = min( elapsed//1000 , 8191)
-            x = 4096
-            while True:
+            
+            key = None
+            for e in range(10):
+                x = int(4096*(1.4142136**e))
                 if cacheCount < x:
                     key = f"{x}:{name}"
                     break
-                x = x*2
+            if key is None:
+                key = f"{x}+:{name}"
             
             his = cls._elapsedHis.setdefault( key, {})
-            x = 10
-            while True:
+            elapsed = min( elapsed//1000 , 8191)
+
+            for e in range(20):
+                x = int(10*(2**e))
                 for values in cls._elapsedHis.values():
                     values.setdefault(x,0)
                 
                 if elapsed < x:
                     his[x] += 1
                     break
-                x = x*2
 
     @classmethod
     def getCacheStats(cls):
