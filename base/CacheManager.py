@@ -295,7 +295,7 @@ class CacheManager:
             if isRemovable:
                 with cls._cacheLock("_lazySave2.locked.B"):
                     cls._memCacheRemovable[cacheKey] = True
-                    cls._memCacheRemovable.move_to_end(cacheKey)
+                    cls._memCacheRemovable.move_to_end(cacheKey, last=False)
             else:
                 with cls._cacheLock("_lazySave2.locked.C"):
                     pos, meta = cls._memCachedIndex[cacheKey]
@@ -309,7 +309,7 @@ class CacheManager:
                         cls._saveCount += 1
                         cls._storagedIndex[cacheKey] = True
                         cls._memCacheRemovable[cacheKey] = True
-                        cls._memCacheRemovable.move_to_end(cacheKey)
+                        cls._memCacheRemovable.move_to_end(cacheKey, last=False)
             time.sleep(0) # 連続的にロックするのを抑制する
 
     @classmethod
