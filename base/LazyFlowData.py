@@ -21,7 +21,7 @@ class LazyFlowData(FlowData):
                  'headers'       ,
                  'args'          ,
                  'kwargs'        ,
-                 '_block_locks'  ,
+                 '_blockLocks'   ,
                 )
     
     def __init__(self, sourceFlowData, *args, **kwargs):
@@ -34,7 +34,7 @@ class LazyFlowData(FlowData):
         
         self.setDimensions(*sourceFlowData.getDimensions())
         
-        self._block_locks = [threading.Lock() for _ in range(MAX_WORKERS*2)]
+        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*2)]
     
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
@@ -46,8 +46,8 @@ class LazyFlowData(FlowData):
             return block
         else:
             # 有効なブロックが無いので遅延評価を実行
-            lock_index = hash((planeIndex, x, y)) % len(self._block_locks)
-            with self._block_locks[lock_index]: # 既に計算中の場合、終了を待つ
+            lockKey = hash((planeIndex, x, y)) % len(self._blockLocks)
+            with self._blockLocks[lockKey]: # 既に計算中の場合、終了を待つ
                 if block.isValid():
                     return block
                 elif type(self).operation == LazyFlowData.operation:
