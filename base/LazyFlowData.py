@@ -45,16 +45,18 @@ class LazyFlowData(FlowData):
         elif block.isValid():
             return block
         else:
-            # 遅延評価
+            # 有効なブロックが無いので遅延評価を実行
             lock_index = hash((planeIndex, x, y)) % len(self._block_locks)
-            with self._block_locks[lock_index]:
+            with self._block_locks[lock_index]: # 既に計算中の場合、終了を待つ
                 if block.isValid():
                     return block
                 elif type(self).operation == LazyFlowData.operation:
+                    # operation がオーバーライドされていないので計測しない
                     block = self.operation(self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
                     self.setBlock(block)
                     return block
                 else:
+                    # operation がオーバーライドされているので計測する
                     block = mes.elapsedThreading(self.operation, self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
                     self.setBlock(block)
                     return block
