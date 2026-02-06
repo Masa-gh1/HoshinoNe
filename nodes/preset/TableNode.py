@@ -206,7 +206,7 @@ class TensorSettingsDialog(tk.Toplevel):
         self.planeEntries  = []
         self.columnEntries = []
         self.lineEntries   = []
-        self.tableEntry    = {}
+        self.tableEntries  = {}
         
         planes = int(self.planeCountEntry.get())
         xOrder = int(self.xOrderEntry.get())
@@ -256,7 +256,7 @@ class TensorSettingsDialog(tk.Toplevel):
                     else:
                         entry.insert(0, "0")
                     entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                    self.tableEntry[key] = entry
+                    self.tableEntries[key] = entry
                 
                 row += 1
             
@@ -278,13 +278,14 @@ class TensorSettingsDialog(tk.Toplevel):
         if self.planes and self.columns and self.lines:
             # 係数を収集
             table = {}
-            for key, entry in self.tableEntry.items():
+            for key, entry in self.tableEntries.items():
                 try:
                     val = float(entry.get())
                     if val != 0:
                         table[key] = val
                 except ValueError:
-                    print(f"Warning: Invalid coefficient value for {key}")
+                    from utils.Debug import Debug
+                    Debug.log(type(self).__name__, f"Warning: Invalid table value for {key}")
             
             self.planes  = planes
             self.columns = columns

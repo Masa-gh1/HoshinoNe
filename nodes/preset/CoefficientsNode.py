@@ -150,8 +150,8 @@ class PolynomialSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
+        self.planeEntries = []
         self.coeffEntries = {}
-        self.planeNameEntries = []
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -215,7 +215,7 @@ class PolynomialSettingsDialog(tk.Toplevel):
         for widget in self.scrollableFrame.winfo_children():
             widget.destroy()
         self.coeffEntries.clear()
-        self.planeNameEntries.clear()
+        self.planeEntries.clear()
         
         try:
             planes = int(self.planeEntry.get())
@@ -235,7 +235,7 @@ class PolynomialSettingsDialog(tk.Toplevel):
                     planeNameEntry.insert(0, f"Plane {planeIndex}")
                 planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
                 
-                self.planeNameEntries.append(planeNameEntry)
+                self.planeEntries.append(planeNameEntry)
                 
                 row += 1
                 
@@ -263,7 +263,8 @@ class PolynomialSettingsDialog(tk.Toplevel):
                 
                 row += 1
         except ValueError:
-            print("Waring: Invalid input for plane count, x order, or y order.")
+            from utils.Debug import Debug
+            Debug.log(type(self).__name__, "Waring: Invalid input for plane count, x order, or y order.")
     
     def onApply(self):
         planes = int(self.planeEntry.get())
@@ -279,11 +280,12 @@ class PolynomialSettingsDialog(tk.Toplevel):
                     if val != 0:
                         coefficients[key] = val
                 except ValueError:
-                    print(f"Warning: Invalid coefficient value for {key}")
+                    from utils.Debug import Debug
+                    Debug.log(type(self).__name__, f"Warning: Invalid coefficient value for {key}")
             
             # プレーン名を収集
             planeNames = []
-            for entry in self.planeNameEntries:
+            for entry in self.planeEntries:
                 name = entry.get().strip()
                 if not name:
                     name = f"Plane {len(planeNames)}"

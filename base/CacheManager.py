@@ -111,7 +111,8 @@ class CacheManager:
                     shutil.rmtree(itemPath, ignore_errors=True)
                             
         except (OSError, IOError):
-            print("Warning: Failed to clean up temporary directories.", file=sys.stderr)
+            from utils.Debug import Debug
+            Debug.log(cls.__name__, "Warning: Failed to clean up temporary directories.")
     
     @classmethod
     def get(cls, cacheKey):
@@ -346,7 +347,8 @@ class CacheManager:
             
             return True
         except (OSError, IOError, ValueError):
-            print(f"Warning: Unable to save block data to storage : key: {cacheKey}", file=sys.stderr)
+            from utils.Debug import Debug
+            Debug.log(cls.__name__, f"Warning: Unable to save block data to storage : key: {cacheKey}")
             return False
     
     @classmethod
@@ -367,7 +369,8 @@ class CacheManager:
             
             return data
         except (OSError, IOError, ValueError):
-            print(f"Warning: Unable to load block data from storage : key: {cacheKey}", file=sys.stderr)
+            from utils.Debug import Debug
+            Debug.log(cls.__name__, f"Warning: Unable to load block data from storage : key: {cacheKey}")
             return None
     
     @classmethod

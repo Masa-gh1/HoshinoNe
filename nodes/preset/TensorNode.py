@@ -149,8 +149,8 @@ class TensorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node = node
-        self.coeffEntries = {}
-        self.planeNameEntries = []
+        self.planeEntries  = []
+        self.tensorEntries = {}
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -213,8 +213,8 @@ class TensorSettingsDialog(tk.Toplevel):
         # 既存の係数エントリーをクリア
         for widget in self.scrollableFrame.winfo_children():
             widget.destroy()
-        self.coeffEntries.clear()
-        self.planeNameEntries.clear()
+        self.tensorEntries.clear()
+        self.planeEntries.clear()
         
         planes = int(self.planeEntry.get())
         xOrd = int(self.xOrderEntry.get())
@@ -233,7 +233,7 @@ class TensorSettingsDialog(tk.Toplevel):
                 planeNameEntry.insert(0, f"Plane {planeIndex}")
             planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
             
-            self.planeNameEntries.append(planeNameEntry)
+            self.planeEntries.append(planeNameEntry)
             
             row += 1
             
@@ -255,7 +255,7 @@ class TensorSettingsDialog(tk.Toplevel):
                     else:
                         entry.insert(0, "0")
                     entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                    self.coeffEntries[key] = entry
+                    self.tensorEntries[key] = entry
                 
                 row += 1
             
@@ -269,17 +269,18 @@ class TensorSettingsDialog(tk.Toplevel):
         if planes > 0 and xOrd >= 0 and yOrd >= 0:
             # 係数を収集
             tensor = {}
-            for key, entry in self.coeffEntries.items():
+            for key, entry in self.tensorEntries.items():
                 try:
                     val = float(entry.get())
                     if val != 0:
                         tensor[key] = val
                 except ValueError:
-                    print(f"Warning: Invalid coefficient value for {key}")
+                    from utils.Debug import Debug
+                    Debug.log(type(self).__name__, f"Warning: Invalid tensor value for {key}")
             
             # プレーン名を収集
             planeNames = []
-            for entry in self.planeNameEntries:
+            for entry in self.planeEntries:
                 name = entry.get().strip()
                 if not name:
                     name = f"Plane {len(planeNames)}"

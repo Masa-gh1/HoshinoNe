@@ -56,7 +56,7 @@ class FlowData:
             # キャッシュから自身のエントリを削除
             CacheManager.clearByPartialKey(self.instanceId)
         except Exception as e:
-            Debug.log(type(self).__name__, f"Warning: cleanup: {str(e)}")
+            Debug.log(type(self).__name__, "Warning: cleanup", e)
 
     def setDimensions(self, width, height):
         """次元を設定"""

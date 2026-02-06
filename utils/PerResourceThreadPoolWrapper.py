@@ -61,8 +61,8 @@ class PerResourceThreadPoolWrapper:
             result = func(*args, **kwargs)
             future.set_result(result)
         except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
+            from utils.Debug import Debug
+            Debug.log(type(self).__name__, f"Error:{func.__name__}", e)
             future.set_exception(e)
         finally:
             self._execute_next_task(resourceKey, future)

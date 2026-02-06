@@ -28,7 +28,8 @@ class FlowControl:
     def execute(self, nodes, sendMessage=None, reportProgress=None):
         """フローを実行"""
         if not sendMessage:
-            sendMessage = lambda msg: print(msg)
+            from utils.Debug import Debug
+            sendMessage = lambda msg: Debug.log(type(self).__name__, msg)
 
         if not reportProgress:
             reportProgress = lambda id, text, msg, current=None, total=None: ""

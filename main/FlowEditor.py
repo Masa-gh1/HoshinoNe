@@ -622,8 +622,8 @@ class FlowEditor:
             filename = os.path.basename(filePath)
             self.root.title(f"{self.name} - {filename}")
         except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
+            from utils.Debug import Debug
+            Debug.log(type(self).__name__, f"保存に失敗しました", e)
             messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
     def loadFlow(self, targetX=0, targetY=0, appendMode=False, filePath=None, initialdir=None):
@@ -709,8 +709,8 @@ class FlowEditor:
                 filename = os.path.basename(filePath)
                 self.root.title(f"{self.name} - {filename}")
         except Exception as e:
-            tb = traceback.format_exc()
-            print(tb,file=sys.stderr)
+            from utils.Debug import Debug
+            Debug.log(type(self).__name__, f"読み込みに失敗しました", e)
             messagebox.showerror("エラー", f"読み込みに失敗しました: {str(e)}")
     
     def createObject(self, type):
