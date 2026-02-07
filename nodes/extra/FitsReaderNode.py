@@ -73,7 +73,7 @@ class FitsReaderNode(BaseReaderNode):
         from astropy.io import fits
         from config import BLOCK_SIZE
         from utils.interval_helper import createHalfOpenEnd
-        from utils.ThreadPool import ProcessExecutorInNode
+        from utils.ThreadPool import ParallelExecutor
         from base import FlowData
         
         resultFlowDatas = []
@@ -249,7 +249,7 @@ class FitsReaderNode(BaseReaderNode):
                 # ブロック単位で並列処理
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
-                        future = ProcessExecutorInNode .submit(self, self._processBlock, data, x, y, planeCount, width, height)
+                        future = ParallelExecutor .submit(self, self._processBlock, data, x, y, planeCount, width, height)
                         futureToDatas[future] = flowData
         
         # 全ブロックの処理完了を待ちながら進捗報告

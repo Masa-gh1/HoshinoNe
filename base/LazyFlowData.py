@@ -34,7 +34,7 @@ class LazyFlowData(FlowData):
         
         self.setDimensions(*sourceFlowData.getDimensions())
         
-        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*2)]
+        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*4)]
     
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得（遅延評価）"""
@@ -45,9 +45,17 @@ class LazyFlowData(FlowData):
         elif block.isValid():
             return block
         else:
+            from utils.ThreadPool import PerResourceThreadPoolWrapper as wrap
             # 有効なブロックが無いので遅延評価を実行
             lockKey = hash((planeIndex, x, y)) % len(self._blockLocks)
+            if self._blockLocks[lockKey].locked():
+                wrap.local.enterWait()
+                a = True
+            else:
+                a = False
             with self._blockLocks[lockKey]: # 既に計算中の場合、終了を待つ
+                if a:
+                    wrap.local.exitWait()
                 if block.isValid():
                     return block
                 elif type(self).operation == LazyFlowData.operation:

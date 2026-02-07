@@ -11,11 +11,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import MAX_WORKERS
-from utils.ThreadPool import ProcessExecutorInNode
+from utils.ThreadPool import ParallelExecutor
 from utils.ThreadPool import PerResourceThreadPoolWrapper
 
-# 同時ノード実行数
-MAX_NODE_EXEC = min(4,MAX_WORKERS)
+MAX_NODE_EXEC     = min(4,MAX_WORKERS)                       # 同時ノード実行数
+MAX_PARALLEL_EXEC = max(1,MAX_WORKERS//min(2,MAX_NODE_EXEC)) # ノード内の並列数
 
 class FlowControl:
     def __init__(self):
@@ -38,13 +38,10 @@ class FlowControl:
 
         startTime = time.time()
         try:
-            maxWorkers = MAX_NODE_EXEC+MAX_WORKERS
-            processInNodeWorkers = maxWorkers/min(2,MAX_NODE_EXEC)
-            with ThreadPoolExecutor(max_workers=maxWorkers) as processExecutor:
-                executor = processExecutor
+            with ThreadPoolExecutor(max_workers=MAX_NODE_EXEC*MAX_WORKERS) as processExecutor:
                 self._nodeExecutor = PerResourceThreadPoolWrapper()
-                self._nodeExecutor.setExecutor(processExecutor, MAX_NODE_EXEC)
-                ProcessExecutorInNode.setExecutor(processExecutor, processInNodeWorkers) # グローバルにスレッドプールを提供
+                self._nodeExecutor.setExecutor(processExecutor, MAX_NODE_EXEC) # ノード実行用スレッドプール
+                ParallelExecutor.setExecutor(processExecutor, MAX_PARALLEL_EXEC, MAX_WORKERS) # グローバルに並列処理用スレッドプールを提供
                 
                 sendMessage("フロー実行中...\n") # ステータス表示
                 
@@ -127,5 +124,5 @@ class FlowControl:
     def stop(self):
         """ノードの実行を中断"""
         if self._nodeExecutor:
-            ProcessExecutorInNode.shutdown(wait=False,cancel_futures=True)
+            ParallelExecutor.shutdown(wait=False,cancel_futures=True)
             self._nodeExecutor.shutdown(wait=False,cancel_futures=True)

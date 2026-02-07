@@ -26,7 +26,7 @@ class N1BlockOperationNode(FlowNode):
     
     def process(self, context=None):
         from utils import measurement as mes
-        from utils.ThreadPool import ProcessExecutorInNode
+        from utils.ThreadPool import ParallelExecutor
 
         self.reportProgress(context, "開始")
         
@@ -54,7 +54,7 @@ class N1BlockOperationNode(FlowNode):
             for block in flowData.iterateBlocks():
                 planeIndex = block.planeIndex
                 x, y = block.x, block.y
-                future = ProcessExecutorInNode.submit(self, mes.elapsedThreading, self.processBlock, processedInputs, planeIndex, x, y)
+                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.processBlock, processedInputs, planeIndex, x, y)
                 futures.append(future)
             
             # 全ブロックの処理完了を待つ

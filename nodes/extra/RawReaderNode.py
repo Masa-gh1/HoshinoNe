@@ -118,7 +118,7 @@ class RawReaderNode(BaseReaderNode):
         from config import RAW_DEMOSAIC_ALGORITHMS
         from config import configRawParams
         from utils import exif_helper as exif
-        from utils.ThreadPool import ProcessExecutorInNode
+        from utils.ThreadPool import ParallelExecutor
         from config import BLOCK_SIZE
         from base import FlowData
         
@@ -289,7 +289,7 @@ class RawReaderNode(BaseReaderNode):
             # ブロック単位で並列処理
             for y in range(0, height, BLOCK_SIZE):
                 for x in range(0, width, BLOCK_SIZE):
-                    future = ProcessExecutorInNode .submit(self, self._processBlock, rawData, x, y, planeCount, height, width)
+                    future = ParallelExecutor .submit(self, self._processBlock, rawData, x, y, planeCount, height, width)
                     futures.append(future)
             
             # 全ブロックの処理完了を待ちながら進捗報告

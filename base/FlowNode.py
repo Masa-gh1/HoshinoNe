@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import MAX_WORKERS
 from main.ResultWindow import ResultWindow
-from utils.ThreadPool import ProcessExecutorInNode
+from utils.ThreadPool import ParallelExecutor
 
 # 定数
 _MAJOR_TYPE_FUNC  = 'func'             # 関数系

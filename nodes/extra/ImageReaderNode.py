@@ -61,7 +61,7 @@ class ImageReaderNode(BaseReaderNode):
     def processFile(self, filePath, context=None):
         from PIL import Image
         import numpy as np
-        from utils.ThreadPool import ProcessExecutorInNode 
+        from utils.ThreadPool import ParallelExecutor 
         from utils import exif_helper as exif
         from config import BLOCK_SIZE
         from base import FlowData
@@ -119,7 +119,7 @@ class ImageReaderNode(BaseReaderNode):
         # ブロック単位で並列処理
         for y in range(0, height, BLOCK_SIZE):
             for x in range(0, width, BLOCK_SIZE):
-                future = ProcessExecutorInNode .submit(self, self._processBlock, pixels, x, y, len(plane_names), width, height)
+                future = ParallelExecutor .submit(self, self._processBlock, pixels, x, y, len(plane_names), width, height)
                 futureToDatas[future] = flowData
 
         # 全ブロックの処理完了を待ちながら進捗報告

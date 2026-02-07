@@ -14,6 +14,6 @@ from utils.PerResourceThreadPoolWrapper import PerResourceThreadPoolWrapper
 from utils.CoalescingThreadPool import CoalescingThreadPool
 
 # グローバルスレッドプール
-ProcessExecutorInNode = PerResourceThreadPoolWrapper()
+ParallelExecutor = PerResourceThreadPoolWrapper()
 CoalescingExecutor = CoalescingThreadPool(max_workers=MAX_WORKERS)
 atexit.register(CoalescingExecutor.shutdown)
