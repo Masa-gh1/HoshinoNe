@@ -16,6 +16,7 @@ from typing import Dict, Any, Callable, Tuple, List
 class PerResourceThreadPoolWrapper:
     def __init__(self):
         self.maxWorkersPerResource = None
+        self.maxWorkers            = None
         self._executor = None
         self._pendingTasks:  Dict[Any, List[Tuple[Callable, tuple, dict, Future]]] = {}  # 保留中タスク
         self._runningTasks:  Dict[Any, List[Future]] = {}  # 実行中タスク
@@ -66,17 +67,17 @@ class PerResourceThreadPoolWrapper:
                 self._runningSum += 1
                 self._execute_task(resourceKey, func, args, kwargs, future)
                 return future
-
+    
     def _execute_task(self, resourceKey: Any, func: Callable, args: tuple, kwargs: dict, future: Future):
         """タスクを実行"""
         future._future = self._executor.submit(self._wrapper, resourceKey, func, args, kwargs, future)
     
     local = threading.local()
-
+    
     def _wrapper(self, resourceKey: Any, func: Callable, args: tuple, kwargs: dict, future: Future):
         try:
-            self.local.enterWait = lambda: self.enterWait(resourceKey)
-            self.local.exitWait  = lambda: self.exitWait(resourceKey)
+            self.local._executor = self
+            self.local._resourceKey = resourceKey
             result = func(*args, **kwargs)
             future.set_result(result)
         except Exception as e:
@@ -89,7 +90,10 @@ class PerResourceThreadPoolWrapper:
     def _execute_next_task(self, resourceKey: Any, future: Future=None):
         """次の保留タスクを実行"""
         with self._lock:
-            if not future is None and resourceKey in self._runningTasks:
+            if(   not future is None
+              and resourceKey in self._runningTasks
+              and future      in self._runningTasks[resourceKey]
+              ):
                 self._runningTasks[resourceKey].remove(future)
                 self._runningSum -= 1
                 if(   len(self._runningTasks[resourceKey]) <= 0
@@ -124,18 +128,24 @@ class PerResourceThreadPoolWrapper:
                             self._execute_task(resourceKey, func, args, kwargs, future)
                             break
     
-    def enterWait(self, resourceKey: Any):
+    @classmethod
+    def enterWait(cls):
         """長時間の待ちが考えられることを通知する"""
-        with self._lock:
-            self._waitingCounts[resourceKey] += 1
-            self._waitingSum += 1
-        self._execute_next_task(resourceKey)
+        if hasattr(cls.local, '_executor') and cls.local._executor:
+            self = cls.local._executor
+            with self._lock:
+                self._waitingCounts[self.local._resourceKey] += 1
+                self._waitingSum += 1
+            self._execute_next_task(self.local._resourceKey)
     
-    def exitWait(self, resourceKey: Any):
+    @classmethod
+    def exitWait(cls):
         """長時間の待ちが終わった事を通知する"""
-        with self._lock:
-            self._waitingCounts[resourceKey] -= 1
-            self._waitingSum -= 1
+        if hasattr(cls.local, '_executor') and cls.local._executor:
+            self = cls.local._executor
+            with self._lock:
+                self._waitingCounts[self.local._resourceKey] -= 1
+                self._waitingSum -= 1
     
     def shutdown(self, wait=True, cancel_futures=False):
         """シャットダウン"""
