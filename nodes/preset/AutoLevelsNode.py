@@ -25,7 +25,6 @@ class AutoLevelsNode(FlowNode):
     
     def process(self, context=None):
         import numpy as np
-        from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
         from base import FlowDataWrapper
 
@@ -37,11 +36,9 @@ class AutoLevelsNode(FlowNode):
             inputDatas.extend(node.flowDatas)
         
         # 各入力データのdisplay_levelsを1%と99%のパーセンタイルで設定
-        for inputData in inputDatas:
-            if inputData.headers and inputData.headers.get('type') in ('image','table'):
-                width, height = inputData.getDimensions()
-                planeCount = inputData.getPlaneCount()
-                
+        for i, inputData in enumerate(inputDatas):
+            type = inputData.getType()
+            if type in ('image','table'):
                 # 全画像データを読み込み
                 blockArrays = []
                 for block in inputData.iterateBlocks():
@@ -60,7 +57,7 @@ class AutoLevelsNode(FlowNode):
                 # FlowDataWrapperを使用してheadersを後方のみに伝える
                 updatedHeaders = {'display_levels': {'min':float(p1), 'exclusive_upper':float(p99)}}
                 wrappedData = FlowDataWrapper(inputData, updatedHeaders)
-                inputDatas[inputDatas.index(inputData)] = wrappedData
+                inputDatas[i] = wrappedData
         
         # ラップされたデータを出力
         self.flowDatas = inputDatas

@@ -5,6 +5,7 @@ Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
 '''
 
+from .NNPlaneOperationNode import NNPlaneOperationNode
 from .N1BlockOperationNode import N1BlockOperationNode
 from .NNBlockOperationNode import NNBlockOperationNode
 from .LazyNNOperationNode import LazyNNOperationNode
@@ -19,6 +20,7 @@ from .PolynomialOperationMixin import PolynomialOperationMixin
 from .NodeFactory import NodeFactory
 
 __all__ = [
+    'NNPlaneOperationNode',
     'N1BlockOperationNode',
     'NNBlockOperationNode',
     'LazyNNOperationNode',

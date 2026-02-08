@@ -1,5 +1,5 @@
 '''
-NNBlockOperationNode base class
+NNPlaneOperationNode base class
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -13,13 +13,13 @@ from concurrent.futures import as_completed
 from base.FlowNode_CONST import *
 from base import FlowNode
 
-class NNBlockOperationNode(FlowNode):
-    """データ入出力 N:N のブロック単位計算ノードの基底クラス"""
+class NNPlaneOperationNode(FlowNode):
+    """データ入出力 N:N の計算ノードの基底クラス"""
     # ノードタイプ
-    majorType = 'NN_block_operation'
-    minorType = 'NN_block_operation'
+    majorType = 'NN_operation'
+    minorType = 'NN_operation'
     # ノード名
-    name      = 'NNBlockOperationNode'
+    name      = 'NNOperationNode'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_PAS
@@ -43,39 +43,37 @@ class NNBlockOperationNode(FlowNode):
         # 前処理
         processedInputs = self.preprocessInputs(inputDatas)
         
-        futureToDatas       = {}
+        futureToDatas = {}
         futureCountPerDatas = {}
         
         for inputData in processedInputs:
             # 結果用の FlowData を初期化
             flowData = self.createFlowData(inputData)
             futureCountPerDatas[flowData] = 0
-            
-            # ブロック単位で並列処理
-            for block in inputData.iterateBlocks():
-                planeIndex = block.planeIndex
-                x, y = block.x, block.y
-                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.processBlock, block, planeIndex, x, y)
+
+            # プレーン単位で並列処理
+            for planeIndex in range(inputData.getPlaneCount()):
+                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.processPlane, inputData, planeIndex)
                 futureToDatas[future] = flowData
                 futureCountPerDatas[flowData] += 1
         
-        # 全ブロックの処理完了を待つ
+        # 全プレーンの処理完了を待つ
         self.reportProgress(context, "処理中")
         resultFlowDatas = []
-        totalBlockCount = len(futureToDatas)
+        totalPlaneCount = len(futureToDatas)
         for i, future in enumerate(as_completed(futureToDatas)):
-            resultBlock = future.result()
+            resultBlocks = future.result()
             flowData = futureToDatas.pop(future)
-            if resultBlock:
+            for resultBlock in resultBlocks:
                 flowData.setBlock(resultBlock)
             
             futureCountPerDatas[flowData] -= 1
             if 0 == futureCountPerDatas[flowData]:
-                # 全部ブロックの処理が終わった flowData を結果配列に追加
+                # 全部プレーンの処理が終わった flowData を結果配列に追加
                 futureCountPerDatas.pop(flowData)
                 resultFlowDatas.append(flowData)
             
-            self.reportProgress(context, "処理中", i + 1, totalBlockCount)
+            self.reportProgress(context, "処理中", i + 1, totalPlaneCount)
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
@@ -125,13 +123,13 @@ class NNBlockOperationNode(FlowNode):
         return {}
     
     @abstractmethod
-    def processBlock(self, block, planeIndex, x, y):
-        """単一ブロックの処理 (サブクラスで実装)
+    def processPlane(self, flowData, planeIndex):
+        """データの処理 (サブクラスで実装)
         
         Args:
-            block: 処理対象のブロック
+            flowData: 処理対象のデータ
             
         Returns:
-            処理結果のDataBlock
+            処理結果の FlowData
         """
         pass

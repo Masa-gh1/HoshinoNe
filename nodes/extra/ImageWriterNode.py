@@ -70,8 +70,8 @@ class ImageWriterNode(BaseWriterNode):
             offset = 0.0
 
         if(  type == 'image'  and mode == 'RGB' and 3 <= planeCount
-            or type == 'table' and mode == '2D'  and 3 <= planeCount
-            ):
+          or type == 'table' and mode == '2D'  and 3 <= planeCount
+          ):
             # RGBカラー画像
             imgMode = 'RGB'
             imgArray = np.zeros((height, width, 3), dtype=dtype)
