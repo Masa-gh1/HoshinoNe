@@ -31,6 +31,7 @@ class NodeFactory:
         ('tensor'                  , '数列(0:1)'),
         ('coefficients'            , '係数(0:1)'),
         ('------------------------', None),
+        ('correlation'             , '相関(N:N)'),
         ('quadratic_fit'           , '2次関数近似(N:N)'),
        #('absolute_lowpass_filter' , '絶対値(低通)(N:N)'),# 廃止 upper_pass, lower_pass に分割
         ('auto_levels'             , '自動レベル(N:N)'),
