@@ -26,10 +26,9 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self.planeCount = 3
+        self.planes = ["Plane 0","Plane 1","Plane 2"]
         self.xOrder = 0
         self.yOrder = 0
-        self.planeNames = ["Plane 0","Plane 1","Plane 2"]
         self.coefficients = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIndex,i,j": value}
     
     def getText(self):
@@ -37,43 +36,38 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         from utils import string_helper as sh
 
         constVal = ""
-        for planeIndex in range(self.planeCount):
+        for planeIndex in range(len(self.planes)):
             value = self.coefficients.get(f"{planeIndex},0,0", 0)
             constVal += f" {sh.dispS(value)}"
-        displayText = f"{self.name}\nP:{self.planeCount} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
+        displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
         return displayText
     
     def store(self, nodeData):
-        nodeData["planeCount"] = self.planeCount
+        nodeData["planes"] = self.planes
         nodeData["xOrder"] = self.xOrder
         nodeData["yOrder"] = self.yOrder
         nodeData["coefficients"] = self.coefficients
-        nodeData["planeNames"] = self.planeNames
     
     def restore(self, nodeData):
-        if "planeCount" in nodeData:
-            self.planeCount = nodeData["planeCount"]
+        if "planeNames" in nodeData:
+            self.planes = nodeData["planeNames"]
+        if "planes" in nodeData:
+            self.planes = nodeData["planes"]
         if "xOrder" in nodeData:
             self.xOrder = nodeData["xOrder"]
         if "yOrder" in nodeData:
             self.yOrder = nodeData["yOrder"]
         if "coefficients" in nodeData:
             self.coefficients = nodeData["coefficients"]
-        if "planeNames" in nodeData:
-            self.planeNames = nodeData["planeNames"]
-        else:
-            # デフォルト名を生成
-            self.planeNames = [f"Plane {i}" for i in range(self.planeCount)]
     
     def createSettingWindow(self):
         return PolynomialSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, planeCount, xOrder, yOrder, coefficients, planeNames):
-        self.planeCount = planeCount
+    def applySettings(self, planes, xOrder, yOrder, coefficients):
+        self.planes = planes
         self.xOrder = xOrder
         self.yOrder = yOrder
         self.coefficients = coefficients
-        self.planeNames = planeNames
         self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
@@ -84,8 +78,9 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "開始")
         
         # 指定されたサイズの係数Polynomialを作成
-        width = self.xOrder + 1
-        height = self.yOrder + 1
+        planeCount = len(self.planes)
+        width      = self.xOrder + 1
+        height     = self.yOrder + 1
         
         # モードを判断
         if width == 1 and height == 1:
@@ -100,7 +95,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
             mode = "2D"
         
         # プレーン名
-        planeNames = self.planeNames
+        planes = self.planes
         
         # 列ラベルと行ラベルを生成
         columns = [f'x^{i}' for i in range(width)]
@@ -113,16 +108,16 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
             'axes': ['x_order', 'y_order'],
             'columns': columns,
             'lines': lines,
-            'planes': planeNames,
+            'planes': planes,
             'max_orders': [self.xOrder, self.yOrder],
-            'equations': [f'{name} = coefficients' for name in planeNames]
+            'equations': [f'{name} = coefficients' for name in planes]
         }
         
         outputFlowData = FlowData(headers)
         outputFlowData.setDimensions(width, height)
         
         # 各プレーンに係数を設定
-        for planeIndex in range(self.planeCount):
+        for planeIndex in range(planeCount):
             result = []
             for j in range(height):
                 row = []
@@ -142,16 +137,17 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         coeffStr = str(sorted(self.coefficients.items()))
-        planeStr = str(self.planeNames)
-        config = f"{self.minorType}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{coeffStr}_{planeStr}"
+        config = f"{self.minorType}_{self.planes}_{self.xOrder}_{self.yOrder}_{coeffStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class PolynomialSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
-        self.node = node
-        self.planeEntries = []
-        self.coeffEntries = {}
+        self.node   = node
+        self.planes = node.planes.copy()
+        self.xOrder = node.xOrder
+        self.yOrder = node.yOrder
+        self.coeff  = node.coefficients.copy()
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -161,16 +157,16 @@ class PolynomialSettingsDialog(tk.Toplevel):
         basicFrame.pack(fill=tk.X, padx=10, pady=5)
         
         tk.Label(basicFrame, text="プレーン数:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.planeEntry = tk.Entry(basicFrame, width=5)
-        self.planeEntry.insert(0, str(node.planeCount))
-        self.planeEntry.grid(row=0, column=1, padx=5, pady=2)
+        self.planeCountEntry = tk.Entry(basicFrame, width=5)
+        self.planeCountEntry.insert(0, str(len(self.planes)))
+        self.planeCountEntry.grid(row=0, column=1, padx=5, pady=2)
         
-        tk.Label(basicFrame, text="X次数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
+        tk.Label(basicFrame, text="x次数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         self.xOrderEntry = tk.Entry(basicFrame, width=5)
         self.xOrderEntry.insert(0, str(node.xOrder))
         self.xOrderEntry.grid(row=0, column=3, padx=5, pady=2)
         
-        tk.Label(basicFrame, text="Y次数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
+        tk.Label(basicFrame, text="y次数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(node.yOrder))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
@@ -178,12 +174,12 @@ class PolynomialSettingsDialog(tk.Toplevel):
         tk.Button(basicFrame, text="次数更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
         # 係数設定フレーム（スクロール可能）
-        coeffFrame = tk.Frame(self, height=120)
-        coeffFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        coeffFrame.pack_propagate(False)
+        frame = tk.Frame(self, height=120)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        frame.pack_propagate(False)
         
-        canvas = tk.Canvas(coeffFrame)
-        scrollbar = tk.Scrollbar(coeffFrame, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(frame)
+        scrollbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
         self.scrollableFrame = tk.Frame(canvas)
         
         self.scrollableFrame.bind(
@@ -214,84 +210,79 @@ class PolynomialSettingsDialog(tk.Toplevel):
         # 既存の係数エントリーをクリア
         for widget in self.scrollableFrame.winfo_children():
             widget.destroy()
-        self.coeffEntries.clear()
-        self.planeEntries.clear()
         
-        try:
-            planes = int(self.planeEntry.get())
-            xOrd = int(self.xOrderEntry.get())
-            yOrd = int(self.yOrderEntry.get())
+        self.planeEntries = []
+        self.coeffEntries = {}
+        
+        planeCount = int(self.planeCountEntry.get())
+        xOrder     = int(self.xOrderEntry.get())
+        yOrder     = int(self.yOrderEntry.get())
+        
+        if planeCount <= 0 or xOrder < 0 or yOrder < 0:
+            return
+        
+        row = 0
+        for planeIndex in range(planeCount):
+            # プレーン名をテキストボックスで表示
+            if len(self.node.planes) <= planeIndex:
+                self.planes.append(f"Plane {planeIndex}")
             
-            if planes <= 0 or xOrd < 0 or yOrd < 0:
-                return
+            entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
+            entry.insert(0, self.planes[planeIndex])
+            entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
+            self.planeEntries.append(entry)
+            row += 1
             
-            row = 0
-            for planeIndex in range(planes):
-                # プレーン名をテキストボックスで表示
-                planeNameEntry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
-                if planeIndex < len(self.node.planeNames):
-                    planeNameEntry.insert(0, self.node.planeNames[planeIndex])
-                else:
-                    planeNameEntry.insert(0, f"Plane {planeIndex}")
-                planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
-                
-                self.planeEntries.append(planeNameEntry)
-                
-                row += 1
-                
-                # X軸ラベル（上部）
-                for i in range(xOrd + 1):
-                    tk.Label(self.scrollableFrame, text=f"x^{i}").grid(row=row, column=i + 1, padx=5, pady=2)
-                row += 1
+            # X軸ラベル（上部）
+            for i in range(xOrder + 1):
+                entry = tk.Label(self.scrollableFrame, text=f"x^{i}")
+                entry.grid(row=row, column=i + 1, padx=5, pady=2)
+            row += 1
+            
+            for j in range(yOrder + 1):
+                # Y軸ラベル（左側）
+                entry = tk.Label(self.scrollableFrame, text=f"y^{j}")
+                entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
                 
                 # 係数エントリー
-                for j in range(yOrd + 1):
-                    # Y軸ラベル（左側）
-                    tk.Label(self.scrollableFrame, text=f"y^{j}").grid(row=row, column=0, sticky="w", padx=5, pady=2)
-                    
-                    for i in range(xOrd + 1):
-                        entry = tk.Entry(self.scrollableFrame, width=8)
-                        key = f"{planeIndex},{i},{j}"
-                        if key in self.node.coefficients:
-                            entry.insert(0, str(self.node.coefficients[key]))
-                        else:
-                            entry.insert(0, "0")
-                        entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                        self.coeffEntries[key] = entry
-                    
-                    row += 1
-                
+                for i in range(xOrder + 1):
+                    entry = tk.Entry(self.scrollableFrame, width=8)
+                    key = f"{planeIndex},{i},{j}"
+                    if key in self.coeff:
+                        entry.insert(0, str(self.coeff[key]))
+                    else:
+                        entry.insert(0, "0")
+                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
+                    self.coeffEntries[key] = entry
                 row += 1
-        except ValueError:
-            from utils.Debug import Debug
-            Debug.log(type(self).__name__, "Waring: Invalid input for plane count, x order, or y order.")
+            row += 1
+            
+            entry = tk.Label(self.scrollableFrame, text=" ")
+            entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+            row += 1
     
     def onApply(self):
-        planes = int(self.planeEntry.get())
-        xOrd = int(self.xOrderEntry.get())
-        yOrd = int(self.yOrderEntry.get())
+        planes = [entry.get() for entry in self.planeEntries]
+        xOrder = int(self.xOrderEntry.get())
+        yOrder = int(self.yOrderEntry.get())
         
-        if planes > 0 and xOrd >= 0 and yOrd >= 0:
+        if planes and 0 <= xOrder and 0 <= yOrder:
             # 係数を収集
-            coefficients = {}
+            coeff = {}
             for key, entry in self.coeffEntries.items():
                 try:
                     val = float(entry.get())
                     if val != 0:
-                        coefficients[key] = val
+                        coeff[key] = val
                 except ValueError:
                     from utils.Debug import Debug
                     Debug.log(type(self).__name__, f"Warning: Invalid coefficient value for {key}")
             
-            # プレーン名を収集
-            planeNames = []
-            for entry in self.planeEntries:
-                name = entry.get().strip()
-                if not name:
-                    name = f"Plane {len(planeNames)}"
-                planeNames.append(name)
-            
-            self.node.applySettings(planes, xOrd, yOrd, coefficients, planeNames)
+            self.planes = planes
+            self.xOrder = xOrder
+            self.yOrder = yOrder
+            self.coeff  = coeff
+            self.node.applySettings(planes, xOrder, yOrder, coeff)
     
     def onClose(self):
         self.destroy()

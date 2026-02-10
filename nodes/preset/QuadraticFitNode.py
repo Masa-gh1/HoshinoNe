@@ -32,7 +32,7 @@ class QuadraticFitNode(NNPlaneOperationNode):
         return datas
     
     def createFlowData(self, inputData):
-        """LazyFlowData を作成"""
+        """FlowData を作成"""
         from base import FlowData
 
         # header を取得

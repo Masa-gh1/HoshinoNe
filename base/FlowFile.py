@@ -76,15 +76,25 @@ class FlowFile:
         try:
             with open(filePath, 'r', encoding='utf-8') as f:
                 serial = json.load(f)
-            if "version" not in serial:
+            if not "version" in serial:
+                var = [0,0,0]
+            else:
+                # format 99.99.99999999
+                var = [int(x) for x in serial["version"].split(".")]
+
+            if [0,0,0] == var:
                 old = oldFlowFile()
                 return old.load_20251129(serial, create, canvas, editor)
+            elif var <= [0,2,20260207]:
+                old = oldFlowFile()
+                return old.load_20260207(serial, create, canvas, editor)
             else:
                 return self.load_now(serial, create, canvas, editor)
         except:
             raise
     
-    def load_now(self, serial, create, canvas, editor):
+    @staticmethod
+    def load_now(serial, create, canvas, editor):
         # zOrder 順を収集
         zOrderMap = {}
 
@@ -129,7 +139,42 @@ class FlowFile:
 ######################
 # ここから旧ファイル対応
 class oldFlowFile:
-    def load_20251129(self, serial, create, canvas, editor):
+    @staticmethod
+    def load_20260207(serial, create, canvas, editor):
+        """
+        旧フォーマットのロード
+        {
+            ...
+            "nodes": [
+                {
+                ...
+                "type": "tensor"
+                "planeCount": 3,  # del
+                "planeNames": [   # -> "planes": [
+                ...
+                },
+                {
+                ...
+                "type": "coefficients"
+                "planeCount": 3,  # del
+                "planeNames": [   # -> "planes": [
+                ...
+                }
+            ]
+            ...
+        }
+        """
+
+        for node in serial["nodes"]:
+            if node["type"] in ("tensor", "coefficients"):
+                node["planes"] = node["planeNames"]
+                del node["planeCount"]
+                del node["planeNames"]
+
+        return FlowFile.load_now(serial, create, canvas, editor)
+
+    @staticmethod
+    def load_20251129(serial, create, canvas, editor):
         """
         旧フォーマットのロード
         {

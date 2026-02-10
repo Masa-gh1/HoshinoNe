@@ -128,8 +128,7 @@ class TensorNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         tensorStr = str(sorted(self.table.items()))
-        planeStr = str(self.planes)
-        config = f"{self.minorType}_{self.planes}_{self.columns}_{self.lines}_{tensorStr}_{planeStr}"
+        config = f"{self.minorType}_{self.planes}_{self.columns}_{self.lines}_{tensorStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
@@ -150,7 +149,7 @@ class TensorSettingsDialog(tk.Toplevel):
         
         tk.Label(basicFrame, text="プレーン数:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         self.planeCountEntry = tk.Entry(basicFrame, width=5)
-        self.planeCountEntry.insert(0, str(len(node.planes)))
+        self.planeCountEntry.insert(0, str(len(self.planes)))
         self.planeCountEntry.grid(row=0, column=1, padx=5, pady=2)
         
         tk.Label(basicFrame, text="x項数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
@@ -158,20 +157,20 @@ class TensorSettingsDialog(tk.Toplevel):
         self.xOrderEntry.insert(0, str(len(node.columns)))
         self.xOrderEntry.grid(row=0, column=3, padx=5, pady=2)
         
-        tk.Label(basicFrame, text="Y項数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
+        tk.Label(basicFrame, text="y項数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(len(node.lines)))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
         
-        tk.Button(basicFrame, text="項数更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
+        tk.Button(basicFrame, text="表更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
-        # 係数設定フレーム（スクロール可能）
-        coeffFrame = tk.Frame(self, height=120)
-        coeffFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        coeffFrame.pack_propagate(False)
+        # 表設定フレーム（スクロール可能）
+        frame = tk.Frame(self, height=120)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        frame.pack_propagate(False)
         
-        canvas = tk.Canvas(coeffFrame)
-        scrollbar = tk.Scrollbar(coeffFrame, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(frame)
+        scrollbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
         self.scrollableFrame = tk.Frame(canvas)
         
         self.scrollableFrame.bind(
@@ -192,14 +191,14 @@ class TensorSettingsDialog(tk.Toplevel):
         tk.Button(buttonFrame, text="適用", command=self.onApply).pack(side=tk.LEFT, padx=5)
         tk.Button(buttonFrame, text="閉じる", command=self.destroy).pack(side=tk.LEFT, padx=5)
         
-        # 初期係数表示
+        # 初期表表示
         self.updateOrder()
         
         # ウィンドウが閉じられたときのクリーンアップ
         self.protocol("WM_DELETE_WINDOW", self.onClose)
     
     def updateOrder(self):
-        # 既存の係数エントリーをクリア
+        # 既存の数列エントリーをクリア
         for widget in self.scrollableFrame.winfo_children():
             widget.destroy()
         
@@ -208,46 +207,57 @@ class TensorSettingsDialog(tk.Toplevel):
         self.lineEntries   = []
         self.tableEntries  = {}
         
-        planes = int(self.planeCountEntry.get())
-        xOrder = int(self.xOrderEntry.get())
-        yOrder = int(self.yOrderEntry.get())
+        planeCount = int(self.planeCountEntry.get())
+        xOrder     = int(self.xOrderEntry.get())
+        yOrder     = int(self.yOrderEntry.get())
         
-        if planes <= 0 or xOrder <= 0 or yOrder <= 0:
+        if planeCount <= 0 or xOrder <= 0 or yOrder <= 0:
             return
         
+        for i in range(len(self.columns), xOrder):
+            self.columns.append(f"{chr(ord('A') + (i%26))}")
+
+        for j in range(len(self.lines), yOrder):
+            self.lines.append(f"{j}")
+        
         row = 0
-        for planeIndex in range(planes):
+        for planeIndex in range(planeCount):
             # プレーン名をテキストボックスで表示
             if len(self.node.planes) <= planeIndex:
                 self.planes.append(f"Plane {planeIndex}")
+            
             entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
             entry.insert(0, self.planes[planeIndex])
             entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
             self.planeEntries.append(entry)
-            
             row += 1
             
             # X軸ラベル（上部）
-            for i in range(xOrder):
-                if len(self.columns) <= i:
-                    self.columns.append(f"{chr(ord('A') + (i%26))}")
-                entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
-                entry.insert(0, self.columns[i])
-                entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                self.columnEntries.append(entry)
-            
+            if 0 == planeIndex:
+                for i in range(xOrder):
+                    entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
+                    entry.insert(0, self.columns[i])
+                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
+                    self.columnEntries.append(entry)
+            else:
+                for i in range(xOrder):
+                    entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=self.columns[i])
+                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
             row += 1
             
-            # 係数エントリー
             for j in range(yOrder):
                 # Y軸ラベル（左側）
-                if len(self.lines) <= j:
-                    self.lines.append(f"{j}")
-                entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
-                entry.insert(0, self.lines[j])
-                entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
-                self.lineEntries.append(entry)
+                if 0 == planeIndex:
+                    entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
+                    entry.insert(0, self.lines[j])
+                    entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+                    self.lineEntries.append(entry)
+                else:
+                    entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=self.lines[j])
+                    entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+
                 
+                # 表エントリー
                 for i in range(xOrder):
                     entry = tk.Entry(self.scrollableFrame, width=8)
                     key = f"{planeIndex},{i},{j}"
@@ -257,26 +267,20 @@ class TensorSettingsDialog(tk.Toplevel):
                         entry.insert(0, "0")
                     entry.grid(row=row, column=i + 1, padx=5, pady=2)
                     self.tableEntries[key] = entry
-                
                 row += 1
+            row += 1
             
+            entry = tk.Label(self.scrollableFrame, text=" ")
+            entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
             row += 1
     
     def onApply(self):
-        planes = []
-        for entry in self.planeEntries:
-            planes.append(entry.get())
-        
-        columns = []
-        for entry in self.columnEntries:
-            columns.append(entry.get())
-        
-        lines = []
-        for entry in self.lineEntries:
-            lines.append(entry.get())
+        planes  = [entry.get() for entry in self.planeEntries]
+        columns = [entry.get() for entry in self.columnEntries]
+        lines   = [entry.get() for entry in self.lineEntries]
         
         if self.planes and self.columns and self.lines:
-            # 係数を収集
+            # 表を収集
             table = {}
             for key, entry in self.tableEntries.items():
                 try:

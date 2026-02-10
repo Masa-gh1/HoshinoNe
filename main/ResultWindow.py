@@ -9,8 +9,6 @@ All rights reserved.
 
 from fractions import Fraction
 import json
-import sys
-import traceback
 import io
 import tkinter as tk
 from tkinter import ttk

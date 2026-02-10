@@ -26,10 +26,9 @@ class TensorNode(FlowNode,ConfigurableNode):
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self.planeCount = 3
+        self.planes = ["Plane 0","Plane 1","Plane 2"]
         self.xOrder = 1
         self.yOrder = 1
-        self.planeNames = ["Plane 0","Plane 1","Plane 2"]
         self.tensor = {"0,0,0": 1.0,"1,0,0": 1.0,"2,0,0": 1.0}  # {"planeIndex,i,j": value}
     
     def getText(self):
@@ -37,43 +36,38 @@ class TensorNode(FlowNode,ConfigurableNode):
         from utils import string_helper as sh
 
         constVal = ""
-        for planeIndex in range(self.planeCount):
+        for planeIndex in range(len(self.planes)):
             value = self.tensor.get(f"{planeIndex},0,0", 0)
             constVal += f" {sh.dispS(value)}"
-        displayText = f"{self.name}\nP:{self.planeCount} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
+        displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
         return displayText
     
     def store(self, nodeData):
-        nodeData["planeCount"] = self.planeCount
+        nodeData["planes"] = self.planes
         nodeData["xOrder"] = self.xOrder
         nodeData["yOrder"] = self.yOrder
         nodeData["tensor"] = self.tensor
-        nodeData["planeNames"] = self.planeNames
     
     def restore(self, nodeData):
-        if "planeCount" in nodeData:
-            self.planeCount = nodeData["planeCount"]
+        if "planeNames" in nodeData:
+            self.planes = nodeData["planeNames"]
+        if "planes" in nodeData:
+            self.planes = nodeData["planes"]
         if "xOrder" in nodeData:
             self.xOrder = nodeData["xOrder"]
         if "yOrder" in nodeData:
             self.yOrder = nodeData["yOrder"]
         if "tensor" in nodeData:
             self.tensor = nodeData["tensor"]
-        if "planeNames" in nodeData:
-            self.planeNames = nodeData["planeNames"]
-        else:
-            # デフォルト名を生成
-            self.planeNames = [f"Plane {i}" for i in range(self.planeCount)]
     
     def createSettingWindow(self):
         return TensorSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, planeCount, xOrder, yOrder, tensor, planeNames):
-        self.planeCount = planeCount
+    def applySettings(self, planes, xOrder, yOrder, tensor):
+        self.planes = planes
         self.xOrder = xOrder
         self.yOrder = yOrder
         self.tensor = tensor
-        self.planeNames = planeNames
         self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
@@ -84,8 +78,9 @@ class TensorNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "開始")
         
         # 指定されたサイズの tensor を作成
-        width = self.xOrder
-        height = self.yOrder
+        planeCount = len(self.planes)
+        width      = self.xOrder
+        height     = self.yOrder
         
         # モードを判断
         if width == 1 and height == 1:
@@ -100,7 +95,7 @@ class TensorNode(FlowNode,ConfigurableNode):
             mode = "2D"
         
         # プレーン名
-        planeNames = self.planeNames
+        planes = self.planes
         
         # 列ラベルと行ラベルを生成
         columns = [f'{i}' for i in range(width)]
@@ -113,7 +108,7 @@ class TensorNode(FlowNode,ConfigurableNode):
             'axes': ['x_order', 'y_order'],
             'columns': columns,
             'lines': lines,
-            'planes': planeNames,
+            'planes': planes,
             'max_orders': [self.xOrder, self.yOrder],
         }
         
@@ -121,7 +116,7 @@ class TensorNode(FlowNode,ConfigurableNode):
         outputFlowData.setDimensions(width, height)
         
         # 各プレーンに数列を設定
-        for planeIndex in range(self.planeCount):
+        for planeIndex in range(planeCount):
             result = []
             for j in range(height):
                 row = []
@@ -141,16 +136,17 @@ class TensorNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         tensorStr = str(sorted(self.tensor.items()))
-        planeStr = str(self.planeNames)
-        config = f"{self.minorType}_{self.planeCount}_{self.xOrder}_{self.yOrder}_{tensorStr}_{planeStr}"
+        config = f"{self.minorType}_{self.planes}_{self.xOrder}_{self.yOrder}_{tensorStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
-        self.node = node
-        self.planeEntries  = []
-        self.tensorEntries = {}
+        self.node   = node
+        self.planes = node.planes.copy()
+        self.xOrder = node.xOrder
+        self.yOrder = node.yOrder
+        self.tensor = node.tensor.copy()
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -160,29 +156,29 @@ class TensorSettingsDialog(tk.Toplevel):
         basicFrame.pack(fill=tk.X, padx=10, pady=5)
         
         tk.Label(basicFrame, text="プレーン数:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.planeEntry = tk.Entry(basicFrame, width=5)
-        self.planeEntry.insert(0, str(node.planeCount))
-        self.planeEntry.grid(row=0, column=1, padx=5, pady=2)
+        self.planeCountEntry = tk.Entry(basicFrame, width=5)
+        self.planeCountEntry.insert(0, str(len(self.planes)))
+        self.planeCountEntry.grid(row=0, column=1, padx=5, pady=2)
         
         tk.Label(basicFrame, text="x項数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         self.xOrderEntry = tk.Entry(basicFrame, width=5)
         self.xOrderEntry.insert(0, str(node.xOrder))
         self.xOrderEntry.grid(row=0, column=3, padx=5, pady=2)
         
-        tk.Label(basicFrame, text="Y項数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
+        tk.Label(basicFrame, text="y項数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(node.yOrder))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
         
         tk.Button(basicFrame, text="項数更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
-        # 係数設定フレーム（スクロール可能）
-        coeffFrame = tk.Frame(self, height=120)
-        coeffFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        coeffFrame.pack_propagate(False)
+        # 数列設定フレーム（スクロール可能）
+        frame = tk.Frame(self, height=120)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        frame.pack_propagate(False)
         
-        canvas = tk.Canvas(coeffFrame)
-        scrollbar = tk.Scrollbar(coeffFrame, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(frame)
+        scrollbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
         self.scrollableFrame = tk.Frame(canvas)
         
         self.scrollableFrame.bind(
@@ -203,71 +199,74 @@ class TensorSettingsDialog(tk.Toplevel):
         tk.Button(buttonFrame, text="適用", command=self.onApply).pack(side=tk.LEFT, padx=5)
         tk.Button(buttonFrame, text="閉じる", command=self.destroy).pack(side=tk.LEFT, padx=5)
         
-        # 初期係数表示
+        # 初期数列表示
         self.updateOrder()
         
         # ウィンドウが閉じられたときのクリーンアップ
         self.protocol("WM_DELETE_WINDOW", self.onClose)
     
     def updateOrder(self):
-        # 既存の係数エントリーをクリア
+        # 既存の数列エントリーをクリア
         for widget in self.scrollableFrame.winfo_children():
             widget.destroy()
-        self.tensorEntries.clear()
-        self.planeEntries.clear()
         
-        planes = int(self.planeEntry.get())
-        xOrd = int(self.xOrderEntry.get())
-        yOrd = int(self.yOrderEntry.get())
+        self.planeEntries  = []
+        self.tensorEntries = {}
         
-        if planes <= 0 or xOrd <= 0 or yOrd <= 0:
+        planeCount = int(self.planeCountEntry.get())
+        xOrder     = int(self.xOrderEntry.get())
+        yOrder     = int(self.yOrderEntry.get())
+        
+        if planeCount <= 0 or xOrder <= 0 or yOrder <= 0:
             return
         
         row = 0
-        for planeIndex in range(planes):
+        for planeIndex in range(planeCount):
             # プレーン名をテキストボックスで表示
-            planeNameEntry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
-            if planeIndex < len(self.node.planeNames):
-                planeNameEntry.insert(0, self.node.planeNames[planeIndex])
-            else:
-                planeNameEntry.insert(0, f"Plane {planeIndex}")
-            planeNameEntry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
+            if len(self.node.planes) <= planeIndex:
+                self.planes.append(f"Plane {planeIndex}")
             
-            self.planeEntries.append(planeNameEntry)
-            
+            entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
+            entry.insert(0, self.planes[planeIndex])
+            entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
+            self.planeEntries.append(entry)
             row += 1
             
             # X軸ラベル（上部）
-            for i in range(xOrd):
-                tk.Label(self.scrollableFrame, text=f"x:{i}").grid(row=row, column=i + 1, padx=5, pady=2)
+            for i in range(xOrder):
+                entry = tk.Label(self.scrollableFrame, text=f"x:{i}")
+                entry.grid(row=row, column=i + 1, padx=5, pady=2)
             row += 1
             
-            # 係数エントリー
-            for j in range(yOrd):
+            for j in range(yOrder):
                 # Y軸ラベル（左側）
-                tk.Label(self.scrollableFrame, text=f"y:{j}").grid(row=row, column=0, sticky="w", padx=5, pady=2)
+                entry = tk.Label(self.scrollableFrame, text=f"y:{j}")
+                entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
                 
-                for i in range(xOrd):
+                # 数列エントリー
+                for i in range(xOrder):
                     entry = tk.Entry(self.scrollableFrame, width=8)
                     key = f"{planeIndex},{i},{j}"
-                    if key in self.node.tensor:
-                        entry.insert(0, str(self.node.tensor[key]))
+                    if key in self.tensor:
+                        entry.insert(0, str(self.tensor[key]))
                     else:
                         entry.insert(0, "0")
                     entry.grid(row=row, column=i + 1, padx=5, pady=2)
                     self.tensorEntries[key] = entry
-                
                 row += 1
+            row += 1
             
+            entry = tk.Label(self.scrollableFrame, text=" ")
+            entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
             row += 1
     
     def onApply(self):
-        planes = int(self.planeEntry.get())
-        xOrd = int(self.xOrderEntry.get())
-        yOrd = int(self.yOrderEntry.get())
+        planes = [entry.get() for entry in self.planeEntries]
+        xOrder = int(self.xOrderEntry.get())
+        yOrder = int(self.yOrderEntry.get())
         
-        if planes > 0 and xOrd >= 0 and yOrd >= 0:
-            # 係数を収集
+        if planes and 0 < xOrder and 0 < yOrder:
+            # 数列を収集
             tensor = {}
             for key, entry in self.tensorEntries.items():
                 try:
@@ -278,15 +277,11 @@ class TensorSettingsDialog(tk.Toplevel):
                     from utils.Debug import Debug
                     Debug.log(type(self).__name__, f"Warning: Invalid tensor value for {key}")
             
-            # プレーン名を収集
-            planeNames = []
-            for entry in self.planeEntries:
-                name = entry.get().strip()
-                if not name:
-                    name = f"Plane {len(planeNames)}"
-                planeNames.append(name)
-            
-            self.node.applySettings(planes, xOrd, yOrd, tensor, planeNames)
+            self.planes = planes
+            self.xOrder = xOrder
+            self.yOrder = yOrder
+            self.tensor = tensor
+            self.node.applySettings(planes, xOrder, yOrder, tensor)
     
     def onClose(self):
         self.destroy()
