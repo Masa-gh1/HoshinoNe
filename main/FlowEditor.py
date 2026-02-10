@@ -881,6 +881,8 @@ class FlowEditor:
     def startUpdateCacheStats(self):
         self._setCount = 0
         self._getCount = 0
+        self._save1Count = 0
+        self._save2Count = 0
         self._startUpdateCacheStats()
     
     def _startUpdateCacheStats(self):
@@ -901,7 +903,7 @@ class FlowEditor:
         
         (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
          getCount, cacheHitCount, recalculateCount, loadCount,
-         setCount, purgeCount, saveCount,
+         setCount, purgeCount, save1Count, save2Count,
          elapsedHis) = CacheManager.getCacheStats()
         setps = (setCount - self._setCount)//5
         getps = (getCount - self._getCount)//5
@@ -940,11 +942,20 @@ class FlowEditor:
             dataInfo  = f"Data: {flowDataCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageSizeStr}"
             nodeInfo  = f"Node: {flowNodeCount}"
         else:
+            save1ps = (save1Count - self._save1Count)//5
+            save2ps = (save2Count - self._save2Count)//5
+            self._save1Count = save1Count
+            self._save2Count = save2Count
+            
+            # save 回数に単位を表示
+            save1psStr = f"{save1ps}save1/s"
+            save2psStr = f"{save2ps}save2/s"
+
             cacheNodeCount = f"{self.getNodeCount()}個"
 
-            blockInfo = f"Block: {getpsStr}, {setpsStr}"
+            blockInfo = f"Block: {getpsStr}, {setpsStr}, {save1psStr}, {save2psStr}"
             objInfo   = f"Object: {ObjectCount}"
-            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount} {purgeCount/setCount:.3f} Save:{saveCount}({saveCount/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
+            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount} {purgeCount/setCount:.3f} Save:{save2Count}({save2Count/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
             dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageCount}({storageSizeStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
@@ -971,7 +982,7 @@ class FlowEditor:
         b_nodeCount = self.getNodeCount()
         (b_objCacheCount, b_cacheCount, b_cacheSize, b_storageCount, b_storageSize,
          b_getCount, b_cacheHitCount, b_recalculateCount, b_loadCount,
-         b_setCount, b_purgeCount, b_saveCount,
+         b_setCount, b_purgeCount, b_save1Count, b_save2Count,
          b_elapsedHis) = CacheManager.getCacheStats()
         
         # ガベージコレクションを実行
@@ -981,7 +992,7 @@ class FlowEditor:
         a_nodeCount = self.getNodeCount()
         (a_objCacheCount, a_cacheCount, a_cacheSize, a_storageCount, a_storageSize,
          a_getCount, a_cacheHitCount, a_recalculateCount, a_loadCount,
-         a_setCount, a_purgeCount, a_saveCount,
+         a_setCount, a_purgeCount, a_save1Count, a_save2Count,
          a_elapsedHis) = CacheManager.getCacheStats()
         
         # 結果を表示
@@ -1023,9 +1034,9 @@ class FlowEditor:
             print(text)
         print("========================")
         (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
-            getCount, cacheHitCount, recalculateCount, loadCount,
-            setCount, purgeCount, saveCount,
-            elapsedHis) = CacheManager.getCacheStats()
+         getCount, cacheHitCount, recalculateCount, loadCount,
+         setCount, purgeCount, save1Count, save2Count,
+         elapsedHis) = CacheManager.getCacheStats()
         print(f"objCacheCount: {objCacheCount}")
         print(f"cacheCount: {cacheCount}")
         print(f"cacheSize: {cacheSize}")
@@ -1037,7 +1048,8 @@ class FlowEditor:
         print(f"loadCount: {loadCount}")
         print(f"setCount: {setCount}")
         print(f"purgeCount: {purgeCount}")
-        print(f"saveCount: {saveCount}")
+        print(f"save1Count: {save1Count}")
+        print(f"save2Count: {save2Count}")
         for label,hist in (('cache count vs process time [us]', elapsedHis), ('call times vs process time [us]', mes.getHistgram())):
             print("------------------------")
             maxlen = max([len(s) for s in [label] + list(hist.keys())])

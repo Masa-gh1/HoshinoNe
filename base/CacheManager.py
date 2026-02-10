@@ -63,10 +63,11 @@ class CacheManager:
     _cleanupRegistered = False # 後始末関数登録状態
     
     # 統計情報
-    _setCount         = 0       # メモリに保存した回数
+    _setCount         = 0       # キャッシュに保存した回数
     _purgeCount       = 0       # メモリから破棄された回数
-    _saveCount        = 0       # メモリからストレージに保存された回数
-    _getCount         = 0       # メモリから取得した回数
+    _save1Count       = 0       # メモリに保存した回数
+    _save2Count       = 0       # メモリからストレージに保存された回数
+    _getCount         = 0       # キャッシュから取得した回数
     _cacheHitCount    = 0       # メモリでキャッシュヒットした回数
     _recalculateCount = 0       # メモリに無く再計算となった回数
     _loadCount        = 0       # メモリに無くストレージから復元した回数
@@ -150,6 +151,14 @@ class CacheManager:
             data = cls._loadFromStorage(cacheKey)
             
             if not data is None:
+                with cls._cacheLock():
+                    objectCacheCount = len(cls._objectCache)
+                
+                if 1000 <= objectCacheCount:
+                    # メモリキャッシュへの遅延書き込みが間に合っていないので少し待つ
+                    # 1000:0.0010s, 1200:0.0073s 1400:0.053s 1800:2.8s
+                    time.sleep(0.001*(1.01**(objectCacheCount-1000)))
+                
                 with cls._cacheLock("_get.locked.B"):
                     cls.__set(cacheKey, data, CachePolicy.PERSISTENT) # メモリキャッシュに復帰
             else:
@@ -169,8 +178,8 @@ class CacheManager:
         
         if 1000 <= objectCacheCount:
             # メモリキャッシュへの遅延書き込みが間に合っていないので少し待つ
-            # 1000:0.10s, 3000:0.33s, 9000:1.35s
-            time.sleep((1.1**(objectCacheCount/1000))-1.0)
+            # 1000:0.0010s, 1200:0.0073s 1400:0.053s 1800:2.8s
+            time.sleep(0.001*(1.01**(objectCacheCount-1000)))
         
         cls._setCount += 1
         return cls.elapsed( cls._set, cacheKey, data, cachePolicy)
@@ -200,7 +209,7 @@ class CacheManager:
                 if not cls._objectCache:
                     break
                 
-                cacheKey,data = next(iter(cls._objectCache.items()))
+                cacheKey, data = next(iter(cls._objectCache.items()))
                 dims  = data.shape
                 dtype = data.dtype
                 size  = data.nbytes
@@ -251,11 +260,12 @@ class CacheManager:
                 pageBody[index, :size] = data.reshape(-1).view(np.uint8) # メモリキャッシュへ書き込み
                 
                 with cls._cacheLock("_lazySave1.locked.D"):
+                    cls._save1Count += 1
                     cls._objectCache.pop(cacheKey, None)
                     cls._memCachedIndex[cacheKey] = (pos, meta)
                     if CachePolicy.PERSISTENT != cachePolicy:
                         cls._memCacheRemovable[cacheKey] = True
-                    if len(cls._memCacheFree) <= BLOCK_CACHE_PAGE_SIZE and 0 == cls._setCount % (BLOCK_CACHE_PAGE_SIZE // 8):
+                    if len(cls._memCacheFree) <= BLOCK_CACHE_PAGE_SIZE and 0 == cls._save1Count % (BLOCK_CACHE_PAGE_SIZE // 8):
                         # 空きが1ページ以下に成ったのでストレージキャッシュを開始
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
             time.sleep(0) # 連続的にロックするのを抑制する
@@ -308,7 +318,7 @@ class CacheManager:
                 if cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
                     # 書き込み成功
                     with cls._cacheLock("_lazySave2.locked.D"):
-                        cls._saveCount += 1
+                        cls._save2Count += 1
                         cls._storagedIndex[cacheKey] = True
                         cls._memCacheRemovable[cacheKey] = True
                         cls._memCacheRemovable.move_to_end(cacheKey, last=False) # 先頭に移動
@@ -473,5 +483,5 @@ class CacheManager:
         storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
         return (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
                 cls._getCount, cls._cacheHitCount, cls._recalculateCount, cls._loadCount,
-                cls._setCount, cls._purgeCount, cls._saveCount,
+                cls._setCount, cls._purgeCount, cls._save1Count, cls._save2Count,
                 cls._elapsedHis)
