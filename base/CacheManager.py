@@ -216,7 +216,7 @@ class CacheManager:
                 meta = (dims, dtype, size)
                 cachePolicy = cls._cachedIndex[cacheKey]
             time.sleep(0) # 連続的にロックするのを抑制する
-                
+            
             with cls._cacheLock("_lazySave1.locked.B"):
                 if cls._memCacheFree:
                     # ページに空が在るので採用
@@ -246,7 +246,7 @@ class CacheManager:
                     page     = None
                     index    = None
                     pageBody = None
-
+            
             if index is None:
                 # ストレージキャッシュへの遅延書き込みが進むのを待つ
                 time.sleep(0.1)
@@ -269,7 +269,7 @@ class CacheManager:
                         # 空きが1ページ以下に成ったのでストレージキャッシュを開始
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
             time.sleep(0) # 連続的にロックするのを抑制する
-
+    
     @classmethod
     def _lazySave2(cls):
         """ストレージキャッシュへの遅延書き込み"""
