@@ -84,9 +84,9 @@ class CorrelationNode(NNPlaneOperationNode):
             auxiliaryTable = self._auxiliaryTable[0]
         else:
             auxiliaryTable = self._auxiliaryTable[planeIndex]
-
-        result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same')
-
+        
+        result = scipy.signal.correlate(planeData, auxiliaryTable, mode='same') # 相関計算
+        
         blocks = []
         for y in range(0, height, BLOCK_SIZE):
             for x in range(0, width, BLOCK_SIZE):
