@@ -1,5 +1,5 @@
 '''
-CorrelationNode - 相関ノード
+ConvolveNode - 畳み込みノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -10,12 +10,12 @@ All rights reserved.
 from base.FlowNode_CONST import *
 from nodes import NNPlaneOperationNode
 
-class CorrelationNode(NNPlaneOperationNode):
+class DeconvolutionNode(NNPlaneOperationNode):
     # ノードタイプ
     majorType = _MAJOR_TYPE_FUNC
-    minorType = 'correlation'
+    minorType = 'deconvolution'
     # ノード名
-    name      = '相関'
+    name      = '逆畳み込み'
     # 入出力タイプ
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
@@ -85,7 +85,7 @@ class CorrelationNode(NNPlaneOperationNode):
         else:
             auxiliaryTable = self._auxiliaryTable[planeIndex]
         
-        result = scipy.signal.correlate(planeData, auxiliaryTable, mode='same') # 相関計算
+        result = deconvolution(planeData, auxiliaryTable) # 逆畳み込み
         
         blocks = []
         for y in range(0, height, BLOCK_SIZE):
@@ -98,3 +98,41 @@ class CorrelationNode(NNPlaneOperationNode):
                 blocks.append(dataBlock)
         
         return blocks
+
+def deconvolution(data, psf, noise_power=0.01):
+    """
+    wiener を用いて逆畳み込みを行う
+    data: 2次元計測データ配列
+    psf:  ボケのカーネル (例: 3x3や5x5)
+    noise_power: 正則化パラメータ (SNRの逆数に相当)
+    """
+    import numpy as np
+    from scipy import fft
+
+    # パディングサイズを計算
+    opt_size = [fft.next_fast_len(s + p - 1) for s, p in zip(data.shape, psf.shape)]
+    
+    # PSFの「中心」を「左上(0,0)」移動
+    psf_padded = np.zeros(opt_size)
+    center0 = np.array(psf.shape) // 2
+    ul = np.array(psf_padded.shape) // 2 - center0
+    dr = ul + psf.shape
+    psf_padded[ul[0]:dr[0], ul[1]:dr[1]] = psf
+    psf_padded = fft.ifftshift(psf_padded, axes=(0, 1))
+    
+    # FFT
+    data_fft = fft.fftn(data, s=opt_size)
+    psf_fft  = fft.fftn(psf_padded)
+    
+    # ウィーナーフィルタ
+    # 1/H (|H|^2)/(|h|^2+k) , |H|^2 = H H*
+    # 1/H  (H H*)/(|h|^2+k)
+    #         H* /(|h|^2+k)
+    wiener_filter = np.conj(psf_fft) / (np.abs(psf_fft)**2 + noise_power)
+    filtered = data_fft * wiener_filter
+
+    # 逆FFT
+    result = fft.ifftn(filtered)
+    
+    # 元のサイズを切り出し
+    return result[:data.shape[0], :data.shape[1]].real

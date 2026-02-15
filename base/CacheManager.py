@@ -55,11 +55,11 @@ class CacheManager:
     _memCacheFree      = deque([(i,j) for i in range(MAX_BLOCK_CACHE_PAGE-1,-1,-1) for j in range(BLOCK_CACHE_PAGE_SIZE-1,-1,-1)]) # 空いているメモリキャッシュ目次 [(page,index)]
     _storagedIndex     = {}            # ストレージキャッシュ目次 {id:boolean}
     _cacheLock         = LockWrapper() # 時間計測機能付きロック
-
+    
     _objectCache       = {}            # オブジェクトキャッシュ {id:data}
-    _memCachePage      = []            # メモリキャッシュページ {page:numpy配列(uint8)[BLOCK_CACHE_PAGE_SIZE,MAX_BLOCK_SIZE_BYTES]}
+    _memCachePage      = []            # メモリキャッシュページ [page:numpy配列(uint8)[BLOCK_CACHE_PAGE_SIZE,MAX_BLOCK_SIZE_BYTES]]
     _storageDir        = None          # ストレージキャッシュディレクトリ
-
+    
     _cleanupRegistered = False # 後始末関数登録状態
     
     # 統計情報
