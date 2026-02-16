@@ -156,14 +156,25 @@ class FlowData:
         
         # numpy配列として正規化
         if isinstance(dataBlock.data, list):
-            arr = nh.array(dataBlock.data)
-        elif np.iscomplexobj(dataBlock.data):
-            # 複素数型は複素数型を保持
-            arr = dataBlock.data
-        elif dataBlock.data.dtype != nh.BDTYPE:
-            arr = dataBlock.data.astype(nh.BDTYPE)
+            if np.iscomplexobj(dataBlock.data):
+                # 複素数
+                arr = np.array(dataBlock.data, dtype=nh.BDCOMPLEX)
+            else:
+                # 実数
+                arr = nh.array(dataBlock.data)
         else:
-            arr = dataBlock.data
+            if np.iscomplexobj(dataBlock.data):
+                # 複素数
+                if dataBlock.data.dtype != nh.BDCOMPLEX:
+                    arr = dataBlock.data.astype(nh.BDCOMPLEX)
+                else:
+                    arr = dataBlock.data
+            else:
+                # 実数
+                if dataBlock.data.dtype != nh.BDTYPE:
+                    arr = dataBlock.data.astype(nh.BDTYPE)
+                else:
+                    arr = dataBlock.data
         
         dataBlock.data = arr
     

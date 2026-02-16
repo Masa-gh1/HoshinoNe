@@ -32,7 +32,7 @@ class FFTNode(NNPlaneOperationNode):
         width, height = flowData.getDimensions()
         
         # データを読み込み
-        planeData = nh.empty((height, width))
+        planeData = np.empty((height, width), dtype=nh.BDCOMPLEX)
         
         for block in flowData.iterateBlocks(planeIndex):
             blockHeight = min(block.getHeight(), height - block.y)
