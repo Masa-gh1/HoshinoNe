@@ -269,7 +269,7 @@ class CacheManager:
                     # 新しいページなので、新規作成
                     s = 2**scale
                     pageBody = np.empty((BLOCK_CACHE_PAGE_SIZE//s,MAX_BLOCK_SIZE_BYTES*s), dtype=np.uint8) # ページ作成
-                    freeIndex = [(page,j) for j in range(1,BLOCK_CACHE_PAGE_SIZE)] # 空き index 作成
+                    freeIndex = [(page,j) for j in range(1,BLOCK_CACHE_PAGE_SIZE//s)] # 空き index 作成
                     with cls._cacheLock("_lazySave1.locked.C"):
                         cls._memCachePage[scale].append(pageBody)
                         cls._memCacheFree[scale].extend(freeIndex)
@@ -425,7 +425,7 @@ class CacheManager:
             values = cls._clearByPartialKey(cls._memCachedIndex, cacheKey)
             for pos, meta in values:
                 scale, page, index = pos
-                cls._memCacheFree[scale].append(pos)
+                cls._memCacheFree[scale].append((page, index))
             for d in cls._memCacheRemovable:
                 cls._clearByPartialKey(d, cacheKey) 
             cls._clearByPartialKey(cls._cachedIndex, cacheKey)
