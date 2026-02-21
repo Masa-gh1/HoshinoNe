@@ -57,9 +57,9 @@ class Debug:
 
     @classmethod
     def record(cls, name, item, num):
-        from config import MAX_BLOCK_CACHE_SIZE_GB
+        from config import MAX_CACHE_SIZE_GB
         from config import BLOCK_SIZE
-        from config import MAX_BLOCK_CACHE_SIZE
+        from config import MAX_CACHE_SIZE
         from config import MAX_WORKERS
         if cls.applicationHome:
             # name がパスだと仮定して相対パスに変換
@@ -67,7 +67,7 @@ class Debug:
                 name = os.path.relpath(name, cls.applicationHome)
                 name = name.replace("\\", "/")
 
-            filename = os.path.join(cls.applicationHome,f"record_{MAX_BLOCK_CACHE_SIZE_GB}GB_{BLOCK_SIZE}px_{MAX_BLOCK_CACHE_SIZE}_{MAX_WORKERS}.csv")
+            filename = os.path.join(cls.applicationHome,f"record_{MAX_CACHE_SIZE_GB}GB_{BLOCK_SIZE}px_{MAX_CACHE_SIZE}_{MAX_WORKERS}.csv")
             if not os.path.exists(filename):
                 with open(os.path.join(filename), "w") as file:
                     file.write("dummy\n")

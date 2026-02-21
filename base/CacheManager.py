@@ -9,20 +9,19 @@ All rights reserved.
 
 import time
 from collections import deque, OrderedDict
-import sys
 import os
 import threading
 import tempfile
 import shutil
 import atexit
 
-from config import MAX_BLOCK_CACHE_SIZE, MAX_BLOCK_SIZE_BYTES, BLOCK_CACHE_PAGE_SIZE
+from config import MAX_CACHE_SIZE, CACHE_BLOCK_SIZE_BYTES, BLOCK_CACHE_PAGE_SIZE
 from utils.ThreadPool import CoalescingExecutor
 from base.Constants import CachePolicy
 
 # キャッシュページの最大数
-MAX_BLOCK_CACHE_PAGE = MAX_BLOCK_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
-MAX_SCALE = (BLOCK_CACHE_PAGE_SIZE-1).bit_length()
+MAX_BLOCK_CACHE_PAGE = MAX_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
+END_SCALE = (BLOCK_CACHE_PAGE_SIZE-1).bit_length() + 1
 
 class LockWrapper():
     """ロックラッパークラス"""
@@ -54,27 +53,33 @@ def getScale(size):
     #   - 2^1*max:1
     #   - 2^2*max:2
     # :
-    n = (size - 1) // MAX_BLOCK_SIZE_BYTES
+    n = (size - 1) // CACHE_BLOCK_SIZE_BYTES
     return n.bit_length()
 
 class CacheManager:
     """統一キャッシュ管理"""
-    # キャッシュ管理
+    # キャッシュ目次
     _cachedIndex       = {}                                        # 全キャッシュ目次 {id:policy}
     _memCachedIndex    = OrderedDict()                             # メモリキャッシュ目次(LRU) OrderedDict({id:((scale,page,index),(dims,dtype,size))})
-    _memCachedUsed     = {}                                        # メモリキャッシュの使用履歴 {id:boolean}
-    _memCacheRemovable = [OrderedDict() for _ in range(MAX_SCALE)] # 削除可能キャッシュ目次(LRU) [scale:OrderedDict({id:lastTime})]
-    _memCacheFree      = [OrderedDict() for _ in range(MAX_SCALE)] # 空いているメモリキャッシュ目次 [scale:OrderedDict({page:OrderedDict({index:boolean})})]
-    _memCachePageCnt   = 0                                         # メモリキャッシュページ数
     _storagedIndex     = {}                                        # ストレージキャッシュ目次 {id:boolean}
-    _cacheLock         = LockWrapper()                             # 時間計測機能付きロック
-    
+
     # キャッシュ本体
     _objectCache       = {}                                        # オブジェクトキャッシュ {id:data}
-    _memCachePage      = [[]            for _ in range(MAX_SCALE)] # メモリキャッシュページ [scale:[page:numpy配列 uint8 * BLOCK_CACHE_PAGE_SIZE * MAX_BLOCK_SIZE_BYTES]]]
+    _memCachePage      = []                                        # メモリキャッシュページ [page:numpy配列 uint8 * BLOCK_CACHE_PAGE_SIZE * MAX_BLOCK_SIZE_BYTES]
     _storageDir        = None                                      # ストレージキャッシュディレクトリ
     
-    _cleanupRegistered = False # 後始末関数登録状態
+    # キャッシュ操作
+    _memCacheEvent     = {}                                        # メモリキャッシュ使用通知 {id:boolean}
+
+    # キャッシュ管理
+    _memCacheRemovable = [OrderedDict() for _ in range(END_SCALE)] # 削除可能キャッシュ(LRU) [scale:OrderedDict({id:lastTime})]
+    _memCacheBitmap    = 0                                         # 使用中メモリキャッシュbitmap 0/1=未使用/使用
+    _memCachePageCnt   = 0                                         # メモリキャッシュページ数
+
+    _cacheLock         = LockWrapper()                             # 時間計測機能付きロック
+    
+    # 後始末関数登録状態
+    _cleanupRegistered = False
     
     # 統計情報
     _setCount         = 0       # キャッシュに保存した回数
@@ -150,8 +155,11 @@ class CacheManager:
                 pos, meta = cls._memCachedIndex[cacheKey]
                 scale, page, index = pos
                 dims, dtype, size = meta
-                data = cls._memCachePage[scale][page][index,:size].view(dtype).reshape(dims)
-                cls._memCachedUsed[cacheKey] = True # LRU の順序を更新
+                s = 1<<scale
+                pageBody = cls._memCachePage[page]
+                pageBody = pageBody.reshape(BLOCK_CACHE_PAGE_SIZE//s, CACHE_BLOCK_SIZE_BYTES*s)
+                data = pageBody[index,:size].view(dtype).reshape(dims)
+                cls._memCacheEvent[cacheKey] = True # LRU の順序を更新
                 return data
             else:
                 laodStorage = cacheKey in cls._storagedIndex
@@ -214,7 +222,7 @@ class CacheManager:
         import numpy as np
         
         with cls._cacheLock("_lazySave1.locked.9"):
-            for cacheKey in cls._memCachedUsed:
+            for cacheKey in cls._memCacheEvent:
                 if cacheKey in cls._memCachedIndex:
                     pos, meta = cls._memCachedIndex[cacheKey]
                     scale, page, index = pos
@@ -222,9 +230,7 @@ class CacheManager:
                     if cacheKey in cls._memCacheRemovable[scale]:
                         cls._memCacheRemovable[scale][cacheKey] = time.perf_counter_ns()
                         cls._memCacheRemovable[scale].move_to_end(cacheKey) # 最後尾に移動(LRU)
-            cls._memCachedUsed.clear()
-        
-        removeLastTime = 0
+            cls._memCacheEvent.clear()
         
         while True:
             # メインスレッドを可能な限り止めない為に、
@@ -244,28 +250,21 @@ class CacheManager:
             time.sleep(0) # 連続的にロックするのを抑制する
             
             with cls._cacheLock("_lazySave1.locked.B"):
-                if cls._memCacheFree[scale]:
+                if pos := cls._memCacheFindFree(scale):
                     # ページに空が在るので採用
-                    page, indices = next(iter(cls._memCacheFree[scale].items()))
-                    index, _      = indices.popitem(last=False)
-                    pos           = (scale, page, index)
-                    pageBody      = cls._memCachePage[scale][page]
-                    if 0 == len(indices):
-                        cls._memCacheFree[scale].pop(page)
-                elif cls._memCachePageCnt < MAX_BLOCK_CACHE_PAGE:
-                    # 新しいページを作れる
-                    page     = len(cls._memCachePage[scale])
-                    index    = 0
-                    pos      = (scale, page, index)
-                    pageBody = None
+                    scale, page, index = pos
+                    cls._memCacheUse(scale, page, index)
+                    if len(cls._memCachePage) <= page:
+                        pageBody = None
+                    else:
+                        pageBody = cls._memCachePage[page]
                 elif cls._memCacheRemovable[scale]:
                     # ページに空が無いので古いデータから削除(LRU)
                     oldKey, oldLast    = cls._memCacheRemovable[scale].popitem(last=False)
                     pos, oldMeta       = cls._memCachedIndex.pop(oldKey)
                     scale, page, index = pos
                     oldPolicy          = cls._cachedIndex[oldKey]
-                    pageBody           = cls._memCachePage[scale][page]
-                    removeLastTime     = max(removeLastTime, oldLast)
+                    pageBody           = cls._memCachePage[page]
                 
                     if CachePolicy.PERSISTENT != oldPolicy:
                         # ポリシー persistent ではないのでキャッシュから削除
@@ -280,21 +279,34 @@ class CacheManager:
                     pageBody = None
             
             if index is None:
+                with cls._cacheLock("_lazySave1.locked.B2"):
+                    while not cls._memCacheFindFree(scale):
+                        if not cls._memCacheRemovable[scale]:
+                            # 一番古いデータを探す
+                            lastTime = 0
+                            for s,x in enumerate(cls._memCacheRemovable):
+                                t = next(iter(x.values())) if x else 0
+                                if lastTime < t:
+                                    lastTime = t
+                                    scale = s
+                            if 0 < lastTime:
+                                # 他のスケールに削除出来るデータがあるので古い方から解放する
+                                oldKey, oldLast = cls._memCacheRemovable[s].popitem(last=False)
+                                pos, meta = cls._memCachedIndex.pop(oldKey)
+                                scale, page, index = pos
+                                cls._memCacheFree(scale, page, index)
+                
                 # ストレージキャッシュへの遅延書き込みが進むのを待つ
                 time.sleep(0.1)
             else:
                 if pageBody is None:
                     # 新しいページなので、新規作成
-                    s = 2**scale
-                    pageBody    = np.empty((BLOCK_CACHE_PAGE_SIZE//s, MAX_BLOCK_SIZE_BYTES*s), dtype=np.uint8) # ページ作成
-                    freeIndices = {j:True for j in range(1, BLOCK_CACHE_PAGE_SIZE//s)} # 空き index 作成
+                    pageBody    = np.empty((BLOCK_CACHE_PAGE_SIZE*CACHE_BLOCK_SIZE_BYTES), dtype=np.uint8) # ページ作成
                     with cls._cacheLock("_lazySave1.locked.C"):
-                        cls._memCachePage[scale].append(pageBody)
-                        cls._memCacheFree[scale][page] = OrderedDict(freeIndices)
-                        for p in sorted(cls._memCacheFree[scale].keys()):
-                            cls._memCacheFree[scale].move_to_end(p)
+                        cls._memCachePage.append(pageBody)
                         cls._memCachePageCnt += 1
-                
+                s = 1<<scale
+                pageBody = pageBody.reshape(BLOCK_CACHE_PAGE_SIZE//s, CACHE_BLOCK_SIZE_BYTES*s)
                 pageBody[index, :size] = data.reshape(-1).view(np.uint8) # メモリキャッシュへ書き込み
                 
                 with cls._cacheLock("_lazySave1.locked.D"):
@@ -307,39 +319,6 @@ class CacheManager:
                         # 空きが1ページ以下に成ったのでストレージキャッシュを開始
                         CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
             time.sleep(0) # 連続的にロックするのを抑制する
-        
-        # 各スケールでの古い残存を整理
-        for scale in range(len(cls._memCacheRemovable)):
-            with cls._cacheLock("_lazySave1.locked.E"):
-                removeKeys = []
-                for key in cls._memCacheRemovable[scale].keys():
-                    if removeLastTime < cls._memCacheRemovable[scale][key]:
-                        break
-                    else:
-                        removeKeys.append(key)
-                for key in removeKeys:
-                    cls._memCacheRemovable[scale].pop(key)
-                    pos, meta = cls._memCachedIndex.pop(key)
-                    scale, page, index = pos
-                    if page in cls._memCacheFree[scale]:
-                        cls._memCacheFree[scale][page][index] = True
-                    else:
-                        cls._memCacheFree[scale][page] = OrderedDict({index:True})
-                        for p in sorted(cls._memCacheFree[scale].keys()):
-                            cls._memCacheFree[scale].move_to_end(p)
-                    
-                    # ページが空になったら解放
-                    s = 2**scale
-                    if BLOCK_CACHE_PAGE_SIZE//s <= len(cls._memCacheFree[scale][page]):
-                        cls._memCacheFree[scale].pop(page)
-                        cls._memCachePage[scale].pop(page)
-                        cls._memCachePageCnt -= 1
-                    
-                    policy = cls._cachedIndex[key]
-                    if CachePolicy.PERSISTENT != policy:
-                        # ポリシー persistent ではないのでキャッシュから削除
-                        cls._purgeCount += 1
-                        cls._cachedIndex.pop(key)
     
     @classmethod
     def _lazySave2(cls):
@@ -390,7 +369,10 @@ class CacheManager:
                         pos, meta = cls._memCachedIndex[cacheKey]
                         scale, page, index = pos
                         dims, dtype, size = meta
-                        data = cls._memCachePage[scale][page][index,:size].view(dtype).reshape(dims)
+                        s = 1<<scale
+                        pageBody = cls._memCachePage[page]
+                        pageBody = pageBody.reshape(BLOCK_CACHE_PAGE_SIZE//s, CACHE_BLOCK_SIZE_BYTES*s)
+                        data = pageBody[index,:size].view(dtype).reshape(dims)
                 
                 if cls._saveToStorage(cacheKey, data): # ストレージへ書き込み
                     # 書き込み成功
@@ -408,7 +390,7 @@ class CacheManager:
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock():
             if cacheKey in cls._cachedIndex:
-                cls._memCachedUsed[cacheKey] = True # LRU の順序を更新
+                cls._memCacheEvent[cacheKey] = True # LRU の順序を更新
                 return True
             else:
                 return False
@@ -477,12 +459,7 @@ class CacheManager:
             values = cls._clearByPartialKey(cls._memCachedIndex, cacheKey)
             for pos, meta in values:
                 scale, page, index = pos
-                if page in cls._memCacheFree[scale]:
-                    cls._memCacheFree[scale][page][index] = True
-                else:
-                    cls._memCacheFree[scale][page] = OrderedDict({index:True})
-                    for p in sorted(cls._memCacheFree[scale].keys()):
-                        cls._memCacheFree[scale].move_to_end(p)
+                cls._memCacheFree(scale, page, index)
             for d in cls._memCacheRemovable:
                 cls._clearByPartialKey(d, cacheKey) 
             cls._clearByPartialKey(cls._cachedIndex, cacheKey)
@@ -502,6 +479,102 @@ class CacheManager:
             removeValues.append(cache.pop(key))
         
         return removeValues
+    
+    # _memCacheBitmap 用ビット定義  0:11, 1:0101, 2:00010001....
+    _scaleBit = [0 for s in range(END_SCALE)]
+    for i in range(END_SCALE):
+        for j in range(0,MAX_BLOCK_CACHE_PAGE):
+            _scaleBit[i] |= 1 << (BLOCK_CACHE_PAGE_SIZE * j)
+    for i in range(END_SCALE):
+        for j in range(i+1):
+            _scaleBit[j] |= _scaleBit[j] << (1<<i)
+    
+    PAGE_SHIFT = (BLOCK_CACHE_PAGE_SIZE).bit_length() - 1
+    PAGE_MASK  = BLOCK_CACHE_PAGE_SIZE - 1
+    
+    @classmethod
+    def _memCacheFindFree(cls, scale):
+        """
+        空いているメモリキャッシュ位置を検索
+
+        _memCacheBitmap の解説
+        メモリキャッシュの使用状態を表す。
+        1:使用中
+        0:未使用
+        各スケールでメモリキャッシュの実体は共有なので、
+        使用状態は各スケールで連動している必要がある
+        """
+        bitmap = ~cls._memCacheBitmap
+        if 0==scale:
+            bitmap = bitmap & cls._scaleBit[0]
+            if 0==bitmap:
+                return None
+            x = bitmap & -bitmap   # 最下位の 1 を取得
+            i = x.bit_length() - 1 # 最下位の 1 の位置を取得
+            page = i >> cls.PAGE_SHIFT
+            index = i & cls.PAGE_MASK
+            return (scale, page, index)
+        elif 1==scale:
+            bitmap &= bitmap >> 1
+            bitmap = bitmap & cls._scaleBit[1]
+            if 0==bitmap:
+                return None
+            
+            x = bitmap & -bitmap   # 最下位の 1 を取得
+            i = x.bit_length() - 1 # 最下位の 1 の位置を取得
+            page = i >> cls.PAGE_SHIFT
+            index = (i & cls.PAGE_MASK) >> 1
+            return (scale, page, index)
+        else:
+            # 一般化
+            for i in range(scale):
+                bitmap &= bitmap >> (1<<i)
+            
+            bitmap = bitmap & cls._scaleBit[scale]
+            if 0==bitmap:
+                return None
+            
+            x = bitmap & -bitmap   # 最下位の 1 を取得
+            i = x.bit_length() - 1 # 最下位の 1 の位置を取得
+            page = i >> cls.PAGE_SHIFT
+            index = (i & cls.PAGE_MASK) >> scale
+            return (scale, page, index)
+    
+    @classmethod
+    def _memCacheUse(cls, scale, page, index):
+        """メモリキャッシュ使用中にセット"""
+        if 0==scale:
+            i = page * BLOCK_CACHE_PAGE_SIZE + index
+            bit = 1 << i
+            cls._memCacheBitmap |= bit
+        elif 1==scale:
+            i = page * BLOCK_CACHE_PAGE_SIZE + (index << 1)
+            bit = 3 << i
+            cls._memCacheBitmap |= bit
+        else:
+            # 一般化
+            i = page * BLOCK_CACHE_PAGE_SIZE + (index << scale)
+            bit = (1<<(1<<scale)) - 1
+            bit = bit << i
+            cls._memCacheBitmap |= bit
+    
+    @classmethod
+    def _memCacheFree(cls, scale, page, index):
+        """メモリキャッシュ使用中を解放"""
+        if 0==scale:
+            i = page * BLOCK_CACHE_PAGE_SIZE + index
+            bit = 1 << i
+            cls._memCacheBitmap &= ~bit
+        elif 1==scale:
+            i = page * BLOCK_CACHE_PAGE_SIZE + (index << 1)
+            bit = 3 << i
+            cls._memCacheBitmap &= ~bit
+        else:
+            # 一般化
+            i = page * BLOCK_CACHE_PAGE_SIZE + (index << scale)
+            bit = (1<<(1<<scale)) - 1
+            bit = bit << i
+            cls._memCacheBitmap &= ~bit
     
     @classmethod
     def elapsed(cls, func, *args, **kwargs):
@@ -559,9 +632,9 @@ class CacheManager:
         """キャッシュ量とストレージ使用量を取得"""
         objCacheCount    = len(cls._objectCache)
         cacheCount       = len(cls._memCachedIndex)
-        cacheSize        = cacheCount * MAX_BLOCK_SIZE_BYTES
+        cacheSize        = cacheCount * CACHE_BLOCK_SIZE_BYTES
         storageCount     = len(cls._storagedIndex)
-        storageSize      = storageCount * MAX_BLOCK_SIZE_BYTES
+        storageSize      = storageCount * CACHE_BLOCK_SIZE_BYTES
         return (objCacheCount, cacheCount, cacheSize, storageCount, storageSize,
                 cls._getCount, cls._cacheHitCount, cls._recalculateCount, cls._loadCount,
                 cls._setCount, cls._purgeCount, cls._save1Count, cls._save2Count,
