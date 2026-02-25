@@ -26,7 +26,6 @@ class FFTNode(NNPlaneOperationNode):
         import numpy as np
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
-        from base import FlowData
         from base import DataBlock
 
         width, height = flowData.getDimensions()
@@ -41,6 +40,9 @@ class FFTNode(NNPlaneOperationNode):
             endX = block.x + blockWidth
             planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
         
+        # NaN を補完
+        np.nan_to_num(planeData, nan=0, copy=False)
+
         result = scipy.fft.fftn(planeData) # FFT
         
         blocks = []

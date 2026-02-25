@@ -48,6 +48,7 @@ class NodeFactory:
        #('image_alignment'         , '画像位置合わせ(N:N)'),# 廃止 ShiftDetectionNode, TransformNode に分割
         ('shift_detection'         , 'ズレ検出(N:1)'),
         ('transform'               , '変形(N:N)'),
+        ('reposition'              , '再配置(N:N)'),
         ('------------------------', None),
         ('colorspace_mask'         , '色空間マスク(N:N)'),
         ('chroma_denoise'          , '色空間分離ノイズ除去(色ノイズ除去)(N:N)'),

@@ -361,8 +361,8 @@ class ResultWindow(tk.Toplevel):
                 cells = []
                 for y in range(displayRows):
                     if(  x < blockX or blockX + blockW <= x
-                    or y < blockY or blockY + blockH <= y
-                    ):
+                      or y < blockY or blockY + blockH <= y
+                      ):
                         block = flowData.getBlock(0, x//BLOCK_SIZE, y//BLOCK_SIZE)
                         if block and not block.data is None:
                             blockX = x//BLOCK_SIZE
@@ -859,6 +859,8 @@ class ResultWindow(tk.Toplevel):
                                         cx2 = min(sx2, bx1+data.shape[1])
                                         cy2 = min(sy2, by1+data.shape[0])
                                         trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
+                                        if np.iscomplexobj(data):
+                                            trimed = np.abs(trimed) # 複素数なので、絶対値を取る
                                         leveled = (trimed - offset) * scale              # レベル調整を適用
                                         norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
                                         cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ

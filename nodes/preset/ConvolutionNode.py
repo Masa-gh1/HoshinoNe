@@ -85,7 +85,8 @@ class ConvolutionNode(NNPlaneOperationNode):
         else:
             auxiliaryTable = self._auxiliaryTable[planeIndex]
         
-        result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same') # 相関計算
+        #result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same') # 相関計算
+        result = convolution(planeData, auxiliaryTable) # 畳み込み
         
         blocks = []
         for y in range(0, height, BLOCK_SIZE):
@@ -98,3 +99,37 @@ class ConvolutionNode(NNPlaneOperationNode):
                 blocks.append(dataBlock)
         
         return blocks
+
+def convolution(data, psf):
+    """
+    畳み込みを行う
+    data: 2次元計測データ配列
+    psf:  ボケのカーネル (例: 3x3や5x5)
+    """
+    import numpy as np
+    from scipy import fft
+    from utils import numpy_helpers as nh
+
+    # パディングサイズを計算
+    opt_size = [fft.next_fast_len(s + p - 1) for s, p in zip(data.shape, psf.shape)]
+    
+    # PSFの「中心」を「左上(0,0)」移動
+    psf_padded = nh.zeros(opt_size)
+    center0 = np.array(psf.shape) // 2
+    ul = np.array(psf_padded.shape) // 2 - center0
+    dr = ul + psf.shape
+    psf_padded[ul[0]:dr[0], ul[1]:dr[1]] = psf
+    psf_padded = fft.ifftshift(psf_padded, axes=(0, 1))
+    
+    # FFT
+    data_fft = fft.fftn(data, s=opt_size)
+    psf_fft  = fft.fftn(psf_padded)
+    
+    # フィルタ
+    filtered = data_fft * psf_fft
+
+    # 逆FFT
+    result = fft.ifftn(filtered)
+    
+    # 元のサイズを切り出し
+    return result[:data.shape[0], :data.shape[1]].real

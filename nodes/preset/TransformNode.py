@@ -49,6 +49,7 @@ class TransformNode(LazyNNOperationNode):
         
         # table 形式データを読み込み
         self._tableData = self._loadTableData(auxiliaryDatas)
+
         # 画像拡張を計算
         self._extendParams = self._calculateExpand(primaryDatas, self._tableData)
         
@@ -67,10 +68,14 @@ class TransformNode(LazyNNOperationNode):
             result = inputData
         else:
             expand_left, expand_top, new_width, new_height = self._extendParams
-            dx, dy, rotation, scale = transformParams
-            dx += expand_left
-            dy += expand_top
-            result = TransformLazyFlowData(inputData, dx, dy, rotation, scale, new_width, new_height)
+            dx, dy, rotation, scale, left, top, width, height = transformParams
+            left   = left   if left   is not None else expand_left
+            top    = top    if top    is not None else expand_top
+            width  = width  if width  is not None else new_width
+            height = height if height is not None else new_height
+            dx += left
+            dy += top
+            result = TransformLazyFlowData(inputData, dx, dy, rotation, scale, width, height)
         return result
         
     def _loadTableData(self, auxiliaryDatas):
@@ -82,7 +87,7 @@ class TransformNode(LazyNNOperationNode):
         columns = None
         tabledatas = []
         for tableFlowData in auxiliaryDatas:
-            if tableFlowData.headers.get('type') == 'table':
+            if 'table' == tableFlowData.headers.get('type'):
                 lines.extend(tableFlowData.headers.get('lines', []))
                 columnCur = tableFlowData.headers.get('columns', [])
                 
@@ -123,7 +128,7 @@ class TransformNode(LazyNNOperationNode):
             transformParams = self._getTransformParams(image_id, tableData)
             
             if transformParams:
-                dx, dy, rotation, scale = transformParams
+                dx, dy, rotation, scale, left, top, _, _ = transformParams
                 corners  = self._calculateTransformedCorners(width, height, dx, dy, rotation, scale)
                 all_corners.extend(corners)
         
@@ -185,12 +190,16 @@ class TransformNode(LazyNNOperationNode):
         else:
             return None
         
-        dx       = row_data[columns.index('dx'      )] if 'dx'       in columns else 0
-        dy       = row_data[columns.index('dy'      )] if 'dy'       in columns else 0
-        rotation = row_data[columns.index('rotation')] if 'rotation' in columns else 0
-        scale    = row_data[columns.index('scale'   )] if 'scale'    in columns else 1
+        dx       = float(row_data[columns.index('dx'      )]) if 'dx'       in columns else 0
+        dy       = float(row_data[columns.index('dy'      )]) if 'dy'       in columns else 0
+        rotation = float(row_data[columns.index('rotation')]) if 'rotation' in columns else 0
+        scale    = float(row_data[columns.index('scale'   )]) if 'scale'    in columns else 1
+        left     = int(  row_data[columns.index('left'    )]) if 'left'     in columns else None
+        top      = int(  row_data[columns.index('top'     )]) if 'top'      in columns else None
+        width    = int(  row_data[columns.index('width'   )]) if 'width'    in columns else None
+        height   = int(  row_data[columns.index('height'  )]) if 'height'   in columns else None
         
-        return( float(dx), float(dy), float(rotation), float(scale))
+        return( dx, dy, rotation, scale, left, top, width, height)
 
 class TransformLazyFlowData(LazyFlowData):
     def __init__(self, flowData, dx, dy, rotation, scale, new_width, new_height):
@@ -230,11 +239,11 @@ class TransformLazyFlowData(LazyFlowData):
         src_min_y = np.min(src_corners[:, 1])
         src_max_y = np.max(src_corners[:, 1])
         
-        # サブピクセルの場合、隣のピクセルを含める
-        src_min_x = int(np.floor(src_min_x - np.ceil(src_min_x % 1)))
-        src_max_x = int(np.ceil( src_max_x + np.ceil(src_max_x % 1)))
-        src_min_y = int(np.floor(src_min_y - np.ceil(src_min_y % 1)))
-        src_max_y = int(np.ceil( src_max_y + np.ceil(src_max_y % 1)))
+        # INTER_LINEAR での補完なので1ピクセル隣を含める
+        src_min_x = int(np.floor(src_min_x - 1))
+        src_max_x = int(np.ceil( src_max_x + 1))
+        src_min_y = int(np.floor(src_min_y - 1))
+        src_max_y = int(np.ceil( src_max_y + 1))
         
         # ブロック境界に拡張
         src_min_blockX = ((src_min_x                 ) // BLOCK_SIZE) * BLOCK_SIZE
@@ -362,8 +371,8 @@ class TransformLazyFlowData(LazyFlowData):
         import cv2
         
         # 中央を原点としオブジェクトの回転=>拡大=>平行移動する
-        # cv2.getRotationMatrix2Dは正の角度で時計回り(CW)の回転行列を返すため、
-        # 反時計回り(CCW)の回転角である rotation を負にして渡すことでCCW回転を適用する
+        # cv2.getRotationMatrix2D は正の角度で(数学的なxy面で)時計回り(CW)の回転行列を返すため、
+        # rotation(反時計回り(CCW)) を負にして渡すことでCCW回転を適用する
         centerX = worldW / 2 - objectX
         centerY = worldH / 2 - objectY
         M = cv2.getRotationMatrix2D((centerX, centerY), -rotation, scale)

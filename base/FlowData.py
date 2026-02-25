@@ -210,8 +210,12 @@ class FlowData:
             data = blockData.data
             if 0 < data.size and not np.isnan(data).all():
                 # 最大値・最小値を更新し、キャッシュをクリア
-                blockMax = np.nanmax(data)
-                blockMin = np.nanmin(data)
+                if np.iscomplexobj(data):
+                    blockMax = np.nanmax(np.abs(data))
+                    blockMin = np.nanmin(np.abs(data))
+                else:
+                    blockMax = np.nanmax(data)
+                    blockMin = np.nanmin(data)
                 
                 with self._lock:
                     if self._maxValue is None or self._maxValue < blockMax:
@@ -254,6 +258,8 @@ class FlowData:
             else:
                 planeData = np.concatenate(blockArrays)
                 validData = planeData[~np.isnan(planeData)]
+                if np.iscomplexobj(validData):
+                    validData = np.abs(validData)
                 sortedData = np.sort(validData)
 
                 if len(sortedData) <= 0:
