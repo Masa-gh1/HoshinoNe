@@ -166,12 +166,9 @@ class RepositionLazyFlowData(LazyFlowData):
         
         # 結果バッファ
         result = nh.nans((reqH, reqW))
-        if 256!=reqH or 256!=reqW:
-            pass
         
         # Shift (Roll) の逆変換を行い、必要な領域を特定する
         # Shiftは循環するので、出力ブロックは最大4つの矩形領域に分割される可能性がある
-        # (Un-shifted空間での矩形)
         
         # X方向の分割
         srcX_start = (x - shift_x) % dstW
@@ -198,8 +195,7 @@ class RepositionLazyFlowData(LazyFlowData):
         # 各領域について処理
         for sy, h, dy in ys:
             for sx, w, dx in xs:
-                # ここでの (sx, sy, w, h) は "Un-shifted" 空間での矩形
-                # これを Source 空間に逆写像してデータを取得し、順変換を適用する
+                # (sx, sy, w, h) を 逆順変換し Source データを取得し、順変換を適用する
                 
                 # 対応する Source 領域を計算
                 # Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Resize
@@ -211,8 +207,8 @@ class RepositionLazyFlowData(LazyFlowData):
                 unflipped_corners = []
                 for cx, cy in corners:
                     tx, ty = cx, cy
-                    if flip_x: tx = dstW - 1 - tx
-                    if flip_y: ty = dstH - 1 - ty
+                    if flip_x % 2: tx = dstW - 1 - tx
+                    if flip_y % 2: ty = dstH - 1 - ty
                     unflipped_corners.append((tx, ty))
                 
                 # Un-Rot90 (Inverse of k*90 deg CW)
@@ -275,27 +271,28 @@ class RepositionLazyFlowData(LazyFlowData):
                 
                 fetch_w = max_src_x - min_src_x
                 fetch_h = max_src_y - min_src_y
-                fetched_data = self._fetch_rect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
+                source = self._fetchRect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
                 
                 # 取得したデータに対して順変換を適用
                 # Source -> Resize -> Transpose -> Rot90 -> Flip -> Shift
                 
-                processed = fetched_data
+                processed = source
                 
                 # Transpose
                 if transpose % 2:
                     processed = np.transpose(processed)
                 
                 # Rot90
-                if rot90 != 0:
+                k = rot90 % 4
+                if k != 0:
                     # rot90 は時計回り(CW)指定、numpy.rot90 は反時計回り(CCW)
                     # そのため負の値を渡して時計回りにする
-                    processed = np.rot90(processed, k=-rot90)
+                    processed = np.rot90(processed, k=-k)
                 
                 # Flip
-                if flip_x:
+                if flip_x % 2:
                     processed = np.fliplr(processed)
-                if flip_y:
+                if flip_y % 2:
                     processed = np.flipud(processed)
                 
                 # 結果バッファに配置
@@ -303,7 +300,7 @@ class RepositionLazyFlowData(LazyFlowData):
         
         return DataBlock(result, planeIndex, x, y)
 
-    def _fetch_rect(self, flowData, planeIndex, x, y, w, h):
+    def _fetchRect(self, flowData, planeIndex, x, y, w, h):
         """指定された矩形領域のデータを取得（ブロック境界を跨ぐ場合に対応）"""
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
