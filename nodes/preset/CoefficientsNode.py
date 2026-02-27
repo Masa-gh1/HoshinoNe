@@ -22,10 +22,11 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     name      = '係数'
     # 入出力タイプ
     ioType    = _IO_TYPE_0N
-    outputCat = _OUT_CAT_AUX 
+    outputCat = _OUT_CAT_NON
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
+        self.outputCat = _OUT_CAT_AUX # オーバーライド
         self.planes = ["Plane 0","Plane 1","Plane 2"]
         self.xOrder = 0
         self.yOrder = 0
@@ -34,23 +35,32 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     def getText(self):
         """ノードのテキストを取得"""
         from utils import string_helper as sh
-
+        
         constVal = ""
-        for planeIndex in range(len(self.planes)):
-            value = self.coefficients.get(f"{planeIndex},0,0", 0)
-            constVal += f" {sh.dispS(value)}"
+        count = 0
+        for x in range(self.xOrder + 1):
+            for y in range(self.yOrder + 1):
+                for planeIndex in range(len(self.planes)):
+                    key = f"{planeIndex},{x},{y}"
+                    value = self.coefficients.get(key, 0)
+                    constVal += f" {sh.dispS(value)}"
+                    count += 1
+                    if 3 <= count:
+                        displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
+                        return displayText
         displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
         return displayText
     
     def store(self, nodeData):
-        nodeData["planes"] = self.planes
-        nodeData["xOrder"] = self.xOrder
-        nodeData["yOrder"] = self.yOrder
+        nodeData["category"    ] = self.outputCat
+        nodeData["planes"      ] = self.planes
+        nodeData["xOrder"      ] = self.xOrder
+        nodeData["yOrder"      ] = self.yOrder
         nodeData["coefficients"] = self.coefficients
     
     def restore(self, nodeData):
-        if "planeNames" in nodeData:
-            self.planes = nodeData["planeNames"]
+        if "category" in nodeData:
+            self.outputCat = nodeData["category"]
         if "planes" in nodeData:
             self.planes = nodeData["planes"]
         if "xOrder" in nodeData:
@@ -63,21 +73,22 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     def createSettingWindow(self):
         return PolynomialSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, planes, xOrder, yOrder, coefficients):
-        self.planes = planes
-        self.xOrder = xOrder
-        self.yOrder = yOrder
+    def applySettings(self, outputCat, planes, xOrder, yOrder, coefficients):
+        self.outputCat    = outputCat
+        self.planes       = planes
+        self.xOrder       = xOrder
+        self.yOrder       = yOrder
         self.coefficients = coefficients
         self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
         from utils.interval_helper import createHalfOpenEnd
-        from base import FlowData
         from base import DataBlock
+        from base import FlowData
         
         self.reportProgress(context, "開始")
         
-        # 指定されたサイズの係数Polynomialを作成
+        # 指定されたサイズの polynomial を作成
         planeCount = len(self.planes)
         width      = self.xOrder + 1
         height     = self.yOrder + 1
@@ -94,23 +105,20 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         else:
             mode = "2D"
         
-        # プレーン名
-        planes = self.planes
-        
         # 列ラベルと行ラベルを生成
         columns = [f'x^{i}' for i in range(width)]
-        lines = [f'y^{j}' for j in range(height)]
+        lines   = [f'y^{j}' for j in range(height)]
         
         headers = {
-            'category': 'auxiliary',
-            'type': 'polynomial',
-            'mode': mode,
-            'axes': ['x_order', 'y_order'],
-            'columns': columns,
-            'lines': lines,
-            'planes': planes,
+            'category'  : self.outputCat,
+            'type'      : 'polynomial',
+            'mode'      : mode,
+            'planes'    : self.planes,
+            'columns'   : columns,
+            'lines'     : lines,
+            'axes'      : ['x_order', 'y_order'],
             'max_orders': [self.xOrder, self.yOrder],
-            'equations': [f'{name} = coefficients' for name in planes]
+            'equations' : [f'{name} = coefficients' for name in self.planes]
         }
         
         outputFlowData = FlowData(headers)
@@ -137,17 +145,18 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         coeffStr = str(sorted(self.coefficients.items()))
-        config = f"{self.minorType}_{self.planes}_{self.xOrder}_{self.yOrder}_{coeffStr}"
+        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.xOrder}_{self.yOrder}_{coeffStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class PolynomialSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node   = node
-        self.planes = node.planes.copy()
-        self.xOrder = node.xOrder
-        self.yOrder = node.yOrder
-        self.coeff  = node.coefficients.copy()
+        self.outputCat = tk.BooleanVar(value=node.outputCat == _OUT_CAT_AUX)
+        self.planes    = node.planes.copy()
+        self.xOrder    = node.xOrder
+        self.yOrder    = node.yOrder
+        self.coeff     = node.coefficients.copy()
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -171,7 +180,9 @@ class PolynomialSettingsDialog(tk.Toplevel):
         self.yOrderEntry.insert(0, str(node.yOrder))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
         
-        tk.Button(basicFrame, text="次数更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
+        tk.Checkbutton(basicFrame, text="補正値", variable=self.outputCat).grid(row=0, column=6, sticky="w", padx=5, pady=2)
+        
+        tk.Button(basicFrame, text="次数サイズ更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
         # 係数設定フレーム（スクロール可能）
         frame = tk.Frame(self, height=120)
@@ -278,11 +289,12 @@ class PolynomialSettingsDialog(tk.Toplevel):
                     from utils.Debug import Debug
                     Debug.log(type(self).__name__, f"Warning: Invalid coefficient value for {key}")
             
+            outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
             self.planes = planes
             self.xOrder = xOrder
             self.yOrder = yOrder
             self.coeff  = coeff
-            self.node.applySettings(planes, xOrder, yOrder, coeff)
+            self.node.applySettings(outputCat, planes, xOrder, yOrder, coeff)
     
     def onClose(self):
         self.destroy()

@@ -360,9 +360,7 @@ class FlowNodeView():
 
     def onNodeConfigChanged(self, node):
         self.text = node.getText()
-        newHash = node.getConfigHash()
-        if newHash != node._lastConfigHash:
-            self.editor.onNodeConfigChanged(node)
+        self.editor.onNodeConfigChanged(node)
 
     def onClick(self, event):
         self.startX = event.x

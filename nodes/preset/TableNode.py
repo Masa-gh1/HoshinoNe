@@ -1,5 +1,5 @@
 '''
-TensorNode class
+TableNode class
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -14,7 +14,7 @@ from base.FlowNode_CONST import *
 from base import FlowNode
 from nodes import ConfigurableNode
 
-class TensorNode(FlowNode,ConfigurableNode):
+class TableNode(FlowNode,ConfigurableNode):
     # ノードタイプ
     majorType = _MAJOR_TYPE_CONST
     minorType = 'table'
@@ -22,10 +22,11 @@ class TensorNode(FlowNode,ConfigurableNode):
     name      = '表'
     # 入出力タイプ
     ioType    = _IO_TYPE_0N
-    outputCat = _OUT_CAT_AUX
+    outputCat = _OUT_CAT_NON
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
+        self.outputCat = _OUT_CAT_AUX # オーバーライド
         self.planes  = ["Plane 0"]
         self.columns = ["A", "B", "C"]
         self.lines   = ["1", "2", "3"]
@@ -37,21 +38,32 @@ class TensorNode(FlowNode,ConfigurableNode):
     def getText(self):
         """ノードのテキストを取得"""
         from utils import string_helper as sh
-
+        
         constVal = ""
-        for planeIndex in range(len(self.planes)):
-            value = self.table.get(f"{planeIndex},0,0", 0)
-            constVal += f" {sh.dispS(value)}"
+        count = 0
+        for x in range(len(self.columns)):
+            for y in range(len(self.lines)):
+                for planeIndex in range(len(self.planes)):
+                    key = f"{planeIndex},{x},{y}"
+                    value = self.table.get(key, 0)
+                    constVal += f" {sh.dispS(value)}"
+                    count += 1
+                    if 3 <= count:
+                        displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
+                        return displayText
         displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
         return displayText
     
     def store(self, nodeData):
-        nodeData["planes" ] = self.planes
-        nodeData["columns"] = self.columns
-        nodeData["lines"  ] = self.lines
-        nodeData["table"  ] = self.table
+        nodeData["category"] = self.outputCat
+        nodeData["planes"  ] = self.planes
+        nodeData["columns" ] = self.columns
+        nodeData["lines"   ] = self.lines
+        nodeData["table"   ] = self.table
     
     def restore(self, nodeData):
+        if "category" in nodeData:
+            self.outputCat = nodeData["category"]
         if "planes" in nodeData:
             self.planes = nodeData["planes"]
         if "columns" in nodeData:
@@ -64,11 +76,12 @@ class TensorNode(FlowNode,ConfigurableNode):
     def createSettingWindow(self):
         return TensorSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, planes, columns, lines, table):
-        self.planes  = planes
-        self.columns = columns
-        self.lines   = lines
-        self.table   = table
+    def applySettings(self, outputCat, planes, columns, lines, table):
+        self.outputCat = outputCat
+        self.planes    = planes
+        self.columns   = columns
+        self.lines     = lines
+        self.table     = table
         self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
@@ -96,7 +109,7 @@ class TensorNode(FlowNode,ConfigurableNode):
             mode = "2D"
         
         headers = {
-            'category': 'auxiliary',
+            'category': self.outputCat,
             'type'    : 'table',
             'mode'    : mode,
             'planes'  : self.planes,
@@ -107,7 +120,7 @@ class TensorNode(FlowNode,ConfigurableNode):
         outputFlowData = FlowData(headers)
         outputFlowData.setDimensions(width, height)
         
-        # 各プレーンに数列を設定
+        # 各プレーンに表を設定
         for planeIndex in range(planeCount):
             result = []
             for j in range(height):
@@ -128,17 +141,18 @@ class TensorNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         tensorStr = str(sorted(self.table.items()))
-        config = f"{self.minorType}_{self.planes}_{self.columns}_{self.lines}_{tensorStr}"
+        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.columns}_{self.lines}_{tensorStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
-        self.node    = node
-        self.planes  = node.planes.copy()
-        self.columns = node.columns.copy()
-        self.lines   = node.lines.copy()
-        self.table   = node.table.copy()
+        self.node      = node
+        self.outputCat = tk.BooleanVar(value=node.outputCat == _OUT_CAT_AUX)
+        self.planes    = node.planes.copy()
+        self.columns   = node.columns.copy()
+        self.lines     = node.lines.copy()
+        self.table     = node.table.copy()
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -162,7 +176,9 @@ class TensorSettingsDialog(tk.Toplevel):
         self.yOrderEntry.insert(0, str(len(node.lines)))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
         
-        tk.Button(basicFrame, text="表更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
+        tk.Checkbutton(basicFrame, text="補正値", variable=self.outputCat).grid(row=0, column=6, sticky="w", padx=5, pady=2)
+        
+        tk.Button(basicFrame, text="表サイズ更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
         # 表設定フレーム（スクロール可能）
         frame = tk.Frame(self, height=120)
@@ -291,11 +307,12 @@ class TensorSettingsDialog(tk.Toplevel):
                     from utils.Debug import Debug
                     Debug.log(type(self).__name__, f"Warning: Invalid table value for {key}")
             
+            outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
             self.planes  = planes
             self.columns = columns
             self.lines   = lines
             self.table   = table
-            self.node.applySettings(self.planes, self.columns, self.lines, self.table)
+            self.node.applySettings(outputCat, planes, columns, lines, table)
     
     def onClose(self):
         self.destroy()

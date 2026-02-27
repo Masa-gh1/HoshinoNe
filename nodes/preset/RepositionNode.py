@@ -47,15 +47,17 @@ class RepositionNode(LazyNNOperationNode):
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
-        shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height = 0, 0, 0, 0, 0, 0, None, None, None, None
+        if not self._tableData:
+            return inputData  # パラメータ未設定時はそのまま
         
-        if self._tableData:
-            image_id = self._generateImageId(inputData)
-            params = self._getRepositionParams(image_id, self._tableData)
-            if params:
-                shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height  = params
+        image_id = self._generateImageId(inputData)
+        params = self._getRepositionParams(image_id, self._tableData)
 
-        return RepositionLazyFlowData(inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+        if not params:
+            return inputData
+        else:
+            shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height  = params
+            return RepositionLazyFlowData(inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
 
     def _loadTableData(self, auxiliaryDatas):
         """table 形式データを読み込み"""

@@ -65,7 +65,8 @@ class TransformNode(LazyNNOperationNode):
         transformParams = self._getTransformParams(image_id, self._tableData)
         
         if not transformParams:
-            result = inputData
+            expand_left, expand_top, new_width, new_height = self._extendParams
+            return TransformLazyFlowData(inputData, expand_left, expand_top, 0, 1, new_width, new_height)
         else:
             expand_left, expand_top, new_width, new_height = self._extendParams
             dx, dy, rotation, scale, left, top, width, height = transformParams
@@ -75,8 +76,7 @@ class TransformNode(LazyNNOperationNode):
             height = height if height is not None else new_height
             dx += left
             dy += top
-            result = TransformLazyFlowData(inputData, dx, dy, rotation, scale, width, height)
-        return result
+            return TransformLazyFlowData(inputData, dx, dy, rotation, scale, width, height)
         
     def _loadTableData(self, auxiliaryDatas):
         """table 形式データを読み込み"""
