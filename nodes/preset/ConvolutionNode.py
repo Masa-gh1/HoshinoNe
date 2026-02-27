@@ -85,8 +85,8 @@ class ConvolutionNode(NNPlaneOperationNode):
         else:
             auxiliaryTable = self._auxiliaryTable[planeIndex]
         
-        #result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same') # 相関計算
-        result = convolution(planeData, auxiliaryTable) # 畳み込み
+        #result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same') # 畳み込み
+        result = convolve(planeData, auxiliaryTable) # 畳み込み
         
         blocks = []
         for y in range(0, height, BLOCK_SIZE):
@@ -100,7 +100,7 @@ class ConvolutionNode(NNPlaneOperationNode):
         
         return blocks
 
-def convolution(data, psf):
+def convolve(data, psf):
     """
     畳み込みを行う
     data: 2次元計測データ配列

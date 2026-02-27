@@ -85,7 +85,7 @@ class DeconvolutionNode(NNPlaneOperationNode):
         else:
             auxiliaryTable = self._auxiliaryTable[planeIndex]
         
-        result = deconvolution(planeData, auxiliaryTable) # 逆畳み込み
+        result = deconvolve(planeData, auxiliaryTable) # 逆畳み込み
         
         blocks = []
         for y in range(0, height, BLOCK_SIZE):
@@ -99,7 +99,7 @@ class DeconvolutionNode(NNPlaneOperationNode):
         
         return blocks
 
-def deconvolution(data, psf, noise_power=0.01):
+def deconvolve(data, psf, noise_power=0.01):
     """
     wiener を用いて逆畳み込みを行う
     data: 2次元計測データ配列
