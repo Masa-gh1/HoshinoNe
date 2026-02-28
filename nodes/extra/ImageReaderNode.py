@@ -102,7 +102,7 @@ class ImageReaderNode(BaseReaderNode):
             'width'         : width,
             'height'        : height,
             'planes'        : plane_names,
-            'datetime'      : norm['datetime'],
+            'datetime'      : norm['datetime'] if 'datetime' in norm else None,
             'display_levels': display_levels,
             'source_file'   : self.getRelativePath(filePath),
         }

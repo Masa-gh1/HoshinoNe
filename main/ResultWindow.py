@@ -780,7 +780,9 @@ class ResultWindow(tk.Toplevel):
         width, height = flowData.getDimensions()
 
         # 画像 mode を設定
-        if 'RGB' == mode and 3 <= planeCount:
+        if(  'RGB'  == mode and 3 <= planeCount
+          or 'RGBA' == mode and 3 <= planeCount
+          ):
             smode = 'RGB'
             dmode = 'RGB'
             imgW = nh.ceil(d_width , gridSize).astype(int)
