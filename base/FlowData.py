@@ -22,6 +22,7 @@ class FlowData:
                  'cachePolicy'      ,
                  'headers'          ,
                  '_dimensions'      ,
+                 '_variableType'    ,
                  '_maxValue'        , 
                  '_minValue'        ,
                  '_percentileCache' ,
@@ -36,7 +37,8 @@ class FlowData:
         self.cachePolicy = CachePolicy.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
         self.headers = headers
         self._dimensions = (0, 0)
-        
+        self._variableType = None
+
         self._maxValue = None
         self._minValue = None
         self._percentileCache  = {}   # パーセンタイルキャッシュ
@@ -83,16 +85,22 @@ class FlowData:
         else:
             return None
     
-    def getDimensions(self):
-        """次元を取得 (width, height)"""
-        return self._dimensions
-    
     def getPlaneCount(self):
         """プレーン数を取得"""
         if 'planes' in self.headers:
             return len(self.headers['planes'])
         return None
     
+    def getDimensions(self):
+        """次元を取得 (width, height)"""
+        return self._dimensions
+    
+    def getVariableType(self):
+        """データ型を取得"""
+        if self._variableType is None:
+            self.getBlock(0,0,0).data
+        return self._variableType
+
     def getArea(self):
         """面積を取得"""
         width, height = self.getDimensions()
@@ -151,32 +159,33 @@ class FlowData:
         import numpy as np
         from utils import numpy_helpers as nh
 
+        # numpy配列として正規化
+        data = dataBlock.data
+        if isinstance(data, list):
+            if np.iscomplexobj(data):
+                # 複素数
+                data = np.array(data, dtype=nh.BDCOMPLEX)
+            else:
+                # 実数
+                data = nh.array(data)
+        else:
+            if np.iscomplexobj(data):
+                # 複素数
+                if data.dtype != nh.BDCOMPLEX:
+                    data = data.astype(nh.BDCOMPLEX)
+                else:
+                    data = data
+            else:
+                # 実数
+                if data.dtype != nh.BDTYPE:
+                    data = data.astype(nh.BDTYPE)
+                else:
+                    data = data
+        
+        # DataBlock を再利用
         dataBlock.blockId = f"{self.instanceId}:{dataBlock.planeIndex}:{dataBlock.x}:{dataBlock.y}"
         dataBlock.cachePolicy = self.cachePolicy
-        
-        # numpy配列として正規化
-        if isinstance(dataBlock.data, list):
-            if np.iscomplexobj(dataBlock.data):
-                # 複素数
-                arr = np.array(dataBlock.data, dtype=nh.BDCOMPLEX)
-            else:
-                # 実数
-                arr = nh.array(dataBlock.data)
-        else:
-            if np.iscomplexobj(dataBlock.data):
-                # 複素数
-                if dataBlock.data.dtype != nh.BDCOMPLEX:
-                    arr = dataBlock.data.astype(nh.BDCOMPLEX)
-                else:
-                    arr = dataBlock.data
-            else:
-                # 実数
-                if dataBlock.data.dtype != nh.BDTYPE:
-                    arr = dataBlock.data.astype(nh.BDTYPE)
-                else:
-                    arr = dataBlock.data
-        
-        dataBlock.data = arr
+        dataBlock.data = data
     
         # 統計情報更新
         self._updateStatistics(dataBlock)
@@ -205,9 +214,14 @@ class FlowData:
             if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
                 from utils.Debug import Debug
                 Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
+        elif not self._variableType is None and self._variableType != blockData.data.dtype:
+            # 型違い検出
+            from utils.Debug import Debug
+            Debug.log(type(self).__name__, f"Warning: Block type mismatch at plane={planeIndex}, x={x}, y={y}")
         else:
             self._existingBlocks[planeIndex, blockY, blockX] = True
             data = blockData.data
+            self._variableType = data.dtype
             if 0 < data.size and not np.isnan(data).all():
                 # 最大値・最小値を更新し、キャッシュをクリア
                 if np.iscomplexobj(data):

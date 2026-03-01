@@ -135,4 +135,5 @@ def deconvolve(data, psf, noise_power=0.01):
     result = fft.ifftn(filtered)
     
     # 元のサイズを切り出し
-    return result[:data.shape[0], :data.shape[1]].real
+    np.abs(result[:data.shape[0], :data.shape[1]], out=result[:data.shape[0], :data.shape[1]])
+    return result

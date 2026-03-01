@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 import hashlib
-import numpy as np
+
 from base.FlowNode_CONST import *
 from base import LazyFlowData
 from nodes import LazyNNOperationNode
@@ -61,6 +61,8 @@ class RepositionNode(LazyNNOperationNode):
 
     def _loadTableData(self, auxiliaryDatas):
         """table 形式データを読み込み"""
+        import numpy as np
+
         # 複数の auxiliary データから table 形式を探す
         lines   = []
         columns = None
@@ -81,7 +83,7 @@ class RepositionNode(LazyNNOperationNode):
                         tabledatas.append(block.data)
         
         if not tabledatas:
-            return None
+            raise ValueError("再配置パラメータが必要です")
         
         tabledata = np.vstack(tabledatas)
         
@@ -166,9 +168,6 @@ class RepositionLazyFlowData(LazyFlowData):
         reqW = min(BLOCK_SIZE, dstW - x)
         reqH = min(BLOCK_SIZE, dstH - y)
         
-        # 結果バッファ
-        result = nh.nans((reqH, reqW))
-        
         # Shift (Roll) の逆変換を行い、必要な領域を特定する
         # Shiftは循環するので、出力ブロックは最大4つの矩形領域に分割される可能性がある
         
@@ -194,6 +193,9 @@ class RepositionLazyFlowData(LazyFlowData):
             h2 = reqH - h1
             ys = [(srcY_start, h1, 0), (0, h2, h1)]
             
+        # 結果バッファ
+        result = nh.nans((reqH, reqW), dtype=flowData.getVariableType())
+        
         # 各領域について処理
         for sy, h, dy in ys:
             for sx, w, dx in xs:
@@ -316,7 +318,7 @@ class RepositionLazyFlowData(LazyFlowData):
         # 作業用バッファ
         buf_w = bx_end - bx_start
         buf_h = by_end - by_start
-        buffer = nh.nans((buf_h, buf_w))
+        buffer = nh.nans((buf_h, buf_w), dtype=flowData.getVariableType())
         
         # ブロックを取得してバッファに配置
         srcW, srcH = flowData.getDimensions()

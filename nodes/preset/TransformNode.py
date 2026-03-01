@@ -6,6 +6,7 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+
 import hashlib
 
 from base.FlowNode_CONST import *
@@ -296,6 +297,8 @@ class TransformLazyFlowData(LazyFlowData):
                         x1 = bx - src_min_blockX
                         y1 = by - src_min_blockY
                         h, w = block_data.shape
+                        if np.iscomplexobj(block_data):
+                            block_data = np.abs(block_data)
                         src_image[y1:y1+h, x1:x1+w] = block_data
 
                         if np.isnan(block_data).any():

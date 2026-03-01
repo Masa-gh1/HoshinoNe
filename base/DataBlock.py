@@ -10,6 +10,7 @@ All rights reserved.
 from .Constants import CachePolicy
 
 class DataBlock:
+    """データブロック配列のラッパークラス"""
     __slots__ = ('blockId'    ,
                  'cachePolicy',
                  '_data'      ,
@@ -18,9 +19,12 @@ class DataBlock:
                  'y'          ,
                 )
     def __init__(self, data, planeIndex=None, x=None, y=None):
-        self.blockId = None # 再現性と他の DataBlock との衝突を回避する為の ID を入れる
+        """
+        キャッシュからの遅延ロードする場合、data を None で初期化する
+        """
+        self.blockId = None # キャッシュ用の ID 、キャッシュする場合に設定する
         self.cachePolicy = CachePolicy.CALCULABLE  # デフォルト
-
+        
         self._data = data
         
         # 付属情報(DataBlockでは使用しない)
@@ -32,7 +36,7 @@ class DataBlock:
     def data(self):
         """遅延ロードでデータを取得"""
         from .CacheManager import CacheManager
-
+        
         if self._data is None:
             data = CacheManager.get(self.blockId)
             self._data = data
@@ -44,7 +48,8 @@ class DataBlock:
         from .CacheManager import CacheManager
         
         self._data = data
-        CacheManager.set(self.blockId, data, self.cachePolicy)
+        if not self.blockId is None:
+            CacheManager.set(self.blockId, data, self.cachePolicy)
     
     def isValid(self):
         """データが有効かどうかを確認"""

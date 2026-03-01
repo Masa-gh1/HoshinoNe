@@ -23,10 +23,12 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
         import numpy as np
+        from utils import numpy_helpers as nh
 
         datas = []
         tensors = []
         polynomials = []
+        variableType = nh.BDTYPE
         
         for data in inputDatas:
             dataType = data.headers.get('type', 'table')
@@ -36,12 +38,15 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                 polynomials.append(data)
             else:
                 datas.append(data)
+            variableType = np.result_type(variableType, data.getVariableType())
         
         # tensor を事前統合(加算)
         self._combinedTensor = self.computeCombinedTensor(tensors, np.add)
         
         # polynomial を事前統合(加算)
         self._combinedPolynomial = self.computeCombinedPolynomial(polynomials, np.add)
+        
+        self._variableType = variableType
         
         if datas:
             return datas
@@ -98,7 +103,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                 
                 if result is None:
                     # 最初のブロックで初期化
-                    result = nh.nans((blockHeight, blockWidth))
+                    result = nh.nans((blockHeight, blockWidth), dtype=self._variableType)
                     result[:minH, :minW] = inputBlock.data[:minH, :minW]
                 else:
                     # スレッドローカルに作業用メモリを確保
@@ -122,7 +127,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         if result is None:
             result = nh.nans((blockHeight, blockWidth))
         
-        # tensor 加算（NaN対応）
+        # tensor を加算（NaN対応）
         if self._combinedTensor:
             block = self._combinedTensor.getBlock( planeIndex, x, y)
             if block:

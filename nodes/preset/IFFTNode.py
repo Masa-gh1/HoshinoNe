@@ -43,7 +43,7 @@ class FFTNode(NNPlaneOperationNode):
         # NaN を補完
         np.nan_to_num(planeData, nan=0, copy=False)
         
-        result = scipy.fft.ifftn(planeData).real # 逆FFT
+        result = scipy.fft.ifftn(planeData) # 逆FFT
         
         blocks = []
         for y in range(0, height, BLOCK_SIZE):

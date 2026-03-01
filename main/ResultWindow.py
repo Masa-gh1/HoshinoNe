@@ -852,7 +852,7 @@ class ResultWindow(tk.Toplevel):
                                 rgb = [l_data]
                             else:
                                 pass # ここには来ない
-
+                            
                             for bd,data in enumerate(rgb):
                                 if data is not None:
                                     try:

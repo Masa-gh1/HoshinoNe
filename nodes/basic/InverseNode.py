@@ -35,7 +35,11 @@ class InverseLazyFlowData(LazyFlowData):
         from base import DataBlock
         
         data = block.data
-        result = np.where(data != 0, nh.BDTYPE(1.0), nh.nan)
-        np.divide(result, data, out=result)
+        if np.iscomplexobj(data):
+            result = np.conj(data)
+            np.divide(result, data*data, out=result)
+        else:
+            result = np.where(data != 0, nh.BDTYPE(1.0), nh.nan)
+            np.divide(result, data, out=result)
         
         return DataBlock(result, planeIndex, x, y)

@@ -20,16 +20,15 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
-
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
         import numpy as np
+        from utils import numpy_helpers as nh
         
         datas = []
         tensors = []
         polynomials = []
+        variableType = nh.BDTYPE
         
         for data in inputDatas:
             dataType = data.headers.get('type', 'table')
@@ -39,12 +38,15 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 polynomials.append(data)
             else:
                 datas.append(data)
+            variableType = np.result_type(variableType, data.getVariableType())
         
         # tensor を事前統合(乗算)
         self._combinedTensor = self.computeCombinedTensor(tensors, np.multiply)
         
         # polynomial を事前統合(乗算)
         self._combinedPolynomial = self.computeCombinedPolynomial(polynomials, np.multiply)
+        
+        self._variableType = variableType
         
         if datas:
             return datas
@@ -86,7 +88,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 
                 if result is None:
                     # 最初のブロックで初期化
-                    result = nh.nans((blockHeight, blockWidth))
+                    result = nh.nans((blockHeight, blockWidth), dtype=self._variableType)
                     result[:minH, :minW] = inputBlock.data[:minH, :minW]
                 else:
                     # NaN対応乗算
@@ -108,12 +110,12 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         if self._combinedTensor:
             block = self._combinedTensor.getBlock( planeIndex, x, y)
             if block:
-                result = result * block.data
+                result *= block.data
         
         # polynomial を乗算（NaN対応）
         if self._combinedPolynomial:
             polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
             if not polynomialValues is None:
-                result = result * polynomialValues
+                result *= polynomialValues
         
         return DataBlock(result, planeIndex, x, y)
