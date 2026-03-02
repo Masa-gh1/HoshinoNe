@@ -79,6 +79,21 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         blockWidth = min(BLOCK_SIZE, resultWidth - x)
         result = None
         
+        # スレッドローカルに作業用メモリを確保
+        _invalidA = self.getLocal('_invalidA')
+        _invalidB = self.getLocal('_invalidB')
+        _invalidC = self.getLocal('_invalidC')
+        
+        if _invalidA is None:
+            _invalidA = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+            self.setLocal('_invalidA', _invalidA)
+        if _invalidB is None:
+            _invalidB = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+            self.setLocal('_invalidB', _invalidB)
+        if _invalidC is None:
+            _invalidC = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+            self.setLocal('_invalidC', _invalidC)
+        
         # tableデータの乗算（NaN対応）
         for inputData in inputDatas:
             inputBlock = inputData.getBlock(planeIndex, x, y)
@@ -91,16 +106,22 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                     result = nh.nans((blockHeight, blockWidth), dtype=self._variableType)
                     result[:minH, :minW] = inputBlock.data[:minH, :minW]
                 else:
+                    # スレッドローカルに作業用メモリを確保
+                    invalidA = _invalidA[:minH, :minW]
+                    invalidB = _invalidB[:minH, :minW]
+                    invalidC = _invalidC[:minH, :minW]
+
                     # NaN対応乗算
-                    result[:minH, :minW] = np.where(
-                        ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
-                        result[:minH, :minW] * inputBlock.data[:minH, :minW],
-                        np.where(
-                            np.isnan(result[:minH, :minW]),
-                            inputBlock.data[:minH, :minW],
-                            result[:minH, :minW]
-                        )
-                    )
+                    np.isnan(result[:minH, :minW]         , out=invalidA)
+                    np.isnan(inputBlock.data[:minH, :minW], out=invalidB)
+                    np.logical_not(invalidB               , out=invalidB)
+                    np.logical_and(invalidA, invalidB     , out=invalidC)
+                    if invalidC.any():
+                        result[invalidC] = inputBlock.data[invalidC]
+                    np.logical_not(invalidA               , out=invalidA)
+                    np.logical_and(invalidA, invalidB     , out=invalidC)
+                    if invalidC.any():
+                        result[invalidC] *= inputBlock.data[invalidC]
             
         # tableデータがない場合の初期化
         if result is None:
@@ -119,3 +140,19 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 result *= polynomialValues
         
         return DataBlock(result, planeIndex, x, y)
+    
+    import threading
+    local = threading.local()
+
+    @staticmethod
+    def setLocal(name, value):
+        if not hasattr(ProductNode.local, "ProductNode"):
+            ProductNode.local.ProductNode = {}
+        ProductNode.local.ProductNode[name] = value
+    
+    @staticmethod
+    def getLocal(name):
+        if not hasattr(ProductNode.local, "ProductNode"):
+            return None
+        else:
+            return ProductNode.local.ProductNode.get(name)
