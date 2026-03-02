@@ -30,14 +30,6 @@ class PolynomialOperationMixin:
         # 最初の polynomial をベースとしてコピー
         result = FlowData(polynomialDatas[0].headers.copy())
 
-        # 出力の範囲を縦横最大にする
-        width, height = polynomialDatas[0].getDimensions()
-        for polynomialData in polynomialDatas[1:]:
-            w, h = polynomialData.getDimensions()
-            width  = max(width , w)
-            height = max(height, h)
-        result.setDimensions(width, height)
-        
         # operation から関数を判定
         if   np.add      == operation:
             combineFunc       = cls._addPolynomialPlane
@@ -54,6 +46,8 @@ class PolynomialOperationMixin:
         if combineFunc:
             for planeIndex in range(planeCount):
                 resultBlock = combineFunc(planeIndex, polynomialDatas)
+                h, w = resultBlock.data.shape
+                result.setDimensions(w,h)
                 result.setBlock(resultBlock)
         else:
             for planeIndex in range(planeCount):
@@ -192,7 +186,6 @@ class PolynomialOperationMixin:
         resultW = w1 + w2 - 1
         result = nh.zeros((resultH, resultW))
         
-        # numpy のブロードキャストを活用した効率的な実装
         for i in range(h2):
             for j in range(w2):
                 if coeffs2[i, j] != 0:

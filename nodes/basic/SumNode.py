@@ -141,31 +141,6 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
 
         return DataBlock(result, planeIndex, x, y)
     
-    def _processPolynomialAddition(self, block, polynomialDatas):
-        """全てpolynomialの場合の加算処理"""
-        from base import DataBlock
-
-        planeIndex = block.planeIndex
-        
-        # 最初のpolynomialの係数行列を取得
-        firstPolynomial = polynomialDatas[0]
-        coeffBlock = firstPolynomial.getBlock(planeIndex, 0, 0)
-        if not coeffBlock:
-            return None
-        
-        result = coeffBlock.data.copy()
-        
-        # 他のpolynomialの係数行列を加算
-        for polynomialData in polynomialDatas[1:]:
-            coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)
-            if coeffBlock:
-                # サイズを合わせて加算
-                minH = min(result.shape[0], coeffBlock.data.shape[0])
-                minW = min(result.shape[1], coeffBlock.data.shape[1])
-                result[:minH, :minW] += coeffBlock.data[:minH, :minW]
-        
-        return DataBlock(result, planeIndex, 0, 0)
-    
     import threading
     local = threading.local()
 
