@@ -16,7 +16,7 @@ np.float_ = DEFAULT_BLOCK_TYPE
 
 # 型変換用エイリアス
 BDTYPE = DEFAULT_BLOCK_TYPE  # ブロックデータタイプ 使用例 arr.astype(nh.BDTYPE)
-BDCOMPLEX = np.result_type(DEFAULT_BLOCK_TYPE, np.complex64)
+BDCOMPLEX = np.result_type(DEFAULT_BLOCK_TYPE, np.complex64).type
 
 e           = BDTYPE(np.e)
 euler_gamma = BDTYPE(np.euler_gamma)

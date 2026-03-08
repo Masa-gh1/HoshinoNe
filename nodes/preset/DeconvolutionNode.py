@@ -125,15 +125,16 @@ def deconvolve(data, psf, noise_power=0.01):
     psf_fft  = fft.fftn(psf_padded)
     
     # ウィーナーフィルタ
-    # 1/H (|H|^2)/(|h|^2+k) , |H|^2 = H H*
-    # 1/H  (H H*)/(|h|^2+k)
-    #         H* /(|h|^2+k)
-    wiener_filter = np.conj(psf_fft) / (np.abs(psf_fft)**2 + noise_power)
+    # 1/H (|H|^2)/(|H|^2+k) , |H|^2 = H H*
+    # 1/H  (H H*)/(|H|^2+k)
+    #         H* /(|H|^2+k)
+    wiener_filter = np.conjugate(psf_fft) / (np.abs(psf_fft)**2 + noise_power)
     filtered = data_fft * wiener_filter
 
     # 逆FFT
     result = fft.ifftn(filtered)
     
     # 元のサイズを切り出し
-    np.abs(result[:data.shape[0], :data.shape[1]], out=result[:data.shape[0], :data.shape[1]])
+    result = result[:data.shape[0], :data.shape[1]]
+    np.abs(result, out=result)
     return result
