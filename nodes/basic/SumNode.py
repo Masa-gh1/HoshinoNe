@@ -129,7 +129,15 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         # tensor を加算（NaN対応）
         if self._combinedTensor:
-            block = self._combinedTensor.getBlock( planeIndex, x, y)
+            w, h = self._combinedTensor.getDimensions()
+            if 1 == w and 1 == h:
+                block = self._combinedTensor.getBlock( planeIndex, 0, 0)
+            elif 1 == w:
+                block = self._combinedTensor.getBlock( planeIndex, 0, y)
+            elif 1 == h:
+                block = self._combinedTensor.getBlock( planeIndex, x, 0)
+            else:
+                block = self._combinedTensor.getBlock( planeIndex, x, y)
             if block:
                 result += block.data
         
