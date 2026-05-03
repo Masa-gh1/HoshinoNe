@@ -861,7 +861,7 @@ class ResultWindow(tk.Toplevel):
                                         cx2 = min(sx2, bx1+data.shape[1])
                                         cy2 = min(sy2, by1+data.shape[0])
                                         trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
-                                        if np.iscomplexobj(data):
+                                        if np.iscomplexobj(trimed):
                                             trimed = np.abs(trimed) # 複素数なので、絶対値を取る
                                         leveled = (trimed - offset) * scale              # レベル調整を適用
                                         norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換

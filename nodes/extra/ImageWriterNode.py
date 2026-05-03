@@ -88,15 +88,28 @@ class ImageWriterNode(BaseWriterNode):
                     endY = y + blockHeight
                     endX = x + blockWidth
                     
-                    r_data = np.nan_to_num((r_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                    g_data = np.nan_to_num((g_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
-                    b_data = np.nan_to_num((b_block.data[:blockHeight, :blockWidth] - offset) * scale, nan=0.0)
+                    # 切り出し
+                    r_data = r_block.data[:blockHeight, :blockWidth]
+                    g_data = g_block.data[:blockHeight, :blockWidth]
+                    b_data = b_block.data[:blockHeight, :blockWidth]
+                    
+                    # 複素数の場合、絶対値を取得
+                    if np.iscomplexobj(r_data): r_data = np.abs(r_data)
+                    if np.iscomplexobj(g_data): g_data = np.abs(g_data)
+                    if np.iscomplexobj(b_data): b_data = np.abs(b_data)
+
+                    # スケーリング
+                    r_data = np.nan_to_num((r_data - offset) * scale, nan=0.0)
+                    g_data = np.nan_to_num((g_data - offset) * scale, nan=0.0)
+                    b_data = np.nan_to_num((b_data - offset) * scale, nan=0.0)
                     
                     if None != max_out:
+                        # クリップ
                         r_data = np.clip(np.round(r_data), 0, max_out)
                         g_data = np.clip(np.round(g_data), 0, max_out)
                         b_data = np.clip(np.round(b_data), 0, max_out)
                     
+                    # 型変換
                     imgArray[y:endY, x:endX, 0] = r_data.astype(dtype)
                     imgArray[y:endY, x:endX, 1] = g_data.astype(dtype)
                     imgArray[y:endY, x:endX, 2] = b_data.astype(dtype)
