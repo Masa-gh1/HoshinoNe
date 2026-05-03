@@ -61,7 +61,7 @@ class ResultWindow(tk.Toplevel):
         
         tk.Label(data_select_frame, text="表示データ:").pack(side=tk.LEFT)
         self._selected_data_var = tk.StringVar()
-        self._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self._selected_data_var, state="readonly", width=60)
+        self._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self._selected_data_var, state="readonly", width=180)
         self._data_combo.pack(side=tk.LEFT, padx=(5,0))
         self._data_combo.bind('<<ComboboxSelected>>', lambda e: self.updateResult())
         self._data_combo.bind('<Key>', self._onComboKeyPress)

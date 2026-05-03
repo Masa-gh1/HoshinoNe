@@ -44,6 +44,8 @@ class FFTNode(NNPlaneOperationNode):
         np.nan_to_num(planeData, nan=0, copy=False)
 
         result = scipy.fft.fftn(planeData) # FFT
+        #結果(numpy配列)のハッシュ値を計算
+        print(f"{id(flowData)} {planeIndex} {hash(planeData.tobytes())} {hash(result.tobytes())} \n")
         
         blocks = []
         for y in range(0, height, BLOCK_SIZE):

@@ -1,5 +1,5 @@
 '''
-PolynomialOperationMixin - polynomial操作の共通機能
+PolynomialOperationMixin - polynomial 操作の共通機能
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -12,7 +12,8 @@ class PolynomialOperationMixin:
     
     @classmethod
     def computeCombinedPolynomial(cls, polynomialDatas, operation):
-        """複数 polynomial を統合計算
+        """
+        複数 polynomial を統合
         
         Args:
             polynomialDatas: polynomial データのリスト
@@ -24,7 +25,7 @@ class PolynomialOperationMixin:
 
         if not polynomialDatas:
             return None
-        if len(polynomialDatas) == 1:
+        if 1 == len(polynomialDatas):
             return polynomialDatas[0]
         
         # 最初の polynomial をベースとしてコピー
@@ -47,19 +48,21 @@ class PolynomialOperationMixin:
             for planeIndex in range(planeCount):
                 resultBlock = combineFunc(planeIndex, polynomialDatas)
                 h, w = resultBlock.data.shape
-                result.setDimensions(w,h)
+                result.setDimensions(w, h)
                 result.setBlock(resultBlock)
         else:
             for planeIndex in range(planeCount):
                 # 最初の polynomial の係数行列を取得
                 coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
+                h, w = coeffBlock.data.shape
+                result.setDimensions(w, h)
                 data = coeffBlock.data.copy()
 
                 # 残りの polynomial を順次適用
                 for polynomialData in polynomialDatas[1:]:
                     otherBlock = polynomialData.getBlock(planeIndex, 0, 0)
                     data = operation(data, otherBlock.data)
-                    result.setBlock(DataBlock(data, planeIndex, 0, 0))
+                result.setBlock(DataBlock(data, planeIndex, 0, 0))
         
         # headers 更新
         if updateHeadersFunc:
@@ -95,13 +98,13 @@ class PolynomialOperationMixin:
         """Polynomial データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh
-
-        width, height = polynomialData.getDimensions()
+        
         planeCount = polynomialData.getPlaneCount()
-        if width < 1 or height < 1 or planeIndex >= planeCount:
-            if defaultValue == 0.0:
+        width, height = polynomialData.getDimensions()
+        if width <= 0 or height <= 0 or planeCount <= planeIndex:
+            if 0.0 == defaultValue:
                 return nh.zeros(blockShape)
-            elif defaultValue == 1.0:
+            elif 1.0 == defaultValue:
                 return nh.ones(blockShape)
             else:
                 return nh.full(blockShape, defaultValue)
@@ -109,9 +112,9 @@ class PolynomialOperationMixin:
         # 指定プレーンの係数行列を取得
         coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)
         if not coeffBlock:
-            if defaultValue == 0.0:
+            if 0.0 == defaultValue:
                 return nh.zeros(blockShape)
-            elif defaultValue == 1.0:
+            elif 1.0 == defaultValue:
                 return nh.ones(blockShape)
             else:
                 return nh.full(blockShape, defaultValue)

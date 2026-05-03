@@ -25,39 +25,51 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         import numpy as np
         from utils import numpy_helpers as nh
         
-        datas = []
-        tensors = []
-        polynomials = []
+        prmDatas       = []
+        prmTensors     = []
+        prmPolynomials = []
+        auxDatas       = []
+        auxTensors     = []
+        auxPolynomials = []
         variableType = nh.BDTYPE
         
         for data in inputDatas:
+            category = data.headers.get('category', 'primary')
             dataType = data.headers.get('type', 'table')
-            if   dataType == 'tensor':
-                tensors.append(data)
-            elif dataType == 'polynomial':
-                polynomials.append(data)
+            if category == 'auxiliary':
+                if   dataType == 'tensor':
+                    auxTensors.append(data)
+                elif dataType == 'polynomial':
+                    auxPolynomials.append(data)
+                else:
+                    auxDatas.append(data)
             else:
-                datas.append(data)
+                if   dataType == 'tensor':
+                    prmTensors.append(data)
+                elif dataType == 'polynomial':
+                    prmPolynomials.append(data)
+                else:
+                    prmDatas.append(data)
             variableType = np.result_type(variableType, data.getVariableType())
         
         # tensor を事前統合(乗算)
-        self._combinedTensor = self.computeCombinedTensor(tensors, np.multiply)
+        self._combinedTensor = self.computeCombinedTensor(prmTensors + auxTensors, np.multiply)
         
         # polynomial を事前統合(乗算)
-        self._combinedPolynomial = self.computeCombinedPolynomial(polynomials, np.multiply)
+        self._combinedPolynomial = self.computeCombinedPolynomial(prmPolynomials + auxPolynomials, np.multiply)
         
         self._variableType = variableType
         
-        if datas:
-            return datas
+        if prmDatas or auxDatas:
+            return prmDatas + auxDatas
         elif self._combinedTensor:
-            datas = [self._combinedTensor]
+            prmDatas = [self._combinedTensor]
             self._combinedTensor = None
-            return datas
+            return prmDatas
         elif self._combinedPolynomial:
-            datas = [self._combinedPolynomial]
+            prmDatas = [self._combinedPolynomial]
             self._combinedPolynomial = None
-            return datas
+            return prmDatas
         else:
             return None
 
@@ -72,11 +84,11 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
         from base import DataBlock
-
+        
         resultWidth, resultHeight = self._outputDimensions
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
-        blockWidth = min(BLOCK_SIZE, resultWidth - x)
+        blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
         result = None
         
         # スレッドローカルに作業用メモリを確保
@@ -99,7 +111,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
             inputBlock = inputData.getBlock(planeIndex, x, y)
             if inputBlock:
                 minH = min(blockHeight, inputBlock.data.shape[0])
-                minW = min(blockWidth, inputBlock.data.shape[1])
+                minW = min(blockWidth , inputBlock.data.shape[1])
                 
                 if result is None:
                     # 最初のブロックで初期化
@@ -110,34 +122,45 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                     invalidA = _invalidA[:minH, :minW]
                     invalidB = _invalidB[:minH, :minW]
                     invalidC = _invalidC[:minH, :minW]
-
-                    # NaN対応乗算
-                    np.isnan(result[:minH, :minW]         , out=invalidA)
+                    
+                    # 計算範囲の結果を取得
+                    res =  result[:minH, :minW]
+                    
+                    # NaN 対応乗算
+                    np.isnan(res                          , out=invalidA)
                     np.isnan(inputBlock.data[:minH, :minW], out=invalidB)
                     np.logical_not(invalidB               , out=invalidB)
                     np.logical_and(invalidA, invalidB     , out=invalidC)
                     if invalidC.any():
-                        result[invalidC] = inputBlock.data[invalidC]
+                        res[invalidC] = inputBlock.data[invalidC]
                     np.logical_not(invalidA               , out=invalidA)
                     np.logical_and(invalidA, invalidB     , out=invalidC)
                     if invalidC.any():
-                        result[invalidC] *= inputBlock.data[invalidC]
-            
+                        res[invalidC] *= inputBlock.data[invalidC]
+        
         # tableデータがない場合の初期化
         if result is None:
             result = nh.nans((blockHeight, blockWidth))
         
         # tensor を乗算（NaN対応）
         if self._combinedTensor:
-            block = self._combinedTensor.getBlock( planeIndex, x, y)
+            w, h = self._combinedTensor.getDimensions()
+            if 1 == w and 1 == h:
+                block = self._combinedTensor.getBlock(planeIndex, 0, 0)
+            elif 1 == w:
+                block = self._combinedTensor.getBlock(planeIndex, 0, y)
+            elif 1 == h:
+                block = self._combinedTensor.getBlock(planeIndex, x, 0)
+            else:
+                block = self._combinedTensor.getBlock(planeIndex, x, y)
             if block:
                 result *= block.data
         
         # polynomial を乗算（NaN対応）
         if self._combinedPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            if not polynomialValues is None:
-                result *= polynomialValues
+            block = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
+            if not block is None:
+                result *= block
         
         return DataBlock(result, planeIndex, x, y)
     

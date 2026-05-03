@@ -9,9 +9,9 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, PolynomialOperationMixin 
+from nodes import LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin
 
-class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
+class OffsetNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_B_OP
     minorType = 'offset'
@@ -23,57 +23,73 @@ class OffsetNode(LazyNNOperationNode, PolynomialOperationMixin):
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self._combinedPolynomial = None
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         import numpy as np
-
-        primaryDatas = []
-        auxiliaryPolynomials = []
-        auxiliaryTables = []
+        
+        prmDatas       = []
+        prmTensors     = []
+        prmPolynomials = []
+        auxDatas       = []
+        auxTensors     = []
+        auxPolynomials = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
+            dataType = data.headers.get('type', 'table')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'table')
-                if dataType == 'polynomial':
-                    auxiliaryPolynomials.append(data)
+                if   dataType == 'tensor':
+                    auxTensors.append(data)
+                elif dataType == 'polynomial':
+                    auxPolynomials.append(data)
                 else:
-                    auxiliaryTables.append(data)
+                    auxDatas.append(data)
             else:
-                primaryDatas.append(data)
+                if   dataType == 'tensor':
+                    prmTensors.append(data)
+                elif dataType == 'polynomial':
+                    prmPolynomials.append(data)
+                else:
+                    prmDatas.append(data)
         
-        # auxiliary polynomialを事前統合
-        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
+        # auxiliary data とtensor を事前統合(加算)
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.add)
         
-        # auxiliary tableを事前統合（最初のものをベースに加算）
-        self._combinedAuxiliaryTable = None
-        if auxiliaryTables:
-            self._combinedAuxiliaryTable = auxiliaryTables[0]
+        # auxiliary polynomialを事前統合(加算)
+        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxPolynomials, np.add)
         
-        return primaryDatas
+        return prmDatas + prmTensors + prmPolynomials
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return OffsetLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        return OffsetLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._combinedAuxiliaryPolynomial)
 
 class OffsetLazyFlowData(LazyFlowData, PolynomialOperationMixin):
-    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryPolynomial):
         import numpy as np
         from base import DataBlock
         
-        result = block.data
+        result = block.data.copy()
         
-        # auxiliary polynomialを加算
+        # auxiliary tensor を加算
+        if combinedAuxiliaryTensor:
+            w, h = combinedAuxiliaryTensor.getDimensions()
+            if 1 == w and 1 == h:
+                block = combinedAuxiliaryTensor.getBlock(planeIndex, 0, 0)
+            elif 1 == w:
+                block = combinedAuxiliaryTensor.getBlock(planeIndex, 0, y)
+            elif 1 == h:
+                block = combinedAuxiliaryTensor.getBlock(planeIndex, x, 0)
+            else:
+                block = combinedAuxiliaryTensor.getBlock(planeIndex, x, y)
+            if block:
+                result += block.data
+        
+        # auxiliary polynomial を加算
         if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape)
-            result = np.add(result, polynomialValues)
-        
-        # auxiliary tableを加算
-        if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
-            if auxiliaryBlock:
-                result = np.add(result, auxiliaryBlock.data)
+            block = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=0.0)
+            if not block is None:
+                result += block
         
         return DataBlock(result, planeIndex, x, y)

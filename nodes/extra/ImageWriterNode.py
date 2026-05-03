@@ -194,6 +194,12 @@ class ImageWriterNode(BaseWriterNode):
                 # テストモードではないので現在時刻を入れる
                 exifInfo[306] = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S") # 306 DateTime
         
+        exifInfo.pop(256, None) # 256 ImageWidth         画像の幅
+        exifInfo.pop(257, None) # 256 ImageLength        画像の高さ
+        exifInfo.pop(258, None) # 256 BitsPerSample      画像のビットの深さ
+        exifInfo[40962] = width  # 40962 PixelXDimension 画像の幅
+        exifInfo[40963] = height # 40963 PixelYDimension 画像の高さ
+        
         if not exifInfo:
             pass
         elif ext.lower() in ['.tiff', '.tif']:
