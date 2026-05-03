@@ -48,7 +48,7 @@ class N1BlockOperationNode(FlowNode):
         else:
             # 結果用の FlowData を初期化
             flowData = self.createFlowData(processedInputs)
-
+            
             # ブロック単位で並列処理
             futures = []
             for block in flowData.iterateBlocks():
