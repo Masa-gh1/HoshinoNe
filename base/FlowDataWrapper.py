@@ -45,6 +45,9 @@ class FlowDataWrapper(FlowData):
     def getDimensions(self):
         return self.orgFlowData.getDimensions()
     
+    def getVariableType(self):
+        return self.orgFlowData.getVariableType()
+    
     def getArea(self):
         return self.orgFlowData.getArea()
     
