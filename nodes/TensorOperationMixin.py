@@ -107,7 +107,7 @@ class TensorOperationMixin:
             block = tensorData.getBlock(planeIndex, x, y)
         
         if block:
-            return block.data
+            return np.nan_to_num(block.data, nan=defaultValue)
         elif 0.0 == defaultValue:
             return nh.zeros(blockShape)
         elif 1.0 == defaultValue:
