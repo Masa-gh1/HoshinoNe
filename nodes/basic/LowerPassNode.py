@@ -1,5 +1,5 @@
 '''
-LowPassFilterNode - ローパスフィルターノード
+LowerPassNode - 下値通過ノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -9,9 +9,9 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, PolynomialOperationMixin
+from nodes import LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin
 
-class LowerPassNode(LazyNNOperationNode, PolynomialOperationMixin):
+class LowerPassNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_B_OP
     minorType = 'lower_pass'
@@ -23,58 +23,66 @@ class LowerPassNode(LazyNNOperationNode, PolynomialOperationMixin):
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self._combinedPolynomial = None
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         import numpy as np
-
-        primaryDatas = []
-        auxiliaryPolynomials = []
-        auxiliaryTables = []
+        
+        prmDatas       = []
+        prmTensors     = []
+        prmPolynomials = []
+        auxDatas       = []
+        auxTensors     = []
+        auxPolynomials = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
+            dataType = data.headers.get('type', 'table')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'table')
-                if dataType == 'polynomial':
-                    auxiliaryPolynomials.append(data)
+                if   dataType == 'tensor':
+                    auxTensors.append(data)
+                elif dataType == 'polynomial':
+                    auxPolynomials.append(data)
                 else:
-                    auxiliaryTables.append(data)
+                    auxDatas.append(data)
             else:
-                primaryDatas.append(data)
+                if   dataType == 'tensor':
+                    prmTensors.append(data)
+                elif dataType == 'polynomial':
+                    prmPolynomials.append(data)
+                else:
+                    prmDatas.append(data)
         
-        # auxiliary polynomialを事前統合
-        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
+        # auxiliary data とtensor を事前統合(最小)
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.minimum)
         
-        # auxiliary tableを事前統合
-        self._combinedAuxiliaryTable = None
-        if auxiliaryTables:
-            self._combinedAuxiliaryTable = auxiliaryTables[0]
+        # auxiliary polynomial を設定
+        self._auxiliaryPolynomials = auxPolynomials
         
-        return primaryDatas
+        return prmDatas + prmTensors + prmPolynomials
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = LowerPassLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
-        return lazyFlowData
-    
-class LowerPassLazyFlowData(LazyFlowData, PolynomialOperationMixin):
-    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+        return LowerPassLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._auxiliaryPolynomials)
+
+class LowerPassLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMixin):
+    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, auxiliaryPolynomials):
         import numpy as np
         from utils import numpy_helpers as nh
         from base import DataBlock
-
+        
         result = block.data.copy()
         
-        # auxiliary polynomialから閾値を取得
-        if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            result[polynomialValues < result] = nh.nan
+        # auxiliary tensor と比較
+        if combinedAuxiliaryTensor:
+            block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=np.inf)
+            if not block is None:
+                result[block < result] = nh.nan
         
-        # auxiliary tableから閾値を取得
-        if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
-            result[auxiliaryBlock.data < result] = nh.nan
+        # auxiliary polynomial と比較
+        for auxiliaryPolynomial in auxiliaryPolynomials:
+            block = self.calculatePolynomialBlock(auxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=np.inf)
+            if not block is None:
+                result[block < result] = nh.nan
         
         return DataBlock(result, planeIndex, x, y)

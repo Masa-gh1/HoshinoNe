@@ -56,7 +56,7 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMi
         # auxiliary data とtensor を事前統合(乗算)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.multiply)
         
-        # auxiliary polynomialを事前統合(乗算)
+        # auxiliary polynomial を事前統合(乗算)
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxPolynomials, np.multiply)
         
         return prmDatas + prmTensors + prmPolynomials
@@ -65,7 +65,7 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMi
         """LazyFlowDataを作成"""
         return ScaleLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._combinedAuxiliaryPolynomial)
 
-class ScaleLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+class ScaleLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMixin):
     def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryPolynomial):
         import numpy as np
         from base import DataBlock
@@ -74,17 +74,9 @@ class ScaleLazyFlowData(LazyFlowData, PolynomialOperationMixin):
         
         # auxiliary tensor を乗算
         if combinedAuxiliaryTensor:
-            w, h = combinedAuxiliaryTensor.getDimensions()
-            if 1 == w and 1 == h:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, 0, 0)
-            elif 1 == w:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, 0, y)
-            elif 1 == h:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, x, 0)
-            else:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, x, y)
-            if block:
-                result *= block.data
+            block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=1.0)
+            if not block is None:
+                result *= block
         
         # auxiliary polynomial を乗算
         if combinedAuxiliaryPolynomial:

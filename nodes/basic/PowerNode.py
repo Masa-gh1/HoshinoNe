@@ -6,11 +6,12 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, PolynomialOperationMixin 
+from nodes import LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin
 
-class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
+class ScaleNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_B_OP
     minorType = 'power'
@@ -22,60 +23,65 @@ class PowerNode(LazyNNOperationNode, PolynomialOperationMixin):
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self._combinedPolynomial = None
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         import numpy as np
-
-        primaryDatas = []
-        auxiliaryPolynomials = []
-        auxiliaryTables = []
+        
+        prmDatas       = []
+        prmTensors     = []
+        prmPolynomials = []
+        auxDatas       = []
+        auxTensors     = []
+        auxPolynomials = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
+            dataType = data.headers.get('type', 'table')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'table')
-                if dataType == 'polynomial':
-                    auxiliaryPolynomials.append(data)
+                if   dataType == 'tensor':
+                    auxTensors.append(data)
+                elif dataType == 'polynomial':
+                    auxPolynomials.append(data)
                 else:
-                    auxiliaryTables.append(data)
+                    auxDatas.append(data)
             else:
-                primaryDatas.append(data)
+                if   dataType == 'tensor':
+                    prmTensors.append(data)
+                elif dataType == 'polynomial':
+                    prmPolynomials.append(data)
+                else:
+                    prmDatas.append(data)
         
-        # auxiliary polynomialを事前統合（加算：指数の加算）
-        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
+        # auxiliary data とtensor を事前統合(指数の乗算)
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.multiply)
         
-        # auxiliary tableを事前統合（最初のもののみ使用）
-        self._combinedAuxiliaryTable = None
-        if auxiliaryTables:
-            self._combinedAuxiliaryTable = auxiliaryTables[0]
+        # auxiliary polynomial を事前統合(指数の乗算)
+        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxPolynomials, np.multiply)
         
-        return primaryDatas
+        return prmDatas + prmTensors + prmPolynomials
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return PowerLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        return PowerLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._combinedAuxiliaryPolynomial)
 
-class PowerLazyFlowData(LazyFlowData, PolynomialOperationMixin):
-    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+class PowerLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMixin):
+    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryPolynomial):
         import numpy as np
         from base import DataBlock
         
-        result = block.data
-        is_complex = np.iscomplexobj(result)
+        result = block.data.copy()
         
-        # auxiliary polynomialを指数として冪乗
+        # auxiliary tensor を冪算
+        if combinedAuxiliaryTensor:
+            block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=1.0)
+            if not block is None:
+                result **= block
+        
+        # auxiliary polynomial を冪算
         if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            power_result = np.power(result, polynomialValues)
-            result = power_result if is_complex else np.real(power_result)
+            block = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
+            if not block is None:
+                result **= block
         
-        # auxiliary tableを指数として冪乗
-        if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
-            if auxiliaryBlock:
-                power_result = np.power(result, auxiliaryBlock.data)
-                result = power_result if is_complex else np.real(power_result)
-        
-        return DataBlock( result, planeIndex, x, y)
+        return DataBlock(result, planeIndex, x, y)

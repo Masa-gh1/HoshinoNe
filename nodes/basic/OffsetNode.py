@@ -56,7 +56,7 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationM
         # auxiliary data とtensor を事前統合(加算)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.add)
         
-        # auxiliary polynomialを事前統合(加算)
+        # auxiliary polynomial を事前統合(加算)
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxPolynomials, np.add)
         
         return prmDatas + prmTensors + prmPolynomials
@@ -65,7 +65,7 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationM
         """LazyFlowDataを作成"""
         return OffsetLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._combinedAuxiliaryPolynomial)
 
-class OffsetLazyFlowData(LazyFlowData, PolynomialOperationMixin):
+class OffsetLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMixin):
     def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryPolynomial):
         import numpy as np
         from base import DataBlock
@@ -74,17 +74,9 @@ class OffsetLazyFlowData(LazyFlowData, PolynomialOperationMixin):
         
         # auxiliary tensor を加算
         if combinedAuxiliaryTensor:
-            w, h = combinedAuxiliaryTensor.getDimensions()
-            if 1 == w and 1 == h:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, 0, 0)
-            elif 1 == w:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, 0, y)
-            elif 1 == h:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, x, 0)
-            else:
-                block = combinedAuxiliaryTensor.getBlock(planeIndex, x, y)
-            if block:
-                result += block.data
+            block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=0.0)
+            if not block is None:
+                result += block
         
         # auxiliary polynomial を加算
         if combinedAuxiliaryPolynomial:
