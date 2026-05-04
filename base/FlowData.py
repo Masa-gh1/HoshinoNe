@@ -112,7 +112,10 @@ class FlowData:
 
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
-        if planeCount <= planeIndex or width <= x or height <= y:
+        if(  planeIndex < 0 or planeCount <= planeIndex
+          or x          < 0 or width      <= x
+          or y          < 0 or height     <= y
+          ):
             return None
         
         # 遅延ロード用のDataBlockを作成

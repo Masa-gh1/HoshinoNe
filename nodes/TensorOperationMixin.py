@@ -44,6 +44,10 @@ class TensorOperationMixin:
                 resultData = nh.zeros((height, width))
             elif np.multiply == operation:
                 resultData = nh.ones((height, width))
+            elif np.minimum == operation:
+                resultData = nh.full((height, width), np.inf)
+            elif np.maximum == operation:
+                resultData = nh.full((height, width), -np.inf)
             else:
                 resultData = nh.zeros((height, width))
             
@@ -65,7 +69,7 @@ class TensorOperationMixin:
             
             for x in range(0, width, BLOCK_SIZE):
                 for y in range(0, height, BLOCK_SIZE):
-                    result.setBlock(DataBlock(resultData, planeIndex, x, y))
+                    result.setBlock(DataBlock(resultData[y:y+BLOCK_SIZE, x:x+BLOCK_SIZE], planeIndex, x, y))
         
         return result
     
@@ -90,23 +94,23 @@ class TensorOperationMixin:
         import numpy as np
         import utils.numpy_helpers as nh
 
-        planeCount = tensorData.getPlaneCount()
         width, height = tensorData.getDimensions()
-        if width <= 0 or height <= 0 or planeCount <= planeIndex:
-            if 0.0 == defaultValue:
-                return nh.zeros(blockShape)
-            elif 1.0 == defaultValue:
-                return nh.ones(blockShape)
-            else:
-                return nh.full(blockShape, defaultValue)
         
         # 指定プレーンの数列を取得
         if 1 == width and 1 == height:
-            return tensorData.getBlock(planeIndex, 0, 0).data
+            block = tensorData.getBlock(planeIndex, 0, 0)
         elif 1 == width:
-            return tensorData.getBlock(planeIndex, 0, y).data
+            block = tensorData.getBlock(planeIndex, 0, y)
         elif 1 == height:
-            return tensorData.getBlock(planeIndex, x, 0).data
+            block = tensorData.getBlock(planeIndex, x, 0)
         else:
-            return tensorData.getBlock(planeIndex, x, y).data
-
+            block = tensorData.getBlock(planeIndex, x, y)
+        
+        if block:
+            return block.data
+        elif 0.0 == defaultValue:
+            return nh.zeros(blockShape)
+        elif 1.0 == defaultValue:
+            return nh.ones(blockShape)
+        else:
+            return nh.full(blockShape, defaultValue)
