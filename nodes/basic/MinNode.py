@@ -9,9 +9,9 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, PolynomialOperationMixin 
+from nodes import LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin
 
-class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
+class MinNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_B_OP
     minorType = 'min'
@@ -28,51 +28,61 @@ class MinNode(LazyNNOperationNode, PolynomialOperationMixin):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         import numpy as np
         
-        primaryDatas = []
-        auxiliaryPolynomials = []
-        auxiliaryTables = []
+        prmDatas       = []
+        prmTensors     = []
+        prmPolynomials = []
+        auxDatas       = []
+        auxTensors     = []
+        auxPolynomials = []
         
         for data in inputDatas:
             category = data.headers.get('category', 'primary')
+            dataType = data.headers.get('type', 'table')
             if category == 'auxiliary':
-                dataType = data.headers.get('type', 'table')
-                if dataType == 'polynomial':
-                    auxiliaryPolynomials.append(data)
+                if   dataType == 'tensor':
+                    auxTensors.append(data)
+                elif dataType == 'polynomial':
+                    auxPolynomials.append(data)
                 else:
-                    auxiliaryTables.append(data)
+                    auxDatas.append(data)
             else:
-                primaryDatas.append(data)
+                if   dataType == 'tensor':
+                    prmTensors.append(data)
+                elif dataType == 'polynomial':
+                    prmPolynomials.append(data)
+                else:
+                    prmDatas.append(data)
         
-        # auxiliary polynomial を事前統合（比較小）
-        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.minimum)
+        # auxiliary data とtensor を事前統合(比較小)
+        self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.minimum)
         
-        # auxiliary table を事前統合（最初のもののみ使用）
-        self._combinedAuxiliaryTable = None
-        if auxiliaryTables:
-            self._combinedAuxiliaryTable = auxiliaryTables[0]
+        # auxiliary polynomial を設定
+        self._auxiliaryPolynomials = auxPolynomials
         
-        return primaryDatas
+        return prmDatas + prmTensors + prmPolynomials
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return MinLazyFlowData(inputData, self._combinedAuxiliaryPolynomial, self._combinedAuxiliaryTable)
+        return MinLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._auxiliaryPolynomials)
     
-class MinLazyFlowData(LazyFlowData, PolynomialOperationMixin):
-    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryPolynomial, combinedAuxiliaryTable):
+class MinLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMixin):
+    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, auxiliaryPolynomials):
         import numpy as np
+        from utils import numpy_helpers as nh
         from base import DataBlock
-
-        result = block.data
         
-        # auxiliary polynomialを比較小
-        if combinedAuxiliaryPolynomial:
-            polynomialValues = self.calculatePolynomialBlock(combinedAuxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
-            result = np.minimum(result, polynomialValues)
+        result = block.data.copy()
         
-        # auxiliary tableを比較小
-        if combinedAuxiliaryTable:
-            auxiliaryBlock = combinedAuxiliaryTable.getBlock(planeIndex, x, y)
-            if auxiliaryBlock:
-                result = np.minimum(result, auxiliaryBlock.data)
+        # auxiliary tensor と比較小
+        if combinedAuxiliaryTensor:
+            block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=np.inf)
+            if not block is None:
+                np.minimum(result, block, out=result)
+        
+        # auxiliary polynomial と比較小
+        for auxiliaryPolynomial in auxiliaryPolynomials:
+            block = self.calculatePolynomialBlock(auxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=np.inf)
+            if not block is None:
+                np.minimum(result, block, out=result)
         
         return DataBlock(result, planeIndex, x, y)

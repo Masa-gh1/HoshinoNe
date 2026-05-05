@@ -25,51 +25,80 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理：Polynomialを事前統合"""
-        datas = []
-        polynomials = []
+        import numpy as np
+        from utils import numpy_helpers as nh
+        
+        prmDatas       = []
+        prmTensors     = []
+        prmPolynomials = []
+        auxDatas       = []
+        auxTensors     = []
+        auxPolynomials = []
+        variableType = nh.BDTYPE
         
         for data in inputDatas:
+            category = data.headers.get('category', 'primary')
             dataType = data.headers.get('type', 'table')
-            if dataType == 'polynomial':
-                polynomials.append(data)
+            if category == 'auxiliary':
+                if   dataType == 'tensor':
+                    auxTensors.append(data)
+                elif dataType == 'polynomial':
+                    auxPolynomials.append(data)
+                else:
+                    auxDatas.append(data)
             else:
-                datas.append(data)
+                if   dataType == 'tensor':
+                    prmTensors.append(data)
+                elif dataType == 'polynomial':
+                    prmPolynomials.append(data)
+                else:
+                    prmDatas.append(data)
+            variableType = np.result_type(variableType, data.getVariableType())
         
-        # polynomial を事前統合(最大)
-        self._combinedPolynomials = polynomials
+        # tensor を事前統合(最小)
+        self._combinedTensor = self.computeCombinedTensor(prmTensors + auxTensors, np.maximum)
         
-        if datas:
-            return datas
-        elif self._combinedPolynomials:
-            datas = [self._combinedPolynomials[0]]
-            del self._combinedPolynomials[0]
-            return datas
+        # polynomial を設定
+        self._polynomials = prmPolynomials + auxPolynomials
+        
+        self._variableType = variableType
+        
+        if prmDatas or auxDatas:
+            return prmDatas + auxDatas
+        elif self._combinedTensor:
+            prmDatas = [self._combinedTensor]
+            self._combinedTensor = None
+            return prmDatas
+        elif self._combinedPolynomial:
+            prmDatas = self._polynomials
+            self._polynomials = None
+            return prmDatas
         else:
             return None
 
     def getOutputDimensions(self, baseData, inputDatas):
-        """選択大では全入力データを包含するサイズを使用"""
+        """最大では全入力データを包含するサイズを使用"""
         self._outputDimensions = self.getUnionDimensions(inputDatas)
         return self._outputDimensions
     
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックの最大処理"""
         import numpy as np
-        from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
+        from config import BLOCK_SIZE
         from base import DataBlock
         
         resultWidth, resultHeight = self._outputDimensions
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
-        blockWidth  = min(BLOCK_SIZE, resultWidth - x)
+        blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
         
         if not inputDatas:
             # データがないので NaN で初期化
             result = nh.nans((blockHeight, blockWidth))
         else:
             result = None
-            # table の最大（NaN対応）
+            # table の最大(NaN対応)
             for inputData in inputDatas:
                 inputBlock = inputData.getBlock(planeIndex, x, y)
                 if inputBlock:
@@ -92,13 +121,16 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                             )
                         )
         
-        for polynomial in self._combinedPolynomials:
-            # polynomial の最大（NaN対応）
-            polynomialValues = self.calculatePolynomialBlock(polynomial, planeIndex, x, y, result.shape)
-            result = np.where(
-                np.isnan(result),
-                polynomialValues,
-                np.maximum( result, polynomialValues)
-            )
+        # tensor を最大(NaN対応)
+        if self._combinedTensor:
+            block = self.calculateTensorBlock(self._combinedTensor, planeIndex, x, y, result.shape, defaultValue=-np.inf)
+            if not block is None:
+                np.maximum( result, block, out=result)
+        
+        # polynomial を最大(NaN対応)
+        for polynomial in self._polynomials:
+            block = self.calculatePolynomialBlock(polynomial, planeIndex, x, y, result.shape, defaultValue=-np.inf)
+            if not block is None:
+                np.maximum( result, block, out=result)
         
         return DataBlock(result, planeIndex, x, y)
