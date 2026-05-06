@@ -16,6 +16,8 @@ class NodeFactory:
         ('negate'                  , '符号反転(N:N)'),
         ('inverse'                 , '逆数(N:N)'),
         ('absolute'                , '絶対値(N:N)'),
+        ('conjugate'               , '共役(N:N)'),
+        ('------------------------', None),
         ('max'                     , '比較大(N:N)'),
         ('min'                     , '比較小(N:N)'),
         ('upper_pass'              , '上値通(N:N)'),

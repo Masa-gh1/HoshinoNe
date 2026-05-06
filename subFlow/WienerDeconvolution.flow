@@ -1,0 +1,342 @@
+{
+  "version": "0.2.20260227",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 3,
+      "x": 120.33333333333337,
+      "y": -203.4,
+      "type": "fft",
+      "text": "FFT",
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 31,
+      "x": 438.33333333333337,
+      "y": -205.4,
+      "type": "ifft",
+      "text": "逆FFT",
+      "connections": [
+        13
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 5,
+      "x": 120.33333333333337,
+      "y": -148.4,
+      "type": "fft",
+      "text": "FFT",
+      "connections": [
+        14,
+        22
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 13,
+      "x": -8.666666666666629,
+      "y": -257.4,
+      "type": "table",
+      "text": "表",
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "columns": [
+        "width",
+        "height"
+      ],
+      "lines": [
+        "1"
+      ],
+      "table": {
+        "0,0,0": 6000.0,
+        "0,1,0": 4000.0
+      },
+      "connections": [
+        9
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 25,
+      "x": 345.33333333333337,
+      "y": -202.4,
+      "type": "scale",
+      "text": "乗算",
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 23,
+      "x": 345.33333333333337,
+      "y": -147.4,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 9,
+      "x": 121.33333333333337,
+      "y": -91.4,
+      "type": "reposition",
+      "text": "再配置",
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 11,
+      "x": -4.666666666666629,
+      "y": -93.4,
+      "type": "table",
+      "text": "表",
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "columns": [
+        "shift_x",
+        "shift_y",
+        "width",
+        "height"
+      ],
+      "lines": [
+        "1"
+      ],
+      "table": {
+        "0,0,0": -1.0,
+        "0,1,0": -1.0,
+        "0,2,0": 6000.0,
+        "0,3,0": 4000.0
+      },
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 29,
+      "x": 436.33333333333337,
+      "y": -92.4,
+      "type": "table",
+      "text": "表",
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "columns": [
+        "width",
+        "height"
+      ],
+      "lines": [
+        "1"
+      ],
+      "table": {
+        "0,0,0": 5184.0,
+        "0,1,0": 3456.0
+      },
+      "connections": [
+        13
+      ]
+    },
+    {
+      "index": 9,
+      "zOrder": 7,
+      "x": 120.33333333333337,
+      "y": -257.4,
+      "type": "reposition",
+      "text": "再配置",
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 10,
+      "zOrder": 17,
+      "x": -62.66666666666663,
+      "y": -203.4,
+      "type": "pass",
+      "text": "通点",
+      "connections": [
+        9
+      ]
+    },
+    {
+      "index": 11,
+      "zOrder": 47,
+      "x": 540.3333333333334,
+      "y": -149.4,
+      "type": "pass",
+      "text": "通点",
+      "connections": []
+    },
+    {
+      "index": 12,
+      "zOrder": 15,
+      "x": -63.66666666666663,
+      "y": -148.4,
+      "type": "pass",
+      "text": "通点",
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 13,
+      "zOrder": 27,
+      "x": 441.33333333333337,
+      "y": -149.4,
+      "type": "reposition",
+      "text": "再配置",
+      "connections": [
+        11
+      ]
+    },
+    {
+      "index": 14,
+      "zOrder": 19,
+      "x": 213.0,
+      "y": -148.0,
+      "type": "conjugate",
+      "text": "共役",
+      "connections": [
+        15
+      ]
+    },
+    {
+      "index": 15,
+      "zOrder": 21,
+      "x": 276.0,
+      "y": -147.0,
+      "type": "scale",
+      "text": "乗算",
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 16,
+      "zOrder": 39,
+      "x": 277.0,
+      "y": -93.0,
+      "type": "inverse",
+      "text": "逆数",
+      "connections": [
+        21
+      ]
+    },
+    {
+      "index": 17,
+      "zOrder": 37,
+      "x": 212.0,
+      "y": -36.0,
+      "type": "power",
+      "text": "冪算",
+      "connections": [
+        19
+      ]
+    },
+    {
+      "index": 18,
+      "zOrder": 35,
+      "x": 120.0,
+      "y": -36.0,
+      "type": "coefficients",
+      "text": "係数",
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": 2.0,
+        "1,0,0": 2.0,
+        "2,0,0": 2.0
+      },
+      "connections": [
+        17
+      ]
+    },
+    {
+      "index": 19,
+      "zOrder": 43,
+      "x": 279.0,
+      "y": -36.0,
+      "type": "offset",
+      "text": "加算",
+      "connections": [
+        16
+      ]
+    },
+    {
+      "index": 20,
+      "zOrder": 45,
+      "x": 386.0,
+      "y": -40.0,
+      "type": "coefficients",
+      "text": "係数",
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": 0.01,
+        "1,0,0": 0.01,
+        "2,0,0": 0.01
+      },
+      "connections": [
+        19
+      ]
+    },
+    {
+      "index": 21,
+      "zOrder": 41,
+      "x": 347.0,
+      "y": -92.0,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "connections": [
+        15
+      ]
+    },
+    {
+      "index": 22,
+      "zOrder": 33,
+      "x": 213.0,
+      "y": -92.0,
+      "type": "absolute",
+      "text": "絶対値",
+      "connections": [
+        17
+      ]
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 241,
+      "y": -162,
+      "width": 624,
+      "height": 326,
+      "title": "ウィーナー 逆畳み込み"
+    }
+  ]
+}
