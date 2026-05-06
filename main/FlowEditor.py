@@ -500,7 +500,13 @@ class FlowEditor:
             node.view.onNodeConfigChanged(node)
         
     def onSelectOutputFile(self, node):
-        outputPath = self.openOutputFileSelector(title=f"{node.name} - 出力ファイルを選択", defaultextension=node.defaultOutputExtension, filetypes=node.outputFileTypes)
+        outputPath = self.openOutputFileSelector(
+            title=f"{node.name} - 出力ファイルを選択",
+            initialfile=node.getOutputFilePath(),
+            initialdir=os.path.dirname(self.currentFlowPath) if self.currentFlowPath else None,
+            defaultextension=node.defaultOutputExtension,
+            filetypes=node.outputFileTypes
+        )
         if outputPath:
             node.setOutputFilePath(outputPath)
             node.view.onNodeConfigChanged(node)

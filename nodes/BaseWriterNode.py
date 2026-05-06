@@ -42,6 +42,9 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
             displayText = self.name
         return displayText
     
+    def getOutputFilePath(self):
+        return self.outputFilePath
+    
     def setOutputFilePath(self, outputPath):
         self.outputFilePath = outputPath
     
@@ -230,6 +233,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         filepath = self.node.view.editor.openOutputFileSelector(
             parent=self,
             title=f"{self.node.name} - 出力ファイルを選択",
+            initialfile=self.node.outputFilePath,
             filetypes=self.node.outputFileTypes,
             defaultextension=self.node.defaultOutputExtension
         )
