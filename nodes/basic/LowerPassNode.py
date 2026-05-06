@@ -53,7 +53,7 @@ class LowerPassNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperati
                 else:
                     prmDatas.append(data)
         
-        # auxiliary data とtensor を事前統合(最小)
+        # auxiliary data と tensor を事前統合(最小)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.minimum)
         
         # auxiliary polynomial を設定
@@ -73,13 +73,13 @@ class LowerPassLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperat
         
         result = block.data.copy()
         
-        # auxiliary tensor と比較
+        # auxiliary data と tensor を比較
         if combinedAuxiliaryTensor:
             block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=np.inf)
             if not block is None:
                 result[block < result] = nh.nan
         
-        # auxiliary polynomial と比較
+        # auxiliary polynomial を比較
         for auxiliaryPolynomial in auxiliaryPolynomials:
             block = self.calculatePolynomialBlock(auxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=np.inf)
             if not block is None:

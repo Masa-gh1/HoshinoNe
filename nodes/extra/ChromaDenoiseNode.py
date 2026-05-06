@@ -143,7 +143,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         return rgb_image
     
     def _denoise_color_image(self, rgb_image):
-        """色ノイズ除去処理（NaN対応）"""
+        """色ノイズ除去処理(NaN対応)"""
         import numpy as np
         
         # NaN値を事前に検出
@@ -231,7 +231,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         return edge_mask
     
     def _gaussian_filter_nan(self, image, sigma):
-        """ガウシアンフィルタ（NaN対応）"""
+        """ガウシアンフィルタ(NaN対応)"""
         import numpy as np
         from scipy.ndimage import gaussian_filter
         
@@ -249,7 +249,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         return result
     
     def _edge_preserving_filter_nan(self, image, sigma, edge_mask):
-        """エッジ保護ガウシアンフィルタ（NaN対応）"""
+        """エッジ保護ガウシアンフィルタ(NaN対応)"""
         import numpy as np
         
         filtered = self._gaussian_filter_nan(image, sigma)

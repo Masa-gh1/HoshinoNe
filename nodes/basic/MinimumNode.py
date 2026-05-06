@@ -24,7 +24,7 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         super().__init__(canvas, editor, x, y, **kwargs)
     
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：Polynomialを事前統合"""
+        """入力データの前処理：tensor を事前統合"""
         import numpy as np
         from utils import numpy_helpers as nh
         
@@ -92,34 +92,43 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
         blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
+        result  = nh.full((blockHeight, blockWidth), np.inf, dtype=self._variableType)
+        invalid = nh.ones((blockHeight, blockWidth), dtype=bool)
         
-        if not inputDatas:
-            # データがないので NaN で初期化
-            result = nh.nans((blockHeight, blockWidth))
-        else:
-            result = None
-            # table の最小(NaN対応)
-            for inputData in inputDatas:
-                inputBlock = inputData.getBlock(planeIndex, x, y)
-                if inputBlock:
-                    minH = min(blockHeight, inputBlock.data.shape[0])
-                    minW = min(blockWidth, inputBlock.data.shape[1])
-                    
-                    if result is None:
-                        # 最初のブロックで初期化
-                        result = nh.nans((blockHeight, blockWidth))
-                        result[:minH, :minW] = inputBlock.data[:minH, :minW]
-                    else:
-                        # NaN 対応最小
-                        result[:minH, :minW] = np.where(
-                            ~np.isnan(result[:minH, :minW]) & ~np.isnan(inputBlock.data[:minH, :minW]),
-                            np.minimum(result[:minH, :minW], inputBlock.data[:minH, :minW]),
-                            np.where(
-                                np.isnan(result[:minH, :minW]),
-                                inputBlock.data[:minH, :minW],
-                                result[:minH, :minW]
-                            )
-                        )
+        # スレッドローカルに作業用メモリを確保
+        _invalidA = self.getLocal('_invalidA', (BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+        _data     = self.getLocal('_data'    , (BLOCK_SIZE, BLOCK_SIZE), dtype=self._variableType)
+        
+        # tableの最小(NaN対応)
+        for inputData in inputDatas:
+            inputBlock = inputData.getBlock(planeIndex, x, y)
+            if inputBlock:
+                # 計算範囲を取得
+                minH = min(blockHeight, inputBlock.data.shape[0])
+                minW = min(blockWidth , inputBlock.data.shape[1])
+                
+                # 計算範囲の結果を取得
+                res = result[:minH, :minW]
+                inv = invalid[:minH, :minW]
+                
+                # 計算範囲の作業用メモリを取得
+                invalidA = _invalidA[:minH, :minW]
+                data     = _data[:minH, :minW]
+                
+                # データをコピー
+                data[:] = inputBlock.data[:minH, :minW]
+                
+                # nan の位置を更新
+                np.isnan(data, out=invalidA)
+                np.logical_and(inv, invalidA, out=inv)
+
+                # 値の最小
+                np.nan_to_num(data, nan=0.0, copy=False)
+                np.minimum( res, data, out=res)
+        
+        # nan の位置を適用
+        if invalid.any():
+            result[invalid] = np.nan
         
         # tensor を最小(NaN対応)
         if self._combinedTensor:
@@ -134,3 +143,23 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 np.minimum( result, block, out=result)
         
         return DataBlock(result, planeIndex, x, y)
+    
+    import threading
+    local = threading.local()
+
+    @staticmethod
+    def getLocal(name, shape=None, dtype=None):
+        if not hasattr(MinimumNode.local, "MinimumNode"):
+            MinimumNode.local.MinimumNode = {}
+        
+        var = MinimumNode.local.MinimumNode.get(name, None)
+        
+        if var is None and shape is None:
+            return None
+        elif var is None or var.shape != shape or var.dtype != dtype:
+            import numpy as np
+            var = np.empty(shape, dtype=dtype)
+            MinimumNode.local.MinimumNode[name] = var
+            return var
+        else:
+            return var

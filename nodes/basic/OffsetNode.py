@@ -53,7 +53,7 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationM
                 else:
                     prmDatas.append(data)
         
-        # auxiliary data とtensor を事前統合(加算)
+        # auxiliary data と tensor を事前統合(加算)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.add)
         
         # auxiliary polynomial を事前統合(加算)
@@ -72,7 +72,7 @@ class OffsetLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperation
         
         result = block.data.copy()
         
-        # auxiliary tensor を加算
+        # auxiliary data と tensor を加算
         if combinedAuxiliaryTensor:
             block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=0.0)
             if not block is None:

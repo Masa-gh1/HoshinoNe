@@ -53,7 +53,7 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMi
                 else:
                     prmDatas.append(data)
         
-        # auxiliary data とtensor を事前統合(指数の乗算)
+        # auxiliary data と tensor を事前統合(指数の乗算)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.multiply)
         
         # auxiliary polynomial を事前統合(指数の乗算)
@@ -72,7 +72,7 @@ class PowerLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationM
         
         result = block.data.copy()
         
-        # auxiliary tensor を冪算
+        # auxiliary data と tensor を冪算
         if combinedAuxiliaryTensor:
             block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=1.0)
             if not block is None:

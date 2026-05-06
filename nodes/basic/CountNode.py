@@ -21,7 +21,11 @@ class CountNode(N1BlockOperationNode):
     #outputCat = スーパークラスを継承
 
     def getBaseDataIndex(self, inputDatas):
-        """カウントではpolynomialがある場合は最初のtableデータを基準とする"""
+        """カウントではpolynomial,tensor がある場合は最初のtableデータを基準とする"""
+        for i, data in enumerate(inputDatas):
+            dataType = data.headers.get('type', 'table') if data.headers else 'table'
+            if dataType != 'polynomial' and dataType != 'tensor':
+                return i
         for i, data in enumerate(inputDatas):
             dataType = data.headers.get('type', 'table') if data.headers else 'table'
             if dataType != 'polynomial':
@@ -46,88 +50,74 @@ class CountNode(N1BlockOperationNode):
     def processBlock(self, inputDatas, planeIndex, x, y):
         """単一ブロックのカウント処理"""
         import numpy as np
-        from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
+        from config import BLOCK_SIZE
         from base import DataBlock
         
-        # データタイプを分類
-        polynomialDatas = []
-        tableDatas = []
+        resultWidth, resultHeight = self._outputDimensions
         
+        blockHeight = min(BLOCK_SIZE, resultHeight - y)
+        blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
+        result = nh.zeros((blockHeight, blockWidth))
+        
+        # スレッドローカルに作業用メモリを確保
+        _invalidA = self.getLocal('_invalidA', (BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+        
+        # tableのカウント(NaN対応)
         for inputData in inputDatas:
             dataType = inputData.headers.get('type', 'table') if inputData.headers else 'table'
-            if dataType == 'polynomial':
-                polynomialDatas.append(inputData)
-            else:
-                tableDatas.append(inputData)
-        
-        # 全てpolynomialの場合はpolynomial数を返す
-        if len(polynomialDatas) == len(inputDatas):
-            return self._processPolynomialCount(planeIndex, polynomialDatas)
-        else:
-            # table と polynomial の混在または table のみの場合
-            resultWidth, resultHeight = self._outputDimensions
-            
-            blockHeight = min(BLOCK_SIZE, resultHeight - y)
-            blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
-            result = nh.zeros((blockHeight, blockWidth))
-            
-            # スレッドローカルに作業用メモリを確保
-            _invalidA = self.getLocal('_invalidA')
-            
-            if _invalidA is None:
-                _invalidA = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
-                self.setLocal('_invalidA', _invalidA)
-            
-            # table データのカウント（NaN対応）
-            for inputData in tableDatas:
-                inputBlock = inputData.getBlock(planeIndex, x, y)
-                if inputBlock:
-                    minH = min(blockHeight, inputBlock.data.shape[0])
-                    minW = min(blockWidth , inputBlock.data.shape[1])
-
-                    # スレッドローカルに作業用メモリを確保
-                    invalidA = _invalidA[:minH, :minW]
+            if   dataType == 'polynomial':
+                # polynomial なので全体を +1
+                result += 1
+            elif dataType == 'tensor':
+                block = self.calculateTensorBlock(inputData, planeIndex, x, y, result.shape, defaultValue=np.nan)
+                if not block is None:
+                    # 計算範囲の作業用メモリを取得
+                    invalidA = _invalidA[:result.shape[0], :result.shape[1]]
                     
                     # NaNでない有効なピクセルのみカウント
-                    np.isnan(inputBlock.data[:minH, :minW], out=invalidA)
-                    np.logical_not(invalidA               , out=invalidA)
-                    result[:minH, :minW] += invalidA
-            
-            # polynomialは全領域に影響するので全体にpolynomial数を加算
-            if polynomialDatas:
-                result += len(polynomialDatas)
-            
-            return DataBlock(result, planeIndex, x, y)
-    
-    def _processPolynomialCount(self, planeIndex, polynomialDatas):
-        """全てpolynomialの場合のカウント処理"""
-        import numpy as np
-        from base import DataBlock
-
-        # 最初のpolynomialの係数行列を取得してサイズを決定
-        firstPolynomial = polynomialDatas[0]
-        coeffBlock = firstPolynomial.getBlock(planeIndex, 0, 0)
-        if not coeffBlock:
-            return None
+                    np.isnan(block, out=invalidA)
+                    np.logical_not(invalidA, out=invalidA)
+                    result += invalidA
+            else:
+                inputBlock = inputData.getBlock(planeIndex, x, y)
+                if inputBlock:
+                    # 計算範囲を取得
+                    minH = min(blockHeight, inputBlock.data.shape[0])
+                    minW = min(blockWidth , inputBlock.data.shape[1])
+                    
+                    # 計算範囲の結果を取得
+                    res = result[:minH, :minW]
+                    
+                    # 計算範囲の作業用メモリを取得
+                    invalidA = _invalidA[:minH, :minW]
+                    
+                    # 計算範囲のデータを取得
+                    data = inputBlock.data[:minH, :minW]
+                    
+                    # NaNでない有効なピクセルのみカウント
+                    np.isnan(data, out=invalidA)
+                    np.logical_not(invalidA, out=invalidA)
+                    res += invalidA
         
-        # polynomial数で埋めた行列を作成
-        result = np.full_like(coeffBlock.data, len(polynomialDatas))
-        
-        return DataBlock(result, planeIndex, 0, 0)
+        return DataBlock(result, planeIndex, x, y)
     
     import threading
     local = threading.local()
 
     @staticmethod
-    def setLocal(name, value):
+    def getLocal(name, shape=None, dtype=None):
         if not hasattr(CountNode.local, "CountNode"):
             CountNode.local.CountNode = {}
-        CountNode.local.CountNode[name] = value
-    
-    @staticmethod
-    def getLocal(name):
-        if not hasattr(CountNode.local, "CountNode"):
+        
+        var = CountNode.local.CountNode.get(name, None)
+        
+        if var is None and shape is None:
             return None
+        elif var is None or var.shape != shape or var.dtype != dtype:
+            import numpy as np
+            var = np.empty(shape, dtype=dtype)
+            CountNode.local.CountNode[name] = var
+            return var
         else:
-            return CountNode.local.CountNode.get(name)
+            return var

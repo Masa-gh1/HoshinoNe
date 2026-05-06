@@ -123,7 +123,7 @@ class TransformNode(LazyNNOperationNode):
         width, height = inputDatas[0].getDimensions()
         all_corners = []
         
-        # table データから各画像の変換パラメータを取得
+        # tableから各画像の変換パラメータを取得
         for inputData in inputDatas:
             image_id = self._generateImageId(inputData)
             transformParams = self._getTransformParams(image_id, tableData)

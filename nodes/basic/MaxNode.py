@@ -53,7 +53,7 @@ class MaxNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixi
                 else:
                     prmDatas.append(data)
         
-        # auxiliary data とtensor を事前統合(比較大)
+        # auxiliary data と tensor を事前統合(比較大)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.maximum)
         
         # auxiliary polynomial を設定
@@ -73,13 +73,13 @@ class MaxLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMix
         
         result = block.data.copy()
         
-        # auxiliary tensor と比較大
+        # auxiliary data と tensor を比較大
         if combinedAuxiliaryTensor:
             block = self.calculateTensorBlock(combinedAuxiliaryTensor, planeIndex, x, y, result.shape, defaultValue=-np.inf)
             if not block is None:
                 np.maximum(result, block, out=result)
         
-        # auxiliary polynomial と比較大
+        # auxiliary polynomial を比較大
         for auxiliaryPolynomial in auxiliaryPolynomials:
             block = self.calculatePolynomialBlock(auxiliaryPolynomial, planeIndex, x, y, result.shape, defaultValue=-np.inf)
             if not block is None:

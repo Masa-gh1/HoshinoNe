@@ -21,7 +21,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     #outputCat = スーパークラスを継承
 
     def preprocessInputs(self, inputDatas):
-        """入力データの前処理：Polynomialを事前統合"""
+        """入力データの前処理：polynomial と tensor を事前統合"""
         import numpy as np
         from utils import numpy_helpers as nh
         
@@ -89,66 +89,51 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         blockHeight = min(BLOCK_SIZE, resultHeight - y)
         blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
-        result = None
+        result  = nh.zeros((blockHeight, blockWidth), dtype=self._variableType)
+        invalid = nh.ones((blockHeight, blockWidth), dtype=bool)
         
         # スレッドローカルに作業用メモリを確保
-        _invalidA = self.getLocal('_invalidA')
-        _invalidB = self.getLocal('_invalidB')
-        _invalidC = self.getLocal('_invalidC')
+        _invalidA = self.getLocal('_invalidA', (BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
+        _data     = self.getLocal('_data'    , (BLOCK_SIZE, BLOCK_SIZE), dtype=self._variableType)
         
-        if _invalidA is None:
-            _invalidA = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
-            self.setLocal('_invalidA', _invalidA)
-        if _invalidB is None:
-            _invalidB = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
-            self.setLocal('_invalidB', _invalidB)
-        if _invalidC is None:
-            _invalidC = np.empty((BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
-            self.setLocal('_invalidC', _invalidC)
-        
-        # tableデータの加算（NaN対応）
+        # tableの加算(NaN対応)
         for inputData in inputDatas:
             inputBlock = inputData.getBlock(planeIndex, x, y)
             if inputBlock:
+                # 計算範囲を取得
                 minH = min(blockHeight, inputBlock.data.shape[0])
                 minW = min(blockWidth , inputBlock.data.shape[1])
                 
-                if result is None:
-                    # 最初のブロックで初期化
-                    result = nh.nans((blockHeight, blockWidth), dtype=self._variableType)
-                    result[:minH, :minW] = inputBlock.data[:minH, :minW]
-                else:
-                    # スレッドローカルに作業用メモリを確保
-                    invalidA = _invalidA[:minH, :minW]
-                    invalidB = _invalidB[:minH, :minW]
-                    invalidC = _invalidC[:minH, :minW]
-                    
-                    # 計算範囲の結果を取得
-                    res =  result[:minH, :minW]
-                    
-                    # NaN 対応加算
-                    np.isnan(res                          , out=invalidA)
-                    np.isnan(inputBlock.data[:minH, :minW], out=invalidB)
-                    np.logical_not(invalidB               , out=invalidB)
-                    np.logical_and(invalidA, invalidB     , out=invalidC)
-                    if invalidC.any():
-                        res[invalidC] = inputBlock.data[invalidC]
-                    np.logical_not(invalidA               , out=invalidA)
-                    np.logical_and(invalidA, invalidB     , out=invalidC)
-                    if invalidC.any():
-                        res[invalidC] += inputBlock.data[invalidC]
+                # 計算範囲の結果を取得
+                res = result[:minH, :minW]
+                inv = invalid[:minH, :minW]
+                
+                # 計算範囲の作業用メモリを取得
+                invalidA = _invalidA[:minH, :minW]
+                data     = _data[:minH, :minW]
+                
+                # データをコピー
+                data[:] = inputBlock.data[:minH, :minW]
+                
+                # nan の位置を更新
+                np.isnan(data, out=invalidA)
+                np.logical_and(inv, invalidA, out=inv)
+
+                # 値の加算
+                np.nan_to_num(data, nan=0.0, copy=False)
+                res += data
         
-        # tableデータがない場合の初期化
-        if result is None:
-            result = nh.nans((blockHeight, blockWidth))
+        # nan の位置を適用
+        if invalid.any():
+            result[invalid] = np.nan
         
-        # tensor を加算（NaN対応）
+        # tensor を加算(NaN対応)
         if self._combinedTensor:
             block = self.calculateTensorBlock(self._combinedTensor, planeIndex, x, y, result.shape, defaultValue=0.0)
             if not block is None:
                 result += block
         
-        # polynomial を加算（NaN対応）
+        # polynomial を加算(NaN対応)
         if self._combinedPolynomial:
             block = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=0.0)
             if not block is None:
@@ -160,14 +145,18 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     local = threading.local()
 
     @staticmethod
-    def setLocal(name, value):
+    def getLocal(name, shape=None, dtype=None):
         if not hasattr(SumNode.local, "SumNode"):
             SumNode.local.SumNode = {}
-        SumNode.local.SumNode[name] = value
-    
-    @staticmethod
-    def getLocal(name):
-        if not hasattr(SumNode.local, "SumNode"):
+        
+        var = SumNode.local.SumNode.get(name, None)
+        
+        if var is None and shape is None:
             return None
+        elif var is None or var.shape != shape or var.dtype != dtype:
+            import numpy as np
+            var = np.empty(shape, dtype=dtype)
+            SumNode.local.SumNode[name] = var
+            return var
         else:
-            return SumNode.local.SumNode.get(name)
+            return var
