@@ -301,7 +301,7 @@ class ResultWindow(tk.Toplevel):
                     if(  x < blockX or blockX + blockW <= x
                     or y < blockY or blockY + blockH <= y
                     ):
-                        block = flowData.getBlock(0, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
+                        block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
                         if block and not block.data is None:
                             blockX = x//BLOCK_SIZE*BLOCK_SIZE
                             blockY = y//BLOCK_SIZE*BLOCK_SIZE
@@ -363,7 +363,7 @@ class ResultWindow(tk.Toplevel):
                     if(  x < blockX or blockX + blockW <= x
                       or y < blockY or blockY + blockH <= y
                       ):
-                        block = flowData.getBlock(0, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
+                        block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
                         if block and not block.data is None:
                             blockX = x//BLOCK_SIZE*BLOCK_SIZE
                             blockY = y//BLOCK_SIZE*BLOCK_SIZE
@@ -427,7 +427,7 @@ class ResultWindow(tk.Toplevel):
                     if(  x < blockX or blockX + blockW <= x
                     or y < blockY or blockY + blockH <= y
                     ):
-                        block = flowData.getBlock(0, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
+                        block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
                         if block and not block.data is None:
                             blockX = x//BLOCK_SIZE*BLOCK_SIZE
                             blockY = y//BLOCK_SIZE*BLOCK_SIZE
