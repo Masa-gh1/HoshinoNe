@@ -1,5 +1,6 @@
 '''
 AbsoluteLowPassFilterNode - 絶対値ローパスフィルターノード
+廃止 upper_pass, lower_pass に分割
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -14,7 +15,7 @@ from nodes import LazyNNOperationNode, PolynomialOperationMixin
 class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
     majorType = _MAJOR_TYPE_FUNC
-    minorType = 'absolute_lowpass_filter'
+    minorType = 'absolute_lowpass_filter' # 廃止 upper_pass, lower_pass に分割
     # ノード名
     name      = '絶対値(低通)'
     # 入出力タイプ
