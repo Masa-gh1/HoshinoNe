@@ -4,19 +4,19 @@
     {
       "index": 0,
       "zOrder": 11,
-      "x": -1303.0,
-      "y": -703.0,
       "type": "scale",
       "text": "乗算",
+      "x": 175.0,
+      "y": 40.0,
       "connections": []
     },
     {
       "index": 1,
       "zOrder": 3,
-      "x": -1437.0,
-      "y": -702.0,
       "type": "sum",
       "text": "総和",
+      "x": 41.0,
+      "y": 41.0,
       "connections": [
         0
       ]
@@ -24,10 +24,10 @@
     {
       "index": 2,
       "zOrder": 9,
-      "x": -1323.0,
-      "y": -650.0,
       "type": "category_auxiliary",
       "text": "補正値",
+      "x": 155.0,
+      "y": 93.0,
       "connections": [
         0
       ]
@@ -35,10 +35,10 @@
     {
       "index": 3,
       "zOrder": 7,
-      "x": -1375.0,
-      "y": -670.0,
       "type": "inverse",
       "text": "逆数",
+      "x": 103.0,
+      "y": 73.0,
       "connections": [
         2
       ]
@@ -46,10 +46,10 @@
     {
       "index": 4,
       "zOrder": 5,
-      "x": -1438.0,
-      "y": -652.0,
       "type": "count",
       "text": "カウント",
+      "x": 40.0,
+      "y": 91.0,
       "connections": [
         3
       ]
@@ -58,8 +58,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -1378,
-      "y": -686,
+      "x": 100.0,
+      "y": 57.0,
       "width": 176,
       "height": 134,
       "title": "平均"

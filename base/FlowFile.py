@@ -22,8 +22,20 @@ class FlowFile:
         }
         
         # ノードの index マッピングを作成
-        nodeIdxs = {id(node): index for index, node in enumerate(nodes)}
+        nodeIdxs = {id(node): index for index, node in enumerate(nodes)}        
+        
+        # ノードとトレイの最小座標を取得
+        minNodeX = min(node.view.x for node in nodes)
+        minNodeY = min(node.view.y for node in nodes)
+        minTrayX = min(tray.x for tray in trays)
+        minTrayY = min(tray.y for tray in trays)
+        minX = min(minNodeX, minTrayX)
+        minY = min(minNodeY, minTrayY)
 
+        # オフセットを計算(マージンを加える)
+        offsetX = -minX + 40
+        offsetY = -minY + 40
+        
         # ノード情報を保存
         for node in nodes:
             # ノードのZ-orderを取得
@@ -33,11 +45,11 @@ class FlowFile:
             # データを保存
             nodeSerial = {
                 "index" : nodeIdxs[id(node)],
-                "zOrder": nodeZOrder,
-                "x"     : node.view.x,
-                "y"     : node.view.y,
+                "zOrder": nodeZOrder
             }
             nodeSerial.update(node.serialize())
+            nodeSerial["x"] += offsetX
+            nodeSerial["y"] += offsetY
             serial["nodes"].append(nodeSerial)
             
             # 接続ノードを index に変換
@@ -55,6 +67,8 @@ class FlowFile:
                 "zOrder": trayZOrder,
             }
             traySerial.update(tray.serialize())
+            traySerial["x"] += offsetX
+            traySerial["y"] += offsetY
             serial["trays"].append(traySerial)
 
         if filePath:

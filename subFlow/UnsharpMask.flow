@@ -4,10 +4,10 @@
     {
       "index": 0,
       "zOrder": 3,
-      "x": -1227.0,
-      "y": -236.0,
       "type": "convolution",
       "text": "畳み込み",
+      "x": 135.0,
+      "y": 45.0,
       "connections": [
         2
       ]
@@ -15,10 +15,10 @@
     {
       "index": 1,
       "zOrder": 9,
-      "x": -1227.0,
-      "y": -168.0,
       "type": "table",
       "text": "表",
+      "x": 135.0,
+      "y": 113.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -47,19 +47,19 @@
     {
       "index": 2,
       "zOrder": 7,
-      "x": -1135.0,
-      "y": -241.0,
       "type": "pass",
       "text": "通点",
+      "x": 227.0,
+      "y": 40.0,
       "connections": []
     },
     {
       "index": 3,
       "zOrder": 5,
-      "x": -1322.0,
-      "y": -238.0,
       "type": "pass",
       "text": "通点",
+      "x": 40.0,
+      "y": 43.0,
       "connections": [
         0
       ]
@@ -68,8 +68,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -1229,
-      "y": -232,
+      "x": 133.0,
+      "y": 49.0,
       "width": 190,
       "height": 142,
       "title": "アンシャープマスク"

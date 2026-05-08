@@ -4,10 +4,10 @@
     {
       "index": 0,
       "zOrder": 3,
-      "x": -559.0,
-      "y": -341.0,
       "type": "fft",
       "text": "FFT",
+      "x": 224.0,
+      "y": 94.0,
       "connections": [
         4
       ]
@@ -15,10 +15,10 @@
     {
       "index": 1,
       "zOrder": 7,
-      "x": -382.0,
-      "y": -340.0,
       "type": "ifft",
       "text": "逆FFT",
+      "x": 401.0,
+      "y": 95.0,
       "connections": [
         13
       ]
@@ -26,10 +26,10 @@
     {
       "index": 2,
       "zOrder": 11,
-      "x": -559.0,
-      "y": -286.0,
       "type": "fft",
       "text": "FFT",
+      "x": 224.0,
+      "y": 149.0,
       "connections": [
         5
       ]
@@ -37,10 +37,10 @@
     {
       "index": 3,
       "zOrder": 21,
-      "x": -688.0,
-      "y": -395.0,
       "type": "table",
       "text": "表",
+      "x": 95.0,
+      "y": 40.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -63,10 +63,10 @@
     {
       "index": 4,
       "zOrder": 5,
-      "x": -470.0,
-      "y": -340.0,
       "type": "scale",
       "text": "乗算",
+      "x": 313.0,
+      "y": 95.0,
       "connections": [
         1
       ]
@@ -74,10 +74,10 @@
     {
       "index": 5,
       "zOrder": 9,
-      "x": -470.0,
-      "y": -289.0,
       "type": "category_auxiliary",
       "text": "補正値",
+      "x": 313.0,
+      "y": 146.0,
       "connections": [
         4
       ]
@@ -85,10 +85,10 @@
     {
       "index": 6,
       "zOrder": 17,
-      "x": -558.0,
-      "y": -229.0,
       "type": "reposition",
       "text": "再配置",
+      "x": 225.0,
+      "y": 206.0,
       "connections": [
         2
       ]
@@ -96,10 +96,10 @@
     {
       "index": 7,
       "zOrder": 19,
-      "x": -684.0,
-      "y": -231.0,
       "type": "table",
       "text": "表",
+      "x": 99.0,
+      "y": 204.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -126,10 +126,10 @@
     {
       "index": 8,
       "zOrder": 23,
-      "x": -385.0,
-      "y": -228.0,
       "type": "table",
       "text": "表",
+      "x": 398.0,
+      "y": 207.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -152,10 +152,10 @@
     {
       "index": 9,
       "zOrder": 15,
-      "x": -559.0,
-      "y": -395.0,
       "type": "reposition",
       "text": "再配置",
+      "x": 224.0,
+      "y": 40.0,
       "connections": [
         0
       ]
@@ -163,10 +163,10 @@
     {
       "index": 10,
       "zOrder": 29,
-      "x": -742.0,
-      "y": -341.0,
       "type": "pass",
       "text": "通点",
+      "x": 41.0,
+      "y": 94.0,
       "connections": [
         9
       ]
@@ -174,19 +174,19 @@
     {
       "index": 11,
       "zOrder": 25,
-      "x": -288.0,
-      "y": -285.0,
       "type": "pass",
       "text": "通点",
+      "x": 495.0,
+      "y": 150.0,
       "connections": []
     },
     {
       "index": 12,
       "zOrder": 27,
-      "x": -743.0,
-      "y": -286.0,
       "type": "pass",
       "text": "通点",
+      "x": 40.0,
+      "y": 149.0,
       "connections": [
         6
       ]
@@ -194,10 +194,10 @@
     {
       "index": 13,
       "zOrder": 13,
-      "x": -380.0,
-      "y": -287.0,
       "type": "reposition",
       "text": "再配置",
+      "x": 403.0,
+      "y": 148.0,
       "connections": [
         11
       ]
@@ -206,8 +206,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -518,
-      "y": -326,
+      "x": 265.0,
+      "y": 109.0,
       "width": 465,
       "height": 272,
       "title": "畳み込み"

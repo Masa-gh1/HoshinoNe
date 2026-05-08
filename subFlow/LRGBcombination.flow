@@ -4,10 +4,10 @@
     {
       "index": 0,
       "zOrder": 3,
-      "x": -1364.0,
-      "y": -264.0,
       "type": "lab_converter",
       "text": "Lab変換",
+      "x": 41.0,
+      "y": 67.0,
       "connections": [
         2
       ]
@@ -15,19 +15,19 @@
     {
       "index": 1,
       "zOrder": 13,
-      "x": -1080.0,
-      "y": -238.0,
       "type": "rgb_converter",
       "text": "RGB変換",
+      "x": 325.0,
+      "y": 93.0,
       "connections": []
     },
     {
       "index": 2,
       "zOrder": 7,
-      "x": -1274.0,
-      "y": -269.0,
       "type": "scale",
       "text": "乗算",
+      "x": 131.0,
+      "y": 62.0,
       "connections": [
         6
       ]
@@ -35,10 +35,10 @@
     {
       "index": 3,
       "zOrder": 17,
-      "x": -1191.0,
-      "y": -291.0,
       "type": "coefficients",
       "text": "係数",
+      "x": 214.0,
+      "y": 40.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0",
@@ -57,10 +57,10 @@
     {
       "index": 4,
       "zOrder": 9,
-      "x": -1272.0,
-      "y": -214.0,
       "type": "scale",
       "text": "乗算",
+      "x": 133.0,
+      "y": 117.0,
       "connections": [
         6
       ]
@@ -68,10 +68,10 @@
     {
       "index": 5,
       "zOrder": 15,
-      "x": -1192.0,
-      "y": -184.0,
       "type": "coefficients",
       "text": "係数",
+      "x": 213.0,
+      "y": 147.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0",
@@ -91,10 +91,10 @@
     {
       "index": 6,
       "zOrder": 11,
-      "x": -1190.0,
-      "y": -237.0,
       "type": "sum",
       "text": "総和",
+      "x": 215.0,
+      "y": 94.0,
       "connections": [
         1
       ]
@@ -102,10 +102,10 @@
     {
       "index": 7,
       "zOrder": 5,
-      "x": -1365.0,
-      "y": -211.0,
       "type": "lab_converter",
       "text": "Lab変換",
+      "x": 40.0,
+      "y": 120.0,
       "connections": [
         4
       ]
@@ -114,8 +114,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -1219,
-      "y": -238,
+      "x": 186.0,
+      "y": 93.0,
       "width": 350,
       "height": 172,
       "title": "L+ab合成"

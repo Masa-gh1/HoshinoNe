@@ -4,10 +4,10 @@
     {
       "index": 0,
       "zOrder": 9,
-      "x": -888.0,
-      "y": -480.0,
       "type": "table",
       "text": "表",
+      "x": 132.0,
+      "y": 113.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -40,10 +40,10 @@
     {
       "index": 1,
       "zOrder": 3,
-      "x": -885.0,
-      "y": -548.0,
       "type": "convolution",
       "text": "畳み込み",
+      "x": 135.0,
+      "y": 45.0,
       "connections": [
         2
       ]
@@ -51,19 +51,19 @@
     {
       "index": 2,
       "zOrder": 7,
-      "x": -793.0,
-      "y": -553.0,
       "type": "pass",
       "text": "通点",
+      "x": 227.0,
+      "y": 40.0,
       "connections": []
     },
     {
       "index": 3,
       "zOrder": 5,
-      "x": -980.0,
-      "y": -550.0,
       "type": "pass",
       "text": "通点",
+      "x": 40.0,
+      "y": 43.0,
       "connections": [
         1
       ]
@@ -72,8 +72,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -887,
-      "y": -544,
+      "x": 133.0,
+      "y": 49.0,
       "width": 190,
       "height": 142,
       "title": "ぼかし"
