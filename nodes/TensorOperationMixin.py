@@ -93,8 +93,11 @@ class TensorOperationMixin:
         """Tensor データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh
-
+        
         width, height = tensorData.getDimensions()
+        
+        if 1 == tensorData.getPlaneCount():
+            planeIndex = 0
         
         # 指定プレーンの数列を取得
         if 1 == width and 1 == height:

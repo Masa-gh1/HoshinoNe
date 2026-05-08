@@ -99,15 +99,10 @@ class PolynomialOperationMixin:
         import numpy as np
         import utils.numpy_helpers as nh
         
-        planeCount = polynomialData.getPlaneCount()
         width, height = polynomialData.getDimensions()
-        if width <= 0 or height <= 0 or planeCount <= planeIndex:
-            if 0.0 == defaultValue:
-                return nh.zeros(blockShape)
-            elif 1.0 == defaultValue:
-                return nh.ones(blockShape)
-            else:
-                return nh.full(blockShape, defaultValue)
+
+        if 1 == polynomialData.getPlaneCount():
+            planeIndex = 0
         
         # 指定プレーンの係数行列を取得
         coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)

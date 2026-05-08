@@ -143,7 +143,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     
     import threading
     local = threading.local()
-
+    
     @staticmethod
     def getLocal(name, shape=None, dtype=None):
         if not hasattr(ProductNode.local, "ProductNode"):

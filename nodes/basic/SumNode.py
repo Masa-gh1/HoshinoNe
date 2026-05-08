@@ -143,7 +143,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     
     import threading
     local = threading.local()
-
+    
     @staticmethod
     def getLocal(name, shape=None, dtype=None):
         if not hasattr(SumNode.local, "SumNode"):
