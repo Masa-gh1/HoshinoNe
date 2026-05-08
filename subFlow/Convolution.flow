@@ -4,8 +4,8 @@
     {
       "index": 0,
       "zOrder": 3,
-      "x": 700.0,
-      "y": -70.0,
+      "x": -559.0,
+      "y": -341.0,
       "type": "fft",
       "text": "FFT",
       "connections": [
@@ -15,8 +15,8 @@
     {
       "index": 1,
       "zOrder": 7,
-      "x": 877.0,
-      "y": -69.0,
+      "x": -382.0,
+      "y": -340.0,
       "type": "ifft",
       "text": "逆FFT",
       "connections": [
@@ -26,8 +26,8 @@
     {
       "index": 2,
       "zOrder": 11,
-      "x": 700.0,
-      "y": -15.0,
+      "x": -559.0,
+      "y": -286.0,
       "type": "fft",
       "text": "FFT",
       "connections": [
@@ -37,8 +37,8 @@
     {
       "index": 3,
       "zOrder": 21,
-      "x": 571.0,
-      "y": -124.0,
+      "x": -688.0,
+      "y": -395.0,
       "type": "table",
       "text": "表",
       "category": "auxiliary",
@@ -63,8 +63,8 @@
     {
       "index": 4,
       "zOrder": 5,
-      "x": 789.0,
-      "y": -69.0,
+      "x": -470.0,
+      "y": -340.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -74,8 +74,8 @@
     {
       "index": 5,
       "zOrder": 9,
-      "x": 789.0,
-      "y": -18.0,
+      "x": -470.0,
+      "y": -289.0,
       "type": "category_auxiliary",
       "text": "補正値",
       "connections": [
@@ -85,8 +85,8 @@
     {
       "index": 6,
       "zOrder": 17,
-      "x": 701.0,
-      "y": 42.0,
+      "x": -558.0,
+      "y": -229.0,
       "type": "reposition",
       "text": "再配置",
       "connections": [
@@ -96,8 +96,8 @@
     {
       "index": 7,
       "zOrder": 19,
-      "x": 575.0,
-      "y": 40.0,
+      "x": -684.0,
+      "y": -231.0,
       "type": "table",
       "text": "表",
       "category": "auxiliary",
@@ -126,8 +126,8 @@
     {
       "index": 8,
       "zOrder": 23,
-      "x": 874.0,
-      "y": 43.0,
+      "x": -385.0,
+      "y": -228.0,
       "type": "table",
       "text": "表",
       "category": "auxiliary",
@@ -152,8 +152,8 @@
     {
       "index": 9,
       "zOrder": 15,
-      "x": 700.0,
-      "y": -124.0,
+      "x": -559.0,
+      "y": -395.0,
       "type": "reposition",
       "text": "再配置",
       "connections": [
@@ -163,8 +163,8 @@
     {
       "index": 10,
       "zOrder": 29,
-      "x": 517.0,
-      "y": -70.0,
+      "x": -742.0,
+      "y": -341.0,
       "type": "pass",
       "text": "通点",
       "connections": [
@@ -174,8 +174,8 @@
     {
       "index": 11,
       "zOrder": 25,
-      "x": 971.0,
-      "y": -14.0,
+      "x": -288.0,
+      "y": -285.0,
       "type": "pass",
       "text": "通点",
       "connections": []
@@ -183,8 +183,8 @@
     {
       "index": 12,
       "zOrder": 27,
-      "x": 516.0,
-      "y": -15.0,
+      "x": -743.0,
+      "y": -286.0,
       "type": "pass",
       "text": "通点",
       "connections": [
@@ -194,8 +194,8 @@
     {
       "index": 13,
       "zOrder": 13,
-      "x": 879.0,
-      "y": -16.0,
+      "x": -380.0,
+      "y": -287.0,
       "type": "reposition",
       "text": "再配置",
       "connections": [
@@ -206,8 +206,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": 741,
-      "y": -55,
+      "x": -518,
+      "y": -326,
       "width": 465,
       "height": 272,
       "title": "畳み込み"

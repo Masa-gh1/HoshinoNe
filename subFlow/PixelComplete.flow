@@ -1,5 +1,5 @@
 {
-  "version": "0.1.20251130",
+  "version": "0.2.20260227",
   "nodes": [
     {
       "index": 0,
@@ -118,21 +118,15 @@
       "y": 57.1875,
       "type": "coefficients",
       "text": "係数",
-      "planeCount": 4,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
       "xOrder": 0,
       "yOrder": 0,
       "coefficients": {
-        "0,0,0": 1.0,
-        "1,0,0": 1.0,
-        "2,0,0": 1.0,
-        "3,0,0": 1.0
+        "0,0,0": 1.0
       },
-      "planeNames": [
-        "Plane 0",
-        "Plane 1",
-        "Plane 2",
-        "Plane 3"
-      ],
       "connections": [
         9,
         7

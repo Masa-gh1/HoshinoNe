@@ -1,11 +1,11 @@
 {
-  "version": "0.1.20251211",
+  "version": "0.2.20260227",
   "nodes": [
     {
       "index": 0,
       "zOrder": 11,
-      "x": -608,
-      "y": 36,
+      "x": -1048,
+      "y": -663,
       "type": "negate",
       "text": "符号反転",
       "connections": [
@@ -15,8 +15,8 @@
     {
       "index": 1,
       "zOrder": 5,
-      "x": -673.0,
-      "y": -12.0,
+      "x": -1113.0,
+      "y": -711.0,
       "type": "offset",
       "text": "加算",
       "connections": [
@@ -26,8 +26,8 @@
     {
       "index": 2,
       "zOrder": 9,
-      "x": -705,
-      "y": 37,
+      "x": -1145,
+      "y": -662,
       "type": "quadratic_fit",
       "text": "2次関数近似",
       "connections": [
@@ -37,8 +37,8 @@
     {
       "index": 3,
       "zOrder": 3,
-      "x": -763.0,
-      "y": -12.0,
+      "x": -1203.0,
+      "y": -711.0,
       "type": "pass",
       "text": "通点",
       "connections": [
@@ -49,8 +49,8 @@
     {
       "index": 4,
       "zOrder": 7,
-      "x": -588.0,
-      "y": -15.0,
+      "x": -1028.0,
+      "y": -714.0,
       "type": "pass",
       "text": "通点",
       "connections": []
@@ -59,8 +59,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -676,
-      "y": 5,
+      "x": -1116,
+      "y": -694,
       "width": 214,
       "height": 136,
       "title": "背景フラット"

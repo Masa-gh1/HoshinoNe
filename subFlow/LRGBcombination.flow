@@ -1,11 +1,11 @@
 {
-  "version": "0.1.20251211",
+  "version": "0.2.20260227",
   "nodes": [
     {
       "index": 0,
       "zOrder": 3,
-      "x": -281.0,
-      "y": -50.0,
+      "x": -1364.0,
+      "y": -264.0,
       "type": "lab_converter",
       "text": "Lab変換",
       "connections": [
@@ -15,8 +15,8 @@
     {
       "index": 1,
       "zOrder": 13,
-      "x": 3.0,
-      "y": -24.0,
+      "x": -1080.0,
+      "y": -238.0,
       "type": "rgb_converter",
       "text": "RGB変換",
       "connections": []
@@ -24,8 +24,8 @@
     {
       "index": 2,
       "zOrder": 7,
-      "x": -191.0,
-      "y": -55.0,
+      "x": -1274.0,
+      "y": -269.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -35,21 +35,21 @@
     {
       "index": 3,
       "zOrder": 17,
-      "x": -108.0,
-      "y": -77.0,
+      "x": -1191.0,
+      "y": -291.0,
       "type": "coefficients",
       "text": "係数",
-      "planeCount": 3,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2"
+      ],
       "xOrder": 0,
       "yOrder": 0,
       "coefficients": {
         "0,0,0": 1.0
       },
-      "planeNames": [
-        "Plane 0",
-        "Plane 1",
-        "Plane 2"
-      ],
       "connections": [
         2
       ]
@@ -57,8 +57,8 @@
     {
       "index": 4,
       "zOrder": 9,
-      "x": -189.0,
-      "y": 0.0,
+      "x": -1272.0,
+      "y": -214.0,
       "type": "scale",
       "text": "乗算",
       "connections": [
@@ -68,22 +68,22 @@
     {
       "index": 5,
       "zOrder": 15,
-      "x": -109.0,
-      "y": 30.0,
+      "x": -1192.0,
+      "y": -184.0,
       "type": "coefficients",
       "text": "係数",
-      "planeCount": 3,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2"
+      ],
       "xOrder": 0,
       "yOrder": 0,
       "coefficients": {
         "1,0,0": 1.0,
         "2,0,0": 1.0
       },
-      "planeNames": [
-        "Plane 0",
-        "Plane 1",
-        "Plane 2"
-      ],
       "connections": [
         4
       ]
@@ -91,8 +91,8 @@
     {
       "index": 6,
       "zOrder": 11,
-      "x": -107.0,
-      "y": -23.0,
+      "x": -1190.0,
+      "y": -237.0,
       "type": "sum",
       "text": "総和",
       "connections": [
@@ -102,8 +102,8 @@
     {
       "index": 7,
       "zOrder": 5,
-      "x": -282.0,
-      "y": 3.0,
+      "x": -1365.0,
+      "y": -211.0,
       "type": "lab_converter",
       "text": "Lab変換",
       "connections": [
@@ -114,8 +114,8 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": -136,
-      "y": -24,
+      "x": -1219,
+      "y": -238,
       "width": 350,
       "height": 172,
       "title": "L+ab合成"
