@@ -80,10 +80,10 @@ class FlowNode(AbstractBaseClass):
         """ノードへの入力を考慮した出力カテゴリを取得"""
         return self._getOutputCategory()
     
-    def _getOutputCategory(self, path=[]):
+    def _getOutputCategory(self, path=None):
         catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
-        if _OUT_CAT_PAS in self.outputCat:
-            path = path.copy()
+        if _OUT_CAT_PAS == self.outputCat:
+            path = path.copy() if path else []
             path.append(self) # 循環参照を除く
             inCats = [catList.index(x._getOutputCategory(path)) for x in self.inputNodes if x not in path]
             if inCats:
@@ -95,6 +95,9 @@ class FlowNode(AbstractBaseClass):
     
     def getOutputCount(self):
         """ノードへの入力を考慮した出力数を取得"""
+        return self._getOutputCount()
+    
+    def _getOutputCount(self, path=None):
         if   _IO_TYPE_N0 == self.ioType:
             return 0
         elif _IO_TYPE_N1 == self.ioType:
@@ -102,7 +105,9 @@ class FlowNode(AbstractBaseClass):
         elif(  _IO_TYPE_0N == self.ioType
             or _IO_TYPE_NN == self.ioType
             ):
-            return sum([x.getOutputCount() for x in self.inputNodes if _OUT_CAT_PRI == x.getOutputCategory()])
+            path = path.copy() if path else []
+            path.append(self) # 循環参照を除く
+            return sum([x._getOutputCount(path) for x in self.inputNodes if x not in path and _OUT_CAT_PRI == x.getOutputCategory()])
         else:
             return 0
     
