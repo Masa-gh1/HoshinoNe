@@ -49,6 +49,7 @@ class Tray:
         
         self.contextMenu.add_separator()
         self.contextMenu.add_command(label="編集", command=self.editTray)
+        self.contextMenu.add_command(label="最背面", command=self.lower)
         self.contextMenu.add_command(label="削除", command=self.deleteTray)
 
     def onPress(self, event):
@@ -314,6 +315,11 @@ class Tray:
         """トレイを前面に移動"""
         self.canvas.tag_raise(self.rect)
         self.canvas.tag_raise(self.label)
+
+    def lower(self):
+        """トレイを背面に移動"""
+        self.canvas.tag_lower(self.rect)
+        self.canvas.tag_lower(self.label)
 
     def serialize(self):
         return {
