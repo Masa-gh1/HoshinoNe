@@ -27,11 +27,11 @@ class FlowFile:
         # ノードとトレイの最小座標を取得
         minNodeX = min(node.view.x for node in nodes)
         minNodeY = min(node.view.y for node in nodes)
-        minTrayX = min(tray.x for tray in trays)
-        minTrayY = min(tray.y for tray in trays)
-        minX = min(minNodeX, minTrayX)
-        minY = min(minNodeY, minTrayY)
-
+        minTrayX = min(tray.x for tray in trays) if trays else None
+        minTrayY = min(tray.y for tray in trays) if trays else None
+        minX = min(minNodeX, minTrayX) if minTrayX else minNodeX
+        minY = min(minNodeY, minTrayY) if minTrayY else minNodeY
+        
         # オフセットを計算(マージンを加える)
         offsetX = -minX + 40
         offsetY = -minY + 40
