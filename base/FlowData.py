@@ -109,14 +109,21 @@ class FlowData:
     def getBlock(self, planeIndex, x, y):
         """指定位置からブロックを取得"""
         from .DataBlock import DataBlock
-
+        
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
         if(  planeIndex < 0 or planeCount <= planeIndex
           or x          < 0 or width      <= x
           or y          < 0 or height     <= y
           ):
+            # 範囲外なので None
             return None
+        
+        if not self._existingBlocks[planeIndex, y//BLOCK_SIZE, x//BLOCK_SIZE]:
+            # 未設定なので all nan
+            from utils import numpy_helpers as nh
+            from base import DataBlock
+            return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
         
         # 遅延ロード用のDataBlockを作成
         block = DataBlock(None, planeIndex, x, y)
@@ -140,8 +147,8 @@ class FlowData:
         """全ブロックを順次取得するジェネレータ"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
-        if planeCount == 0:
-            return
+        if 0 == planeCount:
+            return None
         
         # Z階数曲線でブロックを返す
         from utils.order import zOrderGenerator
@@ -161,10 +168,13 @@ class FlowData:
         """ブロックデータを保存"""
         import numpy as np
         from utils import numpy_helpers as nh
-
+        
         # numpy配列として正規化
         data = dataBlock.data
-        if isinstance(data, list):
+        if np.isnan(data).all():
+            # all nan 設定をパス
+            return
+        elif isinstance(data, list):
             if np.iscomplexobj(data):
                 # 複素数
                 data = np.array(data, dtype=nh.BDCOMPLEX)

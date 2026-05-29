@@ -40,6 +40,7 @@ class NodeFactory:
         ('ifft'                    , '逆FFT(N:N)'),
         ('convolution'             , '畳み込み(N:N)'),
        #('deconvolution'           , '逆畳み込み(N:N)'), # 未公開
+        ('dwt'                     , '離散ウェーブレット変換(N:N)'),
         ('squared_norm'            , 'ノルムの二乗(|x|^2)(N:N)'),
         ('quadratic_fit'           , '2次関数近似(N:N)'),
        #('absolute_lowpass_filter' , '絶対値(低通)(N:N)'),# 廃止 upper_pass, lower_pass に分割

@@ -21,7 +21,7 @@ class FFTNode(NNPlaneOperationNode):
     #outputCat = スーパークラスを継承
     
     def processPlane(self, flowData, planeIndex):
-        """相関処理"""
+        """FFT処理"""
         import scipy
         import numpy as np
         from utils import numpy_helpers as nh

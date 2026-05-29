@@ -99,12 +99,12 @@ class ResultWindow(tk.Toplevel):
         grid_frame = tk.Frame(control_frame)
         grid_frame._is_image_control = True
         
-        tk.Label(grid_frame, text="グリッド分割:").pack(side=tk.LEFT)
+        tk.Label(grid_frame, text="四隅拡大:").pack(side=tk.LEFT)
         
-        self._display_grid_var = tk.StringVar(value="full")
-        tk.Radiobutton(grid_frame, text="full", variable=self._display_grid_var, value="full", command=self.updateResult).pack(side=tk.LEFT)
-        tk.Radiobutton(grid_frame, text="3x3 grid", variable=self._display_grid_var, value="3x3 grid", command=self.updateResult).pack(side=tk.LEFT)
-        tk.Radiobutton(grid_frame, text="5x5 grid", variable=self._display_grid_var, value="5x5 grid", command=self.updateResult).pack(side=tk.LEFT)
+        self._display_corner_var = tk.StringVar(value="full")
+        tk.Radiobutton(grid_frame, text="full", variable=self._display_corner_var, value="full", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(grid_frame, text="3x3 grid", variable=self._display_corner_var, value="3x3 grid", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(grid_frame, text="5x5 grid", variable=self._display_corner_var, value="5x5 grid", command=self.updateResult).pack(side=tk.LEFT)
         
         # 画像ズーム制御（画像データのみ）
         zoom_frame = tk.Frame(control_frame)
@@ -256,7 +256,7 @@ class ResultWindow(tk.Toplevel):
             content.extend(result)
         else:
             content.append(result)
-
+        
         if Debug.LEVEL_NONE < Debug.LEVEL:
             class JSONEncoder(json.JSONEncoder):
                 def default( self, obj):
@@ -279,16 +279,16 @@ class ResultWindow(tk.Toplevel):
         """一般的なデータの内容を生成"""
         headers = flowData.headers
         content = "\n"
-
+        
         planes = headers.get('planes', [])
-
+        
         width, height = flowData.getDimensions()
         displayRows = min(height, 100)  # 最初の100行のみ
         displayCols = min(width ,  10)  # 最初の10列のみ
         
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
-
+            
             block = None
             blockX = 0
             blockY = 0
@@ -414,7 +414,7 @@ class ResultWindow(tk.Toplevel):
             content += f"\n[plane: {planeName}]\n"
             
             median = flowData.getQuantile(0.5)
-
+            
             block = None
             blockX = 0
             blockY = 0
@@ -474,9 +474,9 @@ class ResultWindow(tk.Toplevel):
         displayLevels   = headers['display_levels']
         displayLevelMin = displayLevels["min"]
         displayLevelEnd = displayLevels["exclusive_upper"]
-
+        
         modeValue = flowData.getModeValue() # 最頻値
-
+        
         # パーセンタイルベースの適応的スケーリング
         adpLevelMin = flowData.getQuantile(0.01)
         adpLevelEnd = flowData.getQuantile(0.99)
@@ -545,7 +545,7 @@ class ResultWindow(tk.Toplevel):
                     for data in histogram_data['planes']:
                         edgeMin = min(edgeMin, data['bin_edges'][0])
                         edgeMax = max(edgeMax, data['bin_edges'][-1])
-
+                    
                     total_samples = 0
                     
                     if "log" == ax_xScale and adpLevelEnd > adpLevelMin:
@@ -564,7 +564,8 @@ class ResultWindow(tk.Toplevel):
                         
                         # オフセット適用
                         bin_centers = ((bin_edges[:-1] + bin_edges[1:]) / 2 + xOffset) * xScale
-
+                        
+                        # ヒストグラム作成
                         # グラフ表示
                         plane_name = planes[planeIndex] if planeIndex < len(planes) else f'Plane{planeIndex}'
                         ax.plot(bin_centers, nh.array(bin_counts) + 1, color=colors[planeIndex], label=plane_name, linewidth=1)
@@ -590,10 +591,10 @@ class ResultWindow(tk.Toplevel):
                     plt.rcParams['path.simplify'] = True
                     plt.rcParams['path.simplify_threshold'] = 0.1
                     plt.savefig(buf, format='png', dpi=90)
-
+                    
                     img = Image.open(buf)
                     histogram_image = ImageTk.PhotoImage(img)
-
+                    
                     self._histogramImagesCahace[histogramImageKey] = (histogram_text,histogram_image)
                     content.append(histogram_text)
                     content.append(histogram_image)
@@ -620,37 +621,86 @@ class ResultWindow(tk.Toplevel):
                     scale = 1.0
                     offset = 0.0
                 
-                # グリッド分割を設定
-                displaygrids = self._display_grid_var.get()
-                if "full" == displaygrids:
-                    gridLline = False
+                if mode.endswith('(DWT)'):
+                    # 離散ウェーブレット変換結果かので、分解データをタイル状に表示
+                    gridLline = True
                     gridSize  = max(width, height)
-                    d_width   = width
-                    d_height  = height
-                    srcX = [0]
-                    srcY = [0]
-                elif "3x3 grid" == displaygrids:
-                    gridLline = True
-                    gridSize  = 160
-                    d_width   = 3*gridSize
-                    d_height  = 3*gridSize
-                    srcX = [0, (width -gridSize)//2, (width -gridSize)]
-                    srcY = [0, (height-gridSize)//2, (height-gridSize)]
-                elif "5x5 grid" == displaygrids:
-                    gridLline = True
-                    gridSize  = 96
-                    d_width   = 5*gridSize
-                    d_height  = 5*gridSize
-                    srcX = [0, (width -gridSize)//4*1, (width -gridSize)//4*2, (width -gridSize)//4*3, (width -gridSize)]
-                    srcY = [0, (height-gridSize)//4*1, (height-gridSize)//4*2, (height-gridSize)//4*3, (height-gridSize)]
+                    d_plane  = 3
+                    dwtLevel = headers["DWT level"]
+                    dwtSize  = headers["DWT size"]
+                    src = []
+                    dst = []
+                    for p in range(d_plane):
+                        src.append((p*(1+(dwtLevel)*3),0,0,dwtSize[0],dwtSize[1]))
+                        dst.append((p                 ,0,0))
+                    x = dwtSize[0]
+                    y = dwtSize[1]
+                    for l in range(dwtLevel):
+                        w = dwtSize[2*l]
+                        h = dwtSize[2*l+1]
+                        for p in range(d_plane):
+                            src.append((p*(1+3*dwtLevel)+3*l+1,0,0,w,h))
+                            dst.append((p                     ,x,0))
+                            src.append((p*(1+3*dwtLevel)+3*l+2,0,0,w,h))
+                            dst.append((p                     ,0,y))
+                            src.append((p*(1+3*dwtLevel)+3*l+3,0,0,w,h))
+                            dst.append((p                     ,x,y))
+                        x += w
+                        y += h
+                    d_width  = x
+                    d_height = y
                 else:
-                    gridLline = False
-                    gridSize  = max(width, height)
-                    d_width   = width
-                    d_height  = height
-                    srcX = [0]
-                    srcY = [0]
-
+                    # 四隅拡大を設定
+                    displayCorners = self._display_corner_var.get()
+                    if "full" == displayCorners:
+                        gridLline = False
+                        gridSize  = max(width, height)
+                        d_plane   = planeCount
+                        d_width   = width
+                        d_height  = height
+                        src = []
+                        dst = []
+                        for p in range(planeCount):
+                            src.append((p,0,0,width,height))
+                            dst.append((p,0,0))
+                    elif "3x3 grid" == displayCorners:
+                        gridLline = True
+                        gridSize  = 160
+                        d_plane   = planeCount
+                        d_width   = 3*gridSize
+                        d_height  = 3*gridSize
+                        src = []
+                        dst = []
+                        for p in range(planeCount):
+                            for y in range(3):
+                                for x in range(3):
+                                    src.append((p, (width -gridSize)*x//2, (height-gridSize)*y//2, gridSize, gridSize))
+                                    dst.append((p, x*gridSize, y*gridSize))
+                    elif "5x5 grid" == displayCorners:
+                        gridLline = True
+                        gridSize  = 96
+                        d_plane   = planeCount
+                        d_width   = 5*gridSize
+                        d_height  = 5*gridSize
+                        src = []
+                        dst = []
+                        for p in range(planeCount):
+                            for y in range(5):
+                                for x in range(5):
+                                    src.append((p, (width -gridSize)*x//4, (height-gridSize)*y//4, gridSize, gridSize))
+                                    dst.append((p, x*gridSize, y*gridSize))
+                    else:
+                        gridLline = False
+                        gridSize  = max(width, height)
+                        d_plane   = planeCount
+                        d_width   = width
+                        d_height  = height
+                        src = []
+                        dst = []
+                        for p in range(planeCount):
+                            src.append((p,0,0,width,height))
+                            dst.append((p,0,0))
+                
                 # ズームを設定
                 displayzooms = self._display_zoom_var.get()
                 if "fit" == displayzooms:
@@ -670,13 +720,13 @@ class ResultWindow(tk.Toplevel):
                     zoom = 1
                 
                 # 画像構築
-                img, cont = self.createImage(flowData, scale, offset, d_width, d_height, srcX, srcY, gridSize, gridLline)
+                img, cont = self.createImage(flowData, scale, offset, d_plane, d_width, d_height, src, dst, gridLline)
                 content.extend(cont)
-
+                
                 # 画像を拡縮
                 if 1 != zoom:
                     img = img.resize((int(img.width * zoom), int(img.height * zoom)), Image.Resampling.LANCZOS)
-
+                
                 if fit:
                     window_width = self.winfo_width()
                     max_width = window_width - 40  # 最小余白
@@ -772,121 +822,92 @@ class ResultWindow(tk.Toplevel):
             self._selected_data_var.set(current_values[new_index])
             self.updateResult()
             return 'break'  # デフォルト動作を無効化
-
-    def createImage(self, flowData, scale, offset, d_width, d_height, srcX, srcY, gridSize, gridLline):
-        content = []
-        mode          = flowData.getMode()
-        planeCount    = flowData.getPlaneCount()
-        width, height = flowData.getDimensions()
-
-        # 画像 mode を設定
-        if(  'RGB'  == mode and 3 <= planeCount
-          or 'RGBA' == mode and 3 <= planeCount
-          ):
-            smode = 'RGB'
-            dmode = 'RGB'
-            imgW = nh.ceil(d_width , gridSize).astype(int)
-            imgH = nh.ceil(d_height, gridSize).astype(int)
-            imgD = 3
-        elif 'RGBG' == mode and 4 <= planeCount:
-            smode = 'RGBG'
-            dmode = 'RGB'
-            imgW = nh.ceil(d_width , gridSize).astype(int)
-            imgH = nh.ceil(d_height, gridSize).astype(int)
-            imgD = 3
-        elif(  'L'     == mode and 1 <= planeCount
-            or 'BAYER' == mode and 1 <= planeCount
-            ):
-            smode = 'L'
-            dmode = 'L'
-            imgW = nh.ceil(d_width , gridSize).astype(int)
-            imgH = nh.ceil(d_height, gridSize).astype(int)
-            imgD = 1
-        else:
-            raise ValueError(f"サポートされていないモード: {mode}")
-
+    
+    def createImage(self, flowData, scale, offset, d_plane, d_width, d_height, src, dst, gridLline=False):
+        """
+        画像データを構築
+        
+        Args:
+            flowData (FlowData): FlowDataオブジェクト
+            scale (float): レベル調整 輝度スケール
+            offset (float): レベル調整 輝度オフセット
+            d_plane (int): 出力プレーン数
+            d_width (int): 出力画像の幅
+            d_height (int): 出力画像の高さ
+            src (list): コピー元座標 (plane, x, y, width, height)
+            dst (list): コピー先座標 (plane, x, y)
+            gridLline (bool): グリッド線を表示するかどうか
+        
+        Returns:
+            Image: 画像
+            list: 代用内容
+        """
         # 画像データを構築
-        imgArray = np.empty((imgH, imgW, imgD), dtype=np.uint8)
-
-        tmpImg = np.empty((gridSize, gridSize, imgD), dtype=np.uint8) # 作業領域は使いまわす
+        imgArray = np.zeros((d_height, d_width, d_plane), dtype=np.uint8)
+        content = []
         
-        for sy1,dy in zip(srcY, range(0, imgH, gridSize)): # コピー元座標
-            for sx1,dx in zip(srcX, range(0, imgW, gridSize)):
-                sx2 = sx1+gridSize
-                sy2 = sy1+gridSize
-                x1  = nh.floor(sx1, BLOCK_SIZE).astype(int) # コピー元を包含するブロック座標
-                y1  = nh.floor(sy1, BLOCK_SIZE).astype(int)
-                x2  = nh.ceil( sx2, BLOCK_SIZE).astype(int)
-                y2  = nh.ceil( sy2, BLOCK_SIZE).astype(int)
-
-                try:
-                    # Z階数曲線でブロックを収集
-                    from utils.order import zOrderGenerator
-                    for bx1, by1 in zOrderGenerator(x1, y1, x2, y2, BLOCK_SIZE, BLOCK_SIZE): # コピー元を含むブロックの座標
-                            if 'RGB' == smode:
-                                r_block = flowData.getBlock(0, bx1, by1)
-                                g_block = flowData.getBlock(1, bx1, by1)
-                                b_block = flowData.getBlock(2, bx1, by1)
-                                r_data  = r_block.data if r_block else None
-                                g_data  = g_block.data if g_block else None
-                                b_data  = b_block.data if b_block else None
-                                rgb = [r_data, g_data, b_data]
-                            elif 'RGBG' == smode:
-                                r_block  = flowData.getBlock(0, bx1, by1)
-                                g1_block = flowData.getBlock(1, bx1, by1)
-                                b_block  = flowData.getBlock(2, bx1, by1)
-                                g2_block = flowData.getBlock(3, bx1, by1)
-                                r_data   = r_block.data  if r_block else None
-                                g1_data  = g1_block.data if g1_block else None
-                                b_data   = b_block.data  if b_block else None
-                                g2_data  = g2_block.data if g1_block else None
-                                g_data   = (    (g1_data + g2_data) / 2 if g1_data is not None and g2_data is not None
-                                            else g1_data                if g1_data is not None
-                                            else g2_data                if g2_data is not None
-                                            else None
-                                            )
-                                rgb = [r_data, g_data, b_data]
-                            elif 'L' == smode:
-                                l_block = flowData.getBlock(0, bx1, by1)
-                                l_data  = l_block.data if l_block else None
-                                rgb = [l_data]
-                            else:
-                                pass # ここには来ない
-                            
-                            for bd,data in enumerate(rgb):
-                                if data is not None:
-                                    try:
-                                        cx1 = max(sx1, bx1) # コピー元座標とブロック座標 の積集合
-                                        cy1 = max(sy1, by1)
-                                        cx2 = min(sx2, bx1+data.shape[1])
-                                        cy2 = min(sy2, by1+data.shape[0])
-                                        trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
-                                        if np.iscomplexobj(trimed):
-                                            trimed = np.abs(trimed) # 複素数なので、絶対値を取る
-                                        leveled = (trimed - offset) * scale              # レベル調整を適用
-                                        norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
-                                        cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
-                                        tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, bd] = cliped
-                                    except (IndexError, TypeError, ValueError) as e:
-                                        Debug.log(type(self).__name__, "error", e)
-                                        content.append(f"\nerror: {str(e)}\n\n")
-                    
-                    imgArray[dy:dy+gridSize, dx:dx+gridSize, 0:imgD] = tmpImg
-                except (IndexError, TypeError, ValueError) as e:
-                    Debug.log(type(self).__name__, "error", e)
-                    content.append(f"\nerror: {str(e)}\n\n")
+        gridW = max( w for p,x,y,w,h in src)
+        gridH = max( h for p,x,y,w,h in src)
         
-        if gridLline:
-            for sy1 in range(0, imgH, gridSize):
-                imgArray[sy1, 0:imgW, 0:imgD] = 128
-            imgArray[imgH-1, 0:imgW, 0:imgD] = 128
-            for sx1 in range(0, imgW, gridSize):
-                imgArray[0:imgH, sx1, 0:imgD] = 128
-            imgArray[0:imgH, imgW-1, 0:imgD] = 128
-
-        if 'RGB' == dmode:
-            img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD], 'RGB')
-        elif 'L' == dmode:
-            img = Image.fromarray(imgArray[0:height, 0:width, 0:imgD].squeeze(), 'L')
+        if d_height <= gridW and d_width <= gridH:
+            tmpImg = imgArray # グリッドの方が大きいので作業領域は同じ
+        else:
+            tmpImg = np.empty((gridH, gridW, d_plane), dtype=np.uint8) # 作業領域は使いまわす
+        
+        for (sp,sx1,sy1,sw,sh),(dp,dx,dy) in zip(src, dst):
+            sx2 = sx1+sw
+            sy2 = sy1+sh
+            x1  = nh.floor(sx1, BLOCK_SIZE).astype(int) # コピー元を包含するブロック座標
+            y1  = nh.floor(sy1, BLOCK_SIZE).astype(int)
+            x2  = nh.ceil( sx2, BLOCK_SIZE).astype(int)
+            y2  = nh.ceil( sy2, BLOCK_SIZE).astype(int)
+            
+            try:
+                # Z階数曲線でブロックを収集
+                from utils.order import zOrderGenerator
+                for bx1, by1 in zOrderGenerator(x1, y1, x2, y2, BLOCK_SIZE, BLOCK_SIZE): # コピー元を含むブロックの座標
+                    block = flowData.getBlock(sp, bx1, by1)
+                    data  = block.data if block else None
+                    if not data is None:
+                        try:
+                            cx1 = max(sx1, bx1) # コピー元座標とブロック座標 の積集合
+                            cy1 = max(sy1, by1)
+                            cx2 = min(sx2, bx1+data.shape[1])
+                            cy2 = min(sy2, by1+data.shape[0])
+                            trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
+                            if np.iscomplexobj(trimed):
+                                trimed = np.abs(trimed) # 複素数なので、絶対値を取る
+                            leveled = (trimed - offset) * scale              # レベル調整を適用
+                            norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
+                            cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
+                            tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, dp] = cliped
+                        except (IndexError, TypeError, ValueError) as e:
+                            Debug.log(type(self).__name__, "error", e)
+                            content.append(f"\nerror: {str(e)}\n\n")
+                
+                if gridLline:
+                    if 0 < dy:
+                        tmpImg[0      , 0:gridW, dp] = 128
+                    if 0 < dx:
+                        tmpImg[0:gridH, 0      , dp] = 128
+                
+                if imgArray is not tmpImg:
+                    # 作業領域が別なのでコピー
+                    w = min(sw, d_width  - dx)
+                    h = min(sh, d_height - dy)
+                    imgArray[dy:dy+h, dx:dx+w, dp] = tmpImg[0:h, 0:w, dp]
+            
+            except (IndexError, TypeError, ValueError) as e:
+                Debug.log(type(self).__name__, "error", e)
+                content.append(f"\nerror: {str(e)}\n\n")
+        
+        if 4 == d_plane:
+            # 4 プレーンあるので RGBG として、1,3 プレーンを平均する
+            imgArray[:, :, 1] = imgArray[:, :, 1] // 2 + imgArray[:, :, 3] // 2
+            img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0:3], 'RGB')
+        elif 3 == d_plane:
+            img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0:3], 'RGB')
+        elif 1 == d_plane:
+            img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0].squeeze(), 'L')
         
         return(img, content)

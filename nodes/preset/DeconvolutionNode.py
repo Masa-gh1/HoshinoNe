@@ -60,11 +60,8 @@ class DeconvolutionNode(NNPlaneOperationNode):
     
     def processPlane(self, flowData, planeIndex):
         """相関処理"""
-        import scipy
-        import numpy as np
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
-        from base import FlowData
         from base import DataBlock
 
         width, height = flowData.getDimensions()
