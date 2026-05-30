@@ -71,11 +71,11 @@ class DWTNode(NNPlaneOperationNode):
         if "DWT level" in headers:
             level = headers["DWT level"] + 1
             sizeL = headers["DWT size"]
-            size  = [(sizeL[0] +w-1)//2, (sizeL[1]+w-1)//2]
+            size  = [(sizeL[0]+w-1)//2, (sizeL[1]+w-1)//2]
             size.extend(sizeL)
         else:
             level = 1
-            size  = [(width +w-1)//2, (height+w-1)//2]
+            size  = [(width+w-1)//2, (height+w-1)//2]
         
         mode   = headers["mode"].rstrip(" (DWT)")
         planes = headers["planes"]
@@ -83,8 +83,8 @@ class DWTNode(NNPlaneOperationNode):
         for plane in planes[0::1+((level-1)*3)]:
             newPlanes.append(plane)
             for i in range(level, 0, -1):
-                newPlanes.append(plane+f" (da{i})")
                 newPlanes.append(plane+f" (ad{i})")
+                newPlanes.append(plane+f" (da{i})")
                 newPlanes.append(plane+f" (dd{i})")
         
         headers.update({"mode"     : mode + " (DWT)",
@@ -109,14 +109,14 @@ class DWTNode(NNPlaneOperationNode):
         from config import BLOCK_SIZE
         from base import DataBlock
         
-        idx = planeIndex // (1+3*(self.level-1)) # 元画像プレーン
-        sub = planeIndex %  (1+3*(self.level-1)) # 分解プレーン
+        pln = planeIndex // (1+3*(self.level-1)) # 対象プレーン群の開始位置
+        sub = planeIndex %  (1+3*(self.level-1)) # 対象プレーンの相対位置
         
         if 0 < sub:
             # 対象プレーンが前レベルの分解画像なのでプレーンを移動させる
             blocks = []
             for block in flowData.iterateBlocks(planeIndex):
-                dataBlock = DataBlock(block.data, planeIndex=(idx*(1+3*(self.level))+3+sub), x=block.x, y=block.y)
+                dataBlock = DataBlock(block.data, planeIndex=(pln*(1+3*(self.level))+3+sub), x=block.x, y=block.y)
                 blocks.append(dataBlock)
             return blocks
         else:
@@ -136,7 +136,7 @@ class DWTNode(NNPlaneOperationNode):
                 # 補正データが 1 プレーンだけなので、全プレーンに同じ補正データを適用する
                 auxiliaryTable = self._auxiliaryTable[0]
             else:
-                auxiliaryTable = self._auxiliaryTable[idx]
+                auxiliaryTable = self._auxiliaryTable[pln]
             
             filter_bank = pywt.orthogonal_filter_bank(auxiliaryTable.flatten())
             wavelet = pywt.Wavelet(name="custom", filter_bank=filter_bank)
@@ -153,7 +153,7 @@ class DWTNode(NNPlaneOperationNode):
                         blockWidth  = min(BLOCK_SIZE, w - x)
                         endY = y + blockHeight
                         endX = x + blockWidth
-                        dataBlock = DataBlock(res[y:endY, x:endX], planeIndex=idx*(1+3*(self.level))+i, x=x, y=y)
+                        dataBlock = DataBlock(res[y:endY, x:endX], planeIndex=pln*(1+3*(self.level))+i, x=x, y=y)
                         blocks.append(dataBlock)
             
             return blocks

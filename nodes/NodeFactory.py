@@ -36,11 +36,13 @@ class NodeFactory:
         ('tensor'                  , '数列(0:1)'),
         ('coefficients'            , '係数(0:1)'),
         ('------------------------', None),
-        ('fft'                     , 'FFT(N:N)'),
-        ('ifft'                    , '逆FFT(N:N)'),
         ('convolution'             , '畳み込み(N:N)'),
        #('deconvolution'           , '逆畳み込み(N:N)'), # 未公開
+        ('fft'                     , 'FFT(N:N)'),
+        ('ifft'                    , '逆FFT(N:N)'),
         ('dwt'                     , '離散ウェーブレット変換(N:N)'),
+        ('idwt'                    , '逆離散ウェーブレット変換(N:N)'),
+        ('------------------------', None),
         ('squared_norm'            , 'ノルムの二乗(|x|^2)(N:N)'),
         ('quadratic_fit'           , '2次関数近似(N:N)'),
        #('absolute_lowpass_filter' , '絶対値(低通)(N:N)'),# 廃止 upper_pass, lower_pass に分割

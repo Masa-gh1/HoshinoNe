@@ -119,7 +119,9 @@ class FlowData:
             # 範囲外なので None
             return None
         
-        if not self._existingBlocks[planeIndex, y//BLOCK_SIZE, x//BLOCK_SIZE]:
+        if(  self._existingBlocks is None
+          or not self._existingBlocks[planeIndex, y//BLOCK_SIZE, x//BLOCK_SIZE]
+          ):
             # 未設定なので all nan
             from utils import numpy_helpers as nh
             from base import DataBlock
