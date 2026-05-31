@@ -1,0 +1,262 @@
+{
+  "version": "0.2.20260508",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 5,
+      "type": "table",
+      "text": "表",
+      "x": 82.0,
+      "y": 109.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "columns": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H"
+      ],
+      "lines": [
+        "1"
+      ],
+      "table": {
+        "0,0,0": -0.010597401785069032,
+        "0,1,0": 0.0328830116668852,
+        "0,2,0": 0.030841381835560764,
+        "0,3,0": -0.18703481171909309,
+        "0,4,0": -0.027983769416859854,
+        "0,5,0": 0.6308807679298589,
+        "0,6,0": 0.7148465705529157,
+        "0,7,0": 0.2303778133088965
+      },
+      "connections": [
+        12,
+        13
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 31,
+      "type": "absolute",
+      "text": "絶対値",
+      "x": 175.0,
+      "y": 105.0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 25,
+      "type": "offset",
+      "text": "加算",
+      "x": 311.0,
+      "y": 164.0,
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 33,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 173.0,
+      "y": 225.0,
+      "category": "primary",
+      "planes": [
+        "Plane 0",
+        "Plane 1",
+        "Plane 2",
+        "Plane 3",
+        "Plane 4",
+        "Plane 5",
+        "Plane 6",
+        "Plane 7",
+        "Plane 8",
+        "Plane 9",
+        "Plane 10",
+        "Plane 11"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "1,0,0": 1.0,
+        "2,0,0": 1.0,
+        "3,0,0": 1.0,
+        "5,0,0": 1.0,
+        "6,0,0": 1.0,
+        "7,0,0": 1.0,
+        "9,0,0": 1.0,
+        "10,0,0": 1.0,
+        "11,0,0": 1.0
+      },
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 13,
+      "type": "max",
+      "text": "比較大",
+      "x": 376.0,
+      "y": 167.0,
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 15,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 376.0,
+      "y": 226.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {},
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 11,
+      "type": "scale",
+      "text": "乗算",
+      "x": 375.0,
+      "y": 104.0,
+      "connections": [
+        12
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 9,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "x": 313.0,
+      "y": 105.0,
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 7,
+      "type": "scale",
+      "text": "乗算",
+      "x": 175.0,
+      "y": 164.0,
+      "connections": [
+        10
+      ]
+    },
+    {
+      "index": 9,
+      "zOrder": 23,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 81.0,
+      "y": 165.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": -10.0
+      },
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 10,
+      "zOrder": 27,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "x": 241.0,
+      "y": 165.0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 11,
+      "zOrder": 29,
+      "type": "sign",
+      "text": "符号",
+      "x": 239.0,
+      "y": 104.0,
+      "connections": [
+        7
+      ]
+    },
+    {
+      "index": 12,
+      "zOrder": 19,
+      "type": "idwt",
+      "text": "IDWT",
+      "x": 303.0,
+      "y": 41.0,
+      "connections": [
+        14
+      ]
+    },
+    {
+      "index": 13,
+      "zOrder": 21,
+      "type": "dwt",
+      "text": "DWT",
+      "x": 163.0,
+      "y": 42.0,
+      "connections": [
+        1,
+        11
+      ]
+    },
+    {
+      "index": 14,
+      "zOrder": 17,
+      "type": "pass",
+      "text": "通点",
+      "x": 429.0,
+      "y": 40.0,
+      "connections": []
+    },
+    {
+      "index": 15,
+      "zOrder": 3,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 44.0,
+      "connections": [
+        13
+      ]
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 236.0,
+      "y": 120.0,
+      "width": 418,
+      "height": 284,
+      "title": "ウェーブレット ノイズ除去"
+    }
+  ]
+}

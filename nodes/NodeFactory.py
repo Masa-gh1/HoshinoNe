@@ -16,6 +16,7 @@ class NodeFactory:
         ('------------------------', None),
         ('negate'                  , '符号反転(N:N)'),
         ('inverse'                 , '逆数(N:N)'),
+        ('sign'                    , '符号(N:N)'),
         ('absolute'                , '絶対値(N:N)'),
         ('conjugate'               , '共役(N:N)'),
         ('natural_exponential'     , '自然指数(N:N)'),
