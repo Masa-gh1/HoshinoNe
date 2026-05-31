@@ -52,7 +52,7 @@ class NNPlaneOperationNode(FlowNode):
             futureCountPerDatas[flowData] = 0
 
             # プレーン単位で並列処理
-            for planeIndex in range(inputData.getPlaneCount()):
+            for planeIndex in range(flowData.getPlaneCount()):
                 future = ParallelExecutor.submit(self, mes.elapsedThreading, self.processPlane, inputData, planeIndex)
                 futureToDatas[future] = flowData
                 futureCountPerDatas[flowData] += 1

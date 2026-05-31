@@ -109,23 +109,31 @@ class DWTNode(NNPlaneOperationNode):
         from config import BLOCK_SIZE
         from base import DataBlock
         
-        pln = planeIndex // (1+3*(self.level-1)) # 対象プレーン群の開始位置
-        sub = planeIndex %  (1+3*(self.level-1)) # 対象プレーンの相対位置
+        idx  = planeIndex // (1+3*(self.level  )) # 処理対象元プレーンidx
+        oIdx = idx        *  (1+3*(self.level  )) # 出力DWTプレーン群の先頭
+        oSub = planeIndex %  (1+3*(self.level  )) # 出力DWTプレーン相対位置
+        iIdx = idx        *  (1+3*(self.level-1)) # 入力DWTプレーン群の先頭
+        iSub = oSub-3                             # 入力DWTプレーン相対位置
         
-        if 0 < sub:
-            # 対象プレーンが前レベルの分解画像なのでプレーンを移動させる
+        if 4 <= oSub:
+            # 対象プレーンが前レベルの高周波プレーンなので移動させる
             blocks = []
-            for block in flowData.iterateBlocks(planeIndex):
-                dataBlock = DataBlock(block.data, planeIndex=(pln*(1+3*(self.level))+3+sub), x=block.x, y=block.y)
+            for block in flowData.iterateBlocks(iIdx+iSub):
+                dataBlock = DataBlock(block.data, planeIndex=planeIndex, x=block.x, y=block.y)
                 blocks.append(dataBlock)
             return blocks
+        elif 1 <= oSub:
+            # 今レベルの高周波プレーンなので何もかえさない
+            # 今高周波プレーンは前低周波プレーンを分解して得られる
+            return []
         else:
+            # DWTを実行
             width, height = flowData.getDimensions()
             
             # データを読み込み
             planeData = nh.empty((height, width))
             
-            for block in flowData.iterateBlocks(planeIndex):
+            for block in flowData.iterateBlocks(iIdx):
                 blockHeight = min(block.getHeight(), height - block.y)
                 blockWidth  = min(block.getWidth() , width  - block.x)
                 endY = block.y + blockHeight
@@ -136,7 +144,7 @@ class DWTNode(NNPlaneOperationNode):
                 # 補正データが 1 プレーンだけなので、全プレーンに同じ補正データを適用する
                 auxiliaryTable = self._auxiliaryTable[0]
             else:
-                auxiliaryTable = self._auxiliaryTable[pln]
+                auxiliaryTable = self._auxiliaryTable[idx]
             
             filter_bank = pywt.orthogonal_filter_bank(auxiliaryTable.flatten())
             wavelet = pywt.Wavelet(name="custom", filter_bank=filter_bank)
@@ -145,7 +153,8 @@ class DWTNode(NNPlaneOperationNode):
             result.update(detail)
             
             blocks = []
-            for i,(key,res) in enumerate(result.items()):
+            for key,res in result.items():
+                i = ["cA", "ad", "da", "dd"].index(key)
                 h, w = res.shape
                 for y in range(0, h, BLOCK_SIZE):
                     for x in range(0, w, BLOCK_SIZE):
@@ -153,7 +162,7 @@ class DWTNode(NNPlaneOperationNode):
                         blockWidth  = min(BLOCK_SIZE, w - x)
                         endY = y + blockHeight
                         endX = x + blockWidth
-                        dataBlock = DataBlock(res[y:endY, x:endX], planeIndex=pln*(1+3*(self.level))+i, x=x, y=y)
+                        dataBlock = DataBlock(res[y:endY, x:endX], planeIndex=oIdx+i, x=x, y=y)
                         blocks.append(dataBlock)
             
             return blocks

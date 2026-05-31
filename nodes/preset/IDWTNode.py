@@ -84,34 +84,29 @@ class IDWTNode(NNPlaneOperationNode):
         flowData = FlowData(headers)
         flowData.setDimensions(width, height)
         
-        self.level = level
-        self.size  = size
-        
-        print(width, height)
         return flowData
 
     def processPlane(self, flowData, planeIndex):
         """逆DWT処理"""
+        import re
         import pywt
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
         from base import DataBlock
         
-        pln = planeIndex * (1+3*self.level) # 対象プレーン群の開始位置
-        sub =              (1+3*self.level) # 対象プレーン群の枚数
+        planes = flowData.headers["planes"]
+        level = flowData.headers["DWT level"]
+        size  = flowData.headers["DWT size"]
         
-        planeCount = flowData.getPlaneCount()
-        width, height = flowData.getDimensions()
-        
-        if planeCount // sub <= planeIndex:
-            return []
+        inum =              (1+3*level) # 入力DWTプレーン群の枚数
+        iIdx = planeIndex * (1+3*level) # 入力DWTプレーン群の開始位置
         
         # データを読み込み
         coeffs = []
-        w = self.size[0]
-        h = self.size[1]
+        w = size[0]
+        h = size[1]
         planeData = nh.empty((h, w))
-        for block in flowData.iterateBlocks(pln):
+        for block in flowData.iterateBlocks(iIdx):
             if block.x < w and block.y < h:
                 blockHeight = min(block.getHeight(), h - block.y)
                 blockWidth  = min(block.getWidth() , w - block.x)
@@ -119,20 +114,27 @@ class IDWTNode(NNPlaneOperationNode):
                 endX = block.x + blockWidth
                 planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
         coeffs.append(planeData)
-        for l,(w,h) in enumerate(zip(self.size[0::2], self.size[1::2])):
-            detail = {}
-            for p,key in enumerate(['ad','da','dd']):
-                planeData = nh.empty((h, w))
-                for block in flowData.iterateBlocks(pln+1+3*l+p):
-                    if block.x < w and block.y < h:
-                        blockHeight = min(block.getHeight(), h - block.y)
-                        blockWidth  = min(block.getWidth() , w - block.x)
-                        endY = block.y + blockHeight
-                        endX = block.x + blockWidth
-                        planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
-                detail[key] = planeData
-            coeffs.append(detail)
         
+        detail = [{} for _ in range(level)]
+        for i in range(inum-1):
+            idx = iIdx+1+i
+            # プレーン名 "r (ad1)" から ad, 1 を切り出す
+            r = re.findall(r".+ \(([ad]+)([0-9]+)\)", planes[idx])
+            key = r[0][0]
+            l = int(r[0][1])
+            w = size[2*(level-l)]
+            h = size[2*(level-l)+1]
+            planeData = nh.empty((h, w))
+            for block in flowData.iterateBlocks(idx):
+                if block.x < w and block.y < h:
+                    blockHeight = min(block.getHeight(), h - block.y)
+                    blockWidth  = min(block.getWidth() , w - block.x)
+                    endY = block.y + blockHeight
+                    endX = block.x + blockWidth
+                    planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
+            detail[level-l][key] = planeData
+        coeffs.extend(detail)
+
         if 1 == len(self._auxiliaryTable):
             # 補正データが 1 プレーンだけなので、全プレーンに同じ補正データを適用する
             auxiliaryTable = self._auxiliaryTable[0]
@@ -145,7 +147,6 @@ class IDWTNode(NNPlaneOperationNode):
         
         blocks = []
         h, w = data.shape
-        print(w,h)
         for y in range(0, h, BLOCK_SIZE):
             for x in range(0, w, BLOCK_SIZE):
                 blockHeight = min(BLOCK_SIZE, h - y)

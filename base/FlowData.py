@@ -373,7 +373,9 @@ class FlowData:
         mode_value = 0.0
         
         for hist_data in planeHistograms:
-            if 0 < hist_data['bin_counts'].size:
+            if(   not hist_data is None
+              and 0 < hist_data['bin_counts'].size
+              ):
                 max_idx = np.argmax(hist_data['bin_counts'])
                 if hist_data['bin_counts'][max_idx] > max_count:
                     max_count = hist_data['bin_counts'][max_idx]
