@@ -8,9 +8,10 @@ pyinstaller HoshinoNe.spec
 
 rename dist\HoshinoNe.exe HoshinoNe_%VERSION_DATE%.exe
 
+pip-licenses --with-license-file --no-license-path --output-file=dist\THIRD-PARTY-LICENSES
+
 copy config.py        dist\
 copy LICENSE          dist\
-copy NOTICE.txt       dist\
 copy requirements.txt dist\
 copy README.md        dist\
 

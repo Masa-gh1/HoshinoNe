@@ -1,5 +1,10 @@
 # ほしのね
 
+## 説明 (Japanese)
+フロー図で天体写真を処理するツールです。
+https://www.hoshinone.highwell.jp/
+
+## Description (English)
 Visual Flow-based Image Processing Tool
 
 ## Development
@@ -25,4 +30,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Third-Party Libraries
 
-See [NOTICE.txt](NOTICE.txt) for third-party library licenses.
+See [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt) for third-party library licenses.
