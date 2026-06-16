@@ -94,6 +94,7 @@ class ResultWindow(tk.Toplevel):
         tk.Radiobutton(level_frame, text="display", variable=self._display_levels_var, value="display", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="adaptive", variable=self._display_levels_var, value="adaptive", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="all", variable=self._display_levels_var, value="all", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="isoline", variable=self._display_levels_var, value="isoline", command=self.updateResult).pack(side=tk.LEFT)
         
         # 画像グリッド制御（画像データのみ）
         grid_frame = tk.Frame(control_frame)
@@ -609,17 +610,45 @@ class ResultWindow(tk.Toplevel):
                 # 表示レベルを設定
                 displayLevels = self._display_levels_var.get()
                 if "display" == displayLevels:
-                    scale = 255.0 / (displayLevelEnd - displayLevelMin)
+                    scale = 256.0 / (displayLevelEnd - displayLevelMin)
                     offset = float(displayLevelMin)
+                    scaleFunc = lambda v: (v - offset) * scale
                 elif "adaptive" == displayLevels:
-                    scale = 255.0 / (adpLevelEnd - adpLevelMin)
+                    scale = 256.0 / (adpLevelEnd - adpLevelMin)
                     offset = float(adpLevelMin)
+                    scaleFunc = lambda v: (v - offset) * scale
                 elif "all" == displayLevels:
-                    scale = 255.0 / (maxValue - minValue)
+                    scale = 256.0 / (maxValue - minValue)
                     offset = float(minValue)
+                    scaleFunc = lambda v: (v - offset) * scale
+                elif "isoline" == displayLevels:
+                    band  = 10
+                    isolineMin = flowData.getQuantile(0.05)
+                    isolineEnd = flowData.getQuantile(0.95)
+                    scale = float(band) / (isolineEnd - isolineMin)
+                    offset = float(isolineMin)
+                    _2r = 1+2*band
+                    k = nh.zeros((_2r,_2r))
+                    for y in range(_2r):
+                        for x in range(_2r):
+                            if (y-band)**2 + (x-band)**2 <= band**2:
+                                k[y,x] = 1.0
+                    k /= k.sum()
+                    import scipy.ndimage
+                    def isoline(v):
+                        result = scipy.ndimage.convolve(v, k, mode='reflect')
+                        np.add(     result, -offset  , out=result)
+                        np.multiply(result, scale    , out=result)
+                        np.clip(    result, 0.0, band, out=result)
+                        np.mod(     result, 1        , out=result)
+                        np.greater( result, 0.8      , out=result)
+                        np.multiply(result, 256.0    , out=result)
+                        return result
+                    scaleFunc = isoline
                 else:
                     scale = 1.0
                     offset = 0.0
+                    scaleFunc = lambda v: (v - offset) * scale
                 
                 if mode.endswith('(DWT)'):
                     # 離散ウェーブレット変換結果かので、分解データをタイル状に表示
@@ -720,7 +749,7 @@ class ResultWindow(tk.Toplevel):
                     zoom = 1
                 
                 # 画像構築
-                img, cont = self.createImage(flowData, scale, offset, d_plane, d_width, d_height, src, dst, gridLline)
+                img, cont = self.createImage(flowData, scaleFunc, d_plane, d_width, d_height, src, dst, gridLline)
                 content.extend(cont)
                 
                 # 画像を拡縮
@@ -823,14 +852,13 @@ class ResultWindow(tk.Toplevel):
             self.updateResult()
             return 'break'  # デフォルト動作を無効化
     
-    def createImage(self, flowData, scale, offset, d_plane, d_width, d_height, src, dst, gridLline=False):
+    def createImage(self, flowData, scaleFunc, d_plane, d_width, d_height, src, dst, gridLline=False):
         """
         画像データを構築
         
         Args:
             flowData (FlowData): FlowDataオブジェクト
-            scale (float): レベル調整 輝度スケール
-            offset (float): レベル調整 輝度オフセット
+            scaleFunc (float): レベル調整関数
             d_plane (int): 出力プレーン数
             d_width (int): 出力画像の幅
             d_height (int): 出力画像の高さ
@@ -877,7 +905,7 @@ class ResultWindow(tk.Toplevel):
                             trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
                             if np.iscomplexobj(trimed):
                                 trimed = np.abs(trimed) # 複素数なので、絶対値を取る
-                            leveled = (trimed - offset) * scale              # レベル調整を適用
+                            leveled = scaleFunc(trimed)                      # レベル調整を適用
                             norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
                             cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
                             tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, dp] = cliped
