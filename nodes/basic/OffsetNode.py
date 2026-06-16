@@ -24,34 +24,29 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationM
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
     
-    def preprocessInputs(self, inputDatas):
+    def preprocessStreams(self, inputStreams):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         import numpy as np
         
-        prmDatas       = []
-        prmTensors     = []
-        prmPolynomials = []
+        prmStreams     = []
         auxDatas       = []
         auxTensors     = []
         auxPolynomials = []
         
-        for data in inputDatas:
-            category = data.headers.get('category', 'primary')
-            dataType = data.headers.get('type', 'table')
-            if category == 'auxiliary':
-                if   dataType == 'tensor':
-                    auxTensors.append(data)
-                elif dataType == 'polynomial':
-                    auxPolynomials.append(data)
+        for stream in inputStreams:
+            if stream:
+                category = stream[0].headers.get('category', 'primary')
+                if category == 'auxiliary':
+                    for data in stream:
+                        dataType = data.headers.get('type', 'table')
+                        if   dataType == 'tensor':
+                            auxTensors.append(data)
+                        elif dataType == 'polynomial':
+                            auxPolynomials.append(data)
+                        else:
+                            auxDatas.append(data)
                 else:
-                    auxDatas.append(data)
-            else:
-                if   dataType == 'tensor':
-                    prmTensors.append(data)
-                elif dataType == 'polynomial':
-                    prmPolynomials.append(data)
-                else:
-                    prmDatas.append(data)
+                    prmStreams.append(stream)
         
         # auxiliary data と tensor を事前統合(加算)
         self._combinedAuxiliaryTensor = self.computeCombinedTensor(auxDatas + auxTensors, np.add)
@@ -59,18 +54,23 @@ class OffsetNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationM
         # auxiliary polynomial を事前統合(加算)
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxPolynomials, np.add)
         
-        return prmDatas + prmTensors + prmPolynomials
+        return prmStreams
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return OffsetLazyFlowData(inputData, self._combinedAuxiliaryTensor, self._combinedAuxiliaryPolynomial)
+        return OffsetLazyFlowData(inputDatas, self._combinedAuxiliaryTensor, self._combinedAuxiliaryPolynomial)
 
 class OffsetLazyFlowData(LazyFlowData, TensorOperationMixin, PolynomialOperationMixin):
-    def blockOperation(self, block, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryPolynomial):
+    def blockOperation(self, blocks, planeIndex, x, y, combinedAuxiliaryTensor, combinedAuxiliaryPolynomial):
         import numpy as np
         from base import DataBlock
         
-        result = block.data.copy()
+        result = None
+        for block in blocks:
+            if result is None:
+                result = block.data.copy()
+            else:
+                result += block.data
         
         # auxiliary data と tensor を加算
         if combinedAuxiliaryTensor:

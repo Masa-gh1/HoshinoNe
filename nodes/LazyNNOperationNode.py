@@ -6,6 +6,7 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+from itertools import zip_longest
 
 from abc import abstractmethod
 from base.FlowNode_CONST import *
@@ -26,33 +27,52 @@ class LazyNNOperationNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
         
-        if not inputDatas:
+        if not inputStreams or not any(inputStreams):
             self.flowDatas = []
             self.reportProgress(context, "完了")
             return
         
         # 前処理（サブクラスでオーバーライド可能）
-        processedInputs = self.preprocessInputs(inputDatas)
+        processedStreams = self.preprocessStreams(inputStreams)
+        if not processedStreams:
+            processedDatas = self.preprocessInputs([data for stream in inputStreams for data in stream])
         
         resultFlowDatas = []
         
-        for inputData in processedInputs:
-            # LazyFlowDataを作成
-            lazyFlowData = self.createLazyFlowData(inputData)
-            resultFlowDatas.append(lazyFlowData)
+        # LazyFlowDataを作成
+        if processedStreams:
+            for inputDatas in zip_longest(*processedStreams):
+                lazyFlowData = self.createLazyFlowData(inputDatas)
+                resultFlowDatas.append(lazyFlowData)
+        else:
+            for inputDatas in processedDatas:
+                lazyFlowData = self.createLazyFlowData(inputDatas)
+                resultFlowDatas.append(lazyFlowData)
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
+    
+    def preprocessStreams(self, inputStreams):
+        """入力ストリームの前処理（サブクラスでオーバーライド可能）
+        
+        Args:
+            inputStreams: 入力ストリームのリスト
+            
+        Returns:
+            処理対象ストリームのリスト
+            None の場合、後に preprocessInputs を実行する
+        """
+        return None # inputStreams
     
     def preprocessInputs(self, inputDatas):
         """入力データの前処理（サブクラスでオーバーライド可能）
         
         Args:
-            inputDatas: 入力データのリスト
+            inputStreams: 入力ストリームのリスト
             
         Returns:
             処理対象データのリスト

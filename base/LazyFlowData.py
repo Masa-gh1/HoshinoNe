@@ -16,23 +16,25 @@ from .FlowData import FlowData
 
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
-    __slots__ = ('cachePolicy'   ,
-                 'sourceFlowData',
-                 'headers'       ,
-                 'args'          ,
-                 'kwargs'        ,
-                 '_blockLocks'   ,
+    __slots__ = ('cachePolicy'    ,
+                 'sourceFlowData' ,
+                 'sourceFlowDatas',
+                 'headers'        ,
+                 'args'           ,
+                 'kwargs'         ,
+                 '_blockLocks'    ,
                 )
     
-    def __init__(self, sourceFlowData, *args, **kwargs):
+    def __init__(self, sourceFlowDatas, *args, **kwargs):
         super().__init__(None)
-        self.cachePolicy    = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
-        self.sourceFlowData = sourceFlowData
-        self.headers        = LazyHeadersDict(self, *args, **kwargs)
-        self.args           = args
-        self.kwargs         = kwargs
+        self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
+        self.sourceFlowData  = sourceFlowDatas[0] if isinstance(sourceFlowDatas, (list,tuple)) else sourceFlowDatas
+        self.sourceFlowDatas = sourceFlowDatas
+        self.headers         = LazyHeadersDict(self, *args, **kwargs)
+        self.args            = args
+        self.kwargs          = kwargs
         
-        self.setDimensions(*sourceFlowData.getDimensions())
+        self.setDimensions(*self.sourceFlowData.getDimensions())
         
         self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*4)]
     
@@ -60,26 +62,32 @@ class LazyFlowData(FlowData):
                     return block
                 elif type(self).operation == LazyFlowData.operation:
                     # operation がオーバーライドされていないので計測しない
-                    block = self.operation(self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
+                    block = self.operation(self.sourceFlowDatas, planeIndex, x, y, *self.args, **self.kwargs)
                     self.setBlock(block)
                     return block
                 else:
                     # operation がオーバーライドされているので計測する
-                    block = mes.elapsedThreading(self.operation, self.sourceFlowData, planeIndex, x, y, *self.args, **self.kwargs)
+                    block = mes.elapsedThreading(self.operation, self.sourceFlowDatas, planeIndex, x, y, *self.args, **self.kwargs)
                     self.setBlock(block)
                     return block
     
-    def operation(self, flowData, planeIndex, x, y, *args, **kwargs):
+    def operation(self, flowDatas, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
         from utils import measurement as mes
-        block = flowData.getBlock(planeIndex, x, y)
-        if not block:
-            return block
-        return mes.elapsedThreading(self.blockOperation, block, planeIndex, x, y, *args, **kwargs)
+        if isinstance(flowDatas, (list,tuple)):
+            blocks = [flowData.getBlock(planeIndex, x, y) for flowData in flowDatas]
+            if not any(blocks):
+                return blocks
+            return mes.elapsedThreading(self.blockOperation, blocks, planeIndex, x, y, *args, **kwargs)
+        else:
+            block = flowDatas.getBlock(planeIndex, x, y)
+            if not block:
+                return block
+            return mes.elapsedThreading(self.blockOperation, block, planeIndex, x, y, *args, **kwargs)
 
-    def blockOperation(self, block, planeIndex, x, y, *args, **kwargs):
+    def blockOperation(self, blocks, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
-        return block
+        return blocks
 
     def getLazyHeaderkeys(self):
         """遅延評価対象の header キーを取得"""
@@ -99,8 +107,8 @@ class LazyHeadersDict(UserDict):
         super().__init__(lazyFlowData.sourceFlowData.headers)
         
         self._lazyFlowData = lazyFlowData
-        self.args           = args
-        self.kwargs         = kwargs
+        self.args          = args
+        self.kwargs        = kwargs
 
         for key in self._lazyFlowData.getLazyHeaderkeys():
             self.data[key]= "<LazyHeaderOperation>"

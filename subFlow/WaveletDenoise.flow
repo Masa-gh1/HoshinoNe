@@ -1,5 +1,5 @@
 {
-  "version": "0.2.20260508",
+  "version": "0.2.20260606",
   "nodes": [
     {
       "index": 0,
@@ -7,7 +7,7 @@
       "type": "table",
       "text": "表",
       "x": 82.0,
-      "y": 109.0,
+      "y": 111.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -36,39 +36,39 @@
         "0,7,0": 0.2303778133088965
       },
       "connections": [
-        12,
-        13
+        11,
+        12
       ]
     },
     {
       "index": 1,
-      "zOrder": 31,
+      "zOrder": 15,
       "type": "absolute",
       "text": "絶対値",
-      "x": 175.0,
-      "y": 105.0,
+      "x": 178.0,
+      "y": 106.0,
       "connections": [
         2
       ]
     },
     {
       "index": 2,
-      "zOrder": 25,
+      "zOrder": 19,
       "type": "offset",
       "text": "加算",
-      "x": 311.0,
-      "y": 164.0,
+      "x": 241.0,
+      "y": 168.0,
       "connections": [
         4
       ]
     },
     {
       "index": 3,
-      "zOrder": 33,
+      "zOrder": 29,
       "type": "coefficients",
       "text": "係数",
-      "x": 173.0,
-      "y": 225.0,
+      "x": 136.0,
+      "y": 222.0,
       "category": "primary",
       "planes": [
         "Plane 0",
@@ -98,15 +98,15 @@
         "11,0,0": 1.0
       },
       "connections": [
-        8
+        7
       ]
     },
     {
       "index": 4,
-      "zOrder": 13,
+      "zOrder": 23,
       "type": "max",
       "text": "比較大",
-      "x": 376.0,
+      "x": 302.0,
       "y": 167.0,
       "connections": [
         6
@@ -114,11 +114,11 @@
     },
     {
       "index": 5,
-      "zOrder": 15,
+      "zOrder": 27,
       "type": "coefficients",
       "text": "係数",
-      "x": 376.0,
-      "y": 226.0,
+      "x": 338.0,
+      "y": 223.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -132,44 +132,33 @@
     },
     {
       "index": 6,
-      "zOrder": 11,
+      "zOrder": 21,
       "type": "scale",
       "text": "乗算",
-      "x": 375.0,
-      "y": 104.0,
+      "x": 301.0,
+      "y": 107.0,
       "connections": [
-        12
+        11
       ]
     },
     {
       "index": 7,
-      "zOrder": 9,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 313.0,
-      "y": 105.0,
-      "connections": [
-        6
-      ]
-    },
-    {
-      "index": 8,
       "zOrder": 7,
       "type": "scale",
       "text": "乗算",
       "x": 175.0,
-      "y": 164.0,
+      "y": 166.0,
       "connections": [
-        10
+        9
       ]
     },
     {
-      "index": 9,
-      "zOrder": 23,
+      "index": 8,
+      "zOrder": 13,
       "type": "coefficients",
       "text": "係数",
       "x": 81.0,
-      "y": 165.0,
+      "y": 167.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -180,81 +169,81 @@
         "0,0,0": -10.0
       },
       "connections": [
-        8
+        7
       ]
     },
     {
-      "index": 10,
-      "zOrder": 27,
+      "index": 9,
+      "zOrder": 25,
       "type": "category_auxiliary",
       "text": "補正値",
-      "x": 241.0,
-      "y": 165.0,
+      "x": 243.0,
+      "y": 223.0,
       "connections": [
         2
       ]
     },
     {
-      "index": 11,
-      "zOrder": 29,
+      "index": 10,
+      "zOrder": 17,
       "type": "sign",
       "text": "符号",
-      "x": 239.0,
-      "y": 104.0,
+      "x": 238.0,
+      "y": 105.0,
       "connections": [
-        7
+        6
+      ]
+    },
+    {
+      "index": 11,
+      "zOrder": 9,
+      "type": "idwt",
+      "text": "IDWT",
+      "x": 303.0,
+      "y": 43.0,
+      "connections": [
+        13
       ]
     },
     {
       "index": 12,
-      "zOrder": 19,
-      "type": "idwt",
-      "text": "IDWT",
-      "x": 303.0,
-      "y": 41.0,
+      "zOrder": 11,
+      "type": "dwt",
+      "text": "DWT",
+      "x": 163.0,
+      "y": 44.0,
       "connections": [
-        14
+        1,
+        10
       ]
     },
     {
       "index": 13,
-      "zOrder": 21,
-      "type": "dwt",
-      "text": "DWT",
-      "x": 163.0,
-      "y": 42.0,
-      "connections": [
-        1,
-        11
-      ]
-    },
-    {
-      "index": 14,
-      "zOrder": 17,
+      "zOrder": 31,
       "type": "pass",
       "text": "通点",
-      "x": 429.0,
+      "x": 394.0,
       "y": 40.0,
       "connections": []
     },
     {
-      "index": 15,
+      "index": 14,
       "zOrder": 3,
       "type": "pass",
       "text": "通点",
       "x": 40.0,
-      "y": 44.0,
+      "y": 46.0,
       "connections": [
-        13
+        12
       ]
     }
   ],
   "trays": [
     {
       "zOrder": 1,
-      "x": 236.0,
-      "y": 120.0,
-      "width": 418,
+      "x": 216.0,
+      "y": 122.0,
+      "width": 378,
       "height": 284,
       "title": "ウェーブレット ノイズ除去"
     }
