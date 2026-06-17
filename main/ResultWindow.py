@@ -47,7 +47,7 @@ class ResultWindow(tk.Toplevel):
         self.node = node
     
         self.title(f"{self.node.name} - 処理結果")
-        self.geometry("600x400")
+        self.geometry("600x600")
         
         # 制御フレーム
         control_frame = tk.Frame(self)
@@ -636,13 +636,13 @@ class ResultWindow(tk.Toplevel):
                     k /= k.sum()
                     import scipy.ndimage
                     def isoline(v):
-                        result = scipy.ndimage.convolve(v, k, mode='reflect')
+                        result = scipy.ndimage.convolve(v, k, mode="reflect")
                         np.add(     result, -offset  , out=result)
                         np.multiply(result, scale    , out=result)
                         np.clip(    result, 0.0, band, out=result)
-                        np.mod(     result, 1        , out=result)
-                        np.greater( result, 0.8      , out=result)
-                        np.multiply(result, 256.0    , out=result)
+                        np.mod(     result, 1        , out=result) # 0.0～1.0 の繰り返しに
+                        np.add(     result, -0.6     , out=result) # 0.6 以下を0以下に
+                        np.multiply(result, 256.0/0.3, out=result) # 0.9 以上を256以上に
                         return result
                     scaleFunc = isoline
                 else:
@@ -749,7 +749,15 @@ class ResultWindow(tk.Toplevel):
                     zoom = 1
                 
                 # 画像構築
-                img, cont = self.createImage(flowData, scaleFunc, d_plane, d_width, d_height, src, dst, gridLline)
+                dataImageKey = (flowData, displayLevels, displayCorners)
+                if not hasattr(self,'_dataImagesCahace'):
+                    self._dataImagesCahace = {}
+                if dataImageKey in self._dataImagesCahace:
+                    # キャッシュに在るのでそれを使う
+                    img, cont = self._dataImagesCahace[dataImageKey]
+                else:
+                    img, cont = self.createImage(flowData, scaleFunc, d_plane, d_width, d_height, src, dst, gridLline)
+                    self._dataImagesCahace[dataImageKey] = (img, cont)
                 content.extend(cont)
                 
                 # 画像を拡縮
