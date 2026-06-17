@@ -157,6 +157,7 @@ class RepositionLazyFlowData(LazyFlowData):
 
     def operation(self, flowData, planeIndex, x, y, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
         """再配置を実行"""
+        import numpy as np
         from config import BLOCK_SIZE
         from base import DataBlock
         from utils import numpy_helpers as nh
