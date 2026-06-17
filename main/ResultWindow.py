@@ -512,33 +512,33 @@ class ResultWindow(tk.Toplevel):
             Debug.log(type(self).__name__, "error", e)
         
         # ヒストグラムグラフを作成
-        histogramImageKey = (flowData, self._x_scale_var.get(), self._y_scale_var.get())
-        if not hasattr(self,'_histogramImagesCahace'):
-            self._histogramImagesCahace = {}
-        if histogramImageKey in self._histogramImagesCahace:
-            # キャッシュに在るのでそれを使う
-            histogram_text, histogram_image = self._histogramImagesCahace[histogramImageKey]
-            content.append(histogram_text)
-            content.append(histogram_image)
+        if not PIL_AVAILABLE:
+            content.append("\nImage is not available.\n\n")
+        elif not PYPLOT_AVAILABLE:
+            content.append("\nmatplotlib is not available.\n\n")
+        elif not NUMPY_AVAILABLE:
+            content.append("\nNumpy is not available.\n\n")
         else:
-            if not PIL_AVAILABLE:
-                content.append("\nImage is not available.\n\n")
-            elif not PYPLOT_AVAILABLE:
-                content.append("\nmatplotlib is not available.\n\n")
-            elif not NUMPY_AVAILABLE:
-                content.append("\nNumpy is not available.\n\n")
-            else:
-                try:
+            try:
+                # 軸スケール設定を取得
+                ax_xScale = self._x_scale_var.get()
+                ax_yScale = self._y_scale_var.get()
+                
+                histogramImageKey = (flowData, ax_xScale, ax_yScale)
+                if not hasattr(self,'_histogramImagesCahace'):
+                    self._histogramImagesCahace = {}
+                if histogramImageKey in self._histogramImagesCahace:
+                    # キャッシュに在るのでそれを使う
+                    histogram_text, histogram_image = self._histogramImagesCahace[histogramImageKey]
+                else:
                     # FlowData.getHistogramを使用してプレーン別ヒストグラムを取得
                     fig, ax = plt.subplots(figsize=(6, 3))
                     if planeCount <= 1:
                         colors = ['black']
-                    else:
+                    elif planeCount <= 4:
                         colors = ['red', 'green', 'blue', 'darkcyan']
-                    
-                    # 軸スケール設定を取得
-                    ax_xScale = self._x_scale_var.get()
-                    ax_yScale = self._y_scale_var.get()
+                    else:
+                        colors = [None] * planeCount
                     
                     histogram_data = flowData.getHistogram(log_scale=("log"==ax_xScale))
                     edgeMin = histogram_data['planes'][0]['bin_edges'][0]
@@ -558,7 +558,7 @@ class ResultWindow(tk.Toplevel):
                         xScale = 1.0
                         xOffset = 0.0
                     
-                    for planeIndex, plane_hist in enumerate(histogram_data['planes'][:4]):
+                    for planeIndex, plane_hist in enumerate(histogram_data['planes']):
                         bin_counts = plane_hist['bin_counts']
                         bin_edges = plane_hist['bin_edges']
                         total_samples += plane_hist['total_samples']
@@ -571,7 +571,6 @@ class ResultWindow(tk.Toplevel):
                         plane_name = planes[planeIndex] if planeIndex < len(planes) else f'Plane{planeIndex}'
                         ax.plot(bin_centers, nh.array(bin_counts) + 1, color=colors[planeIndex], label=plane_name, linewidth=1)
                     
-                    histogram_text = f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
                     ax.set_xlabel(f'Value ({ax_xScale})' if "log" == ax_xScale else f'Value ({ax_xScale}, normalized adjusted)')
                     ax.set_ylabel(f'Count ({ax_yScale})')
                     ax.set_yscale(ax_yScale)
@@ -594,14 +593,15 @@ class ResultWindow(tk.Toplevel):
                     plt.savefig(buf, format='png', dpi=90)
                     
                     img = Image.open(buf)
-                    histogram_image = ImageTk.PhotoImage(img)
                     
+                    histogram_text = f"Histogram per plane ({len(bin_counts)} bins, {total_samples} total samples)\n"
+                    histogram_image = ImageTk.PhotoImage(img)
                     self._histogramImagesCahace[histogramImageKey] = (histogram_text,histogram_image)
-                    content.append(histogram_text)
-                    content.append(histogram_image)
-                except Exception as e:
-                    Debug.log(type(self).__name__, "Histogram error", e)
-                    content.append(f"Histogram error: {str(e)}\n")
+                content.append(histogram_text)
+                content.append(histogram_image)
+            except Exception as e:
+                Debug.log(type(self).__name__, "Histogram error", e)
+                content.append(f"Histogram error: {str(e)}\n")
         
         if not PIL_AVAILABLE:
             content.append("\nImage is not available.\n\n")
@@ -652,6 +652,7 @@ class ResultWindow(tk.Toplevel):
                 
                 if mode.endswith('(DWT)'):
                     # 離散ウェーブレット変換結果かので、分解データをタイル状に表示
+                    displayCorners = "DWT"
                     gridLline = True
                     gridSize  = max(width, height)
                     d_plane  = 3
