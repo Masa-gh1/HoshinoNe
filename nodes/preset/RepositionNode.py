@@ -258,8 +258,8 @@ class RepositionLazyFlowData(LazyFlowData):
                 max_src_y = max(c[1] for c in src_corners)
                 
                 # Un-Resize (Add offset)
-                off_x = left if left is not None else 0
-                off_y = top  if top  is not None else 0
+                off_x = left if left else 0
+                off_y = top  if top  else 0
                 
                 min_src_x += off_x
                 max_src_x += off_x
