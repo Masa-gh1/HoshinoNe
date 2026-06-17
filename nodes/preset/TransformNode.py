@@ -71,12 +71,12 @@ class TransformNode(LazyNNOperationNode):
         else:
             expand_left, expand_top, new_width, new_height = self._extendParams
             dx, dy, rotation, scale, left, top, width, height = transformParams
-            left   = left   if left   is not None else expand_left
-            top    = top    if top    is not None else expand_top
-            width  = width  if width  is not None else new_width
-            height = height if height is not None else new_height
-            dx += left
-            dy += top
+            left   = left   if left   else -expand_left
+            top    = top    if top    else -expand_top
+            width  = width  if width  else new_width
+            height = height if height else new_height
+            dx -= left
+            dy -= top
             return TransformLazyFlowData(inputData, dx, dy, rotation, scale, width, height)
         
     def _loadTableData(self, auxiliaryDatas):
