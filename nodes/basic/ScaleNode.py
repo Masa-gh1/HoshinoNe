@@ -54,7 +54,18 @@ class ScaleNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMi
         # auxiliary polynomial を事前統合(乗算)
         self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxPolynomials, np.multiply)
         
-        return prmStreams
+        if prmStreams:
+            return prmStreams
+        elif self._combinedAuxiliaryTensor:
+            data = self._combinedAuxiliaryTensor
+            self._combinedAuxiliaryTensor = None
+            return [[data]]
+        elif self._combinedAuxiliaryPolynomial:
+            data = self._combinedAuxiliaryPolynomial
+            self._combinedAuxiliaryPolynomial = None
+            return [[data]]
+        else:
+            return []
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
