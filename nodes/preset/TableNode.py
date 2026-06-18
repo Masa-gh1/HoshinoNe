@@ -41,17 +41,20 @@ class TableNode(FlowNode,ConfigurableNode):
         
         constVal = ""
         count = 0
-        for x in range(len(self.columns)):
-            for y in range(len(self.lines)):
-                for planeIndex in range(len(self.planes)):
-                    key = f"{planeIndex},{x},{y}"
-                    value = self.table.get(key, 0)
-                    constVal += f" {sh.dispS(value)}"
-                    count += 1
-                    if 3 <= count:
-                        displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
-                        return displayText
-        displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
+        if isinstance(self.columns,int) and isinstance(self.lines,int):
+            displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.columns}x{self.lines}\nall 0"
+        else:
+            for x in range(len(self.columns)):
+                for y in range(len(self.lines)):
+                    for planeIndex in range(len(self.planes)):
+                        key = f"{planeIndex},{x},{y}"
+                        value = self.table.get(key, 0)
+                        constVal += f" {sh.dispS(value)}"
+                        count += 1
+                        if 3 <= count:
+                            displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
+                            return displayText
+            displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
         return displayText
     
     def store(self, nodeData):
@@ -85,16 +88,18 @@ class TableNode(FlowNode,ConfigurableNode):
         self.view.onNodeConfigChanged(self)
     
     def process(self, context=None):
+        from config import BLOCK_SIZE
         from utils.interval_helper import createHalfOpenEnd
         from base import DataBlock
         from base import FlowData
+        from utils import numpy_helpers as nh
         
         self.reportProgress(context, "開始")
         
         # 指定されたサイズの table を作成
         planeCount = len(self.planes)
-        width      = len(self.columns)
-        height     = len(self.lines)
+        width      = len(self.columns) if isinstance(self.columns, list) else self.columns
+        height     = len(self.lines)   if isinstance(self.lines  , list) else self.lines
         
         # モードを判断
         if width == 1 and height == 1:
@@ -113,8 +118,8 @@ class TableNode(FlowNode,ConfigurableNode):
             'type'    : 'table',
             'mode'    : mode,
             'planes'  : self.planes,
-            'columns' : self.columns,
-            'lines'   : self.lines,
+            'columns' : self.columns if isinstance(self.columns, list) else [],
+            'lines'   : self.lines   if isinstance(self.lines  , list) else [],
         }
         
         outputFlowData = FlowData(headers)
@@ -122,15 +127,24 @@ class TableNode(FlowNode,ConfigurableNode):
         
         # 各プレーンに表を設定
         for planeIndex in range(planeCount):
-            result = []
-            for j in range(height):
-                row = []
-                for i in range(width):
-                    key = f"{planeIndex},{i},{j}"
-                    row.append(self.table.get(key, 0))
-                result.append(row)
-            dataBlock = DataBlock(result, planeIndex, 0, 0)
-            outputFlowData.setBlock(dataBlock)
+            if isinstance(self.table, int):
+                result = nh.full((BLOCK_SIZE, BLOCK_SIZE), self.table)
+                for y in range(0, height, BLOCK_SIZE):
+                    for x in range(0, width, BLOCK_SIZE):
+                        blockW = min(BLOCK_SIZE, width  - x)
+                        blockH = min(BLOCK_SIZE, height - y)
+                        dataBlock = DataBlock(result[0:blockH, 0:blockW], planeIndex, x, y)
+                        outputFlowData.setBlock(dataBlock)
+            else:
+                result = []
+                for y in range(height):
+                    row = []
+                    for x in range(width):
+                        key = f"{planeIndex},{x},{y}"
+                        row.append(self.table.get(key, 0))
+                    result.append(row)
+                dataBlock = DataBlock(result, planeIndex, 0, 0)
+                outputFlowData.setBlock(dataBlock)
         
         minValue = outputFlowData.getMinValue()
         maxValue = outputFlowData.getMaxValue()
@@ -140,8 +154,8 @@ class TableNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "完了")
     
     def getConfigHash(self):
-        tensorStr = str(sorted(self.table.items()))
-        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.columns}_{self.lines}_{tensorStr}"
+        tableStr = str(sorted(self.table.items())) if isinstance(self.table, dict) else str(self.table)
+        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.columns}_{self.lines}_{tableStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
@@ -150,9 +164,22 @@ class TensorSettingsDialog(tk.Toplevel):
         self.node      = node
         self.outputCat = tk.BooleanVar(value=node.outputCat == _OUT_CAT_AUX)
         self.planes    = node.planes.copy()
-        self.columns   = node.columns.copy()
-        self.lines     = node.lines.copy()
-        self.table     = node.table.copy()
+        if isinstance(node.columns, int):
+            self.columnCnt = node.columns
+            self.columns   = []
+        else:
+            self.columnCnt = len(node.columns)
+            self.columns   = node.columns.copy()
+        if isinstance(node.lines, int):
+            self.lineCnt = node.lines
+            self.lines   = []
+        else:
+            self.lineCnt = len(node.lines)
+            self.lines   = node.lines.copy()
+        if isinstance(node.table, int):
+            self.table   = node.table
+        else:
+            self.table   = node.table.copy()
         
         self.title(f"{node.name}設定")
         self.geometry("600x450")
@@ -168,12 +195,12 @@ class TensorSettingsDialog(tk.Toplevel):
         
         tk.Label(basicFrame, text="x項数:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         self.xOrderEntry = tk.Entry(basicFrame, width=5)
-        self.xOrderEntry.insert(0, str(len(node.columns)))
+        self.xOrderEntry.insert(0, str(self.columnCnt))
         self.xOrderEntry.grid(row=0, column=3, padx=5, pady=2)
         
         tk.Label(basicFrame, text="y項数:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
-        self.yOrderEntry.insert(0, str(len(node.lines)))
+        self.yOrderEntry.insert(0, str(self.lineCnt))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
         
         tk.Checkbutton(basicFrame, text="補正値", variable=self.outputCat).grid(row=0, column=6, sticky="w", padx=5, pady=2)
@@ -229,90 +256,122 @@ class TensorSettingsDialog(tk.Toplevel):
         
         if planeCount <= 0 or xOrder <= 0 or yOrder <= 0:
             return
-        
-        for i in range(len(self.columns), xOrder):
-            self.columns.append(f"{chr(ord('A') + (i%26))}")
-
-        for j in range(len(self.lines), yOrder):
-            self.lines.append(f"{j}")
-        
-        row = 0
-        for planeIndex in range(planeCount):
-            # プレーン名をテキストボックスで表示
-            if len(self.node.planes) <= planeIndex:
-                self.planes.append(f"Plane {planeIndex}")
+        elif 100 < planeCount*xOrder*yOrder:
+            # セルが多いので初期値 0 に固定
+            self.columnCnt = xOrder
+            self.lineCnt   = yOrder
             
-            entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
-            entry.insert(0, self.planes[planeIndex])
-            entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
-            self.planeEntries.append(entry)
-            row += 1
-            
-            # X軸ラベル（上部）
-            if 0 == planeIndex:
-                for i in range(xOrder):
-                    entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
-                    entry.insert(0, self.columns[i])
-                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                    self.columnEntries.append(entry)
-            else:
-                for i in range(xOrder):
-                    entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=self.columns[i])
-                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
-            row += 1
-            
-            for j in range(yOrder):
-                # Y軸ラベル（左側）
-                if 0 == planeIndex:
-                    entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
-                    entry.insert(0, self.lines[j])
-                    entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
-                    self.lineEntries.append(entry)
-                else:
-                    entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=self.lines[j])
-                    entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
-
+            row = 0
+            for planeIndex in range(planeCount):
+                # プレーン名をテキストボックスで表示
+                if len(self.node.planes) <= planeIndex:
+                    self.planes.append(f"Plane {planeIndex}")
                 
-                # 表エントリー
-                for i in range(xOrder):
-                    entry = tk.Entry(self.scrollableFrame, width=8)
-                    key = f"{planeIndex},{i},{j}"
-                    if key in self.table:
-                        entry.insert(0, str(self.table[key]))
-                    else:
-                        entry.insert(0, "0")
-                    entry.grid(row=row, column=i + 1, padx=5, pady=2)
-                    self.tableEntries[key] = entry
+                entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
+                entry.insert(0, self.planes[planeIndex])
+                entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
+                self.planeEntries.append(entry)
+                entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=f"{self.columnCnt}x{self.lineCnt} all 0")
+                entry.grid(row=row, column=6, padx=5, pady=2)
                 row += 1
-            row += 1
+        else:
+            # セルが少ないので格子状の入力項目を生成
+            self.columnCnt = xOrder
+            self.lineCnt   = yOrder
             
-            entry = tk.Label(self.scrollableFrame, text=" ")
-            entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
-            row += 1
+            # 足りない行列名を補完
+            for i in range(len(self.columns), xOrder):
+                self.columns.append(f"{chr(ord('A') + (i%26))}")
+
+            for j in range(len(self.lines), yOrder):
+                self.lines.append(f"{j}")
+            
+            row = 0
+            for planeIndex in range(planeCount):
+                # プレーン名をテキストボックスで表示
+                if len(self.node.planes) <= planeIndex:
+                    self.planes.append(f"Plane {planeIndex}")
+                
+                entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=20)
+                entry.insert(0, self.planes[planeIndex])
+                entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
+                self.planeEntries.append(entry)
+                row += 1
+                
+                # X軸ラベル（上部）
+                if 0 == planeIndex:
+                    for i in range(xOrder):
+                        entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
+                        entry.insert(0, self.columns[i])
+                        entry.grid(row=row, column=i + 1, padx=5, pady=2)
+                        self.columnEntries.append(entry)
+                else:
+                    for i in range(xOrder):
+                        entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=self.columns[i])
+                        entry.grid(row=row, column=i + 1, padx=5, pady=2)
+                row += 1
+                
+                for j in range(yOrder):
+                    # Y軸ラベル（左側）
+                    if 0 == planeIndex:
+                        entry = tk.Entry(self.scrollableFrame, font=("Arial", 10, "bold"), width=8)
+                        entry.insert(0, self.lines[j])
+                        entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+                        self.lineEntries.append(entry)
+                    else:
+                        entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=self.lines[j])
+                        entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+
+                    
+                    # 表エントリー
+                    for i in range(xOrder):
+                        entry = tk.Entry(self.scrollableFrame, width=8)
+                        key = f"{planeIndex},{i},{j}"
+                        if isinstance(self.table, int):
+                            entry.insert(0, str(self.table))
+                        elif key in self.table:
+                            entry.insert(0, str(self.table[key]))
+                        else:
+                            entry.insert(0, "0")
+                        entry.grid(row=row, column=i + 1, padx=5, pady=2)
+                        self.tableEntries[key] = entry
+                    row += 1
+                row += 1
+                
+                entry = tk.Label(self.scrollableFrame, text=" ")
+                entry.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+                row += 1
     
     def onApply(self):
-        planes  = [entry.get() for entry in self.planeEntries]
-        columns = [entry.get() for entry in self.columnEntries]
-        lines   = [entry.get() for entry in self.lineEntries]
-        
-        if self.planes and self.columns and self.lines:
-            # 表を収集
-            table = {}
-            for key, entry in self.tableEntries.items():
-                try:
-                    val = float(entry.get())
-                    if val != 0:
-                        table[key] = val
-                except ValueError:
-                    from utils.Debug import Debug
-                    Debug.log(type(self).__name__, f"Warning: Invalid table value for {key}")
-            
+        if not self.columnEntries and not self.lineEntries and not self.tableEntries:
+            planes = [entry.get() for entry in self.planeEntries]
             outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
-            self.planes  = planes
-            self.columns = columns
-            self.lines   = lines
-            self.table   = table
-            self.node.applySettings(outputCat, planes, columns, lines, table)
+            self.planes = planes
+            self.table  = 0
+            self.node.applySettings(outputCat, planes, self.columnCnt, self.lineCnt, self.table)
+        else:
+            planes  = [entry.get() for entry in self.planeEntries]
+            columns = [entry.get() for entry in self.columnEntries]
+            lines   = [entry.get() for entry in self.lineEntries]
+            
+            if self.planes and self.columns and self.lines:
+                # 表を収集
+                table = {}
+                for key, entry in self.tableEntries.items():
+                    try:
+                        val = float(entry.get())
+                        if val != 0:
+                            table[key] = val
+                    except ValueError:
+                        from utils.Debug import Debug
+                        Debug.log(type(self).__name__, f"Warning: Invalid table value for {key}")
+                
+                outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
+                self.planes  = planes
+                self.columns = columns
+                self.lines   = lines
+                self.table   = table
+                self.node.applySettings(outputCat, planes, columns, lines, table)
     
     def onClose(self):
         self.destroy()
