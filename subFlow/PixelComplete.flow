@@ -1,35 +1,35 @@
 {
-  "version": "0.2.20260227",
+  "version": "0.2.20260606",
   "nodes": [
     {
       "index": 0,
       "zOrder": 13,
       "type": "category_auxiliary",
       "text": "補正値",
-      "x": 409.0,
-      "y": 101.0,
+      "x": 327.0,
+      "y": 96.0,
       "connections": [
         1
       ]
     },
     {
       "index": 1,
-      "zOrder": 7,
+      "zOrder": 9,
       "type": "scale",
       "text": "乗算",
-      "x": 410.0,
+      "x": 327.0,
       "y": 41.0,
       "connections": [
-        11
+        9
       ]
     },
     {
       "index": 2,
-      "zOrder": 5,
+      "zOrder": 7,
       "type": "sum",
       "text": "総和",
-      "x": 285.0,
-      "y": 40.0,
+      "x": 249.0,
+      "y": 41.0,
       "connections": [
         1
       ]
@@ -39,7 +39,7 @@
       "zOrder": 3,
       "type": "transform",
       "text": "変形",
-      "x": 164.0,
+      "x": 140.0,
       "y": 42.0,
       "connections": [
         2
@@ -47,77 +47,55 @@
     },
     {
       "index": 4,
-      "zOrder": 21,
+      "zOrder": 19,
       "type": "transform",
       "text": "変形",
-      "x": 413.0,
-      "y": 268.0,
+      "x": 326.0,
+      "y": 265.0,
       "connections": [
         6
       ]
     },
     {
       "index": 5,
-      "zOrder": 17,
+      "zOrder": 15,
       "type": "inverse",
       "text": "逆数",
-      "x": 411.0,
-      "y": 156.0,
+      "x": 326.0,
+      "y": 150.0,
       "connections": [
         0
       ]
     },
     {
       "index": 6,
-      "zOrder": 19,
+      "zOrder": 17,
       "type": "sum",
       "text": "総和",
-      "x": 411.0,
-      "y": 212.0,
+      "x": 324.0,
+      "y": 209.0,
       "connections": [
         5
       ]
     },
     {
       "index": 7,
-      "zOrder": 31,
+      "zOrder": 25,
       "type": "min",
       "text": "比較小",
-      "x": 288.0,
-      "y": 188.0,
+      "x": 209.0,
+      "y": 149.0,
       "connections": [
         4
       ]
     },
     {
       "index": 8,
-      "zOrder": 25,
-      "type": "absolute",
-      "text": "絶対値",
-      "x": 166.0,
-      "y": 133.0,
-      "connections": [
-        9
-      ]
-    },
-    {
-      "index": 9,
       "zOrder": 27,
-      "type": "offset",
-      "text": "加算",
-      "x": 286.0,
-      "y": 132.0,
-      "connections": [
-        7
-      ]
-    },
-    {
-      "index": 10,
-      "zOrder": 29,
       "type": "coefficients",
       "text": "係数",
-      "x": 170.0,
-      "y": 188.0,
+      "x": 180.0,
+      "y": 204.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -128,59 +106,70 @@
         "0,0,0": 1.0
       },
       "connections": [
-        9,
-        7
+        7,
+        12
+      ]
+    },
+    {
+      "index": 9,
+      "zOrder": 11,
+      "type": "pass",
+      "text": "通点",
+      "x": 391.0,
+      "y": 40.0,
+      "connections": []
+    },
+    {
+      "index": 10,
+      "zOrder": 5,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 44.0,
+      "connections": [
+        3,
+        12
       ]
     },
     {
       "index": 11,
-      "zOrder": 9,
-      "type": "pass",
-      "text": "通点",
-      "x": 527.0,
-      "y": 43.0,
-      "connections": []
-    },
-    {
-      "index": 12,
-      "zOrder": 11,
-      "type": "pass",
-      "text": "通点",
-      "x": 40.0,
-      "y": 45.0,
-      "connections": [
-        3,
-        8
-      ]
-    },
-    {
-      "index": 13,
-      "zOrder": 15,
+      "zOrder": 29,
       "type": "category_auxiliary",
       "text": "補正値",
-      "x": 42.0,
-      "y": 118.0,
+      "x": 43.0,
+      "y": 264.0,
       "connections": [
         3,
         4
+      ]
+    },
+    {
+      "index": 12,
+      "zOrder": 23,
+      "type": "max",
+      "text": "比較大",
+      "x": 154.0,
+      "y": 148.0,
+      "connections": [
+        7
       ]
     }
   ],
   "trays": [
     {
       "zOrder": 1,
-      "x": 285.0,
+      "x": 218.0,
       "y": 141.0,
-      "width": 512,
+      "width": 382,
       "height": 314,
       "title": "ピクセルコンプリート"
     },
     {
-      "zOrder": 23,
-      "x": 226.0,
-      "y": 149.0,
-      "width": 240,
-      "height": 143,
+      "zOrder": 21,
+      "x": 184.0,
+      "y": 166.0,
+      "width": 123,
+      "height": 142,
       "title": "NaN 以外を 1"
     }
   ]
