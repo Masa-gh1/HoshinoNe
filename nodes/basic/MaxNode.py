@@ -54,7 +54,14 @@ class MaxNode(LazyNNOperationNode, TensorOperationMixin, PolynomialOperationMixi
         # auxiliary polynomial を設定
         self._auxiliaryPolynomials = auxPolynomials
         
-        return prmStreams
+        if prmStreams:
+            return prmStreams
+        elif self._combinedAuxiliaryTensor:
+            data = self._combinedAuxiliaryTensor
+            self._combinedAuxiliaryTensor = None
+            return [[data]]
+        else:
+            return []
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
