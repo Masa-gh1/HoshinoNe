@@ -41,12 +41,27 @@ class Tray:
 
         # 右クリックメニュー
         self.contextMenu = tk.Menu(self.canvas, tearoff=0)
+        columnbreak = False
+        row=0
+        maxRow=0
         for nodeType, label in NodeFactory.getMenuItems():
             if '---' in nodeType:
                 self.contextMenu.add_separator()
+                row += 1
+            elif '***' in nodeType:
+                self.contextMenu.add_separator()
+                columnbreak = True
+                row = 0
             else:
-                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.editor.addNodeAtPosition(nt))
+                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt), columnbreak=columnbreak)
+                columnbreak = False
+                row += 2
+            maxRow = max(maxRow, row)
         
+        if row < maxRow:
+            self.contextMenu.add_separator()
+        for _ in range(row, maxRow,2):
+            self.contextMenu.add_command(label="")
         self.contextMenu.add_separator()
         self.contextMenu.add_command(label="編集", command=self.editTray)
         self.contextMenu.add_command(label="最背面", command=self.lower)
