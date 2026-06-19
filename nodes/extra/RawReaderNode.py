@@ -453,8 +453,8 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         self.demosaicVar = tk.StringVar()
         algoOptions = ["bayer - ベイヤー配列の生データを1プレーンで取得(以下の後処理設定も無効)",
                        "bayer crop - ベイヤー配列の生データを1プレーンで取得(クロップのみ実施)",
-                       "unpack - ベイヤー変換せずに2x2を4プレーンにする(Greenが2枚)",
-                       "raw - ベイヤー変換せずに2x2を1ピクセルにする(Greenを平均)",
+                       "unpack - ベイヤー変換せずに R,G1,B,G2 を4プレーンにする(Greenが2枚)",
+                       "raw - ベイヤー変換せずに R,G,B を3プレーンにする(Greenを平均)",
                       ]
         for name,text in RAW_DEMOSAIC_ALGORITHMS.items():
             algoOptions.append(f"{name} - {text}")
