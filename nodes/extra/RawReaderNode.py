@@ -443,6 +443,7 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         if not parent:
             return tk.Frame()  # テスト用ダミー
         
+        style = ttk.Style()
         customFrame = tk.Frame(parent)
         
         # ベイヤー変換
@@ -466,7 +467,9 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
                 break
         self.demosaicCombo = ttk.Combobox(demosaicFrame, textvariable=self.demosaicVar, values=algoOptions, state="readonly")
         self.demosaicCombo.pack(fill=tk.X, pady=2)
-        
+        style.configure("Demosaic.TCombobox", postoffset=(0, 0, 200, 0))
+        self.demosaicCombo.configure(style="Demosaic.TCombobox")
+
         # 出力色空間
         colorspaceFrame = tk.Frame(customFrame)
         colorspaceFrame.pack(fill=tk.X, pady=5)
@@ -485,6 +488,8 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
                 break
         self.colorspaceCombo = ttk.Combobox(colorspaceFrame, textvariable=self.colorspaceVar, values=csOptions, state="readonly")
         self.colorspaceCombo.pack(fill=tk.X, pady=2)
+        style.configure("Colorspace.TCombobox", postoffset=(0, 0, 50, 0))
+        self.colorspaceCombo.configure(style="Colorspace.TCombobox")
         
         # ホワイトバランス
         wbFrame = tk.Frame(customFrame)
@@ -507,6 +512,8 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
                 break
         self.wbCombo = ttk.Combobox(wbFrame, textvariable=self.wbVar, values=wbOptions, state="readonly")
         self.wbCombo.pack(fill=tk.X, pady=2)
+        style.configure("Wb.TCombobox", postoffset=(0, 0, 50, 0))
+        self.wbCombo.configure(style="Wb.TCombobox")
 
         # ガンマ
         gammaFrame = tk.Frame(customFrame)
