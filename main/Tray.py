@@ -12,10 +12,10 @@ class Tray:
         self.height = height
         self.title = title
 
-        self.isDragging = False
+        self.isMoveing  = False
         self.isResizing = False
-        self.dragStartX = 0
-        self.dragStartY = 0
+        self.startX = 0
+        self.startY = 0
         self.dragNodes = []  # ドラッグ時に一緒に移動するノードリスト
         self.dragTrays = []  # ドラッグ時に一緒に移動するトレイリスト
 
@@ -53,159 +53,170 @@ class Tray:
         self.contextMenu.add_command(label="削除", command=self.deleteTray)
 
     def onPress(self, event):
-        self.dragStartX = event.x
-        self.dragStartY = event.y
-        canvasX = self.canvas.canvasx(event.x)
-        canvasY = self.canvas.canvasy(event.y)
-
-        # 境界近くかチェック（リサイズ判定）
-        margin = 10
-        left = self.x - self.width//2
-        right = self.x + self.width//2
-        top = self.y - self.height//2
-        bottom = self.y + self.height//2
-
-        # リサイズハンドルの判定
-        self.resizeHandle = None
-        if abs(canvasX - right) < margin and abs(canvasY - bottom) < margin:
-            self.resizeHandle = 'se'  # 右下
-        elif abs(canvasX - left) < margin and abs(canvasY - bottom) < margin:
-            self.resizeHandle = 'sw'  # 左下
-        elif abs(canvasX - right) < margin and abs(canvasY - top) < margin:
-            self.resizeHandle = 'ne'  # 右上
-        elif abs(canvasX - left) < margin and abs(canvasY - top) < margin:
-            self.resizeHandle = 'nw'  # 左上
-        elif abs(canvasX - right) < margin:
-            self.resizeHandle = 'e'   # 右
-        elif abs(canvasX - left) < margin:
-            self.resizeHandle = 'w'   # 左
-        elif abs(canvasY - bottom) < margin:
-            self.resizeHandle = 's'   # 下
-        elif abs(canvasY - top) < margin:
-            self.resizeHandle = 'n'   # 上
-
-        if self.resizeHandle:
-            self.isResizing = True
-            # リサイズ開始時の座標を保存
-            self.resizeStartX = self.x
-            self.resizeStartY = self.y
-            self.resizeStartWidth = self.width
-            self.resizeStartHeight = self.height
-        else:
-            self.isDragging = True
-            self.dragNodes = self.getVisuallyContainedNodes()  # 視覚的に上にあるノードのみを固定
-            self.dragTrays = self.getVisuallyContainedTrays()  # 視覚的に上にあるトレイを固定
-            # ドラッグ開始時にハイライトを消す
-            self.editor.clearSelectedHighlight()
-            self.editor.clearReprocessingHighlights()
-            # ドラッグ開始時にトレイと含まれるアイテムを前面に
-            groupItems = [self.rect, self.label]
-            for node in self.dragNodes:
-                groupItems.extend([node.view.rect, node.view.label])
-            for tray in self.dragTrays:
-                groupItems.extend([tray.rect, tray.label])
-            self.editor._placeItemBeforeConnections(*groupItems)
-            # ドラッグ開始時に外観を更新
-            self.editor.updateAllTrayAppearance()
+        self.startX = event.x
+        self.startY = event.y
+        self.isDragging = False
 
     def onDrag(self, event):
-        dx = event.x - self.dragStartX
-        dy = event.y - self.dragStartY
+        dx = event.x - self.startX
+        dy = event.y - self.startY
+        
+        if not self.isDragging:
+            # ドラッグ開始の判定
+            dx = abs(event.x - self.startX)
+            dy = abs(event.y - self.startY)
+            if dx > 5 or dy > 5:
+                self.isDragging = True
+                
+                # 開始位置
+                canvasX = self.canvas.canvasx(self.startX)
+                canvasY = self.canvas.canvasy(self.startY)
 
+                # 境界近くかチェック（リサイズ判定）
+                margin = 10
+                left = self.x - self.width//2
+                right = self.x + self.width//2
+                top = self.y - self.height//2
+                bottom = self.y + self.height//2
+
+                # リサイズハンドルの判定
+                self.resizeHandle = None
+                if abs(canvasX - right) < margin and abs(canvasY - bottom) < margin:
+                    self.resizeHandle = 'se'  # 右下
+                elif abs(canvasX - left) < margin and abs(canvasY - bottom) < margin:
+                    self.resizeHandle = 'sw'  # 左下
+                elif abs(canvasX - right) < margin and abs(canvasY - top) < margin:
+                    self.resizeHandle = 'ne'  # 右上
+                elif abs(canvasX - left) < margin and abs(canvasY - top) < margin:
+                    self.resizeHandle = 'nw'  # 左上
+                elif abs(canvasX - right) < margin:
+                    self.resizeHandle = 'e'   # 右
+                elif abs(canvasX - left) < margin:
+                    self.resizeHandle = 'w'   # 左
+                elif abs(canvasY - bottom) < margin:
+                    self.resizeHandle = 's'   # 下
+                elif abs(canvasY - top) < margin:
+                    self.resizeHandle = 'n'   # 上
+
+                if self.resizeHandle:
+                    self.isResizing = True
+                    # リサイズ開始時の座標を保存
+                    self.resizeStartX = self.x
+                    self.resizeStartY = self.y
+                    self.resizeStartWidth = self.width
+                    self.resizeStartHeight = self.height
+                else:
+                    self.isMoveing = True
+                    self.dragNodes = self.getVisuallyContainedNodes()  # 視覚的に上にあるノードのみを固定
+                    self.dragTrays = self.getVisuallyContainedTrays()  # 視覚的に上にあるトレイを固定
+                    # ドラッグ開始時にハイライトを消す
+                    self.editor.clearSelectedHighlight()
+                    self.editor.clearReprocessingHighlights()
+                    # ドラッグ開始時にトレイと含まれるアイテムを前面に
+                    groupItems = [self.rect, self.label]
+                    for node in self.dragNodes:
+                        groupItems.extend([node.view.rect, node.view.label])
+                    for tray in self.dragTrays:
+                        groupItems.extend([tray.rect, tray.label])
+                    self.editor._placeItemBeforeConnections(*groupItems)
+                    # ドラッグ開始時に外観を更新
+                    self.editor.updateAllTrayAppearance()
+        
         if self.isDragging:
-            # トレイを移動
-            self.x += dx
-            self.y += dy
-            self.canvas.move(self.rect, dx, dy)
-            self.canvas.move(self.label, dx, dy)
+            if self.isMoveing:
+                # トレイを移動
+                self.x += dx
+                self.y += dy
+                self.canvas.move(self.rect, dx, dy)
+                self.canvas.move(self.label, dx, dy)
 
-            # ドラッグ開始時に固定したノードを一緒に移動
-            for node in self.dragNodes:
-                node.view.x += dx
-                node.view.y += dy
-                self.canvas.move(node.view.rect, dx, dy)
-                self.canvas.move(node.view.label, dx, dy)
+                # ドラッグ開始時に固定したノードを一緒に移動
+                for node in self.dragNodes:
+                    node.view.x += dx
+                    node.view.y += dy
+                    self.canvas.move(node.view.rect, dx, dy)
+                    self.canvas.move(node.view.label, dx, dy)
 
-            # ドラッグ開始時に固定したトレイを一緒に移動
-            for tray in self.dragTrays:
-                tray.x += dx
-                tray.y += dy
-                self.canvas.move(tray.rect, dx, dy)
-                self.canvas.move(tray.label, dx, dy)
+                # ドラッグ開始時に固定したトレイを一緒に移動
+                for tray in self.dragTrays:
+                    tray.x += dx
+                    tray.y += dy
+                    self.canvas.move(tray.rect, dx, dy)
+                    self.canvas.move(tray.label, dx, dy)
 
-            # ドラッグ中はグループ全体を順序を維持して前面に保持
-            groupItems = [self.rect, self.label]
-            for node in self.dragNodes:
-                groupItems.extend([node.view.rect, node.view.label])
-            for tray in self.dragTrays:
-                groupItems.extend([tray.rect, tray.label])
-            self.editor._placeItemBeforeConnections(*groupItems)
-            # ドラッグ中に外観を更新
-            self.editor.updateAllTrayAppearance()
+                # ドラッグ中はグループ全体を順序を維持して前面に保持
+                groupItems = [self.rect, self.label]
+                for node in self.dragNodes:
+                    groupItems.extend([node.view.rect, node.view.label])
+                for tray in self.dragTrays:
+                    groupItems.extend([tray.rect, tray.label])
+                self.editor._placeItemBeforeConnections(*groupItems)
+                # ドラッグ中に外観を更新
+                self.editor.updateAllTrayAppearance()
 
-            # 接続線を更新
-            self.editor.updateConnections()
+                # 接続線を更新
+                self.editor.updateConnections()
+            elif self.isResizing:
+                canvasX = self.canvas.canvasx(event.x)
+                canvasY = self.canvas.canvasy(event.y)
 
+                # ハンドルに応じてリサイズ処理
+                # 固定点を計算
+                fixedLeft = self.resizeStartX - self.resizeStartWidth//2
+                fixedRight = self.resizeStartX + self.resizeStartWidth//2
+                fixedTop = self.resizeStartY - self.resizeStartHeight//2
+                fixedBottom = self.resizeStartY + self.resizeStartHeight//2
+
+                # 新しい境界を計算
+                newLeft = fixedLeft
+                newRight = fixedRight
+                newTop = fixedTop
+                newBottom = fixedBottom
+
+                if 'e' in self.resizeHandle:  # 右辺移動
+                    newRight = max(fixedLeft + 100, canvasX)
+                elif 'w' in self.resizeHandle:  # 左辺移動
+                    newLeft = min(fixedRight - 100, canvasX)
+
+                if 's' in self.resizeHandle:  # 下辺移動
+                    newBottom = max(fixedTop + 80, canvasY)
+                elif 'n' in self.resizeHandle:  # 上辺移動
+                    newTop = min(fixedBottom - 80, canvasY)
+
+                # 新しい中心とサイズを計算
+                newWidth = newRight - newLeft
+                newHeight = newBottom - newTop
+                newX = (newLeft + newRight) // 2
+                newY = (newTop + newBottom) // 2
+
+                self.x = int(newX)
+                self.y = int(newY)
+                self.width = int(newWidth)
+                self.height = int(newHeight)
+
+                # 矩形を再描画
+                self.canvas.coords(self.rect,
+                    self.x - self.width//2, self.y - self.height//2,
+                    self.x + self.width//2, self.y + self.height//2)
+                self.canvas.coords(self.label,
+                    self.x - self.width//2 + 10, self.y - self.height//2 + 10)
+
+            self.startX = event.x
+            self.startY = event.y
+            
             # canvasの自動拡大/縮小
             self.editor.adjustCanvasSize()
-        elif self.isResizing:
-            canvasX = self.canvas.canvasx(event.x)
-            canvasY = self.canvas.canvasy(event.y)
-
-            # ハンドルに応じてリサイズ処理
-            # 固定点を計算
-            fixedLeft = self.resizeStartX - self.resizeStartWidth//2
-            fixedRight = self.resizeStartX + self.resizeStartWidth//2
-            fixedTop = self.resizeStartY - self.resizeStartHeight//2
-            fixedBottom = self.resizeStartY + self.resizeStartHeight//2
-
-            # 新しい境界を計算
-            newLeft = fixedLeft
-            newRight = fixedRight
-            newTop = fixedTop
-            newBottom = fixedBottom
-
-            if 'e' in self.resizeHandle:  # 右辺移動
-                newRight = max(fixedLeft + 100, canvasX)
-            elif 'w' in self.resizeHandle:  # 左辺移動
-                newLeft = min(fixedRight - 100, canvasX)
-
-            if 's' in self.resizeHandle:  # 下辺移動
-                newBottom = max(fixedTop + 80, canvasY)
-            elif 'n' in self.resizeHandle:  # 上辺移動
-                newTop = min(fixedBottom - 80, canvasY)
-
-            # 新しい中心とサイズを計算
-            newWidth = newRight - newLeft
-            newHeight = newBottom - newTop
-            newX = (newLeft + newRight) // 2
-            newY = (newTop + newBottom) // 2
-
-            self.x = int(newX)
-            self.y = int(newY)
-            self.width = int(newWidth)
-            self.height = int(newHeight)
-
-            # 矩形を再描画
-            self.canvas.coords(self.rect,
-                self.x - self.width//2, self.y - self.height//2,
-                self.x + self.width//2, self.y + self.height//2)
-            self.canvas.coords(self.label,
-                self.x - self.width//2 + 10, self.y - self.height//2 + 10)
-
-            # canvasの自動拡大/縮小
-            self.editor.adjustCanvasSize()
-
-        self.dragStartX = event.x
-        self.dragStartY = event.y
 
     def onRelease(self, event):
         self.isDragging = False
+        self.isMoveing  = False
         self.isResizing = False
         self.dragNodes = []  # ドラッグノードリストをクリア
         self.dragTrays = []  # ドラッグトレイリストをクリア
         # 全トレイの外観を更新
         self.editor.updateAllTrayAppearance()
+
+        self.editor.unselectNode()
 
     def onRightPress(self, event):
         self.editor.rightClickX = event.x

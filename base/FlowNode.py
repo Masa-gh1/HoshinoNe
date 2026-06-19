@@ -212,7 +212,7 @@ class FlowNodeView():
         self.shapePoints = self._getShapePoints()
 
         self.isDoubleClick = False
-        self.dragging = False
+        self.isDragging = False
         self.startX = 0
         self.startY = 0
 
@@ -224,10 +224,10 @@ class FlowNodeView():
         self.label = self.canvas.create_text(self.x, self.y, text=self.text, font=('Arial', 8))
 
         # イベントバインディング
-        self.canvasBind('<Button-1>'       , self.onClick      )
+        self.canvasBind('<Button-1>'       , self.onPress      )
         self.canvasBind('<B1-Motion>'      , self.onDrag       )
         self.canvasBind('<ButtonRelease-1>', self.onRelease    )
-        self.canvasBind('<Button-3>'       , self.onRightClick )
+        self.canvasBind('<Button-3>'       , self.onRightPress )
         self.canvasBind('<Double-Button-1>', self.onDoubleClick)
     
     def cleanUp(self):
@@ -367,28 +367,28 @@ class FlowNodeView():
         self.text = node.getText()
         self.editor.onNodeConfigChanged(node)
 
-    def onClick(self, event):
+    def onPress(self, event):
         self.startX = event.x
         self.startY = event.y
-        self.dragging = False
+        self.isDragging = False
     
     def onDrag(self, event):
         if self.isDoubleClick:
             return
         
-        if not self.dragging:
+        if not self.isDragging:
             # ドラッグ開始の判定
             dx = abs(event.x - self.startX)
             dy = abs(event.y - self.startY)
             if dx > 5 or dy > 5:
-                self.dragging = True
+                self.isDragging = True
                 # ドラッグ開始時にハイライトを消す
                 self.editor.clearSelectedHighlight()
                 self.editor.clearReprocessingHighlights()
                 # ドラッグ開始時にノードをノード/トレイ群の最前に移動
                 self.editor._placeItemBeforeConnections(self.rect, self.label)
         
-        if self.dragging:
+        if self.isDragging:
             # ノードを移動
             dx = event.x - self.startX
             dy = event.y - self.startY
@@ -409,16 +409,16 @@ class FlowNodeView():
             self.isDoubleClick = False
             return
         
-        if not self.dragging:
+        if not self.isDragging:
             # クリックとして処理
             self.editor.onNodeClick(self)
-        self.dragging = False
+        self.isDragging = False
     
     def onDoubleClick(self, event):
         self.isDoubleClick = True
         self.editor.onNodeDoubleClick(self)
     
-    def onRightClick(self, event):
+    def onRightPress(self, event):
         self.editor.onNodeRightClick(self, event)
     
     def onEdit(self, node):
