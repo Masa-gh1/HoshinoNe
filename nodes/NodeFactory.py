@@ -21,6 +21,8 @@ class NodeFactory:
         ('conjugate'               , '共役(N:N)'),
         ('natural_exponential'     , '自然指数(N:N)'),
         ('natural_logarithm'       , '自然対数(N:N)'),
+        ('fill_0'                  , '0 埋め'),
+        ('fill_1'                  , '1 埋め'),
         ('------------------------', None),
         ('max'                     , '比較大(N:N)'),
         ('min'                     , '比較小(N:N)'),
