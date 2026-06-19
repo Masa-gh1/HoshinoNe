@@ -437,6 +437,9 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
     def createSortButton(self, parent):
         return tk.Button(parent, text="撮影時刻ソート", command=self.sortByTimestamp)
     
+    def getCustomSettingsWidth(self):
+        return 250
+    
     def createCustomSettings(self, parent):
         from config import RAW_DEMOSAIC_ALGORITHMS
         

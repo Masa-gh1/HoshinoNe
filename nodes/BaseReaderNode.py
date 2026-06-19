@@ -247,9 +247,9 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             sortButton.pack(side=tk.LEFT)
         
         # 右側：カスタム設定項目（設定がある場合のみ表示）
-        customFrame = self.createCustomSettings(None)
-        if customFrame:
-            rightFrame = tk.Frame(mainFrame, width=250)
+        customWidth = self.getCustomSettingsWidth()
+        if customWidth:
+            rightFrame = tk.Frame(mainFrame, width=customWidth)
             rightFrame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
             rightFrame.pack_propagate(False)
             
@@ -322,11 +322,18 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         
         self.updateFileList()
     
+    def getCustomSettingsWidth(self):
+        """カスタム設定の幅を取得（サブクラスでオーバーライド）
+        Returns:
+            幅、または None
+        """
+        return None
+    
     def createCustomSettings(self, parent):
         """カスタム設定項目を作成（サブクラスでオーバーライド）
         
         Returns:
-            作成したフレーム、またはNone
+            作成したフレーム、または None
         """
         return None
     
