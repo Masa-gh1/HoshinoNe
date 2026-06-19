@@ -97,7 +97,7 @@ class RawReaderNode(BaseReaderNode):
         try:
             with rawpy.imread(filePath) as raw:
                 height, width = raw.sizes.raw_height, raw.sizes.raw_width
-                # デモザイクアルゴリズムによってサイズが変わる
+                # ベイヤー変換によってサイズが変わる
                 if self.demosaicAlgorithm in ["unpack", "raw"]:
                     height //= 2
                     width //= 2
@@ -126,7 +126,7 @@ class RawReaderNode(BaseReaderNode):
         params = rawpy.Params()
         configRawParams(params)
         
-        # デモザイクアルゴリズム
+        # ベイヤー変換
         if   self.demosaicAlgorithm in "bayer":
             pass
         elif self.demosaicAlgorithm in "bayer crop":
@@ -445,11 +445,11 @@ class RawSettingsDialog(BaseReaderSettingsDialog):
         
         customFrame = tk.Frame(parent)
         
-        # デモザイクアルゴリズム
+        # ベイヤー変換
         demosaicFrame = tk.Frame(customFrame)
         demosaicFrame.pack(fill=tk.X, pady=5)
         
-        tk.Label(demosaicFrame, text="ベイヤー変換アルゴリズム:").pack(anchor="w")
+        tk.Label(demosaicFrame, text="ベイヤー変換:").pack(anchor="w")
         self.demosaicVar = tk.StringVar()
         algoOptions = ["bayer - ベイヤー配列の生データを1プレーンで取得(以下の後処理設定も無効)",
                        "bayer crop - ベイヤー配列の生データを1プレーンで取得(クロップのみ実施)",

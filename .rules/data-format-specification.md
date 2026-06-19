@@ -27,7 +27,7 @@
 - `exif`: EXIF情報辞書
 
 #### RAW 画像追加ヘッダー
-- `demosaic`: デモザイクアルゴリズム
+- `demosaic`: ベイヤー変換
 - `colorspace`: 出力色空間
 - `white_balance`: ホワイトバランス設定
 - `raw`: RAW固有情報辞書
