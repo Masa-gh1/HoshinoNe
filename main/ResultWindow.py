@@ -379,13 +379,13 @@ class ResultWindow(tk.Toplevel):
                 cols.append(sh.dispL(cells))
             
             # ヘッダー行
-            if columns:
-                length = max([len(label) for label in lines])
-                content += "\t"*(length//8)
-                for x, column in enumerate(columns):
-                    content += "\t"
-                    content += column.ljust(max([len(t) for t in cols[x]]))
-                content += "\n"
+            length = max([len(label) for label in lines]) if lines else 7
+            content += "\t"*(length//8)
+            for x in range(displayCols):
+                content += "\t"
+                column = columns[x] if x < len(columns) else f"col_{x}"
+                content += column.ljust(max([len(t) for t in cols[x]]))
+            content += "\n"
             
             # データ行
             for y in range(displayRows):
