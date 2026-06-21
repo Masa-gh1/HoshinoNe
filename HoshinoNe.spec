@@ -1,6 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os
+from PIL import Image
+
+# icon.png から icon.ico を自動生成する
+icon_png = 'icon.png'
+icon_ico = 'icon.ico'
+if os.path.exists(icon_png):
+    try:
+        img = Image.open(icon_png)
+        # Windowsの各種表示に合わせた複数サイズの入った.icoファイルを生成
+        img.save(icon_ico, format='ICO', sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])
+    except Exception as e:
+        print(f"Failed to convert icon: {e}")
 
 def getNodesFilrs():
     nodedir = ['nodes/basic','nodes/preset','nodes/extra']
@@ -13,6 +25,9 @@ def getNodesFilrs():
                     src  = os.path.join(root, file)
                     dest = os.path.join(nodes, rel)
                     result.append((src, dest))
+    # 実行ファイル内に icon.ico を同梱する
+    if os.path.exists(icon_ico):
+        result.append((icon_ico, '.'))
     return result
 
 def getImportNodes():
@@ -61,4 +76,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=icon_ico if os.path.exists(icon_ico) else None, # 生成された .ico を指定
 )

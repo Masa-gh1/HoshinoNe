@@ -15,10 +15,12 @@ if getattr(sys, 'frozen', False):
     # PyInstaller によってフリーズされた
     # 実行ファイルのあるディレクトリを sys.path の
     # 最優先位置に追加しモジュールの実行時ロードを可能にする
-    applicationPath = os.path.dirname(sys.executable)
-    sys.path.insert(0, applicationPath)
+    executablePath = os.path.dirname(sys.executable)
+    sys.path.insert(0, executablePath)
+    applicationPath = sys._MEIPASS
 else:
-    applicationPath = os.path.dirname(__file__)
+    executablePath = os.path.dirname(__file__)
+    applicationPath = executablePath
 
 import tkinter as tk
 from main.FlowEditor import FlowEditor
@@ -30,10 +32,19 @@ if __name__ == '__main__':
     else:
         filename = None
 
+    # Windows環境でタスクバーのアイコンを独自のものに反映させるための処理
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("hoshinone.floweditor.app")
+        except Exception:
+            pass
+
     root = tk.Tk()
+    root.iconbitmap(os.path.join(applicationPath, "icon.ico"))
     app = FlowEditor(root,"ほしのね")
-    app.applicationHome = applicationPath
-    Debug.applicationHome = applicationPath
+    app.applicationHome = executablePath
+    Debug.applicationHome = executablePath
 
     if filename:
         app.loadFlow(filePath=filename)
