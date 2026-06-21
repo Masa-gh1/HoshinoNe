@@ -14,7 +14,7 @@ if os.path.exists(icon_png):
     except Exception as e:
         print(f"Failed to convert icon: {e}")
 
-def getNodesFilrs():
+def getDataFilrs():
     nodedir = ['nodes/basic','nodes/preset','nodes/extra']
     result = []
     for nodes in nodedir:
@@ -46,7 +46,7 @@ a = Analysis(
     ['HoshinoNe.py'],
     pathex=[],
     binaries=[],
-    datas=getNodesFilrs(),
+    datas=getDataFilrs(),
     hiddenimports=getImportNodes(),
     hookspath=[],
     hooksconfig={},
