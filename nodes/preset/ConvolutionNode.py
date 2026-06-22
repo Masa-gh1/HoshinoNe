@@ -60,9 +60,10 @@ class ConvolutionNode(NNPlaneOperationNode):
     
     def processPlane(self, flowData, planeIndex):
         """相関処理"""
-        from utils import numpy_helpers as nh
+        import numpy as np
         from config import BLOCK_SIZE
         from base import DataBlock
+        from utils import numpy_helpers as nh
 
         width, height = flowData.getDimensions()
         
@@ -81,6 +82,9 @@ class ConvolutionNode(NNPlaneOperationNode):
             auxiliaryTable = self._auxiliaryTable[0]
         else:
             auxiliaryTable = self._auxiliaryTable[planeIndex]
+        
+        # NaN を補完
+        np.nan_to_num(planeData, nan=0, copy=False)
         
         #result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same') # 畳み込み
         result = convolve(planeData, auxiliaryTable) # 畳み込み
