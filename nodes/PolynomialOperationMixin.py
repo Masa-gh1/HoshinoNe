@@ -126,7 +126,7 @@ class PolynomialOperationMixin:
         
         # numpy 配列演算で多項式計算
         result = nh.zeros(blockShape)
-        y_power = nh.ones(x_coords.shape)
+        y_power = nh.ones(y_coords.shape)
         for j in range(maxOrderY):
             x_power = nh.ones(x_coords.shape)
             for i in range(maxOrderX):

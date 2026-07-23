@@ -74,25 +74,56 @@ class LazyFlowData(FlowData):
     def operation(self, flowDatas, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
         from utils import measurement as mes
-        if isinstance(flowDatas, (list,tuple)):
-            blocks = [flowData.getBlock(planeIndex, x, y) for flowData in flowDatas]
-            if not any(blocks):
-                return blocks
-            return mes.elapsedThreading(self.blockOperation, blocks, planeIndex, x, y, *args, **kwargs)
+        blocks, shape = self.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
+        if not blocks:
+            return blocks
+        elif isinstance(blocks, (list,tuple)) and not any(blocks):
+            return blocks
         else:
-            block = flowDatas.getBlock(planeIndex, x, y)
-            if not block:
-                return block
-            return mes.elapsedThreading(self.blockOperation, block, planeIndex, x, y, *args, **kwargs)
+            return self.blockOperation(blocks, planeIndex, x, y, *args, **kwargs)
+    
+    def calculateBroadcastedBlock(self, flowDatas, planeIndex, x, y, shape = None):
+        """指定された shape にブロードキャストしたブロックを計算する
+        flowDatas が複数の場合、先頭の shape で後続のブロックをブロードキャストする。
+        プレーンが1枚の場合、複数プレーンにブロードキャストする。
+        """
+        if isinstance(flowDatas, (list,tuple)):
+            blocks = []
+            for flowData in flowDatas:
+                block, shape = self.calculateBroadcastedBlock(flowData, planeIndex, x, y, shape)
+                blocks.append(block)
+            return(blocks, shape)
+        else:
+            if 1 == flowDatas.getPlaneCount():
+                # プレーンが1枚なので複数枚プレーンにブロードキャストする
+                planeIndex = 0
 
+            dataType = flowDatas.headers.get('type', 'table')
+            if   shape and 'tensor'     == dataType:
+                import numpy as np
+                from nodes import TensorOperationMixin as mixin
+                block = mixin.calculateTensorBlock(flowDatas, planeIndex, x, y, shape, defaultValue=np.nan)
+            elif shape and 'polynomial' == dataType:
+                import numpy as np
+                from nodes import PolynomialOperationMixin as mixin
+                block = mixin.calculatePolynomialBlock(flowDatas, planeIndex, x, y, shape, defaultValue=np.nan)
+            elif dataType in ('tensor', 'polynomial'):
+                block = flowDatas.getBlock(planeIndex, x, y)
+            elif shape:
+                block = flowDatas.getBlock(planeIndex, x, y)
+            else:
+                block = flowDatas.getBlock(planeIndex, x, y)
+                shape = block.data.shape # shape が指定されていない場合、先頭のブロックの shape を使用する
+            return(block, shape)
+    
     def blockOperation(self, blocks, planeIndex, x, y, *args, **kwargs):
         """遅延評価を実行"""
         return blocks
-
+    
     def getLazyHeaderkeys(self):
         """遅延評価対象の header キーを取得"""
         return []
-
+    
     def headerOperation(self, lazyFlowData, key, *args, **kwargs):
         """headers 遅延評価"""
         return {}

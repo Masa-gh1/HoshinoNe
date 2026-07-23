@@ -22,7 +22,7 @@ from utils.ThreadPool import ParallelExecutor
 # 定数
 _MAJOR_TYPE_FUNC  = 'func'             # 関数系
 _MAJOR_TYPE_U_OP  = 'unary operation'  # 単項演算系
-_MAJOR_TYPE_B_OP  = 'binary operation' # 演算系
+_MAJOR_TYPE_B_OP  = 'binary operation' # 二項演算系
 _MAJOR_TYPE_AGG   = 'aggregate'        # 集計系
 _MAJOR_TYPE_IO    = 'in/out'           # 入出系
 _MAJOR_TYPE_CONST = 'constant'         # 定数系

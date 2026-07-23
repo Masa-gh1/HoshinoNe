@@ -44,9 +44,9 @@ class TensorOperationMixin:
                 resultData = nh.zeros((height, width))
             elif np.multiply == operation:
                 resultData = nh.ones((height, width))
-            elif np.minimum == operation:
+            elif np.minimum  == operation:
                 resultData = nh.full((height, width), np.inf)
-            elif np.maximum == operation:
+            elif np.maximum  == operation:
                 resultData = nh.full((height, width), -np.inf)
             else:
                 resultData = nh.zeros((height, width))

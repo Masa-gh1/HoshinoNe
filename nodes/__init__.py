@@ -9,6 +9,7 @@ from .NNPlaneOperationNode import NNPlaneOperationNode
 from .N1BlockOperationNode import N1BlockOperationNode
 from .NNBlockOperationNode import NNBlockOperationNode
 from .LazyNNOperationNode import LazyNNOperationNode
+from .LazyNNBinaryOperationNode import LazyNNBinaryOperationNode
 from .ConfigurableNode import ConfigurableNode
 from .BaseReaderNode import BaseReaderNode
 from .BaseReaderNode import BaseReaderSettingsDialog
@@ -24,6 +25,7 @@ __all__ = [
     'N1BlockOperationNode',
     'NNBlockOperationNode',
     'LazyNNOperationNode',
+    'LazyNNBinaryOperationNode',
     'ConfigurableNode',
     'BaseReaderNode',
     'BaseReaderSettingsDialog',
