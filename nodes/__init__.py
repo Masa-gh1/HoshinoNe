@@ -16,8 +16,6 @@ from .BaseReaderNode import BaseReaderSettingsDialog
 from .LazyReaderNode import LazyReaderNode
 from .BaseWriterNode import BaseWriterNode
 from .BaseWriterNode import BaseWriterSettingsDialog
-from .TensorOperationMixin import TensorOperationMixin
-from .PolynomialOperationMixin import PolynomialOperationMixin
 from .NodeFactory import NodeFactory
 
 __all__ = [
@@ -32,7 +30,5 @@ __all__ = [
     'LazyReaderNode',
     'BaseWriterNode',
     'BaseWriterSettingsDialog',
-    'TensorOperationMixin',
-    'PolynomialOperationMixin',
     'NodeFactory',
 ]

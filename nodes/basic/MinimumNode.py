@@ -8,7 +8,9 @@ All rights reserved.
 '''
 
 from base.FlowNode_CONST import *
-from nodes import N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin
+from base import PolynomialOperationMixin
+from base import TensorOperationMixin
+from nodes import N1BlockOperationNode
 
 class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMixin):
     # ノードタイプ

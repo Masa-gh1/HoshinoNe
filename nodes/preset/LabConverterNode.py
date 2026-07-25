@@ -9,7 +9,9 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNOperationNode, PolynomialOperationMixin 
+from base import PolynomialOperationMixin
+from base import TensorOperationMixin
+from nodes import LazyNNOperationNode
 
 class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
