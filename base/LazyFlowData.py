@@ -47,17 +47,17 @@ class LazyFlowData(FlowData):
         elif block.isValid():
             return block
         else:
-            from utils.ThreadPool import PerResourceThreadPoolWrapper as wrapper
+            from utils.ThreadPool import ParallelExecutor
             # 有効なブロックが無いので遅延評価を実行
             lockKey = hash((planeIndex, x, y)) % len(self._blockLocks)
             if self._blockLocks[lockKey].locked():
-                wrapper.enterWait()
+                ParallelExecutor.enterWait() # 長時間の待ちが考えられることを通知する
                 isWait = True
             else:
                 isWait = False
             with self._blockLocks[lockKey]: # 既に計算中の場合、終了を待つ
                 if isWait:
-                    wrapper.exitWait()
+                    ParallelExecutor.exitWait() # 長時間の待ちが終わった事を通知する
                 if block.isValid():
                     return block
                 elif type(self).operation == LazyFlowData.operation:
