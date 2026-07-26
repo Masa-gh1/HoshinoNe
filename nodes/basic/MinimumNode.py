@@ -136,13 +136,13 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         if self._combinedTensor:
             block = self.calculateTensorBlock(self._combinedTensor, planeIndex, x, y, result.shape, defaultValue=np.inf)
             if not block is None:
-                np.minimum( result, block, out=result)
+                np.minimum( result, block.data, out=result)
         
         # polynomial を最小(NaN対応)
         for polynomial in self._polynomials:
             block = self.calculatePolynomialBlock(polynomial, planeIndex, x, y, result.shape, defaultValue=np.inf)
             if not block is None:
-                np.minimum( result, block, out=result)
+                np.minimum( result, block.data, out=result)
         
         return DataBlock(result, planeIndex, x, y)
     

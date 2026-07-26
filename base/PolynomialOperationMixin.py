@@ -17,7 +17,7 @@ class PolynomialOperationMixin:
         
         Args:
             polynomialDatas: polynomial データのリスト
-            operation: 係数演算関数 (加算・減算用)
+            operation: 係数演算関数
         """
         import numpy as np
         from base import FlowData
@@ -94,25 +94,26 @@ class PolynomialOperationMixin:
         return min(v1, v2, v3, v4, v5), max(v1, v2, v3, v4, v5)
     
     @classmethod
-    def calculatePolynomialBlock(cls, polynomialData, planeIndex, x, y, blockShape, defaultValue=0.0):
+    def calculatePolynomialBlock(cls, polynomialFlowData, planeIndex, x, y, blockShape, defaultValue=0.0):
         """Polynomial データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh
+        from base import DataBlock
         
-        width, height = polynomialData.getDimensions()
+        width, height = polynomialFlowData.getDimensions()
 
-        if 1 == polynomialData.getPlaneCount():
+        if 1 == polynomialFlowData.getPlaneCount():
             planeIndex = 0
         
         # 指定プレーンの係数行列を取得
-        coeffBlock = polynomialData.getBlock(planeIndex, 0, 0)
+        coeffBlock = polynomialFlowData.getBlock(planeIndex, 0, 0)
         if not coeffBlock:
             if 0.0 == defaultValue:
-                return nh.zeros(blockShape)
+                return DataBlock(nh.zeros(blockShape), planeIndex, x, y)
             elif 1.0 == defaultValue:
-                return nh.ones(blockShape)
+                return DataBlock(nh.ones(blockShape), planeIndex, x, y)
             else:
-                return nh.full(blockShape, defaultValue)
+                return DataBlock(nh.full(blockShape, defaultValue), planeIndex, x, y)
         
         coeffMatrix = coeffBlock.data
         maxOrderY, maxOrderX = coeffMatrix.shape
@@ -136,7 +137,7 @@ class PolynomialOperationMixin:
                 x_power *= x_coords
             y_power *= y_coords
         
-        return result
+        return DataBlock(result, planeIndex, x, y)
     
     @classmethod
     def _addPolynomialPlane(cls, planeIndex, polynomialDatas):

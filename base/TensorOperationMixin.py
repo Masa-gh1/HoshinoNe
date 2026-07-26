@@ -93,6 +93,7 @@ class TensorOperationMixin:
         """Tensor データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh
+        from base import DataBlock
         
         width, height = tensorData.getDimensions()
         
@@ -110,10 +111,10 @@ class TensorOperationMixin:
             block = tensorData.getBlock(planeIndex, x, y)
         
         if block:
-            return np.nan_to_num(block.data, nan=defaultValue)
+            return DataBlock(np.nan_to_num(block.data, nan=defaultValue), planeIndex, x, y)
         elif 0.0 == defaultValue:
-            return nh.zeros(blockShape)
+            return DataBlock(nh.zeros(blockShape), planeIndex, x, y)
         elif 1.0 == defaultValue:
-            return nh.ones(blockShape)
+            return DataBlock(nh.ones(blockShape), planeIndex, x, y)
         else:
-            return nh.full(blockShape, defaultValue)
+            return DataBlock(nh.full(blockShape, defaultValue), planeIndex, x, y)

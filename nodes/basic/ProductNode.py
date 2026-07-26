@@ -133,13 +133,13 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         if self._combinedTensor:
             block = self.calculateTensorBlock(self._combinedTensor, planeIndex, x, y, result.shape, defaultValue=1.0)
             if not block is None:
-                result *= block
+                result *= block.data
         
         # polynomial を乗算(NaN対応)
         if self._combinedPolynomial:
             block = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=1.0)
             if not block is None:
-                result *= block
+                result *= block.data
         
         return DataBlock(result, planeIndex, x, y)
     

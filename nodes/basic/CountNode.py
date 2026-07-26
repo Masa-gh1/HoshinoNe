@@ -71,12 +71,12 @@ class CountNode(N1BlockOperationNode):
                 result += 1
             elif dataType == 'tensor':
                 block = self.calculateTensorBlock(inputData, planeIndex, x, y, result.shape, defaultValue=np.nan)
-                if not block is None:
+                if not block.data is None:
                     # 計算範囲の作業用メモリを取得
                     invalidA = _invalidA[:result.shape[0], :result.shape[1]]
                     
                     # NaNでない有効なピクセルのみカウント
-                    np.isnan(block, out=invalidA)
+                    np.isnan(block.data, out=invalidA)
                     np.logical_not(invalidA, out=invalidA)
                     result += invalidA
             else:
