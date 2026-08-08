@@ -37,7 +37,9 @@ class LazyNNBinaryOperationNode(FlowNode):
             return
         
         # 前処理（サブクラスでオーバーライド可能）
+        from base import BroadcastMixin
         processedStreams = self.preprocessStreams(inputStreams)
+        processedStreams = BroadcastMixin.calculateBroadcastedStream(processedStreams)
         
         resultFlowDatas = []
         
@@ -51,7 +53,8 @@ class LazyNNBinaryOperationNode(FlowNode):
     
     def preprocessStreams(self, inputStreams):
         """入力ストリームの前処理（サブクラスでオーバーライド可能）
-        入力データの前処理：primary/auxiliaryで分類し、単一枚を複数枚へブロードキャスト
+        演算結果のデータタイプを primary 優先とするため、
+        primary/auxiliaryで分類し、primaryを前に集める。
         
         Args:
             inputStreams: 入力ストリームのリスト
@@ -59,43 +62,22 @@ class LazyNNBinaryOperationNode(FlowNode):
         Returns:
             処理対象ストリームのリスト
         """
-        num                  = 0
-        prmDataStreams       = []
-        prmTensorStreams     = []
-        prmPolynomialStreams = []
-        auxDataStreams       = []
-        auxTensorStreams     = []
-        auxPolynomialStreams = []
+        def getPriority(stream):
+            category = stream[0].headers.get("category", "primary")
+            dataType = stream[0].headers.get("type", "table")
+            
+            if   "primary"   == category: priority =  0
+            elif "auxiliary" == category: priority = 10
+            else                        : priority = 20
+            
+            if   "tensor"     == dataType: priority += 1
+            elif "polynomial" == dataType: priority += 2
+            else                         : priority += 0
+            
+            return priority
         
-        for stream in inputStreams:
-            if stream:
-                num = max(num, len(stream))
-                dataType = stream[0].headers.get('type', 'table')
-                if   'tensor' == dataType:
-                    prm = prmTensorStreams
-                    aux = auxTensorStreams
-                elif 'polynomial' == dataType:
-                    prm = prmPolynomialStreams
-                    aux = auxPolynomialStreams
-                else:
-                    prm = prmDataStreams
-                    aux = auxDataStreams
-                
-                category = stream[0].headers.get('category', 'primary')
-                if category == 'auxiliary':
-                    aux.append(stream)
-                else:
-                    prm.append(stream)
-        
-        streams = []
-        for stream in ( prmDataStreams + prmTensorStreams + prmPolynomialStreams
-                      + auxDataStreams + auxTensorStreams + auxPolynomialStreams
-                      ):
-            if stream:
-                if 1==len(stream):
-                    streams.append([stream[0]]*num)
-                else:
-                    streams.append(stream)
+        streams = filter(lambda s: s, inputStreams)
+        streams = sorted(streams, key=getPriority)
         return streams
     
     @abstractmethod
