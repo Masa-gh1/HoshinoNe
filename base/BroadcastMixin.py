@@ -30,7 +30,7 @@ class BroadcastMixin:
 
         result = []
         for stream in streams:
-            if 1 == len(stream):
+            if 1 < num and 1 == len(stream):
                 result.append(stream*num) # 1枚だけなので、最長の枚数分ブロードキャストする
             else:
                 result.append(stream)

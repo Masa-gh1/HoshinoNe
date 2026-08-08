@@ -36,34 +36,35 @@ class TransformNode(LazyNNOperationNode):
             messagebox.showerror(f"{self.name} エラー", "ライブラリ OpenCV がインストールされていません。\npip install opencv-python でインストールしてください。")
             return
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理：primary/auxiliaryで分類"""
-        primaryDatas = []
-        auxiliaryDatas = []
+    def preprocessStreams(self, inputStreams):
+        """入力ストリームの前処理：primary/auxiliaryで分類"""
+        primaryStreams = []
+        auxiliarys     = []
         
-        for data in inputDatas:
-            category = data.headers.get('category', 'primary')
-            if category == 'auxiliary':
-                auxiliaryDatas.append(data)
-            else:
-                primaryDatas.append(data)
+        for stream in inputStreams:
+            if stream:
+                category = stream[0].headers.get('category', 'primary')
+                if category == 'auxiliary':
+                    auxiliarys.extend(stream)
+                else:
+                    primaryStreams.append(stream)
         
-        # table 形式データを読み込み
-        self._tableData = self._loadTableData(auxiliaryDatas)
-
+        # auxiliary データから変換パラメータを取得
+        self._params = self._loadParams(auxiliarys)
+        
         # 画像拡張を計算
-        self._extendParams = self._calculateExpand(primaryDatas, self._tableData)
+        self._extendParams = self._calculateExpand(primaryStreams, self._params)
         
-        return primaryDatas
+        return primaryStreams
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
-        if not self._tableData or not self._extendParams:
+        if not self._params or not self._extendParams:
             return inputData  # パラメータ未設定時はそのまま
         
         image_id = self._generateImageId(inputData)
-        transformParams = self._getTransformParams(image_id, self._tableData)
+        transformParams = self._getTransformParams(image_id, self._params)
         
         if not transformParams:
             expand_left, expand_top, new_width, new_height = self._extendParams
@@ -79,7 +80,7 @@ class TransformNode(LazyNNOperationNode):
             dy -= top
             return TransformLazyFlowData(inputData, dx, dy, rotation, scale, width, height)
         
-    def _loadTableData(self, auxiliaryDatas):
+    def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
         import numpy as np
 
@@ -87,7 +88,7 @@ class TransformNode(LazyNNOperationNode):
         lines   = []
         columns = None
         tabledatas = []
-        for tableFlowData in auxiliaryDatas:
+        for tableFlowData in auxiliarys:
             if 'table' == tableFlowData.headers.get('type'):
                 lines.extend(tableFlowData.headers.get('lines', []))
                 columnCur = tableFlowData.headers.get('columns', [])
@@ -113,25 +114,26 @@ class TransformNode(LazyNNOperationNode):
             'data': tabledata
         }
     
-    def _calculateExpand(self, inputDatas, tableData):
+    def _calculateExpand(self, inputStreams, params):
         """拡張領域計算"""
         import numpy as np
 
-        if not inputDatas or not tableData:
+        if not inputStreams or not params:
             return None
         
-        width, height = inputDatas[0].getDimensions()
+        width, height = inputStreams[0][0].getDimensions()
         all_corners = []
         
-        # tableから各画像の変換パラメータを取得
-        for inputData in inputDatas:
-            image_id = self._generateImageId(inputData)
-            transformParams = self._getTransformParams(image_id, tableData)
-            
-            if transformParams:
-                dx, dy, rotation, scale, left, top, _, _ = transformParams
-                corners  = self._calculateTransformedCorners(width, height, dx, dy, rotation, scale)
-                all_corners.extend(corners)
+        # paramsから各画像の変換パラメータを取得
+        for inputStream in inputStreams:
+            for inputData in inputStream:
+                image_id = self._generateImageId(inputData)
+                transformParams = self._getTransformParams(image_id, params)
+                
+                if transformParams:
+                    dx, dy, rotation, scale, left, top, _, _ = transformParams
+                    corners  = self._calculateTransformedCorners(width, height, dx, dy, rotation, scale)
+                    all_corners.extend(corners)
         
         if not all_corners:
             return (0, 0, width, height)

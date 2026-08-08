@@ -27,31 +27,32 @@ class RepositionNode(LazyNNOperationNode):
         super().__init__(canvas, editor, x, y, **kwargs)
         self._tableData = None
 
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理：primary/auxiliaryで分類"""
-        primaryDatas = []
-        auxiliaryDatas = []
+    def preprocessStreams(self, inputStreams):
+        """入力ストリームの前処理：primary/auxiliaryで分類"""
+        primaryStreams = []
+        auxiliarys     = []
         
-        for data in inputDatas:
-            category = data.headers.get('category', 'primary')
-            if category == 'auxiliary':
-                auxiliaryDatas.append(data)
-            else:
-                primaryDatas.append(data)
+        for stream in inputStreams:
+            if stream:
+                category = stream[0].headers.get('category', 'primary')
+                if category == 'auxiliary':
+                    auxiliarys.extend(stream)
+                else:
+                    primaryStreams.append(stream)
         
-        # table 形式データを読み込み
-        self._tableData = self._loadTableData(auxiliaryDatas)
+        # auxiliary データから変換パラメータを取得
+        self._params = self._loadParams(auxiliarys)
         
-        return primaryDatas
+        return primaryStreams
 
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
-        if not self._tableData:
+        if not self._params:
             return inputData  # パラメータ未設定時はそのまま
         
         image_id = self._generateImageId(inputData)
-        params = self._getRepositionParams(image_id, self._tableData)
+        params = self._getRepositionParams(image_id, self._params)
 
         if not params:
             return inputData
@@ -59,7 +60,7 @@ class RepositionNode(LazyNNOperationNode):
             shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height  = params
             return RepositionLazyFlowData(inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
 
-    def _loadTableData(self, auxiliaryDatas):
+    def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
         import numpy as np
 
@@ -67,7 +68,7 @@ class RepositionNode(LazyNNOperationNode):
         lines   = []
         columns = None
         tabledatas = []
-        for tableFlowData in auxiliaryDatas:
+        for tableFlowData in auxiliarys:
             if 'table' == tableFlowData.headers.get('type'):
                 lines.extend(tableFlowData.headers.get('lines', []))
                 columnCur = tableFlowData.headers.get('columns', [])

@@ -7,6 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from itertools import zip_longest
+
 from abc import abstractmethod
 from base.FlowNode_CONST import *
 from base import FlowNode
@@ -26,38 +28,82 @@ class LazyNNOperationNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
         
-        if not inputDatas:
+        if not inputStreams or not any(inputStreams):
             self.flowDatas = []
             self.reportProgress(context, "完了")
             return
         
         # 前処理（サブクラスでオーバーライド可能）
-        processedInputs = self.preprocessInputs(inputDatas)
+        from base import BroadcastMixin
+        tempStreams = self.preprocessStreams(inputStreams)
+        tempStreams = BroadcastMixin.calculateBroadcastedStream(tempStreams)
+        processedStreams = []
+        for stream in tempStreams:
+            processedstream = self.preprocessInputs(stream)
+            processedStreams.append(processedstream)
         
         resultFlowDatas = []
         
-        for inputData in processedInputs:
+        for inputDatas in zip_longest(*processedStreams):
             # LazyFlowDataを作成
-            lazyFlowData = self.createLazyFlowData(inputData)
-            resultFlowDatas.append(lazyFlowData)
+            if not inputDatas:
+                pass
+            elif 1 < len(inputDatas):
+                lazyFlowData = self.createLazyFlowData(inputDatas)
+                resultFlowDatas.append(lazyFlowData)
+            else:
+                lazyFlowData = self.createLazyFlowData(inputDatas[0])
+                resultFlowDatas.append(lazyFlowData)
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessInputs(self, inputDatas):
+    def preprocessStreams(self, inputStreams):
+        """入力ストリームの前処理（サブクラスでオーバーライド可能）
+        演算結果のデータタイプを primary 優先とするため、
+        primary/auxiliaryで分類し、primaryを前に集める。
+        
+        Args:
+            inputStreams: 入力ストリームのリスト
+            
+        Returns:
+            処理対象ストリームのリスト
+        """
+        def getPriority(stream):
+            category = stream[0].headers.get("category", "primary")
+            dataType = stream[0].headers.get("type", "table")
+            n        = len(stream)
+            
+            if   "primary"   == category: priority =     0
+            elif "auxiliary" == category: priority = 10000
+            else                        : priority = 20000
+            
+            if   "tensor"     == dataType: priority += 1000
+            elif "polynomial" == dataType: priority += 2000
+            else                         : priority +=    0
+            
+            priority += n
+
+            return priority
+        
+        streams = filter(lambda s: s, inputStreams)
+        streams = sorted(streams, key=getPriority)
+        return streams
+    
+    def preprocessInputs(self, inputStream):
         """入力データの前処理（サブクラスでオーバーライド可能）
         
         Args:
-            inputDatas: 入力データのリスト
+            inputStream: 入力ストリーム
             
         Returns:
             処理対象データのリスト
         """
-        return inputDatas
+        return inputStream
     
     @abstractmethod
     def createLazyFlowData(self, inputData):

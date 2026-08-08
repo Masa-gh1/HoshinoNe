@@ -68,8 +68,8 @@ class LazyNNBinaryOperationNode(FlowNode):
             n        = len(stream)
             
             if   "primary"   == category: priority =     0
-            elif "auxiliary" == category: priority = 10000
-            else                        : priority = 20000
+            elif "auxiliary" == category: priority = 20000
+            else                        : priority = 10000
             
             if   "tensor"     == dataType: priority += 1000
             elif "polynomial" == dataType: priority += 2000
