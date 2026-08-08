@@ -26,37 +26,6 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
-        import numpy as np
-        
-        primaryDatas = []
-        auxiliaryPolynomials = []
-        auxiliaryTables = []
-        
-        for data in inputDatas:
-            category = data.headers.get('category', 'primary')
-            if category == 'auxiliary':
-                dataType = data.headers.get('type', 'table')
-                if dataType == 'polynomial':
-                    auxiliaryPolynomials.append(data)
-                else:
-                    auxiliaryTables.append(data)
-            else:
-                primaryDatas.append(data)
-        
-        # auxiliary polynomialを事前統合
-        self._combinedAuxiliaryPolynomial = self.computeCombinedPolynomial(auxiliaryPolynomials, np.add)
-        
-        # auxiliary tableを事前統合
-        self._combinedAuxiliaryTable = None
-        if auxiliaryTables:
-            self._combinedAuxiliaryTable = auxiliaryTables[0]
-            for table in auxiliaryTables[1:]:
-                self._combinedAuxiliaryTable += table
-        
-        return primaryDatas
-    
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         return LabConverterLazyFlowData(inputData)

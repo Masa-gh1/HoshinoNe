@@ -24,9 +24,9 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
     
-    def preprocessInputs(self, inputDatas):
+    def preprocessInputs(self, inputStream):
         """ベイヤーデータのみを抽出"""
-        return [data for data in inputDatas if data.headers.get('is_bayer', False)]
+        return [data for data in inputStream if data.headers.get('is_bayer', False)]
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
