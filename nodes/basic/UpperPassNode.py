@@ -9,9 +9,9 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNBinaryOperationNode
+from nodes import LazyNNOperationNode
 
-class UpperPassNode(LazyNNBinaryOperationNode):
+class UpperPassNode(LazyNNOperationNode):
     # ノードタイプ
     majorType = _MAJOR_TYPE_B_OP
     minorType = 'upper_pass'

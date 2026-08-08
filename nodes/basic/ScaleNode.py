@@ -9,9 +9,9 @@ All rights reserved.
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
-from nodes import LazyNNBinaryOperationNode
+from nodes import LazyNNOperationNode
 
-class ScaleNode(LazyNNBinaryOperationNode):
+class ScaleNode(LazyNNOperationNode):
     # ノードタイプ
     majorType = _MAJOR_TYPE_B_OP
     minorType = 'scale'
