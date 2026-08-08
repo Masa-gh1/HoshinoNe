@@ -80,16 +80,16 @@ class NNBlockOperationNode(FlowNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理 (サブクラスでオーバーライド可能)
+    def preprocessInputs(self, inputStream):
+        """入力データの前処理（サブクラスでオーバーライド可能）
         
         Args:
-            inputDatas: 入力データのリスト
+            inputStream: 入力ストリーム
             
         Returns:
             処理対象データのリスト
         """
-        return inputDatas
+        return inputStream
     
     def createFlowData(self, inputData):
         """LazyFlowDataを作成 (サブクラスでオーバーライド可能)
