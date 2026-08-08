@@ -65,15 +65,18 @@ class LazyNNBinaryOperationNode(FlowNode):
         def getPriority(stream):
             category = stream[0].headers.get("category", "primary")
             dataType = stream[0].headers.get("type", "table")
+            n        = len(stream)
             
-            if   "primary"   == category: priority =  0
-            elif "auxiliary" == category: priority = 10
-            else                        : priority = 20
+            if   "primary"   == category: priority =     0
+            elif "auxiliary" == category: priority = 10000
+            else                        : priority = 20000
             
-            if   "tensor"     == dataType: priority += 1
-            elif "polynomial" == dataType: priority += 2
-            else                         : priority += 0
+            if   "tensor"     == dataType: priority += 1000
+            elif "polynomial" == dataType: priority += 2000
+            else                         : priority +=    0
             
+            priority += n
+
             return priority
         
         streams = filter(lambda s: s, inputStreams)
