@@ -19,18 +19,6 @@ class CountNode(N1BlockOperationNode):
     # 入出力タイプ
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
-
-    def getBaseDataIndex(self, inputDatas):
-        """カウントではpolynomial,tensor がある場合は最初のtableデータを基準とする"""
-        for i, data in enumerate(inputDatas):
-            dataType = data.headers.get('type', 'table') if data.headers else 'table'
-            if dataType != 'polynomial' and dataType != 'tensor':
-                return i
-        for i, data in enumerate(inputDatas):
-            dataType = data.headers.get('type', 'table') if data.headers else 'table'
-            if dataType != 'polynomial':
-                return i
-        return 0  # polynomialのみの場合は最初のpolynomialを基準とする
     
     def getOutputDimensions(self, baseData, inputDatas):
         """カウントでは全入力データを包含するサイズを使用"""
@@ -47,7 +35,7 @@ class CountNode(N1BlockOperationNode):
             }
         }
     
-    def processBlock(self, inputDatas, planeIndex, x, y):
+    def blockOperation(self, blocks, planeIndex, x, y):
         """単一ブロックのカウント処理"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -56,49 +44,36 @@ class CountNode(N1BlockOperationNode):
         
         resultWidth, resultHeight = self._outputDimensions
         
-        blockHeight = min(BLOCK_SIZE, resultHeight - y)
-        blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
-        result = nh.zeros((blockHeight, blockWidth))
+        resultHeight = min(BLOCK_SIZE, resultHeight - y)
+        resultWidth  = min(BLOCK_SIZE, resultWidth  - x)
+        result = nh.zeros((resultHeight, resultWidth))
         
         # スレッドローカルに作業用メモリを確保
         _invalidA = self.getLocal('_invalidA', (BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
         
         # tableのカウント(NaN対応)
-        for inputData in inputDatas:
-            dataType = inputData.headers.get('type', 'table') if inputData.headers else 'table'
-            if   dataType == 'polynomial':
-                # polynomial なので全体を +1
-                result += 1
-            elif dataType == 'tensor':
-                block = self.calculateTensorBlock(inputData, planeIndex, x, y, result.shape, defaultValue=np.nan)
-                if not block.data is None:
-                    # 計算範囲の作業用メモリを取得
-                    invalidA = _invalidA[:result.shape[0], :result.shape[1]]
-                    
-                    # NaNでない有効なピクセルのみカウント
-                    np.isnan(block.data, out=invalidA)
-                    np.logical_not(invalidA, out=invalidA)
-                    result += invalidA
-            else:
-                inputBlock = inputData.getBlock(planeIndex, x, y)
-                if inputBlock:
-                    # 計算範囲を取得
-                    minH = min(blockHeight, inputBlock.data.shape[0])
-                    minW = min(blockWidth , inputBlock.data.shape[1])
-                    
-                    # 計算範囲の結果を取得
-                    res = result[:minH, :minW]
-                    
-                    # 計算範囲の作業用メモリを取得
-                    invalidA = _invalidA[:minH, :minW]
-                    
-                    # 計算範囲のデータを取得
-                    data = inputBlock.data[:minH, :minW]
-                    
-                    # NaNでない有効なピクセルのみカウント
-                    np.isnan(data, out=invalidA)
-                    np.logical_not(invalidA, out=invalidA)
-                    res += invalidA
+        for block in blocks:
+            if block:
+                # 計算範囲を取得
+                blockH, blockW = block.data.shape
+                blockH = min(resultHeight, blockH) if 1<blockH else resultHeight # ブロックの高さが1の場合、ブロードキャストにする
+                blockW = min(resultWidth , blockW) if 1<blockW else resultWidth  # ブロックの幅が1の場合、ブロードキャストにする
+                minH = min(resultHeight, blockH)
+                minW = min(resultWidth , blockW)
+                
+                # 計算範囲の結果を取得
+                res = result[:minH, :minW]
+                
+                # 計算範囲の作業用メモリを取得
+                invalidA = _invalidA[:minH, :minW]
+                
+                # 計算範囲のデータを取得
+                data = block.data[:blockH, :blockW]
+                
+                # NaNでない有効なピクセルのみカウント
+                np.isnan(data, out=invalidA)
+                np.logical_not(invalidA, out=invalidA)
+                res += invalidA
         
         return DataBlock(result, planeIndex, x, y)
     

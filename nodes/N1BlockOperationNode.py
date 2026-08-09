@@ -31,30 +31,34 @@ class N1BlockOperationNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
         
-        if not inputDatas:
+        if not inputStreams or not any(inputStreams):
             self.flowDatas = []
             self.reportProgress(context, "完了")
             return
         
         # 前処理
-        processedInputs = self.preprocessInputs(inputDatas)
+        tempStreams = self.preprocessStreams(inputStreams)
+        processedDatas = []
+        for stream in tempStreams:
+            processedStream = self.preprocessInputs(stream)
+            processedDatas.extend(processedStream)
         
-        if not processedInputs:
-            self.flowDatas = processedInputs
+        if not processedDatas:
+            self.flowDatas = []
         else:
             # 結果用の FlowData を初期化
-            flowData = self.createFlowData(processedInputs)
+            flowData = self.createFlowData(processedDatas)
             
             # ブロック単位で並列処理
             futures = []
             for block in flowData.iterateBlocks():
                 planeIndex = block.planeIndex
                 x, y = block.x, block.y
-                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.processBlock, processedInputs, planeIndex, x, y)
+                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.operation, processedDatas, planeIndex, x, y)
                 futures.append(future)
             
             # 全ブロックの処理完了を待つ
@@ -69,26 +73,58 @@ class N1BlockOperationNode(FlowNode):
         
         self.reportProgress(context, "完了")
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理 (サブクラスでオーバーライド可能)
+    def preprocessStreams(self, inputStreams):
+        """入力ストリームの前処理（サブクラスでオーバーライド可能）
+        演算結果のデータタイプを primary 優先とするため、
+        primary/auxiliaryで分類し、primaryを前に集める。
         
         Args:
-            inputDatas: 入力データのリスト
+            inputStreams: 入力ストリームのリスト
+            
+        Returns:
+            処理対象ストリームのリスト
+        """
+        def getPriority(stream):
+            category = stream[0].headers.get("category", "primary")
+            dataType = stream[0].headers.get("type", "table")
+            n        = len(stream)
+            
+            if   "primary"   == category: priority =     0
+            elif "auxiliary" == category: priority = 10000
+            else                        : priority = 20000
+            
+            if   "tensor"     == dataType: priority += 1000
+            elif "polynomial" == dataType: priority += 2000
+            else                         : priority +=    0
+            
+            priority += n
+
+            return priority
+        
+        streams = filter(lambda s: s, inputStreams)
+        streams = sorted(streams, key=getPriority)
+        return streams
+    
+    def preprocessInputs(self, inputStream):
+        """入力データの前処理(サブクラスでオーバーライド可能)
+        
+        Args:
+            inputStream: 入力ストリーム
             
         Returns:
             処理対象データのリスト
         """
-        return inputDatas
+        return inputStream
     
     def createFlowData(self, inputDatas):
         """
-        LazyFlowDataを作成 (サブクラスでオーバーライド可能)
+        FlowDataを作成 (サブクラスでオーバーライド可能)
         
         Args:
             inputData: 入力FlowData
             
         Returns:
-            LazyFlowData
+            FlowData
         """
         from base import FlowData
 
@@ -156,15 +192,37 @@ class N1BlockOperationNode(FlowNode):
         """
         return {}
     
-    @abstractmethod
-    def processBlock(self, inputDatas, planeIndex, x, y):
+    def operation(self, flowDatas, planeIndex, x, y):
         """
-        単一ブロックの処理 (サブクラスで実装)
+        単一ブロックの処理 (サブクラスでオーバーライド可能)
         
         Args:
-            inputDatas: 入力データのリスト
+            flowDatas: 入力 FlowDatas
+            planeIndex: 処理する plane のインデックス
+            x: 処理するブロックの x 座標
+            y: 処理するブロックの y 座標
             
         Returns:
             処理結果のDataBlock
         """
-        pass
+        from base import BroadcastMixin
+        blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
+        if not blocks:
+            return None
+        else:
+            return self.blockOperation(blocks, planeIndex, x, y)
+
+    def blockOperation(self, blocks, planeIndex, x, y):
+        """
+        単一ブロックの処理 (サブクラスでオーバーライド可能)
+        
+        Args:
+            blocks: 入力データのリスト
+            planeIndex: 処理する plane のインデックス
+            x: 処理するブロックの x 座標
+            y: 処理するブロックの y 座標
+            
+        Returns:
+            処理結果のDataBlock
+        """
+        return None

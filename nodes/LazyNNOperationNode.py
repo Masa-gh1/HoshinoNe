@@ -8,8 +8,8 @@ All rights reserved.
 '''
 
 from itertools import zip_longest
-
 from abc import abstractmethod
+
 from base.FlowNode_CONST import *
 from base import FlowNode
 
@@ -37,7 +37,7 @@ class LazyNNOperationNode(FlowNode):
             self.reportProgress(context, "完了")
             return
         
-        # 前処理（サブクラスでオーバーライド可能）
+        # 前処理
         from base import BroadcastMixin
         tempStreams = self.preprocessStreams(inputStreams)
         tempStreams = BroadcastMixin.calculateBroadcastedStream(tempStreams)
@@ -95,7 +95,7 @@ class LazyNNOperationNode(FlowNode):
         return streams
     
     def preprocessInputs(self, inputStream):
-        """入力データの前処理（サブクラスでオーバーライド可能）
+        """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:
             inputStream: 入力ストリーム

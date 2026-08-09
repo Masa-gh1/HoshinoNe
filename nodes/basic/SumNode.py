@@ -22,65 +22,20 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理：polynomial と tensor を事前統合"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-        
-        prmDatas       = []
-        prmTensors     = []
-        prmPolynomials = []
-        auxDatas       = []
-        auxTensors     = []
-        auxPolynomials = []
-        variableType = nh.BDTYPE
-        
-        for data in inputDatas:
-            category = data.headers.get('category', 'primary')
-            dataType = data.headers.get('type', 'table')
-            if category == 'auxiliary':
-                if   dataType == 'tensor':
-                    auxTensors.append(data)
-                elif dataType == 'polynomial':
-                    auxPolynomials.append(data)
-                else:
-                    auxDatas.append(data)
-            else:
-                if   dataType == 'tensor':
-                    prmTensors.append(data)
-                elif dataType == 'polynomial':
-                    prmPolynomials.append(data)
-                else:
-                    prmDatas.append(data)
-            variableType = np.result_type(variableType, data.getVariableType())
-        
-        # tensor を事前統合(加算)
-        self._combinedTensor = self.computeCombinedTensor(prmTensors + auxTensors, np.add)
-        
-        # polynomial を事前統合(加算)
-        self._combinedPolynomial = self.computeCombinedPolynomial(prmPolynomials + auxPolynomials, np.add)
-        
-        self._variableType = variableType
-        
-        if prmDatas or auxDatas:
-            return prmDatas + auxDatas
-        elif self._combinedTensor:
-            prmDatas = [self._combinedTensor]
-            self._combinedTensor = None
-            return prmDatas
-        elif self._combinedPolynomial:
-            prmDatas = [self._combinedPolynomial]
-            self._combinedPolynomial = None
-            return prmDatas
-        else:
-            return None
-
     def getOutputDimensions(self, baseData, inputDatas):
         """加算では全入力データを包含するサイズを使用"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+
+        variableType = nh.BDTYPE
+        for data in inputDatas:
+            variableType = np.result_type(variableType, data.getVariableType())
+        self._variableType = variableType
+
         self._outputDimensions = self.getUnionDimensions(inputDatas)
         return self._outputDimensions
     
-    def processBlock(self, inputDatas, planeIndex, x, y):
+    def blockOperation(self, blocks, planeIndex, x, y):
         """単一ブロックの加算処理"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -89,22 +44,24 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         
         resultWidth, resultHeight = self._outputDimensions
         
-        blockHeight = min(BLOCK_SIZE, resultHeight - y)
-        blockWidth  = min(BLOCK_SIZE, resultWidth  - x)
-        result  = nh.zeros((blockHeight, blockWidth), dtype=self._variableType)
-        invalid = nh.ones((blockHeight, blockWidth), dtype=bool)
+        resultHeight = min(BLOCK_SIZE, resultHeight - y)
+        resultWidth  = min(BLOCK_SIZE, resultWidth  - x)
+        result  = nh.zeros((resultHeight, resultWidth), dtype=self._variableType)
+        invalid = nh.ones((resultHeight, resultWidth), dtype=bool)
         
         # スレッドローカルに作業用メモリを確保
         _invalidA = self.getLocal('_invalidA', (BLOCK_SIZE, BLOCK_SIZE), dtype=bool)
         _data     = self.getLocal('_data'    , (BLOCK_SIZE, BLOCK_SIZE), dtype=self._variableType)
         
         # tableの加算(NaN対応)
-        for inputData in inputDatas:
-            inputBlock = inputData.getBlock(planeIndex, x, y)
-            if inputBlock:
+        for block in blocks:
+            if block:
                 # 計算範囲を取得
-                minH = min(blockHeight, inputBlock.data.shape[0])
-                minW = min(blockWidth , inputBlock.data.shape[1])
+                blockH, blockW = block.data.shape
+                blockH = min(resultHeight, blockH) if 1<blockH else resultHeight # ブロックの高さが1の場合、ブロードキャストにする
+                blockW = min(resultWidth , blockW) if 1<blockW else resultWidth  # ブロックの幅が1の場合、ブロードキャストにする
+                minH = min(resultHeight, blockH)
+                minW = min(resultWidth , blockW)
                 
                 # 計算範囲の結果を取得
                 res = result[:minH, :minW]
@@ -115,7 +72,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                 data     = _data[:minH, :minW]
                 
                 # データをコピー
-                data[:] = inputBlock.data[:minH, :minW]
+                data[:] = block.data[:blockH, :blockW]
                 
                 # nan の位置を更新
                 np.isnan(data, out=invalidA)
@@ -128,18 +85,6 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
         # nan の位置を適用
         if invalid.any():
             result[invalid] = np.nan
-        
-        # tensor を加算(NaN対応)
-        if self._combinedTensor:
-            block = self.calculateTensorBlock(self._combinedTensor, planeIndex, x, y, result.shape, defaultValue=0.0)
-            if not block is None:
-                result += block.data
-        
-        # polynomial を加算(NaN対応)
-        if self._combinedPolynomial:
-            block = self.calculatePolynomialBlock(self._combinedPolynomial, planeIndex, x, y, result.shape, defaultValue=0.0)
-            if not block is None:
-                result += block.data
         
         return DataBlock(result, planeIndex, x, y)
     
