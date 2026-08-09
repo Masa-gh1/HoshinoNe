@@ -43,7 +43,7 @@ class LazyNNOperationNode(FlowNode):
         tempStreams = BroadcastMixin.calculateBroadcastedStream(tempStreams)
         processedStreams = []
         for stream in tempStreams:
-            processedstream = self.preprocessInputs(stream)
+            processedstream = self.preprocessStream(stream)
             processedStreams.append(processedstream)
         
         resultFlowDatas = []
@@ -94,7 +94,7 @@ class LazyNNOperationNode(FlowNode):
         streams = sorted(streams, key=getPriority)
         return streams
     
-    def preprocessInputs(self, inputStream):
+    def preprocessStream(self, inputStream):
         """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:

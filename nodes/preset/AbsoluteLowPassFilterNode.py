@@ -28,7 +28,7 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         super().__init__(canvas, editor, x, y, **kwargs)
         self._combinedPolynomial = None
     
-    def preprocessInputs(self, inputDatas):
+    def preprocessStream(self, inputStream):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""
         import numpy as np
 
@@ -36,7 +36,7 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
         auxiliaryPolynomials = []
         auxiliaryTables = []
         
-        for data in inputDatas:
+        for data in inputStream:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
                 dataType = data.headers.get('type', 'table')

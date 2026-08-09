@@ -44,7 +44,7 @@ class N1BlockOperationNode(FlowNode):
         tempStreams = self.preprocessStreams(inputStreams)
         processedDatas = []
         for stream in tempStreams:
-            processedStream = self.preprocessInputs(stream)
+            processedStream = self.preprocessStream(stream)
             processedDatas.extend(processedStream)
         
         if not processedDatas:
@@ -105,7 +105,7 @@ class N1BlockOperationNode(FlowNode):
         streams = sorted(streams, key=getPriority)
         return streams
     
-    def preprocessInputs(self, inputStream):
+    def preprocessStream(self, inputStream):
         """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:

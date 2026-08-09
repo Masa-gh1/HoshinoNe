@@ -24,7 +24,7 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
     
-    def preprocessInputs(self, inputStream):
+    def preprocessStream(self, inputStream):
         """ベイヤーデータのみを抽出"""
         return [data for data in inputStream if data.headers.get('is_bayer', False)]
     
