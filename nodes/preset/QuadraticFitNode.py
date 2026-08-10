@@ -20,17 +20,6 @@ class QuadraticFitNode(NNPlaneOperationNode):
     #ioType    = スーパークラスを継承
     outputCat = _OUT_CAT_AUX
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理"""
-        datas = []
-
-        for data in inputDatas:
-            dataType = data.headers.get('type', 'table')
-            if dataType in ('image','table'):
-                datas.append(data)
-    
-        return datas
-    
     def createFlowData(self, inputData):
         """FlowData を作成"""
         from base import FlowData
@@ -58,7 +47,7 @@ class QuadraticFitNode(NNPlaneOperationNode):
 
         return flowData
 
-    def processPlane(self, flowData, planeIndex):
+    def planeOperation(self, flowData, planeIndex):
         """2次関数近似処理"""
         import numpy as np
         from utils import numpy_helpers as nh

@@ -7,6 +7,7 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from itertools import zip_longest
 from abc import abstractmethod
 from concurrent.futures import as_completed
 
@@ -31,31 +32,49 @@ class NNPlaneOperationNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
         
-        if not inputDatas:
+        if not inputStreams or not any(inputStreams):
             self.flowDatas = []
             self.reportProgress(context, "完了")
             return
         
         # 前処理
-        processedInputs = self.preprocessInputs(inputDatas)
+        from base import BroadcastMixin
+        tempStreams = self.preprocessStreams(inputStreams)
+        tempStreams = BroadcastMixin.calculateBroadcastedStream(tempStreams)
+        processedStreams = []
+        for stream in tempStreams:
+            processedstream = self.preprocessStream(stream)
+            processedStreams.append(processedstream)
         
         futureToDatas = {}
         futureCountPerDatas = {}
         
-        for inputData in processedInputs:
+        for inputDatas in zip_longest(*processedStreams):
             # 結果用の FlowData を初期化
-            flowData = self.createFlowData(inputData)
-            futureCountPerDatas[flowData] = 0
+            if not inputDatas:
+                pass
+            elif 1 < len(inputDatas):
+                flowData = self.createFlowData(inputDatas)
+                futureCountPerDatas[flowData] = 0
 
-            # プレーン単位で並列処理
-            for planeIndex in range(flowData.getPlaneCount()):
-                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.processPlane, inputData, planeIndex)
-                futureToDatas[future] = flowData
-                futureCountPerDatas[flowData] += 1
+                # プレーン単位で並列処理
+                for planeIndex in range(flowData.getPlaneCount()):
+                    future = ParallelExecutor.submit(self, mes.elapsedThreading, self.planeOperation, inputDatas, planeIndex)
+                    futureToDatas[future] = flowData
+                    futureCountPerDatas[flowData] += 1
+            else:
+                flowData = self.createFlowData(inputDatas[0])
+                futureCountPerDatas[flowData] = 0
+
+                # プレーン単位で並列処理
+                for planeIndex in range(flowData.getPlaneCount()):
+                    future = ParallelExecutor.submit(self, mes.elapsedThreading, self.planeOperation, inputDatas[0], planeIndex)
+                    futureToDatas[future] = flowData
+                    futureCountPerDatas[flowData] += 1
         
         # 全プレーンの処理完了を待つ
         self.reportProgress(context, "処理中")
@@ -78,18 +97,50 @@ class NNPlaneOperationNode(FlowNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理 (サブクラスでオーバーライド可能)
+    def preprocessStreams(self, inputStreams):
+        """入力ストリームの前処理（サブクラスでオーバーライド可能）
+        演算結果のデータタイプを primary 優先とするため、
+        primary/auxiliaryで分類し、primaryを前に集める。
         
         Args:
-            inputDatas: 入力データのリスト
+            inputStreams: 入力ストリームのリスト
+            
+        Returns:
+            処理対象ストリームのリスト
+        """
+        def getPriority(stream):
+            category = stream[0].headers.get("category", "primary")
+            dataType = stream[0].headers.get("type", "table")
+            n        = len(stream)
+            
+            if   "primary"   == category: priority =     0
+            elif "auxiliary" == category: priority = 10000
+            else                        : priority = 20000
+            
+            if   "tensor"     == dataType: priority += 1000
+            elif "polynomial" == dataType: priority += 2000
+            else                         : priority +=    0
+            
+            priority += n
+
+            return priority
+        
+        streams = filter(lambda s: s, inputStreams)
+        streams = sorted(streams, key=getPriority)
+        return streams
+    
+    def preprocessStream(self, inputStream):
+        """入力データの前処理(サブクラスでオーバーライド可能)
+        
+        Args:
+            inputStream: 入力ストリーム
             
         Returns:
             処理対象データのリスト
         """
-        return inputDatas
+        return inputStream
     
-    def createFlowData(self, inputData):
+    def createFlowData(self, inputDatas):
         """LazyFlowDataを作成 (サブクラスでオーバーライド可能)
         
         Args:
@@ -99,20 +150,22 @@ class NNPlaneOperationNode(FlowNode):
             LazyFlowData
         """
         from base import FlowData
-
+        
+        inputData = inputDatas[0] if isinstance(inputDatas, (list, tuple)) else inputDatas
+        
         # headers を生成
         headers = inputData.headers.copy()
         headers.update(self.processHeaders(inputData))
-
+        
         # サイズを決定
         width, height = inputData.getDimensions()
         
         # 結果用の FlowData を生成
         flowData = FlowData(headers)
         flowData.setDimensions(width, height)
-
+        
         return flowData
-
+    
     def processHeaders(self, inputData):
         """
         出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
@@ -123,13 +176,14 @@ class NNPlaneOperationNode(FlowNode):
         return {}
     
     @abstractmethod
-    def processPlane(self, flowData, planeIndex):
-        """データの処理 (サブクラスで実装)
+    def planeOperation(self, flowDatas, planeIndex):
+        """単一プレーンの処理 (サブクラスで実装)
         
         Args:
-            flowData: 処理対象のデータ
+            flowDatas: 入力データのリスト
+            planeIndex: 処理対象プレーンのインデックス
             
         Returns:
-            処理結果の FlowData
+            処理結果の DataBlock のリスト
         """
         pass

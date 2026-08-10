@@ -57,8 +57,8 @@ class FlowDataWrapper(FlowData):
     def getBlockCount(self):
         return self.orgFlowData.getBlockCount()
     
-    def iterateBlocks(self):
-        return self.orgFlowData.iterateBlocks()
+    def iterateBlocks(self, planeIndex=None):
+        return self.orgFlowData.iterateBlocks(planeIndex)
     
     def setBlock(self, dataBlock):
         return self.orgFlowData.setBlock(dataBlock)

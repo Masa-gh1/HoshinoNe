@@ -20,51 +20,13 @@ class IDWTNode(NNPlaneOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def preprocessInputs(self, inputDatas):
-        """入力データの前処理"""
-        from utils import numpy_helpers as nh
-
-        primaryDatas = []
-        auxiliaryTables = []
-
-        for data in inputDatas:
-            dataType = data.headers.get('type', 'table')
-            category = data.headers.get('category', 'primary')
-            if category == 'auxiliary':
-                dataType = data.headers.get('type', 'table')
-                if dataType in ('image','table'):
-                    auxiliaryTables.append(data)
-            else:
-                if dataType in ('image','table'):
-                    primaryDatas.append(data)
-    
-        # auxiliary tableを事前統合（最初のものをベースに加算）
-        self._auxiliaryTable = None
-        if auxiliaryTables:
-            width, height = auxiliaryTables[0].getDimensions()
-            planeCount = auxiliaryTables[0].getPlaneCount()
-            planeData = [nh.empty((height, width)) for _ in range(planeCount)]
-            
-            for block in auxiliaryTables[0].iterateBlocks():
-                x = block.x
-                y = block.y
-                planeIndex = block.planeIndex
-                blockWidth  = min(block.getWidth() , width  - x)
-                blockHeight = min(block.getHeight(), height - y)
-                endX = block.x + blockWidth
-                endY = block.y + blockHeight
-                planeData[planeIndex][y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
-            self._auxiliaryTable = planeData
-        
-        return primaryDatas
-    
-    def createFlowData(self, inputData):
+    def createFlowData(self, inputDatas):
         from base import FlowData
         
-        width, height = inputData.getDimensions()
+        width, height = inputDatas[0].getDimensions()
         
         # headers を生成
-        headers = inputData.headers.copy()
+        headers = inputDatas[0].headers.copy()
         
         # 逆 DWT 後のプレーンを設定
         level = headers.pop("DWT level")
@@ -86,7 +48,7 @@ class IDWTNode(NNPlaneOperationNode):
         
         return flowData
 
-    def processPlane(self, flowData, planeIndex):
+    def planeOperation(self, flowDatas, planeIndex):
         """逆DWT処理"""
         import re
         import pywt
@@ -94,6 +56,9 @@ class IDWTNode(NNPlaneOperationNode):
         from config import BLOCK_SIZE
         from base import DataBlock
         
+        flowData = flowDatas[0]
+        auxData  = flowDatas[1]
+
         planes = flowData.headers["planes"]
         level = flowData.headers["DWT level"]
         size  = flowData.headers["DWT size"]
@@ -134,14 +99,24 @@ class IDWTNode(NNPlaneOperationNode):
                     planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
             detail[level-l][key] = planeData
         coeffs.extend(detail)
-
-        if 1 == len(self._auxiliaryTable):
-            # 補正データが 1 プレーンだけなので、全プレーンに同じ補正データを適用する
-            auxiliaryTable = self._auxiliaryTable[0]
-        else:
-            auxiliaryTable = self._auxiliaryTable[planeIndex]
         
-        filter_bank = pywt.orthogonal_filter_bank(auxiliaryTable.flatten())
+        # 補正データを読み込み
+        auxW, auxH = auxData.getDimensions()
+        auxPlanCnt = auxData.getPlaneCount()
+        
+        auxPlane = nh.empty((auxH, auxW))
+        
+        for block in (auxData.iterateBlocks(0) if 1 == auxPlanCnt else auxData.iterateBlocks(planeIndex)):
+            # 補正データが 1 プレーンだけの場合、全プレーンに同じ補正データを適用する
+            x = block.x
+            y = block.y
+            blockWidth  = min(block.getWidth() , auxW - x)
+            blockHeight = min(block.getHeight(), auxH - y)
+            endX = block.x + blockWidth
+            endY = block.y + blockHeight
+            auxPlane[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
+        
+        filter_bank = pywt.orthogonal_filter_bank(auxPlane.flatten())
         wavelet = pywt.Wavelet(name="custom", filter_bank=filter_bank)
         data = pywt.waverecn(coeffs, wavelet) # 逆DWT
         

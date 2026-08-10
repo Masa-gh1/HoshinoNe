@@ -223,6 +223,6 @@ class N1BlockOperationNode(FlowNode):
             y: 処理するブロックの y 座標
             
         Returns:
-            処理結果のDataBlock
+            処理結果の DataBlock
         """
         return None
