@@ -94,10 +94,15 @@ class FlowNode(AbstractBaseClass):
             return self.outputCat
     
     def getOutputCount(self):
-        """ノードへの入力を考慮した出力数を取得"""
+        """ノードへの入力を考慮した出力数を取得
+        (オーバーライドする場合、_getOutputCountを実装すること)
+        """
         return self._getOutputCount()
     
     def _getOutputCount(self, path=None):
+        """ノードへの入力を考慮した出力数を取得
+        (オーバーライドする場合、_getOutputCountを実装すること)
+        """
         if   _IO_TYPE_N0 == self.ioType:
             return 0
         elif _IO_TYPE_N1 == self.ioType:
