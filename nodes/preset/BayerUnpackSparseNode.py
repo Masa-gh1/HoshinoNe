@@ -20,9 +20,6 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
     # 入出力タイプ
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
-
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
     
     def preprocessStream(self, inputStream):
         """ベイヤーデータのみを抽出"""

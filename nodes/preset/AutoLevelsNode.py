@@ -19,9 +19,6 @@ class AutoLevelsNode(FlowNode):
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_PAS
-
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
     
     def process(self, context=None):
         import numpy as np

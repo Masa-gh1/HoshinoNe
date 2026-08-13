@@ -23,10 +23,6 @@ class RepositionNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
-        self._tableData = None
-
     def preprocessStreams(self, inputStreams):
         """入力ストリームの前処理：primary/auxiliaryで分類"""
         primaryStreams = []

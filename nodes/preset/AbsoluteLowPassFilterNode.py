@@ -23,10 +23,6 @@ class AbsoluteLowPassFilterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # 入出力タイプ
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
-
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
-        self._combinedPolynomial = None
     
     def preprocessStream(self, inputStream):
         """入力データの前処理：primary/auxiliaryで分類し、auxiliaryを事前統合"""

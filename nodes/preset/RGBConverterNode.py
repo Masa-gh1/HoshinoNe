@@ -23,9 +23,6 @@ class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
-    
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         return RGBConverterLazyFlowData(inputData)

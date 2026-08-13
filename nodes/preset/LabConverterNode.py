@@ -22,14 +22,11 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # 入出力タイプ
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
-
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        super().__init__(canvas, editor, x, y, **kwargs)
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
         return LabConverterLazyFlowData(inputData)
-    
+
 class LabConverterLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):
         """Lab 変換操作(正規化なし)"""
