@@ -15,12 +15,12 @@ from base.FlowNode_CONST import *
 from base import FlowNode
 
 class NNPlaneOperationNode(FlowNode):
-    """データ入出力 N:N の計算ノードの基底クラス"""
+    """データ入出力 N:N のプレーン単位計算ノードの基底クラス"""
     # ノードタイプ
-    majorType = 'NN_operation'
-    minorType = 'NN_operation'
+    majorType = 'NN_plane_operation'
+    minorType = 'NN_plane_operation'
     # ノード名
-    name      = 'NNOperationNode'
+    name      = 'NNPlaneOperationNode'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_PAS

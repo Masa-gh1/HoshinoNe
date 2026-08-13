@@ -132,12 +132,12 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         if "templateSearchRange" in nodeData:
             self.template.searchRange = nodeData["templateSearchRange"]
     
-    def preprocessInputs(self, inputDatas):
+    def preprocessStream(self, inputStream):
         """入力データの前処理：primary/auxiliaryで分類"""
         primaryDatas = []
         auxiliaryDatas = []
         
-        for data in inputDatas:
+        for data in inputStream:
             category = data.headers.get('category', 'primary')
             if category == 'auxiliary':
                 auxiliaryDatas.append(data)
@@ -154,7 +154,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         
         return primaryDatas
     
-    def processBlock(self, block, planeIndex, x, y):
+    def blockOperation(self, block, planeIndex, x, y):
         """ブロック単位での位置合わせ処理"""
         if block is None:
             return None
@@ -173,7 +173,7 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
             inputDatas.extend(node.flowDatas)
         
         # primary/auxiliaryで分類
-        primaryDatas = self.preprocessInputs(inputDatas)
+        primaryDatas = self.preprocessStream(inputDatas)
         if self._referenceData is None:
             self.flowDatas = inputDatas
             return

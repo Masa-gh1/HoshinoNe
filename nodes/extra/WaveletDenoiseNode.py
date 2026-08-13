@@ -75,7 +75,7 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         config = f"{self.wavelet}_{self.levels}_{self.sigma}_{self.star_threshold}_{self.star_protection}_{self.protection_radius}"
         return hashlib.md5(config.encode()).hexdigest()
     
-    def processBlock(self, block, planeIndex, x, y):
+    def blockOperation(self, block, planeIndex, x, y):
         """ウェーブレットノイズ除去処理"""
         import numpy as np
         import pywt
