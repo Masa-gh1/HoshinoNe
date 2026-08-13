@@ -153,26 +153,17 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         return primaryDatas
     
-    def processBlock(self, block, planeIndex, x, y):
-        """ブロック単位での位置合わせ処理"""
-        if block is None:
-            return None
-        
-        # 現在の実装では、全画像を一度に処理する必要があるため
-        # ブロック処理は後の段階で実装
-        return block
-    
     def process(self, context=None):
         """シフト検出のメイン処理"""
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStream = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStream.extend(node.flowDatas)
         
         # primary/auxiliaryで分類
-        primaryDatas = self.preprocessStream(inputDatas)
+        primaryDatas = self.preprocessStream(inputStream)
         if self._referenceData is None:
             self.flowDatas = []
             return
@@ -186,7 +177,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         self.reportProgress(context, "完了")
     
     def _calculateShifts(self, referenceData, inputDatas, context):
-        """移動/回転計算のみを実行"""
+        """シフト検出を実行"""
         # 経過報告用全画像のズレ計算ステップ数
         totalGlobalBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
         globalProcessedBlocks = 0

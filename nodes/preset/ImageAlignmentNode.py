@@ -168,14 +168,14 @@ class ImageAlignmentNode(NNBlockOperationNode, ConfigurableNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStream = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStream.extend(node.flowDatas)
         
         # primary/auxiliaryで分類
-        primaryDatas = self.preprocessStream(inputDatas)
+        primaryDatas = self.preprocessStream(inputStream)
         if self._referenceData is None:
-            self.flowDatas = inputDatas
+            self.flowDatas = inputStream
             return
         
         # 移動/回転計算のみを実行
