@@ -97,8 +97,8 @@ class N1BlockOperationNode(FlowNode):
             elif "polynomial" == dataType: priority += 2000
             else                         : priority +=    0
             
-            priority += n
-
+            priority += max(0, min(999, 1000 - n))
+            
             return priority
         
         streams = filter(lambda s: s, inputStreams)

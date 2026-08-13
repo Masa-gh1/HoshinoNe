@@ -131,48 +131,48 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         if "templateSearchRange" in nodeData:
             self.template.searchRange = nodeData["templateSearchRange"]
     
-    def preprocessStream(self, inputStream):
+    def preprocessStreams(self, inputStreams):
         """入力データの前処理：primary/auxiliaryで分類"""
-        primaryDatas = []
-        auxiliaryDatas = []
+        primaryStreams = []
+        auxiliaryStreams = []
         
-        for data in inputStream:
-            category = data.headers.get('category', 'primary')
+        for stream in inputStreams:
+            category = stream[0].headers.get('category', 'primary')
             if category == 'auxiliary':
-                auxiliaryDatas.append(data)
+                auxiliaryStreams.append(stream)
             else:
-                primaryDatas.append(data)
+                primaryStreams.append(stream)
         
-        if 0 == len(auxiliaryDatas):
+        if not auxiliaryStreams or not auxiliaryStreams[0]:
             # 基準画像（auxiliary）が必要
             self._referenceData = None
             raise ValueError("基準画像（補正値）が必要です")
         else:
             # 複数ある場合は最初のものを採用
-            self._referenceData = auxiliaryDatas[0]
+            self._referenceData = auxiliaryStreams[0][0]
         
-        return primaryDatas
+        return primaryStreams
     
     def process(self, context=None):
         """シフト検出のメイン処理"""
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputStream = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputStream.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
         
         # primary/auxiliaryで分類
-        primaryDatas = self.preprocessStream(inputStream)
+        primaryStreams = self.preprocessStreams(inputStreams)
         if self._referenceData is None:
             self.flowDatas = []
             return
         
         # シフト検出を実行
-        results = self._calculateShifts(self._referenceData, primaryDatas, context)
+        results = self._calculateShifts(self._referenceData, primaryStreams[0], context)
         
         # table形式でFlowDataを生成
-        self.flowDatas = [self._createTableOutput(primaryDatas, results)]
+        self.flowDatas = [self._createTableOutput(primaryStreams[0], results)]
         
         self.reportProgress(context, "完了")
     
