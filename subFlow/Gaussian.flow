@@ -1,13 +1,13 @@
 {
-  "version": "0.2.20260227",
+  "version": "0.2.20260621",
   "nodes": [
     {
       "index": 0,
-      "zOrder": 3,
+      "zOrder": 21,
       "type": "table",
       "text": "表",
-      "x": 40.0,
-      "y": 42.0,
+      "x": 41.0,
+      "y": 41.0,
       "category": "primary",
       "planes": [
         "Plane 0"
@@ -41,10 +41,10 @@
     },
     {
       "index": 1,
-      "zOrder": 5,
+      "zOrder": 3,
       "type": "offset",
       "text": "加算",
-      "x": 144.0,
+      "x": 159.0,
       "y": 45.0,
       "connections": [
         8
@@ -52,11 +52,11 @@
     },
     {
       "index": 2,
-      "zOrder": 7,
+      "zOrder": 25,
       "type": "coefficients",
       "text": "係数",
-      "x": 41.0,
-      "y": 105.0,
+      "x": 40.0,
+      "y": 95.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -79,8 +79,8 @@
       "zOrder": 19,
       "type": "coefficients",
       "text": "係数",
-      "x": 169.0,
-      "y": 218.0,
+      "x": 147.0,
+      "y": 98.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -97,11 +97,11 @@
     },
     {
       "index": 4,
-      "zOrder": 17,
+      "zOrder": 23,
       "type": "coefficients",
       "text": "係数",
-      "x": 42.0,
-      "y": 161.0,
+      "x": 41.0,
+      "y": 160.0,
       "category": "primary",
       "planes": [
         "Plane 0"
@@ -117,10 +117,10 @@
     },
     {
       "index": 5,
-      "zOrder": 15,
+      "zOrder": 7,
       "type": "power",
       "text": "冪算",
-      "x": 146.0,
+      "x": 161.0,
       "y": 160.0,
       "connections": [
         6
@@ -128,111 +128,89 @@
     },
     {
       "index": 6,
-      "zOrder": 21,
+      "zOrder": 9,
       "type": "scale",
       "text": "乗算",
-      "x": 214.0,
+      "x": 229.0,
       "y": 160.0,
       "connections": [
         7,
-        13
+        12
       ]
     },
     {
       "index": 7,
-      "zOrder": 13,
+      "zOrder": 27,
       "type": "inverse",
       "text": "逆数",
-      "x": 215.0,
-      "y": 101.0,
+      "x": 227.0,
+      "y": 99.0,
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 5,
+      "type": "scale",
+      "text": "乗算",
+      "x": 228.0,
+      "y": 44.0,
       "connections": [
         9
       ]
     },
     {
-      "index": 8,
-      "zOrder": 9,
-      "type": "scale",
-      "text": "乗算",
-      "x": 213.0,
+      "index": 9,
+      "zOrder": 11,
+      "type": "natural_exponential",
+      "text": "自然指数",
+      "x": 295.0,
       "y": 44.0,
       "connections": [
         10
       ]
     },
     {
-      "index": 9,
-      "zOrder": 11,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 145.0,
-      "y": 102.0,
-      "connections": [
-        8
-      ]
-    },
-    {
       "index": 10,
-      "zOrder": 23,
-      "type": "natural_exponential",
-      "text": "自然指数",
-      "x": 280.0,
-      "y": 44.0,
-      "connections": [
-        11
-      ]
-    },
-    {
-      "index": 11,
-      "zOrder": 29,
+      "zOrder": 31,
       "type": "scale",
       "text": "乗算",
-      "x": 348.0,
-      "y": 43.0,
-      "connections": [
-        16
-      ]
-    },
-    {
-      "index": 12,
-      "zOrder": 33,
-      "type": "inverse",
-      "text": "逆数",
-      "x": 351.0,
-      "y": 161.0,
+      "x": 360.0,
+      "y": 44.0,
       "connections": [
         14
       ]
     },
     {
-      "index": 13,
-      "zOrder": 25,
-      "type": "scale",
-      "text": "乗算",
-      "x": 282.0,
-      "y": 161.0,
+      "index": 11,
+      "zOrder": 29,
+      "type": "inverse",
+      "text": "逆数",
+      "x": 294.0,
+      "y": 100.0,
       "connections": [
-        12
+        10
       ]
     },
     {
-      "index": 14,
-      "zOrder": 31,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 351.0,
-      "y": 101.0,
+      "index": 12,
+      "zOrder": 13,
+      "type": "scale",
+      "text": "乗算",
+      "x": 297.0,
+      "y": 161.0,
       "connections": [
         11
       ]
     },
     {
-      "index": 15,
-      "zOrder": 27,
+      "index": 13,
+      "zOrder": 17,
       "type": "coefficients",
       "text": "係数",
-      "x": 282.0,
-      "y": 217.0,
+      "x": 382.0,
+      "y": 160.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -243,15 +221,15 @@
         "0,0,0": 3.1415926
       },
       "connections": [
-        13
+        12
       ]
     },
     {
-      "index": 16,
-      "zOrder": 35,
+      "index": 14,
+      "zOrder": 15,
       "type": "pass",
       "text": "通点",
-      "x": 415.0,
+      "x": 430.0,
       "y": 40.0,
       "connections": []
     }
@@ -259,10 +237,10 @@
   "trays": [
     {
       "zOrder": 1,
-      "x": 206.0,
-      "y": 116.0,
-      "width": 440,
-      "height": 270,
+      "x": 213.0,
+      "y": 87.0,
+      "width": 455,
+      "height": 212,
       "title": "ガウシアン(正規分布)"
     }
   ]

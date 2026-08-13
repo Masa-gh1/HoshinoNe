@@ -1,5 +1,5 @@
 {
-  "version": "0.2.20260227",
+  "version": "0.2.20260621",
   "nodes": [
     {
       "index": 0,
@@ -20,23 +20,23 @@
       "x": 401.0,
       "y": 95.0,
       "connections": [
-        13
+        12
       ]
     },
     {
       "index": 2,
-      "zOrder": 11,
+      "zOrder": 9,
       "type": "fft",
       "text": "FFT",
       "x": 224.0,
       "y": 149.0,
       "connections": [
-        5
+        4
       ]
     },
     {
       "index": 3,
-      "zOrder": 21,
+      "zOrder": 19,
       "type": "table",
       "text": "表",
       "x": 95.0,
@@ -57,7 +57,7 @@
         "0,1,0": 4000.0
       },
       "connections": [
-        9
+        8
       ]
     },
     {
@@ -73,18 +73,7 @@
     },
     {
       "index": 5,
-      "zOrder": 9,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 313.0,
-      "y": 146.0,
-      "connections": [
-        4
-      ]
-    },
-    {
-      "index": 6,
-      "zOrder": 17,
+      "zOrder": 15,
       "type": "reposition",
       "text": "再配置",
       "x": 225.0,
@@ -94,8 +83,8 @@
       ]
     },
     {
-      "index": 7,
-      "zOrder": 19,
+      "index": 6,
+      "zOrder": 17,
       "type": "table",
       "text": "表",
       "x": 99.0,
@@ -120,12 +109,12 @@
         "0,3,0": 4000.0
       },
       "connections": [
-        6
+        5
       ]
     },
     {
-      "index": 8,
-      "zOrder": 23,
+      "index": 7,
+      "zOrder": 21,
       "type": "table",
       "text": "表",
       "x": 398.0,
@@ -146,12 +135,12 @@
         "0,1,0": 3456.0
       },
       "connections": [
-        13
+        12
       ]
     },
     {
-      "index": 9,
-      "zOrder": 15,
+      "index": 8,
+      "zOrder": 13,
       "type": "reposition",
       "text": "再配置",
       "x": 224.0,
@@ -161,19 +150,19 @@
       ]
     },
     {
-      "index": 10,
-      "zOrder": 29,
+      "index": 9,
+      "zOrder": 27,
       "type": "pass",
       "text": "通点",
       "x": 41.0,
       "y": 94.0,
       "connections": [
-        9
+        8
       ]
     },
     {
-      "index": 11,
-      "zOrder": 25,
+      "index": 10,
+      "zOrder": 23,
       "type": "pass",
       "text": "通点",
       "x": 495.0,
@@ -181,25 +170,25 @@
       "connections": []
     },
     {
-      "index": 12,
-      "zOrder": 27,
+      "index": 11,
+      "zOrder": 25,
       "type": "pass",
       "text": "通点",
       "x": 40.0,
       "y": 149.0,
       "connections": [
-        6
+        5
       ]
     },
     {
-      "index": 13,
-      "zOrder": 13,
+      "index": 12,
+      "zOrder": 11,
       "type": "reposition",
       "text": "再配置",
       "x": 403.0,
       "y": 148.0,
       "connections": [
-        11
+        10
       ]
     }
   ],

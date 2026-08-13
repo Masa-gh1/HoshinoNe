@@ -1,135 +1,124 @@
 {
-  "version": "0.2.20260606",
+  "version": "0.2.20260621",
   "nodes": [
     {
       "index": 0,
-      "zOrder": 23,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 328.0,
-      "y": 91.0,
+      "zOrder": 7,
+      "type": "scale",
+      "text": "乗算",
+      "x": 356.0,
+      "y": 41.0,
       "connections": [
-        1
+        6
       ]
     },
     {
       "index": 1,
-      "zOrder": 9,
-      "type": "scale",
-      "text": "乗算",
-      "x": 327.0,
+      "zOrder": 5,
+      "type": "sum",
+      "text": "総和",
+      "x": 278.0,
       "y": 41.0,
       "connections": [
-        7
+        0
       ]
     },
     {
       "index": 2,
-      "zOrder": 7,
-      "type": "sum",
-      "text": "総和",
-      "x": 249.0,
-      "y": 41.0,
+      "zOrder": 3,
+      "type": "transform",
+      "text": "変形",
+      "x": 169.0,
+      "y": 42.0,
       "connections": [
         1
       ]
     },
     {
       "index": 3,
-      "zOrder": 3,
-      "type": "transform",
-      "text": "変形",
-      "x": 140.0,
-      "y": 42.0,
-      "connections": [
-        2
-      ]
-    },
-    {
-      "index": 4,
       "zOrder": 15,
       "type": "transform",
       "text": "変形",
-      "x": 143.0,
-      "y": 151.0,
-      "connections": [
-        6
-      ]
-    },
-    {
-      "index": 5,
-      "zOrder": 13,
-      "type": "inverse",
-      "text": "逆数",
-      "x": 326.0,
-      "y": 150.0,
-      "connections": [
-        0
-      ]
-    },
-    {
-      "index": 6,
-      "zOrder": 17,
-      "type": "sum",
-      "text": "総和",
-      "x": 251.0,
-      "y": 150.0,
+      "x": 169.0,
+      "y": 100.0,
       "connections": [
         5
       ]
     },
     {
-      "index": 7,
+      "index": 4,
       "zOrder": 11,
+      "type": "inverse",
+      "text": "逆数",
+      "x": 354.0,
+      "y": 98.0,
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 13,
+      "type": "sum",
+      "text": "総和",
+      "x": 277.0,
+      "y": 98.0,
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 9,
       "type": "pass",
       "text": "通点",
-      "x": 391.0,
+      "x": 420.0,
       "y": 40.0,
       "connections": []
     },
     {
-      "index": 8,
-      "zOrder": 5,
+      "index": 7,
+      "zOrder": 17,
       "type": "pass",
       "text": "通点",
-      "x": 40.0,
-      "y": 44.0,
+      "x": 41.0,
+      "y": 42.0,
       "connections": [
-        3,
-        10
+        2,
+        9
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 19,
+      "type": "category_auxiliary",
+      "text": "補正値",
+      "x": 40.0,
+      "y": 102.0,
+      "connections": [
+        2,
+        3
       ]
     },
     {
       "index": 9,
-      "zOrder": 19,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 41.0,
-      "y": 148.0,
-      "connections": [
-        3,
-        4
-      ]
-    },
-    {
-      "index": 10,
       "zOrder": 21,
       "type": "fill_1",
       "text": "1 埋め",
-      "x": 145.0,
-      "y": 93.0,
+      "x": 91.0,
+      "y": 71.0,
       "connections": [
-        4
+        3
       ]
     }
   ],
   "trays": [
     {
       "zOrder": 1,
-      "x": 218.0,
-      "y": 85.0,
-      "width": 382,
-      "height": 203,
+      "x": 234.0,
+      "y": 58.0,
+      "width": 406,
+      "height": 148,
       "title": "ピクセルコンプリート"
     }
   ]

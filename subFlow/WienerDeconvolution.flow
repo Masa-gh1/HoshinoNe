@@ -1,26 +1,26 @@
 {
-  "version": "0.2.20260227",
+  "version": "0.2.20260621",
   "nodes": [
     {
       "index": 0,
       "zOrder": 3,
       "type": "fft",
       "text": "FFT",
-      "x": 223.9999999999999,
-      "y": 94.0,
+      "x": 212.9999999999999,
+      "y": 100.0,
       "connections": [
         4
       ]
     },
     {
       "index": 1,
-      "zOrder": 31,
+      "zOrder": 21,
       "type": "ifft",
       "text": "逆FFT",
-      "x": 541.9999999999999,
-      "y": 92.0,
+      "x": 453.9999999999999,
+      "y": 98.0,
       "connections": [
-        13
+        12
       ]
     },
     {
@@ -28,11 +28,11 @@
       "zOrder": 5,
       "type": "fft",
       "text": "FFT",
-      "x": 223.9999999999999,
-      "y": 149.0,
+      "x": 212.9999999999999,
+      "y": 155.0,
       "connections": [
-        14,
-        20
+        13,
+        18
       ]
     },
     {
@@ -40,8 +40,8 @@
       "zOrder": 13,
       "type": "table",
       "text": "表",
-      "x": 95.0,
-      "y": 40.0,
+      "x": 84.0,
+      "y": 46.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -58,49 +58,38 @@
         "0,1,0": 4000.0
       },
       "connections": [
-        9
+        8
       ]
     },
     {
       "index": 4,
-      "zOrder": 25,
+      "zOrder": 23,
       "type": "scale",
       "text": "乗算",
-      "x": 448.9999999999999,
-      "y": 95.0,
+      "x": 369.9999999999999,
+      "y": 100.0,
       "connections": [
         1
       ]
     },
     {
       "index": 5,
-      "zOrder": 23,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 448.9999999999999,
-      "y": 150.0,
-      "connections": [
-        4
-      ]
-    },
-    {
-      "index": 6,
       "zOrder": 9,
       "type": "reposition",
       "text": "再配置",
-      "x": 224.9999999999999,
-      "y": 205.99999999999997,
+      "x": 213.9999999999999,
+      "y": 211.99999999999997,
       "connections": [
         2
       ]
     },
     {
-      "index": 7,
+      "index": 6,
       "zOrder": 11,
       "type": "table",
       "text": "表",
-      "x": 99.0,
-      "y": 203.99999999999997,
+      "x": 88.0,
+      "y": 209.99999999999997,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -121,16 +110,16 @@
         "0,3,0": 4000.0
       },
       "connections": [
-        6
+        5
       ]
     },
     {
-      "index": 8,
-      "zOrder": 29,
+      "index": 7,
+      "zOrder": 27,
       "type": "table",
       "text": "表",
-      "x": 539.9999999999999,
-      "y": 204.99999999999997,
+      "x": 332.9999999999999,
+      "y": 41.99999999999997,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -147,113 +136,113 @@
         "0,1,0": 3456.0
       },
       "connections": [
-        13
+        12
       ]
     },
     {
-      "index": 9,
+      "index": 8,
       "zOrder": 7,
       "type": "reposition",
       "text": "再配置",
-      "x": 223.9999999999999,
-      "y": 40.0,
+      "x": 212.9999999999999,
+      "y": 46.0,
       "connections": [
         0
       ]
     },
     {
-      "index": 10,
-      "zOrder": 17,
+      "index": 9,
+      "zOrder": 37,
       "type": "pass",
       "text": "通点",
       "x": 41.0,
-      "y": 94.0,
+      "y": 98.0,
       "connections": [
-        9
+        8
       ]
     },
     {
-      "index": 11,
+      "index": 10,
       "zOrder": 35,
       "type": "pass",
       "text": "通点",
-      "x": 643.9999999999999,
-      "y": 148.0,
+      "x": 550.9999999999999,
+      "y": 40.0,
       "connections": []
     },
     {
-      "index": 12,
-      "zOrder": 15,
+      "index": 11,
+      "zOrder": 39,
       "type": "pass",
       "text": "通点",
       "x": 40.0,
-      "y": 149.0,
-      "connections": [
-        6
-      ]
-    },
-    {
-      "index": 13,
-      "zOrder": 27,
-      "type": "reposition",
-      "text": "再配置",
-      "x": 544.9999999999999,
-      "y": 148.0,
-      "connections": [
-        11
-      ]
-    },
-    {
-      "index": 14,
-      "zOrder": 19,
-      "type": "conjugate",
-      "text": "共役",
-      "x": 316.6666666666665,
-      "y": 149.39999999999998,
-      "connections": [
-        15
-      ]
-    },
-    {
-      "index": 15,
-      "zOrder": 21,
-      "type": "scale",
-      "text": "乗算",
-      "x": 379.6666666666665,
-      "y": 150.39999999999998,
+      "y": 153.0,
       "connections": [
         5
       ]
     },
     {
-      "index": 16,
-      "zOrder": 43,
+      "index": 12,
+      "zOrder": 25,
+      "type": "reposition",
+      "text": "再配置",
+      "x": 453.9999999999999,
+      "y": 41.0,
+      "connections": [
+        10
+      ]
+    },
+    {
+      "index": 13,
+      "zOrder": 15,
+      "type": "conjugate",
+      "text": "共役",
+      "x": 305.6666666666665,
+      "y": 155.39999999999998,
+      "connections": [
+        14
+      ]
+    },
+    {
+      "index": 14,
+      "zOrder": 17,
+      "type": "scale",
+      "text": "乗算",
+      "x": 368.6666666666665,
+      "y": 156.39999999999998,
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 15,
+      "zOrder": 29,
       "type": "inverse",
       "text": "逆数",
-      "x": 449.6666666666665,
-      "y": 264.4,
+      "x": 434.6666666666665,
+      "y": 156.39999999999998,
       "connections": [
-        19
+        14
+      ]
+    },
+    {
+      "index": 16,
+      "zOrder": 31,
+      "type": "offset",
+      "text": "加算",
+      "x": 433.6666666666665,
+      "y": 211.39999999999998,
+      "connections": [
+        15
       ]
     },
     {
       "index": 17,
-      "zOrder": 41,
-      "type": "offset",
-      "text": "加算",
-      "x": 350.6666666666665,
-      "y": 265.4,
-      "connections": [
-        16
-      ]
-    },
-    {
-      "index": 18,
-      "zOrder": 39,
+      "zOrder": 33,
       "type": "coefficients",
       "text": "係数",
-      "x": 242.66666666666652,
-      "y": 263.4,
+      "x": 521.6666666666665,
+      "y": 212.39999999999998,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -264,39 +253,28 @@
         "0,0,0": 0.01
       },
       "connections": [
-        17
+        16
       ]
     },
     {
-      "index": 19,
-      "zOrder": 33,
-      "type": "category_auxiliary",
-      "text": "補正値",
-      "x": 450.6666666666665,
-      "y": 205.39999999999998,
-      "connections": [
-        15
-      ]
-    },
-    {
-      "index": 20,
-      "zOrder": 37,
+      "index": 18,
+      "zOrder": 19,
       "type": "squared_norm",
       "text": "ノルムの二乗",
-      "x": 349.6666666666665,
-      "y": 206.39999999999998,
+      "x": 338.6666666666665,
+      "y": 212.39999999999998,
       "connections": [
-        17
+        16
       ]
     }
   ],
   "trays": [
     {
       "zOrder": 1,
-      "x": 344.6666666666665,
-      "y": 135.39999999999998,
-      "width": 624,
-      "height": 326,
+      "x": 294.0,
+      "y": 111.0,
+      "width": 534,
+      "height": 266,
       "title": "ウィーナー 逆畳み込み"
     }
   ]
