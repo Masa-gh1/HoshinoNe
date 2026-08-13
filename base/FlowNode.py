@@ -107,7 +107,7 @@ class FlowNode(AbstractBaseClass):
             ):
             path = path.copy() if path else []
             path.append(self) # 循環参照を除く
-            return sum([x._getOutputCount(path) for x in self.inputNodes if x not in path and _OUT_CAT_PRI == x.getOutputCategory()])
+            return max([0]+[x._getOutputCount(path) for x in self.inputNodes if not x in path])
         else:
             return 0
     
