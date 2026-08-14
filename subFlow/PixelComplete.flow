@@ -3,7 +3,7 @@
   "nodes": [
     {
       "index": 0,
-      "zOrder": 7,
+      "zOrder": 9,
       "type": "scale",
       "text": "乗算",
       "x": 356.0,
@@ -14,7 +14,7 @@
     },
     {
       "index": 1,
-      "zOrder": 5,
+      "zOrder": 7,
       "type": "sum",
       "text": "総和",
       "x": 278.0,
@@ -25,7 +25,7 @@
     },
     {
       "index": 2,
-      "zOrder": 3,
+      "zOrder": 5,
       "type": "transform",
       "text": "変形",
       "x": 169.0,
@@ -36,7 +36,7 @@
     },
     {
       "index": 3,
-      "zOrder": 15,
+      "zOrder": 17,
       "type": "transform",
       "text": "変形",
       "x": 169.0,
@@ -47,7 +47,7 @@
     },
     {
       "index": 4,
-      "zOrder": 11,
+      "zOrder": 13,
       "type": "inverse",
       "text": "逆数",
       "x": 354.0,
@@ -58,7 +58,7 @@
     },
     {
       "index": 5,
-      "zOrder": 13,
+      "zOrder": 15,
       "type": "sum",
       "text": "総和",
       "x": 277.0,
@@ -69,7 +69,7 @@
     },
     {
       "index": 6,
-      "zOrder": 9,
+      "zOrder": 11,
       "type": "pass",
       "text": "通点",
       "x": 420.0,
@@ -78,7 +78,7 @@
     },
     {
       "index": 7,
-      "zOrder": 17,
+      "zOrder": 19,
       "type": "pass",
       "text": "通点",
       "x": 41.0,
@@ -90,7 +90,7 @@
     },
     {
       "index": 8,
-      "zOrder": 19,
+      "zOrder": 21,
       "type": "category_auxiliary",
       "text": "補正値",
       "x": 40.0,
@@ -102,7 +102,7 @@
     },
     {
       "index": 9,
-      "zOrder": 21,
+      "zOrder": 23,
       "type": "fill_1",
       "text": "1 埋め",
       "x": 91.0,
@@ -120,6 +120,14 @@
       "width": 406,
       "height": 148,
       "title": "ピクセルコンプリート"
+    },
+    {
+      "zOrder": 3,
+      "x": 327.0,
+      "y": 59.0,
+      "width": 203,
+      "height": 133,
+      "title": "平均"
     }
   ]
 }
