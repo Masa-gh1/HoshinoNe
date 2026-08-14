@@ -24,10 +24,13 @@ class PassNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
+        
+        if not inputStreams or not inputStreams[0]:
+            return
         
         # 入力データをそのまま出力
-        self.flowDatas = inputDatas
+        self.flowDatas = inputStreams[0]
         self.reportProgress(context, "完了")

@@ -71,16 +71,15 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         self.reportProgress(context, "開始")
         
         # 入力データを取得
-        flowDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            flowDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
         
-        if not flowDatas:
+        if not inputStreams or not inputStreams[0]:
             return
         
         resultFlowDatas = []
-        
-        for flowData in flowDatas:
+        for flowData in inputStreams[0]:
             if flowData.getPlaneCount() < 3:
                 # RGB以外はそのまま通す
                 resultFlowDatas.append(flowData)

@@ -26,17 +26,20 @@ class CategoryAuxiliaryNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
+        
+        if not inputStreams or not inputStreams[0]:
+            return
         
         # FlowDataWrapperを使用して category: auxiliary を後方のみに伝える
-        wrappedDatas = []
-        for inputData in inputDatas:
+        resultFlowDatas = []
+        for inputData in inputStreams[0]:
             updatedHeaders = {'category': 'auxiliary'}
             wrappedData = FlowDataWrapper(inputData, updatedHeaders)
-            wrappedDatas.append(wrappedData)
+            resultFlowDatas.append(wrappedData)
         
         # ラップされたデータを出力
-        self.flowDatas = wrappedDatas
+        self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")

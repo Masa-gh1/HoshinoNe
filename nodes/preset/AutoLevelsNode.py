@@ -28,12 +28,16 @@ class AutoLevelsNode(FlowNode):
         self.reportProgress(context, "開始")
         
         # 入力データを収集
-        inputDatas = []
+        inputStreams = []
         for node in self.inputNodes:
-            inputDatas.extend(node.flowDatas)
+            inputStreams.append(node.flowDatas)
+        
+        if not inputStreams or not inputStreams[0]:
+            return
         
         # 各入力データのdisplay_levelsを1%と99%のパーセンタイルで設定
-        for i, inputData in enumerate(inputDatas):
+        resultFlowDatas = []
+        for i, inputData in enumerate(inputStreams[0]):
             type = inputData.getType()
             if type in ('image','table'):
                 # 全画像データを読み込み
@@ -54,8 +58,10 @@ class AutoLevelsNode(FlowNode):
                 # FlowDataWrapperを使用してheadersを後方のみに伝える
                 updatedHeaders = {'display_levels': {'min':float(p1), 'exclusive_upper':float(p99)}}
                 wrappedData = FlowDataWrapper(inputData, updatedHeaders)
-                inputDatas[i] = wrappedData
+                resultFlowDatas.append(wrappedData)
+            else:
+                resultFlowDatas.append(inputData)
         
         # ラップされたデータを出力
-        self.flowDatas = inputDatas
+        self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
