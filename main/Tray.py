@@ -53,7 +53,7 @@ class Tray:
                 columnbreak = True
                 row = 0
             else:
-                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt), columnbreak=columnbreak)
+                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.editor.addNodeAtPosition(nt), columnbreak=columnbreak)
                 columnbreak = False
                 row += 2
             maxRow = max(maxRow, row)
