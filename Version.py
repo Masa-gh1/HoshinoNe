@@ -10,4 +10,4 @@ All rights reserved.
 from _version import VERSION_DATE
 
 # varsion
-VERSION = f"0.2.{VERSION_DATE}"
+VERSION = f"0.3.{VERSION_DATE}"
