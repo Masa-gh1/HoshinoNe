@@ -1,17 +1,17 @@
 # 必須ライブラリ
 numpy==2.2.6  # 数値計算・配列処理・NaN値処理
 
-# オプションライブラリ（対応する機能ノード）
-matplotlib==3.10.7  # グラフ描画（ResultWindow, ToneCurveNode設定画面）
-pillow==12.0.0  # 画像読み込み・書き出し（ResultWindow, ImageReaderNode, ImageWriterNode）
-rawpy==0.25.1  # RAW画像読み込み（RawReaderNode）
-astropy==7.1.1  # FITS天体画像読み込み（FitsReaderNode）
-scipy==1.16.3  # 科学計算・補間・スプライン（ToneCurveNode, ChromaDenoiseNode, WaveletDenoiseNode）
-PyWavelets==1.9.0  # ウェーブレット変換（WaveletDenoiseNode）
-scikit-image==0.25.2  # 画像処理・モルフォロジー（WaveletDenoiseNode）
-opencv-python==4.11.0.86  # 画像処理・位置合わせ（ImageAlignmentNode）
-tifffile==2025.10.16  # TIFF画像書き出し（ImageWriterNode）
-ExifRead==3.5.1  # EXIF情報読み込み補完（utils/exif_helper.py）
+# オプションライブラリ (使用するノード)
+matplotlib==3.10.7  # グラフ描画 (ResultWindow, ToneCurveNode)
+pillow==12.0.0  # 画像読み込み・書き出し (ResultWindow, ImageReaderNode, ImageWriterNode)
+rawpy==0.25.1  # RAW画像読み込み (RawReaderNode)
+astropy==7.1.1  # FITS天体画像読み込み (FitsReaderNode)
+scipy==1.16.3  # 科学計算・補間・スプライン (ConvolutionNode, DeconvolutionNode, FFTNode, IFFTNode, ToneCurveNode, ChromaDenoiseNode)
+PyWavelets==1.9.0  # ウェーブレット変換 (WaveletDenoiseNode, DWTNode, IDWTNode)
+scikit-image==0.25.2  # 画像処理・モルフォロジー (WaveletDenoiseNode)
+opencv-python==4.11.0.86  # 画像処理・位置合わせ (ShiftDetectionNode, TransformNode)
+tifffile==2025.10.16  # TIFF画像書き出し (ImageWriterNode)
+ExifRead==3.5.1  # EXIF情報読み込み補完 (utils/exif_helper.py)
 pyinstaller==6.16.0 # 実行ファイル作成
 
 # 依存によるインストール
