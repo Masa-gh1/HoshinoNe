@@ -5,8 +5,5 @@
 __pycache__
 /build
 /dist
-*.CR2
-*.DNG
-*.fits
 /debug
-/sample/test/light_jpeg
+/sample
