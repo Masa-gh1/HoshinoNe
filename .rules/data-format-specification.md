@@ -115,10 +115,6 @@
 - CSV固有: プレーン名はファイル内の#マーカーから取得
 
 ### 処理ノード
-#### ImageAlignment, ShiftDetection
-- 入力headersを継承
-- 位置合わせ情報を追加 (method, success, confidence, movement_from_reference等)
-
 #### BayerUnpackSparse
 - 入力headersを継承
 - mode='RGB', planes=['R', 'G', 'B']に変更
@@ -129,13 +125,17 @@
 - width, heightを半分に変更
 
 ### 生成ノード
+#### TableNode
+- category='auxiliary', type='table'
+- columns, lines
+
 #### CoefficientsNode
 - category='auxiliary', type='polynomial'
-- mode, axes, columns, lines, max_orders, equations設定
+- mode, axes, columns, lines, max_orders, equations を設定
 
 #### TensorNode
 - category='auxiliary', type='tensor'
-- mode, axes, columns, lines, max_orders設定
+- mode, axes, columns, lines, max_orders を設定
 
 ### 分類ノード
 #### CategoryAuxiliary

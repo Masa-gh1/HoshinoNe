@@ -52,7 +52,6 @@ class NodeFactory:
         ('idwt'                    , '逆離散ウェーブレット変換(N:N)'),
         ('------------------------', None),
         ('quadratic_fit'           , '2次関数近似(N:N)'),
-       #('absolute_lowpass_filter' , '絶対値(低通)(N:N)'),# 廃止 upper_pass, lower_pass に分割
         ('auto_levels'             , '自動レベル(N:N)'),
         ('tone_curve'              , 'トーンカーブ(N:N)'),
         ('------------------------', None),
@@ -61,7 +60,6 @@ class NodeFactory:
         ('lab_converter'           , 'Lab変換(正規化なし)(N:N)'),
         ('rgb_converter'           , 'RGB変換(正規化なし)(N:N)'),
         ('------------------------', None),
-       #('image_alignment'         , '画像位置合わせ(N:N)'),# 廃止 ShiftDetectionNode, TransformNode に分割
         ('shift_detection'         , 'ズレ検出(N:1)'),
         ('transform'               , '変形(N:N)'),
         ('reposition'              , '再配置(N:N)'),

@@ -7,7 +7,7 @@
 - 速度が優先される一時的な画面表示は近似値を許可(例:ヒストグラムなど)
 
 ## コーディングルール
-- クラス名:PascalCase(例:ImageAlignmentNode)
+- クラス名:PascalCase(例:OffsetNode)
 - メソッド名:camelCase(例:detectStars)
 - 変数名:camelCase(例:starThreshold)
 - 定数:UPPER_CASE(例:BLOCK_SIZE)

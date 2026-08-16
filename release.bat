@@ -6,10 +6,12 @@ echo venv\           > EXCLUDE.lst
 echo __pycache__\   >> EXCLUDE.lst
 echo .git\          >> EXCLUDE.lst
 echo .vscode\       >> EXCLUDE.lst
+echo .agents\       >> EXCLUDE.lst
 echo .amazonq\      >> EXCLUDE.lst
 echo debug\         >> EXCLUDE.lst
 echo build\         >> EXCLUDE.lst
 echo dist\          >> EXCLUDE.lst
+echo local\         >> EXCLUDE.lst
 echo sample\        >> EXCLUDE.lst
 echo .CR2           >> EXCLUDE.lst
 echo Thumbs.db      >> EXCLUDE.lst
