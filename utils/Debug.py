@@ -67,7 +67,9 @@ class Debug:
                 name = os.path.relpath(name, cls.applicationHome)
                 name = name.replace("\\", "/")
 
-            filename = os.path.join(cls.applicationHome,f"record_{MAX_CACHE_SIZE_GB}GB_{BLOCK_SIZE}px_{MAX_CACHE_SIZE}_{MAX_WORKERS}.csv")
+            localDir = os.path.join(cls.applicationHome, "local")
+            os.makedirs(localDir, exist_ok=True)
+            filename = os.path.join(localDir, f"record_{MAX_CACHE_SIZE_GB}GB_{BLOCK_SIZE}px_{MAX_CACHE_SIZE}_{MAX_WORKERS}.csv")
             if not os.path.exists(filename):
                 with open(os.path.join(filename), "w") as file:
                     file.write("dummy\n")
