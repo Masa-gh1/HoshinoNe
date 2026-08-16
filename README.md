@@ -2,10 +2,25 @@
 
 ## 説明 (Japanese)
 フロー図で天体写真を処理するツールです。
-https://www.hoshinone.highwell.jp/
+
+詳しい使い方は [https://www.hoshinone.highwell.jp/](https://www.hoshinone.highwell.jp/)
 
 ## Description (English)
 Visual Flow-based Image Processing Tool
+
+For detailed usage, visit [https://www.hoshinone.highwell.jp/](https://www.hoshinone.highwell.jp/)
+
+## Quick start
+
+### 1. Clone the repository
+git clone https://github.com/Masa-gh1/HoshinoNe.git
+cd HoshinoNe
+
+### 2. Install dependencies
+pip install -r requirements.txt
+
+### 3. Run
+python HoshinoNe.py
 
 ## Development
 
