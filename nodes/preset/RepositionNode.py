@@ -1,5 +1,5 @@
 '''
-RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose, Integer Scale, No-copy placement)
+RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose, Integer Scale, Centered)
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -277,14 +277,14 @@ class RepositionLazyFlowData(LazyFlowData):
                 source = self._fetchRect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
                 
                 # 取得したデータに対して順変換を適用
-                # Source -> Resize (integer upscale, no-copy placement) -> Transpose -> Rot90 -> Flip -> Shift
+                # Source -> Resize (integer upscale, center-based no-copy placement) -> Transpose -> Rot90 -> Flip -> Shift
                 
                 # default processed for non-scale case
                 processed = source
                 
                 if scale_x != 1 or scale_y != 1:
                     # We do NOT duplicate source pixels. Instead, place each source pixel
-                    # into the resized (output) grid at spacing = scale, leaving gaps as NaN.
+                    # into the resized (output) grid at spacing = scale, using CENTER alignment.
                     expect_w = w
                     expect_h = h
                     # initialize processed with NaN of target resized area
@@ -294,25 +294,31 @@ class RepositionLazyFlowData(LazyFlowData):
                     fh = source.shape[0]
                     fw = source.shape[1]
 
-                    # source origin in source-space (subtract off_x/off_y because min_src includes off)
-                    src_x0 = min_src_x - off_x
-                    src_y0 = min_src_y - off_y
+                    # global source indices for fetched pixels
+                    src_xs = np.arange(fw) + min_src_x
+                    src_ys = np.arange(fh) + min_src_y
 
-                    # compute positions in local resized coordinates
-                    x_positions = (np.arange(fw) + src_x0) * scale_x - min_resized_x
-                    y_positions = (np.arange(fh) + src_y0) * scale_y - min_resized_y
+                    # compute centers (float) in global coordinates
+                    center_src_x = (min_src_x + (max_src_x - 1)) / 2.0
+                    center_src_y = (min_src_y + (max_src_y - 1)) / 2.0
+                    center_resized_x = min_resized_x + (expect_w - 1) / 2.0
+                    center_resized_y = min_resized_y + (expect_h - 1) / 2.0
 
-                    # cast to int
-                    x_positions = x_positions.astype(int)
-                    y_positions = y_positions.astype(int)
+                    # target global positions (rounded to nearest integer)
+                    target_x_global = np.round((src_xs - center_src_x) * scale_x + center_resized_x).astype(int)
+                    target_y_global = np.round((src_ys - center_src_y) * scale_y + center_resized_y).astype(int)
 
-                    # mask positions that are inside expected area
-                    x_mask = (x_positions >= 0) & (x_positions < expect_w)
-                    y_mask = (y_positions >= 0) & (y_positions < expect_h)
+                    # convert to local coords within processed (relative to min_resized)
+                    local_x = target_x_global - min_resized_x
+                    local_y = target_y_global - min_resized_y
+
+                    # mask positions inside expected area
+                    x_mask = (local_x >= 0) & (local_x < expect_w)
+                    y_mask = (local_y >= 0) & (local_y < expect_h)
 
                     if x_mask.any() and y_mask.any():
-                        x_pos_sel = x_positions[x_mask]
-                        y_pos_sel = y_positions[y_mask]
+                        x_pos_sel = local_x[x_mask]
+                        y_pos_sel = local_y[y_mask]
                         x_idx_sel = np.nonzero(x_mask)[0]
                         y_idx_sel = np.nonzero(y_mask)[0]
 
@@ -346,7 +352,7 @@ class RepositionLazyFlowData(LazyFlowData):
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
         
-        # 必要なブロックの範囲
+        # 必��なブロックの範囲
         bx_start = (x // BLOCK_SIZE) * BLOCK_SIZE
         bx_end   = ((x + w - 1) // BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE
         by_start = (y // BLOCK_SIZE) * BLOCK_SIZE
