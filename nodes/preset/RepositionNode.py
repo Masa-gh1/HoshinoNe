@@ -1,5 +1,5 @@
 '''
-RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose)
+RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose, Integer Scale)
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -53,8 +53,13 @@ class RepositionNode(LazyNNOperationNode):
         if not params:
             return inputData
         else:
-            shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height  = params
-            return RepositionLazyFlowData(inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+            # params now may include scale_x, scale_y (integers >=1)
+            # older tables without scale will default to 1
+            (shift_x, shift_y, rot90, flip_x, flip_y,
+             transpose, left, top, width, height,
+             scale_x, scale_y) = params
+            return RepositionLazyFlowData(inputData, shift_x, shift_y, rot90, flip_x, flip_y,
+                                          transpose, left, top, width, height, scale_x, scale_y)
 
     def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
@@ -128,12 +133,19 @@ class RepositionNode(LazyNNOperationNode):
         top       = int(row_data[columns.index('top'      )]) if 'top'      in columns else None
         width     = int(row_data[columns.index('width'    )]) if 'width'    in columns else None
         height    = int(row_data[columns.index('height'   )]) if 'height'   in columns else None
+        # Integer scale parameters (optional)
+        scale_x   = int(row_data[columns.index('scale_x'  )]) if 'scale_x'  in columns else 1
+        scale_y   = int(row_data[columns.index('scale_y'  )]) if 'scale_y'  in columns else 1
         
-        return (shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+        # Validate scale
+        if scale_x < 1 or scale_y < 1:
+            raise ValueError('scale_x/scale_y must be integers >= 1')
+        
+        return (shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height, scale_x, scale_y)
 
 class RepositionLazyFlowData(LazyFlowData):
-    def __init__(self, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
-        super().__init__(flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+    def __init__(self, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height, scale_x=1, scale_y=1):
+        super().__init__(flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height, scale_x, scale_y)
         
         # 出力サイズを計算
         w, h = flowData.getDimensions()
@@ -141,6 +153,10 @@ class RepositionLazyFlowData(LazyFlowData):
         h = h - top  if top    else h
         w = width    if width  else w
         h = height   if height else h
+        
+        # Apply integer scale (only expansion, scale_x/scale_y >=1)
+        w = w * scale_x
+        h = h * scale_y
         
         # Transpose または Rot90(奇数回) の場合、幅と高さを入れ替え
         isTransposed = (transpose % 2 != 0)
@@ -152,7 +168,7 @@ class RepositionLazyFlowData(LazyFlowData):
         else:
             self.setDimensions(w, h)
 
-    def operation(self, flowData, planeIndex, x, y, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
+    def operation(self, flowData, planeIndex, x, y, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height, scale_x=1, scale_y=1):
         """再配置を実行"""
         import numpy as np
         from config import BLOCK_SIZE
@@ -202,7 +218,7 @@ class RepositionLazyFlowData(LazyFlowData):
                 # 対応する Source 領域を計算
                 # Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Resize
                 
-                # 矩形の4隅
+                # 矩形の4隅 (リサイズ後空間の座標)
                 corners = [(sx, sy), (sx+w, sy), (sx+w, sy+h), (sx, sy+h)]
                 
                 # Un-Flip
@@ -214,15 +230,6 @@ class RepositionLazyFlowData(LazyFlowData):
                     unflipped_corners.append((tx, ty))
                 
                 # Un-Rot90 (Inverse of k*90 deg CW)
-                # k=1 (90 CW)  -> Inv (90 CCW)
-                # k=2 (180)    -> Inv (180)
-                # k=3 (270 CW) -> Inv (90 CW) = 270 CCW
-                
-                # 回転前の空間サイズ (Transpose後のサイズ)
-                # 現在の dstW, dstH は回転後のサイズ
-                
-                # 回転シミュレーション (CCW)
-                # rot90 は時計回り回数。逆変換は rot90 回の CCW 回転。
                 k = rot90 % 4
                 
                 curW, curH = dstW, dstH
@@ -246,39 +253,47 @@ class RepositionLazyFlowData(LazyFlowData):
                         tx, ty = ty, tx
                     untranspose_corners.append((tx, ty))
                 
-                # 逆変換結果
-                src_corners = untranspose_corners
+                # 逆変換結果 (リサイズ後空間のコーナー)
+                resized_corners = untranspose_corners
                 
-                # Source 空間でのバウンディングボックス
-                min_src_x = min(c[0] for c in src_corners)
-                max_src_x = max(c[0] for c in src_corners)
-                min_src_y = min(c[1] for c in src_corners)
-                max_src_y = max(c[1] for c in src_corners)
+                # リサイズ後空間でのバウンディングボックス
+                min_resized_x = min(c[0] for c in resized_corners)
+                max_resized_x = max(c[0] for c in resized_corners)
+                min_resized_y = min(c[1] for c in resized_corners)
+                max_resized_y = max(c[1] for c in resized_corners)
                 
-                # Un-Resize (Add offset)
+                # Un-Resize: integer scale の逆変換 (floor/ceil を利用)
                 off_x = left if left else 0
                 off_y = top  if top  else 0
                 
-                min_src_x += off_x
-                max_src_x += off_x
-                min_src_y += off_y
-                max_src_y += off_y
+                min_src_x = (min_resized_x // scale_x) + off_x
+                max_src_x = ((max_resized_x + scale_x - 1) // scale_x) + off_x
+                min_src_y = (min_resized_y // scale_y) + off_y
+                max_src_y = ((max_resized_y + scale_y - 1) // scale_y) + off_y
                 
-                # 整数座標に丸める (ピクセル中心ではなくインデックスとして扱うため)
-                # 厳密には、回転によって矩形の頂点が入れ替わっているだけなので、
-                # min/max で正しい範囲が得られる (ただし max は inclusive)
-                
-                # 範囲: [min_src_x, max_src_x + 1)
-                # ただし、回転しているので width/height が入れ替わっている可能性がある
-                
+                # fetch_w/h はソース空間での幅
                 fetch_w = max_src_x - min_src_x
                 fetch_h = max_src_y - min_src_y
                 source = self._fetchRect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
                 
                 # 取得したデータに対して順変換を適用
-                # Source -> Resize -> Transpose -> Rot90 -> Flip -> Shift
+                # Source -> Resize (integer upscale) -> Transpose -> Rot90 -> Flip -> Shift
                 
                 processed = source
+                # Integer upscale by repeating pixels (no interpolation)
+                if scale_x != 1 or scale_y != 1:
+                    # repeat along Y then X
+                    processed = np.repeat(np.repeat(processed, scale_y, axis=0), scale_x, axis=1)
+                    # Crop to exact resized-region corresponding to [min_resized, max_resized)
+                    crop_x = min_resized_x - ((min_src_x - off_x) * scale_x)
+                    crop_y = min_resized_y - ((min_src_y - off_y) * scale_y)
+                    # Ensure ints
+                    crop_x = int(crop_x)
+                    crop_y = int(crop_y)
+                    # The expected resized width/height
+                    expect_w = w
+                    expect_h = h
+                    processed = processed[crop_y:crop_y+expect_h, crop_x:crop_x+expect_w]
                 
                 # Transpose
                 if transpose % 2:
