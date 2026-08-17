@@ -1,5 +1,5 @@
 '''
-RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose, Integer Scale)
+RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose, Integer Scale, No-copy placement)
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -203,7 +203,7 @@ class RepositionLazyFlowData(LazyFlowData):
         if srcY_start < srcY_end:
             ys = [(srcY_start, reqH, 0)]
         else:
-            h1 = dstH - srcY_start
+            h1 = reqH if False else (dstH - srcY_start)
             h2 = reqH - h1
             ys = [(srcY_start, h1, 0), (0, h2, h1)]
             
@@ -277,24 +277,48 @@ class RepositionLazyFlowData(LazyFlowData):
                 source = self._fetchRect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
                 
                 # 取得したデータに対して順変換を適用
-                # Source -> Resize (integer upscale) -> Transpose -> Rot90 -> Flip -> Shift
+                # Source -> Resize (integer upscale, no-copy placement) -> Transpose -> Rot90 -> Flip -> Shift
                 
+                # default processed for non-scale case
                 processed = source
-                # Integer upscale by repeating pixels (no interpolation)
+                
                 if scale_x != 1 or scale_y != 1:
-                    # repeat along Y then X
-                    processed = np.repeat(np.repeat(processed, scale_y, axis=0), scale_x, axis=1)
-                    # Crop to exact resized-region corresponding to [min_resized, max_resized)
-                    crop_x = min_resized_x - ((min_src_x - off_x) * scale_x)
-                    crop_y = min_resized_y - ((min_src_y - off_y) * scale_y)
-                    # Ensure ints
-                    crop_x = int(crop_x)
-                    crop_y = int(crop_y)
-                    # The expected resized width/height
+                    # We do NOT duplicate source pixels. Instead, place each source pixel
+                    # into the resized (output) grid at spacing = scale, leaving gaps as NaN.
                     expect_w = w
                     expect_h = h
-                    processed = processed[crop_y:crop_y+expect_h, crop_x:crop_x+expect_w]
-                
+                    # initialize processed with NaN of target resized area
+                    processed = nh.nans((expect_h, expect_w), dtype=flowData.getVariableType())
+
+                    # source has size (fetch_h, fetch_w)
+                    fh = source.shape[0]
+                    fw = source.shape[1]
+
+                    # source origin in source-space (subtract off_x/off_y because min_src includes off)
+                    src_x0 = min_src_x - off_x
+                    src_y0 = min_src_y - off_y
+
+                    # compute positions in local resized coordinates
+                    x_positions = (np.arange(fw) + src_x0) * scale_x - min_resized_x
+                    y_positions = (np.arange(fh) + src_y0) * scale_y - min_resized_y
+
+                    # cast to int
+                    x_positions = x_positions.astype(int)
+                    y_positions = y_positions.astype(int)
+
+                    # mask positions that are inside expected area
+                    x_mask = (x_positions >= 0) & (x_positions < expect_w)
+                    y_mask = (y_positions >= 0) & (y_positions < expect_h)
+
+                    if x_mask.any() and y_mask.any():
+                        x_pos_sel = x_positions[x_mask]
+                        y_pos_sel = y_positions[y_mask]
+                        x_idx_sel = np.nonzero(x_mask)[0]
+                        y_idx_sel = np.nonzero(y_mask)[0]
+
+                        # assign by outer indexing; source is 2D per-plane
+                        processed[np.ix_(y_pos_sel, x_pos_sel)] = source[np.ix_(y_idx_sel, x_idx_sel)]
+
                 # Transpose
                 if transpose % 2:
                     processed = np.transpose(processed)
