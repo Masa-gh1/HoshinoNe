@@ -6,6 +6,7 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+import math
 
 def dispS(value, representative = None):
     """数値を表示に適した長さで文字列化(短)する"""
@@ -51,7 +52,7 @@ def dispL(value, representative = None):
         abss   = [abs(representative)]
         absMax = max(abss)
     else:
-        abss   = [abs(v) for v in values]
+        abss   = [abs(v) if not math.isnan(v) else 0.0 for v in values]
         absMax = max(abss)
     
     threshold = [100.0,  0.1, 0.0001, 0.0000001]

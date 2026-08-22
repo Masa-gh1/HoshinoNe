@@ -284,8 +284,8 @@ class ResultWindow(tk.Toplevel):
         planes = headers.get('planes', [])
         
         width, height = flowData.getDimensions()
-        displayRows = min(height, 100)  # 最初の100行のみ
-        displayCols = min(width ,  10)  # 最初の10列のみ
+        displayRows = min(height, 100)  # 最初と最後の50行のみ表示
+        displayCols = min(width ,  10)  # 最初と最後の5列のみ表示
         
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
@@ -297,8 +297,12 @@ class ResultWindow(tk.Toplevel):
             blockH = 0
             cols = []
             for x in range(displayCols):
+                if displayCols < width and displayCols//2 <= x:
+                    x += width - displayCols
                 cells = []
                 for y in range(displayRows):
+                    if displayRows < height and displayRows//2 <= y:
+                        y += height - displayRows
                     if(  x < blockX or blockX + blockW <= x
                     or y < blockY or blockY + blockH <= y
                     ):
@@ -319,23 +323,28 @@ class ResultWindow(tk.Toplevel):
             # ヘッダー行
             if width:
                 for x in  range(width):
+                    if displayCols < width and displayCols//2 == x:
+                        content += "\t..."
                     content += "\t"
                     content += f"x:{x}".ljust(max([len(t) for t in cols[x]]))
                 content += "\n"
             
             # データ行
             for y in range(displayRows):
-                row = [f"y:{y}"]
+                if displayRows < height and displayRows//2 == y:
+                    content += " :\n"
+                if displayRows < height and displayRows//2 <= y:
+                    row = [f"y:{y + height - displayRows}"]
+                else:
+                    row = [f"y:{y}"]
                 for x in range(displayCols):
+                    if displayCols < width and displayCols//2 == x:
+                        row.append("...")
                     row.append(cols[x][y])
-                if width > displayCols:
-                    row.append("...")
                 content += "\t".join(row) + "\n"
-            if height > displayRows:
-                content += "...\n"
         
         return content
-        
+    
     def _generateTableContent(self, flowData):
         """マトリックスデータの内容を生成"""
         headers = flowData.headers
@@ -346,8 +355,8 @@ class ResultWindow(tk.Toplevel):
         columns = headers.get('columns', [])
         
         width, height = flowData.getDimensions()
-        displayRows = min(height, 1000)  # 最初の1000行のみ表示
-        displayCols = min(width ,   10)  # 最初の10列のみ表示
+        displayRows = min(height, 1000)  # 最初と最後の500行のみ表示
+        displayCols = min(width ,   10)  # 最初と最後の5列のみ表示
         
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
@@ -359,8 +368,12 @@ class ResultWindow(tk.Toplevel):
             blockH = 0
             cols = []
             for x in range(displayCols):
+                if displayCols < width and displayCols//2 <= x:
+                    x += width - displayCols
                 cells = []
                 for y in range(displayRows):
+                    if displayRows < height and displayRows//2 <= y:
+                        y += height - displayRows
                     if(  x < blockX or blockX + blockW <= x
                       or y < blockY or blockY + blockH <= y
                       ):
@@ -382,6 +395,8 @@ class ResultWindow(tk.Toplevel):
             length = max([len(label) for label in lines]) if lines else 7
             content += "\t"*(length//8)
             for x in range(displayCols):
+                if displayCols < width and displayCols//2 == x:
+                    content += "\t..."
                 content += "\t"
                 column = columns[x] if x < len(columns) else f"col_{x}"
                 content += column.ljust(max([len(t) for t in cols[x]]))
@@ -389,14 +404,17 @@ class ResultWindow(tk.Toplevel):
             
             # データ行
             for y in range(displayRows):
-                row = [lines[y] if y < len(lines) else f"row_{y}"]
+                if displayRows < height and displayRows//2 == y:
+                    content += " :\n"
+                if displayRows < height and displayRows//2 <= y:
+                    row = [lines[y] if y < len(lines) else f"row_{y + height - displayRows}"]
+                else:
+                    row = [lines[y] if y < len(lines) else f"row_{y}"]
                 for x in range(displayCols):
+                    if displayCols < width and displayCols//2 == x:
+                        row.append("...")
                     row.append(cols[x][y])
-                if width > displayCols:
-                    row.append("...")
                 content += "\t".join(row) + "\n"
-            if height > displayRows:
-                content += "...\n"
             
         return content
     
