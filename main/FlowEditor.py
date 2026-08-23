@@ -87,29 +87,25 @@ class FlowEditor:
         # 右クリックメニュー
         self.contextMenu = tk.Menu(self.root, tearoff=0)
         columnbreak = False
+        col=0
         row=0
-        maxRow=0
-        for nodeType, label in NodeFactory.getMenuItems():
+        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [('***', None, None)]:
             if '---' in nodeType:
                 self.contextMenu.add_separator()
                 row += 1
             elif '***' in nodeType:
-                self.contextMenu.add_separator()
                 columnbreak = True
+                if 0 == col:
+                    self.contextMenu.add_separator()
+                    self.contextMenu.add_separator()
+                    self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
+                    self.contextMenu.add_command(label="別のフローをインポート", command=self.addFlowAtPosition)
+                col += 1
                 row = 0
             else:
-                self.contextMenu.add_command(label=label, command=lambda nt=nodeType: self.addNodeAtPosition(nt), columnbreak=columnbreak)
+                self.contextMenu.add_command(label=label, accelerator=tooltip, command=lambda nt=nodeType: self.addNodeAtPosition(nt), columnbreak=columnbreak)
                 columnbreak = False
                 row += 2
-            maxRow = max(maxRow, row)
-        
-        if row < maxRow:
-            self.contextMenu.add_separator()
-        for _ in range(row, maxRow,2):
-            self.contextMenu.add_command(label="")
-        self.contextMenu.add_separator()
-        self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
-        self.contextMenu.add_command(label="別のフローをインポート", command=self.addFlowAtPosition)
         
         # 使い方説明
         infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード/トレイ追加 2.ドラッグで移動 3.クリックで接続 4.実行 5.ダブルクリックで結果表示", bg='lightyellow')
