@@ -39,8 +39,8 @@ class NodeFactory:
         #('deconvolution'           , '逆畳み込み(N:N)'             , None                        ), # 未公開
         ('fft'                     , 'FFT(N:N)'                     , 'DFT(A)'                    ),
         ('ifft'                    , '逆FFT(N:N)'                   , 'IDFT(A)'                   ),
-        ('dwt'                     , '離散ウェーブレット変換(N:N)'  , 'DWT(A)'                    ),
-        ('idwt'                    , '逆離散ウェーブレット変換(N:N)', 'IDWT(A)'                   ),
+        ('dwt'                     , '離散ウェーブレット変換(N:N)'  , 'DWT(A,B)'                  ),
+        ('idwt'                    , '逆離散ウェーブレット変換(N:N)', 'IDWT(A,B)'                 ),
         ('------------------------', None                           , None                        ),
         ('quadratic_fit'           , '2次関数近似(N:N)'             , None                        ),
         ('auto_levels'             , '自動レベル(N:N)'              , None                        ),
