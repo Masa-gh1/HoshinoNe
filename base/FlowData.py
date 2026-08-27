@@ -125,7 +125,9 @@ class FlowData:
             # 未設定なので all nan
             from utils import numpy_helpers as nh
             from base import DataBlock
-            return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
+            w = min(BLOCK_SIZE, width-x)
+            h = min(BLOCK_SIZE, height-y)
+            return DataBlock(nh.nans((h, w)), planeIndex, x, y)
         
         # 遅延ロード用のDataBlockを作成
         block = DataBlock(None, planeIndex, x, y)
@@ -173,10 +175,7 @@ class FlowData:
         
         # numpy配列として正規化
         data = dataBlock.data
-        if np.isnan(data).all():
-            # all nan 設定をパス
-            return
-        elif isinstance(data, list):
+        if isinstance(data, list):
             if np.iscomplexobj(data):
                 # 複素数
                 data = np.array(data, dtype=nh.BDCOMPLEX)
