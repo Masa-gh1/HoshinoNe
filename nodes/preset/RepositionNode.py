@@ -190,8 +190,6 @@ class RepositionLazyFlowData(LazyFlowData):
         
         srcW, srcH = flowData.getDimensions()
         dstW, dstH = self.getDimensions()
-        if 0==planeIndex and 0==x and 0==y:
-            print("src", (srcW, srcH), "dst", (dstW, dstH))
         
         # 要求された結果ブロックサイズ
         dstBlockW = min(BLOCK_SIZE, dstW - x)
@@ -205,13 +203,11 @@ class RepositionLazyFlowData(LazyFlowData):
             [r, b],
             [l, b],
         ])
-        print("dst_corners", "[" + ", ".join([f"({x:.3f}, {y:.3f})" for x,y in dst_corners]) + "]")
         
         # 逆算して読み込む Source 領域を計算
         # Un-Resize -> Un-Shift -> Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Scale
         Minv = np.linalg.inv(M)
         src_corners = (np.hstack((dst_corners, nh.ones((dst_corners.shape[0], 1)))) @ Minv.T[:, :2])
-        print("src_corners", "[" + ", ".join([f"({x:.3f}, {y:.3f})" for x,y in src_corners]) + "]")
         
         # corners の境界跨ぎ(roll)を分解する
         minCorX = min([c[0] for c in src_corners])
@@ -222,7 +218,6 @@ class RepositionLazyFlowData(LazyFlowData):
         endSrcX = math.floor(maxCorX) + 1
         minSrcY = math.floor(minCorY)
         endSrcY = math.floor(maxCorY) + 1
-        print("source", f"({minSrcX:.3f}, {minSrcY:.3f}) ({endSrcX:.3f}, {endSrcY:.3f})")
         
         if 0 <= minSrcX and 0 <= minSrcY and endSrcX <= srcW and endSrcY <= srcH:
             source = self._fetchRect(flowData, planeIndex, minSrcX, minSrcY, endSrcX - minSrcX, endSrcY - minSrcY)
@@ -245,33 +240,28 @@ class RepositionLazyFlowData(LazyFlowData):
                 else:
                     source = np.vstack([source, yfrag])
         
-        print(source)
-
         # 結果バッファ
         result = nh.nans((dstBlockH, dstBlockW), dtype=flowData.getVariableType())
         
-        # 結果バッファに配置
-        for sy in range(minSrcY, endSrcY):
-            debug_s = ""
-            debug_d = ""
-            try:
-                for sx in range(minSrcX, endSrcX):
-                    ((dx,), (dy,), (_,),) = M @ (nh.array([[sx], [sy], [1]]))
-                    dx -= x
-                    dy -= y
-                    px  = sx - minSrcX
-                    py  = sy - minSrcY
-                    if (dx < 5 and dy < 5) or (250 < dx and dy < 5):
-                        debug_s += "(%.1f, %.1f)"%(sx, sy) + " "
-                        debug_d += "(%.1f, %.1f)"%(dx, dy) + " "
-                    if(   0 <= dx and dx < dstBlockW       and 0 <= dy and dy < dstBlockH
-                      and 0 <= px and px < source.shape[1] and 0 <= py and py < source.shape[0]
-                      ):
-                        result[int(dy), int(dx)] = source[py, px]
-            finally:
-                if dy < 8:
-                    print(debug_s,debug_d)
-            
+        # 結果バッファに再配置
+        sy, sx = np.mgrid[minSrcY:endSrcY, minSrcX:endSrcX].astype(flowData.getVariableType())
+        sx = sx.ravel()
+        sy = sy.ravel()
+        pts = np.vstack([sx, sy, nh.ones(sx.size)])
+        dst_pts = M[:2, :] @ pts
+        dx = (dst_pts[0] - x).astype(int)
+        dy = (dst_pts[1] - y).astype(int)
+        px = (sx - minSrcX).astype(int)
+        py = (sy - minSrcY).astype(int)
+        valid = (
+            (0 <= dx) & (dx < dstBlockW) &
+            (0 <= dy) & (dy < dstBlockH) &
+            (0 <= px) & (px < source.shape[1]) &
+            (0 <= py) & (py < source.shape[0])
+        )
+        if np.any(valid):
+            result[dy[valid], dx[valid]] = source[py[valid], px[valid]]
+        
         return DataBlock(result, planeIndex, x, y)
 
     def _fetchRect(self, flowData, planeIndex, x, y, w, h):
