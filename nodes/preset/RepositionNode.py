@@ -6,7 +6,7 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
-
+import math
 import hashlib
 
 from base.FlowNode_CONST import *
@@ -149,31 +149,39 @@ class RepositionNode(LazyNNOperationNode):
 
 class RepositionLazyFlowData(LazyFlowData):
     def __init__(self, flowData, shift_x, shift_y, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, width, height):
-        super().__init__(flowData, shift_x, shift_y, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, width, height)
+        from utils import numpy_helpers as nh
+        
+        # 出力位置を計算
+        w, h = flowData.getDimensions()
+        M = self.createAffine(w, h, 0, 0, flip_x, flip_y, rot90, transpose, scale_x, scale_y)
+        p = M @ nh.array([[0, w-1], # ピクセル位置で最小位置を計算
+                          [0, h-1],
+                          [1,   1]])
+        l = min(p[0])
+        t = min(p[1])
+
+        # width/height が指定されていれば、その領域を切り出す
+        l = left if left else l
+        t = top  if top  else t
+        M = self.createAffine(w, h, shift_x - l, shift_y - t, flip_x, flip_y, rot90, transpose, scale_x, scale_y)
+        super().__init__(flowData, M, shift_x, shift_y, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, width, height)
         
         # 出力サイズを計算
-        w, h = flowData.getDimensions()
-        w = w - left if left   else w
-        h = h - top  if top    else h
-        w = width    if width  else w
-        h = height   if height else h
+        p = M @ nh.array([[0, w], # 入力サイズで出力サイズを計算
+                          [0, h],
+                          [1, 1]])
+        w = math.floor(max(p[0]) - min(p[0]))
+        h = math.floor(max(p[1]) - min(p[1]))
         
-        w = w * scale_x
-        h = h * scale_y
-        
-        # Transpose または Rot90(奇数回) の場合、幅と高さを入れ替え
-        isTransposed = (transpose % 2 != 0)
-        isRotOdd = (rot90 % 2 != 0)
-        
-        # Transpose Rot90 どちらか片方だけなら入れ替え、両方なら元に戻る
-        if isTransposed ^ isRotOdd:
-            self.setDimensions(h, w)
-        else:
-            self.setDimensions(w, h)
-
-    def operation(self, flowData, planeIndex, x, y, shift_x, shift_y, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, width, height):
+        # left/top が指定されていれば、その領域を切り出す
+        w = width  if width  else w
+        h = height if height else h
+        self.setDimensions(w, h)
+    
+    def operation(self, flowData, planeIndex, x, y, M, shift_x, shift_y, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, width, height):
         """再配置を実行
-        処理順序は Resize -> Scale -> Transpose -> Rot90 -> Flip -> Shift
+        処理順序は Scale -> Transpose -> Rot90 -> Flip -> Shift
+        Resize は 出力結果の範囲
         """
         import numpy as np
         from config import BLOCK_SIZE
@@ -182,183 +190,88 @@ class RepositionLazyFlowData(LazyFlowData):
         
         srcW, srcH = flowData.getDimensions()
         dstW, dstH = self.getDimensions()
+        if 0==planeIndex and 0==x and 0==y:
+            print("src", (srcW, srcH), "dst", (dstW, dstH))
         
-        # 要求されたブロックサイズ
-        reqW = min(BLOCK_SIZE, dstW - x)
-        reqH = min(BLOCK_SIZE, dstH - y)
+        # 要求された結果ブロックサイズ
+        dstBlockW = min(BLOCK_SIZE, dstW - x)
+        dstBlockH = min(BLOCK_SIZE, dstH - y)
         
-        # Shift (Roll) の逆変換を行い、必要な領域を特定する
-        # Shiftは循環するので、出力ブロックは最大4つの矩形領域に分割される可能性がある
+        # 出力ブロック位置のコーナー座標
+        l, r, t, b = x, x + dstBlockW - 1, y, y + dstBlockH - 1
+        dst_corners = nh.array([
+            [l, t],
+            [r, t],
+            [r, b],
+            [l, b],
+        ])
+        print("dst_corners", "[" + ", ".join([f"({x:.3f}, {y:.3f})" for x,y in dst_corners]) + "]")
         
-        # X方向の分割
-        srcX_start = (x - shift_x) % dstW
-        srcX_end   = (x + reqW - shift_x) % dstW
+        # 逆算して読み込む Source 領域を計算
+        # Un-Resize -> Un-Shift -> Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Scale
+        Minv = np.linalg.inv(M)
+        src_corners = (np.hstack((dst_corners, nh.ones((dst_corners.shape[0], 1)))) @ Minv.T[:, :2])
+        print("src_corners", "[" + ", ".join([f"({x:.3f}, {y:.3f})" for x,y in src_corners]) + "]")
         
-        if srcX_start < srcX_end:
-            xs = [(srcX_start, reqW, 0)] # (start, width, dst_offset)
+        # corners の境界跨ぎ(roll)を分解する
+        minCorX = min([c[0] for c in src_corners])
+        maxCorX = max([c[0] for c in src_corners])
+        minCorY = min([c[1] for c in src_corners])
+        maxCorY = max([c[1] for c in src_corners])
+        minSrcX = math.floor(minCorX)
+        endSrcX = math.floor(maxCorX) + 1
+        minSrcY = math.floor(minCorY)
+        endSrcY = math.floor(maxCorY) + 1
+        print("source", f"({minSrcX:.3f}, {minSrcY:.3f}) ({endSrcX:.3f}, {endSrcY:.3f})")
+        
+        if 0 <= minSrcX and 0 <= minSrcY and endSrcX <= srcW and endSrcY <= srcH:
+            source = self._fetchRect(flowData, planeIndex, minSrcX, minSrcY, endSrcX - minSrcX, endSrcY - minSrcY)
         else:
-            w1 = dstW - srcX_start
-            w2 = reqW - w1
-            xs = [(srcX_start, w1, 0), (0, w2, w1)]
+            source = None
+            for sy in [minSrcY] + ([0] if minSrcY < 0 else []) + list(range(srcH, endSrcY, srcH)):
+                yfrag = None
+                for sx in [minSrcX] + ([0] if minSrcX < 0 else []) + list(range(srcW, endSrcX, srcW)):
+                    psx = sx % srcW
+                    psy = sy % srcH
+                    pw = min(srcW - psx, endSrcX - sx)
+                    ph = min(srcH - psy, endSrcY - sy)
+                    xfrag = self._fetchRect(flowData, planeIndex, psx, psy, pw, ph)
+                    if yfrag is None:
+                        yfrag = xfrag
+                    else:
+                        yfrag = np.hstack([yfrag, xfrag])
+                if source is None:
+                    source = yfrag
+                else:
+                    source = np.vstack([source, yfrag])
         
-        # Y方向の分割
-        srcY_start = (y - shift_y) % dstH
-        srcY_end   = (y + reqH - shift_y) % dstH
-        
-        if srcY_start < srcY_end:
-            ys = [(srcY_start, reqH, 0)]
-        else:
-            h1 = dstH - srcY_start
-            h2 = reqH - h1
-            ys = [(srcY_start, h1, 0), (0, h2, h1)]
-            
+        print(source)
+
         # 結果バッファ
-        result = nh.nans((reqH, reqW), dtype=flowData.getVariableType())
+        result = nh.nans((dstBlockH, dstBlockW), dtype=flowData.getVariableType())
         
-        # 各領域について処理
-        for sy, h, dy in ys:
-            for sx, w, dx in xs:
-                # (sx, sy, w, h) を 逆順変換し Source データを取得し、順変換を適用する
-                
-                # 対応する Source 領域を計算
-                # Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Resize
-                
-                # 矩形の4隅 (リサイズ後空間の座標)
-                corners = [(sx, sy), (sx+w, sy), (sx+w, sy+h), (sx, sy+h)]
-                
-                # Un-Flip
-                unflipped_corners = []
-                for cx, cy in corners:
-                    tx, ty = cx, cy
-                    if flip_x % 2: tx = dstW - 1 - tx
-                    if flip_y % 2: ty = dstH - 1 - ty
-                    unflipped_corners.append((tx, ty))
-                
-                # Un-Rot90 (Inverse of k*90 deg CW)
-                # k=1 (90 CW)  -> Inv (90 CCW)
-                # k=2 (180)    -> Inv (180)
-                # k=3 (270 CW) -> Inv (90 CW) = 270 CCW
-                
-                # 回転前の空間サイズ (Transpose後のサイズ)
-                # 現在の dstW, dstH は回転後のサイズ
-                
-                # 回転シミュレーション (CCW)
-                # rot90 は時計回り回数。逆変換は rot90 回の CCW 回転。
-                k = rot90 % 4
-                
-                curW, curH = dstW, dstH
-                unrotated_corners = unflipped_corners
-                
-                for _ in range(k):
-                    next_corners = []
-                    for cx, cy in unrotated_corners:
-                        # 90 deg CCW: (x, y) -> (y, W-1-x)
-                        nx = cy
-                        ny = curW - 1 - cx
-                        next_corners.append((nx, ny))
-                    unrotated_corners = next_corners
-                    curW, curH = curH, curW
-                
-                # Un-Transpose
-                untranspose_corners = []
-                for cx, cy in unrotated_corners:
-                    tx, ty = cx, cy
-                    if transpose % 2:
-                        tx, ty = ty, tx
-                    untranspose_corners.append((tx, ty))
-                
-                # 逆変換結果 (リサイズ後空間のコーナー)
-                resized_corners = untranspose_corners
-                
-                # リサイズ後空間でのバウンディングボックス
-                min_resized_x = min(c[0] for c in resized_corners)
-                max_resized_x = max(c[0] for c in resized_corners)
-                min_resized_y = min(c[1] for c in resized_corners)
-                max_resized_y = max(c[1] for c in resized_corners)
-                
-                # Un-Resize: integer scale の逆変換 (floor/ceil を利用)
-                off_x = left if left else 0
-                off_y = top  if top  else 0
-                
-                min_src_x = (min_resized_x // scale_x) + off_x
-                max_src_x = ((max_resized_x + scale_x - 1) // scale_x) + off_x
-                min_src_y = (min_resized_y // scale_y) + off_y
-                max_src_y = ((max_resized_y + scale_y - 1) // scale_y) + off_y
-                
-                # fetch_w/h はソース空間での幅
-                fetch_w = max_src_x - min_src_x
-                fetch_h = max_src_y - min_src_y
-                source = self._fetchRect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
-                
-                # 取得したデータに対して順変換を適用
-                # Resize -> Scale -> Transpose -> Rot90 -> Flip -> Shift
-                
-                processed = source
-                
-                # Scale
-                if 1 < scale_x or 1 < scale_y:
-                    # We do NOT duplicate source pixels. Instead, place each source pixel
-                    # into the resized (output) grid at spacing = scale, using CENTER alignment.
-                    expect_w = w
-                    expect_h = h
-                    # initialize processed with NaN of target resized area
-                    processed = nh.nans((expect_h, expect_w), dtype=flowData.getVariableType())
-
-                    # source has size (fetch_h, fetch_w)
-                    fh = source.shape[0]
-                    fw = source.shape[1]
-
-                    # global source indices for fetched pixels
-                    src_xs = np.arange(fw) + min_src_x
-                    src_ys = np.arange(fh) + min_src_y
-
-                    # compute centers (float) in global coordinates
-                    center_src_x = (min_src_x + (max_src_x - 1)) / 2.0
-                    center_src_y = (min_src_y + (max_src_y - 1)) / 2.0
-                    center_resized_x = min_resized_x + (expect_w - 1) / 2.0
-                    center_resized_y = min_resized_y + (expect_h - 1) / 2.0
-
-                    # target global positions (rounded to nearest integer)
-                    target_x_global = np.round((src_xs - center_src_x) * scale_x + center_resized_x).astype(int)
-                    target_y_global = np.round((src_ys - center_src_y) * scale_y + center_resized_y).astype(int)
-
-                    # convert to local coords within processed (relative to min_resized)
-                    local_x = target_x_global - min_resized_x
-                    local_y = target_y_global - min_resized_y
-
-                    # mask positions inside expected area
-                    x_mask = (local_x >= 0) & (local_x < expect_w)
-                    y_mask = (local_y >= 0) & (local_y < expect_h)
-
-                    if x_mask.any() and y_mask.any():
-                        x_pos_sel = local_x[x_mask]
-                        y_pos_sel = local_y[y_mask]
-                        x_idx_sel = np.nonzero(x_mask)[0]
-                        y_idx_sel = np.nonzero(y_mask)[0]
-
-                        # assign by outer indexing; source is 2D per-plane
-                        processed[np.ix_(y_pos_sel, x_pos_sel)] = source[np.ix_(y_idx_sel, x_idx_sel)]
-                
-                # Transpose
-                if transpose % 2:
-                    processed = np.transpose(processed)
-                
-                # Rot90
-                k = rot90 % 4
-                if k != 0:
-                    # rot90 は時計回り(CW)指定、numpy.rot90 は反時計回り(CCW)
-                    # そのため負の値を渡して時計回りにする
-                    processed = np.rot90(processed, k=-k)
-                
-                # Flip
-                if flip_x % 2:
-                    processed = np.fliplr(processed)
-                if flip_y % 2:
-                    processed = np.flipud(processed)
-                
-                # 結果バッファに配置
-                result[dy:dy+h, dx:dx+w] = processed
-        
+        # 結果バッファに配置
+        for sy in range(minSrcY, endSrcY):
+            debug_s = ""
+            debug_d = ""
+            try:
+                for sx in range(minSrcX, endSrcX):
+                    ((dx,), (dy,), (_,),) = M @ (nh.array([[sx], [sy], [1]]))
+                    dx -= x
+                    dy -= y
+                    px  = sx - minSrcX
+                    py  = sy - minSrcY
+                    if (dx < 5 and dy < 5) or (250 < dx and dy < 5):
+                        debug_s += "(%.1f, %.1f)"%(sx, sy) + " "
+                        debug_d += "(%.1f, %.1f)"%(dx, dy) + " "
+                    if(   0 <= dx and dx < dstBlockW       and 0 <= dy and dy < dstBlockH
+                      and 0 <= px and px < source.shape[1] and 0 <= py and py < source.shape[0]
+                      ):
+                        result[int(dy), int(dx)] = source[py, px]
+            finally:
+                if dy < 8:
+                    print(debug_s,debug_d)
+            
         return DataBlock(result, planeIndex, x, y)
 
     def _fetchRect(self, flowData, planeIndex, x, y, w, h):
@@ -402,3 +315,67 @@ class RepositionLazyFlowData(LazyFlowData):
         crop_x = x - bx_start
         crop_y = y - by_start
         return buffer[crop_y:crop_y+h, crop_x:crop_x+w]
+    
+    def createAffine(self, width, height, dx, dy, flip_x, flip_y, rot90, transpose, scale_x, scale_y):
+        from utils import numpy_helpers as nh
+        
+        # 変換行列を計算
+        # Scale -> Transpose -> Rot90 -> Flip -> move
+        M = nh.eye(3)
+        
+        # 左上座標系から中央座標系へ変換
+        M = nh.array([[1, 0, -width /2.0],
+                      [0, 1, -height/2.0],
+                      [0, 0,           1]]) @ M
+        
+        # Scale
+        M = nh.array([[scale_x,       0, 0],
+                      [      0, scale_y, 0],
+                      [      0,       0, 1]]) @ M
+        
+        # Transpose
+        if transpose % 2 != 0:
+            M = nh.array([[0, 1, 0],
+                          [1, 0, 0],
+                          [0, 0, 1]]) @ M
+        
+        # Rot90
+        # k=1 (90 CW)  -> Inv (90 CCW)
+        # k=2 (180)    -> Inv (180)
+        # k=3 (270 CW) -> Inv (90 CW) = 270 CCW
+        # rot90 は時計回り(CW)回数、逆変換は rot90 回の CCW 回転
+        if rot90 % 4 == 1:
+            M = nh.array([[ 0, -1, 0],
+                          [ 1,  0, 0],
+
+                          [ 0,  0, 1]]) @ M
+        elif rot90 % 4 == 2:
+            M = nh.array([[-1, 0, 0],
+                          [ 0,-1, 0],
+                          [ 0, 0, 1]]) @ M
+        elif rot90 % 4 == 3:
+            M = nh.array([[ 0, 1, 0],
+                          [-1, 0, 0],
+                          [ 0, 0, 1]]) @ M
+        
+        # Flip
+        if flip_x % 2 != 0:
+            M = nh.array([[-1, 0, 0],
+                          [ 0, 1, 0],
+                          [ 0, 0, 1]]) @ M
+        if flip_y % 2 != 0:
+            M = nh.array([[1,  0, 0],
+                          [0, -1, 0],
+                          [0,  0, 1]]) @ M
+        
+        # move
+        M = nh.array([[1, 0, dx],
+                      [0, 1, dy],
+                      [0, 0,  1]]) @ M
+        
+        # 中央座標系から左上座標系へ変換
+        M = nh.array([[1, 0, width /2.0],
+                      [0, 1, height/2.0],
+                      [0, 0,          1]]) @ M
+        
+        return M
