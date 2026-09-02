@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import time
 from collections import deque, OrderedDict
 import os
@@ -19,6 +22,9 @@ from config import MAX_CACHE_SIZE, CACHE_BLOCK_SIZE_BYTES, BLOCK_CACHE_PAGE_SIZE
 from utils.ThreadPool import CoalescingExecutor
 from base.Constants import CachePolicy
 
+if TYPE_CHECKING:
+    import numpy as np
+
 # キャッシュページの最大数
 MAX_BLOCK_CACHE_PAGE = MAX_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
 END_SCALE = (BLOCK_CACHE_PAGE_SIZE-1).bit_length() + 1
@@ -29,7 +35,7 @@ class LockWrapper():
         self._lock = threading.Lock()
         self._local = threading.local()
     
-    def __call__(self, name=None):
+    def __call__(self, name:str|None=None):
         # ロック時間の計測
         #if name:
         #    self._local.name = name
@@ -47,7 +53,7 @@ class LockWrapper():
         CacheManager.elapsedLogging(self._local.name, elapsed_ns)
         return self._lock.release()
 
-def getScaleLog(size):
+def getScaleLog(size:int) -> int:
     """スケール指数を取得"""
     # 1 - 2^0*max:0
     #   - 2^1*max:1
@@ -99,7 +105,7 @@ class CacheManager:
     _elapsedHis       = {}      # 処理時間ヒストグラム
     
     @classmethod
-    def _getGlobelTempDir(cls):
+    def _getGlobelTempDir(cls) -> str:
         """キャッシュディレクトリを取得"""
         if cls._storageDir is None:
             # 初回だけクリーンアップの実施と終了時の登録を行う
@@ -140,13 +146,13 @@ class CacheManager:
             Debug.log(cls.__name__, "Warning: Failed to clean up temporary directories.")
     
     @classmethod
-    def get(cls, cacheKey):
+    def get(cls, cacheKey:str) -> np.ndarray|None:
         """キャッシュから取得"""
         cls._getCount += 1
         return cls.elapsed( cls._get, cacheKey)
 
     @classmethod
-    def _get(cls, cacheKey):
+    def _get(cls, cacheKey:str) -> np.ndarray|None:
         with cls._cacheLock("_get.locked.A"):
             laodStorage = False
             if cacheKey in cls._objectCache:
@@ -218,7 +224,7 @@ class CacheManager:
             return None
     
     @classmethod
-    def set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
+    def set(cls, cacheKey:str, data:np.ndarray, cachePolicy:str=CachePolicy.CALCULABLE):
         """キャッシュに保存"""
         with cls._cacheLock():
             objectCacheCount = len(cls._objectCache)
@@ -232,12 +238,12 @@ class CacheManager:
         return cls.elapsed( cls._set, cacheKey, data, cachePolicy)
 
     @classmethod
-    def _set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
+    def _set(cls, cacheKey:str, data:np.ndarray, cachePolicy:str=CachePolicy.CALCULABLE):
         with cls._cacheLock("_set.locked.A"):
             cls.__set(cacheKey, data, cachePolicy)
 
     @classmethod
-    def __set(cls, cacheKey, data, cachePolicy=CachePolicy.CALCULABLE):
+    def __set(cls, cacheKey:str, data:np.ndarray, cachePolicy:str=CachePolicy.CALCULABLE):
         cls._cachedIndex[cacheKey] = cachePolicy
         cls._objectCache[cacheKey] = data
         
@@ -362,6 +368,7 @@ class CacheManager:
                 if index is None:
                     with cls._cacheLock("_lazySave1.locked.B2"):
                         while not cls._memCacheFindFree(scale):
+                            # ページに空きがないので、解放出来るデータがあるか確認して解放する
                             if not cls._memCacheRemovable[scale]:
                                 # 一番古いデータを探す
                                 lastTime = 0
@@ -484,7 +491,7 @@ class CacheManager:
             time.sleep(0) # 連続的にロックするのを抑制する
 
     @classmethod
-    def isCached(cls, cacheKey):
+    def isCached(cls, cacheKey:str) -> bool:
         """キャッシュされているかどうかを判定"""
         with cls._cacheLock():
             if cacheKey in cls._cachedIndex:
@@ -494,7 +501,7 @@ class CacheManager:
                 return False
 
     @classmethod
-    def _saveToStorage(cls, cacheKey, data):
+    def _saveToStorage(cls, cacheKey:str, data:np.ndarray) -> bool:
         """ストレージに退避"""
         import numpy as np
 
@@ -503,7 +510,7 @@ class CacheManager:
 
             filename = f"{cacheKey}".replace("/", "_").replace("\\", "_").replace(":", "_")
             pre = filename[:2]
-            subDir = os.path.join( cls._storageDir, pre)
+            subDir = os.path.join( tempDir, pre)
             os.makedirs(subDir, exist_ok=True)
             
             fileName = os.path.join(subDir, f"{filename}.npy")
@@ -516,7 +523,7 @@ class CacheManager:
             return False
     
     @classmethod
-    def _loadFromStorage(cls, cacheKey):
+    def _loadFromStorage(cls, cacheKey:str) -> np.ndarray|None:
         """ストレージから復元"""
         import numpy as np
         
@@ -538,7 +545,7 @@ class CacheManager:
             return None
     
     @classmethod
-    def clearByPartialKey(cls, cacheKey):
+    def clearByPartialKey(cls, cacheKey:str):
         """key の部分一致でデータを削除"""
         # ストレージを削除
         if cls._storageDir and os.path.exists(cls._storageDir):
@@ -568,7 +575,7 @@ class CacheManager:
             cls._clearByPartialKey(cls._objectCache, cacheKey)
     
     @classmethod
-    def _clearByPartialKey(cls, cache, cacheKey):
+    def _clearByPartialKey(cls, cache:dict, cacheKey:str) -> list:
         """key の部分一致でデータを削除"""
         keysToRemove = []
         # メモリキャッシュから対象キーを収集
@@ -595,7 +602,7 @@ class CacheManager:
     PAGE_MASK  = BLOCK_CACHE_PAGE_SIZE - 1
     
     @classmethod
-    def _memCacheFindFree(cls, scale):
+    def _memCacheFindFree(cls, scale:int) -> tuple[int,int,int]|None:
         """
         空いているメモリキャッシュ位置を検索
 
@@ -605,6 +612,12 @@ class CacheManager:
         0:未使用
         各スケールでメモリキャッシュの実体は共有なので、
         使用状態は各スケールで連動している必要がある
+        
+        prams:
+            scale:スケール指数
+        
+        returns:
+            (scale, page, index) or None
         """
         bitmap = ~cls._memCacheBitmap
         if 0==scale:
@@ -643,7 +656,7 @@ class CacheManager:
             return (scale, page, index)
     
     @classmethod
-    def _memCacheUse(cls, scale, page, index):
+    def _memCacheUse(cls, scale:int, page:int, index:int):
         """メモリキャッシュ使用中にセット"""
         if 0==scale:
             i = page * BLOCK_CACHE_PAGE_SIZE + index
@@ -661,7 +674,7 @@ class CacheManager:
             cls._memCacheBitmap |= bit
     
     @classmethod
-    def _memCacheFree(cls, scale, page, index):
+    def _memCacheFree(cls, scale:int, page:int, index:int):
         """メモリキャッシュ使用中を解放"""
         if 0==scale:
             i = page * BLOCK_CACHE_PAGE_SIZE + index
@@ -730,7 +743,7 @@ class CacheManager:
                     break
 
     @classmethod
-    def getCacheStats(cls):
+    def getCacheStats(cls) -> tuple:
         """キャッシュ量とストレージ使用量を取得"""
         objCacheCount    = len(cls._objectCache)
         cacheCount       = len(cls._memCachedIndex)

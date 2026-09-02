@@ -7,11 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    from .DataBlock import DataBlock
+    from .FlowData import FlowData
+
 class PolynomialOperationMixin:
     """polynomial 操作の共通機能を提供するMixin"""
     
     @classmethod
-    def computeCombinedPolynomial(cls, polynomialDatas, operation):
+    def computeCombinedPolynomial(cls, polynomialDatas:list[FlowData], operation:callable) -> FlowData:
         """
         複数 polynomial を統合
         
@@ -71,7 +79,7 @@ class PolynomialOperationMixin:
         return result
     
     @classmethod
-    def calculatePolynomialRange(cls, polynomial, width, height):
+    def calculatePolynomialRange(cls, polynomial:np.ndarray, width:int, height:int) -> tuple[float, float]:
         """多項式 polynomial の範囲を計算（四隅と中央で評価）"""
         def evalPoly(x, y):
             value = 0.0
@@ -94,7 +102,7 @@ class PolynomialOperationMixin:
         return min(v1, v2, v3, v4, v5), max(v1, v2, v3, v4, v5)
     
     @classmethod
-    def calculatePolynomialBlock(cls, polynomialFlowData, planeIndex, x, y, blockShape, defaultValue=0.0):
+    def calculatePolynomialBlock(cls, polynomialFlowData:FlowData, planeIndex:int, x:int, y:int, blockShape:tuple, defaultValue:float=0.0) -> DataBlock:
         """Polynomial データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh

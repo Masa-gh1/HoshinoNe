@@ -7,12 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from itertools import zip_longest
 from abc import abstractmethod
 from concurrent.futures import as_completed
 
 from base.FlowNode_CONST import *
 from base import FlowNode
+
+if TYPE_CHECKING:
+    from base.DataBlock import DataBlock
+    from base.FlowData import FlowData
 
 class NNBlockOperationNode(FlowNode):
     """データ入出力 N:N のブロック単位計算ノードの基底クラス"""
@@ -103,7 +110,7 @@ class NNBlockOperationNode(FlowNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessStreams(self, inputStreams):
+    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
         """入力ストリームの前処理（サブクラスでオーバーライド可能）
         演算結果のデータタイプを primary 優先とするため、
         primary/auxiliaryで分類し、primaryを前に集める。
@@ -135,7 +142,7 @@ class NNBlockOperationNode(FlowNode):
         streams = sorted(streams, key=getPriority)
         return streams
     
-    def preprocessStream(self, inputStream):
+    def preprocessStream(self, inputStream:list[FlowData]) -> list[FlowData]:
         """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:
@@ -146,7 +153,7 @@ class NNBlockOperationNode(FlowNode):
         """
         return inputStream
     
-    def createFlowData(self, inputDatas):
+    def createFlowData(self, inputDatas:FlowData|list[FlowData]) -> FlowData:
         """LazyFlowDataを作成 (サブクラスでオーバーライド可能)
         
         Args:
@@ -172,17 +179,20 @@ class NNBlockOperationNode(FlowNode):
 
         return flowData
 
-    def processHeaders(self, inputData):
+    def processHeaders(self, inputData:FlowData) -> dict:
         """
         出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
         
         Args:
             inputFlowData: 入力FlowData
+        
+        Returns:
+            出力 FlowData の追加 headers
         """
         return {}
     
     @abstractmethod
-    def blockOperation(self, block, planeIndex, x, y):
+    def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:
         """単一ブロックの処理 (サブクラスで実装)
         
         Args:

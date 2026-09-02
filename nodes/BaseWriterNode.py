@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from abc import abstractmethod
 import hashlib
 import os
@@ -16,6 +19,11 @@ import tkinter as tk
 from base.FlowNode_CONST import *
 from base import FlowNode
 from nodes import ConfigurableNode
+
+if TYPE_CHECKING:
+    from base.FlowData import FlowData
+    from main.FlowEditor import FlowEditor
+    
 
 class BaseWriterNode(FlowNode,ConfigurableNode):
     """ファイル出力ノードの基底クラス"""
@@ -28,13 +36,13 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
     ioType    = _IO_TYPE_N0
     outputCat = _OUT_CAT_ETC
     
-    def __init__(self, canvas, editor, x, y, **kwargs):
+    def __init__(self, canvas: tk.Canvas, editor: FlowEditor, x: int, y: int, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
         self.outputFilePath = ""
         self.outputFileTypes = [("files", "*.*")]
         self.defaultOutputExtension = ".txt"
     
-    def getText(self):
+    def getText(self) -> str:
         """ノードのテキストを取得"""
         if self.outputFilePath:
             displayText = f"{self.name}\n{os.path.basename(self.outputFilePath)}"
@@ -42,13 +50,13 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
             displayText = self.name
         return displayText
     
-    def getOutputFilePath(self):
+    def getOutputFilePath(self) -> str:
         return self.outputFilePath
     
-    def setOutputFilePath(self, outputPath):
+    def setOutputFilePath(self, outputPath:str):
         self.outputFilePath = outputPath
     
-    def store(self, nodeData):
+    def store(self, nodeData:dict):
         """ノード固有の設定 nodeData に保存"""
         if not self.outputFilePath:
             filepath = None
@@ -60,7 +68,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
                 filepath = self.outputFilePath
         nodeData["outputFilePath"] = filepath
         
-    def restore(self, nodeData):
+    def restore(self, nodeData:dict):
         """ノード固有の設定 nodeData から復元"""
         if "outputFilePath" in nodeData:
             filepath = nodeData["outputFilePath"]
@@ -70,7 +78,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
 
             self.outputFilePath = filepath
     
-    def getRelativePath(self, filePath):
+    def getRelativePath(self, filePath:str) -> str:
         """相対パスを取得"""
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
@@ -78,7 +86,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         else:
             return None
     
-    def getAbsolutePath(self, filePath):
+    def getAbsolutePath(self, filePath:str) -> str:
         """絶対パスを取得"""
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
@@ -86,7 +94,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         else:
             return None
     
-    def getConfigHash(self):
+    def getConfigHash(self) -> str:
         config = f"{self.minorType}_{self.outputFilePath}"
         return hashlib.md5(config.encode()).hexdigest()
     
@@ -134,11 +142,11 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         
         self.reportProgress(context, "完了")
         
-    def createSettingWindow(self):
+    def createSettingWindow(self) -> tk.Toplevel:
         """Settings dialogを開く"""
         return BaseWriterSettingsDialog(self.view.editor.root, self)
 
-    def _createFlowData(self, fileInfos):
+    def _createFlowData(self, fileInfos:list[tuple[str, int, int, int, int]]):
         """結果FlowDataを生成"""
         from base import DataBlock
         from base import FlowData
@@ -161,11 +169,11 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         
         self.flowDatas = [resultFlowData]
     
-    def countFlowDataBlocks(self, flowData):
+    def countFlowDataBlocks(self, flowData:FlowData) -> int:
         """FlowDataのブロック数を計算（サブクラスでオーバーライド可能）"""
         return flowData.getBlockCount()
     
-    def reportBlockProgress(self, context, message="処理中"):
+    def reportBlockProgress(self, context, message:str="処理中"):
         """ブロック進捗を報告（BaseReaderNodeと同様）"""
         if context and 'totalBlocks' in context:
             with context['processedBlocks_lock']:
@@ -175,12 +183,12 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
             self.reportProgress(context, message, current, total)
     
     @abstractmethod
-    def processFile(self, filePath, flowData, context=None):
+    def processFile(self, filePath:str, flowData:FlowData, context=None) -> tuple[str, int, int, int, int]:
         """単一ファイル出力処理（サブクラスで実装）
         
         Args:
             filePath: 出力ファイルパス
-            flowData: 出力するFlowData
+            flowData: 出力する FlowData
             context: 処理コンテキスト
             
         Returns:
@@ -189,7 +197,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         pass
 
 class BaseWriterSettingsDialog(tk.Toplevel):
-    def __init__(self, parent, node):
+    def __init__(self, parent:tk.Widget, node:BaseWriterNode):
         super().__init__(parent)
         self.node = node
         
@@ -241,7 +249,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         if filepath:
             self.pathVar.set(filepath)
     
-    def createCustomSettings(self, parent):
+    def createCustomSettings(self, parent:tk.Widget) -> tk.Frame:
         """カスタム設定項目を作成（サブクラスでオーバーライド）
         
         Returns:

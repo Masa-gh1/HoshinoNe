@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterator
+
 import uuid
 import threading
 from tkinter import messagebox
@@ -15,6 +18,10 @@ from config import BLOCK_SIZE
 from .Constants import CachePolicy
 from .CacheManager import CacheManager
 from utils.Debug import Debug
+
+if TYPE_CHECKING:
+    import numpy as np
+    from .DataBlock import DataBlock
 
 class FlowData:
     """ノードの実行結果を保存する"""
@@ -64,13 +71,13 @@ class FlowData:
         """次元を設定"""
         self._dimensions = (width, height)
     
-    def getType(self):
+    def getType(self) -> str:
         """型を取得"""
         if 'type' in self.headers:
             return self.headers['type']
         return 'table'
     
-    def getMode(self):
+    def getMode(self) -> str:
         """モードを取得"""
         if 'mode' in self.headers:
             return self.headers['mode']
@@ -85,28 +92,28 @@ class FlowData:
         else:
             return None
     
-    def getPlaneCount(self):
+    def getPlaneCount(self) -> int:
         """プレーン数を取得"""
         if 'planes' in self.headers:
             return len(self.headers['planes'])
         return None
     
-    def getDimensions(self):
+    def getDimensions(self) -> tuple[int, int]:
         """次元を取得 (width, height)"""
         return self._dimensions
     
-    def getVariableType(self):
+    def getVariableType(self) -> np.dtype:
         """データ型を取得"""
         if self._variableType is None:
             self.getBlock(0,0,0).data
         return self._variableType
 
-    def getArea(self):
+    def getArea(self) -> int:
         """面積を取得"""
         width, height = self.getDimensions()
         return (width*height)
     
-    def getBlock(self, planeIndex, x, y):
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock:
         """指定位置からブロックを取得"""
         from .DataBlock import DataBlock
         
@@ -135,7 +142,7 @@ class FlowData:
         block.blockId = f"{self.instanceId}:{planeIndex}:{x}:{y}"
         return block
     
-    def getBlockCount(self):
+    def getBlockCount(self) -> int:
         """ブロックの総数を取得"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
@@ -147,7 +154,7 @@ class FlowData:
         
         return planeCount * blocksX * blocksY
     
-    def iterateBlocks(self, planeIndex=None):
+    def iterateBlocks(self, planeIndex:int=None) -> Iterator[DataBlock]:
         """全ブロックを順次取得するジェネレータ"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
@@ -168,7 +175,7 @@ class FlowData:
                 if block:
                     yield block
     
-    def setBlock(self, dataBlock):
+    def setBlock(self, dataBlock:DataBlock):
         """ブロックデータを保存"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -204,7 +211,7 @@ class FlowData:
         # 統計情報更新
         self._updateStatistics(dataBlock)
         
-    def _updateStatistics(self, blockData):
+    def _updateStatistics(self, dataBlock:DataBlock):
         """統計情報を更新"""
         import numpy as np
         
@@ -217,9 +224,9 @@ class FlowData:
                     blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
                     self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
             
-        planeIndex = blockData.planeIndex
-        x = blockData.x
-        y = blockData.y
+        planeIndex = dataBlock.planeIndex
+        x = dataBlock.x
+        y = dataBlock.y
         blockX = x // BLOCK_SIZE
         blockY = y // BLOCK_SIZE
 
@@ -228,13 +235,13 @@ class FlowData:
             if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
                 from utils.Debug import Debug
                 Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
-        elif not self._variableType is None and self._variableType != blockData.data.dtype:
+        elif not self._variableType is None and self._variableType != dataBlock.data.dtype:
             # 型違い検出
             from utils.Debug import Debug
             Debug.log(type(self).__name__, f"Warning: Block type mismatch at plane={planeIndex}, x={x}, y={y}")
         else:
             self._existingBlocks[planeIndex, blockY, blockX] = True
-            data = blockData.data
+            data = dataBlock.data
             self._variableType = data.dtype
             if 0 < data.size and not np.isnan(data).all():
                 # 最大値・最小値を更新し、キャッシュをクリア
@@ -256,11 +263,11 @@ class FlowData:
                     self._histogramCache.clear()
                     self._highResHistCache.clear()
     
-    def getMaxValue(self):
+    def getMaxValue(self) -> float:
         """最大値を取得"""
         return self._maxValue
     
-    def getMinValue(self):
+    def getMinValue(self) -> float:
         """最小値を取得"""
         return self._minValue
     
@@ -358,7 +365,7 @@ class FlowData:
         self._highResHistCache[bins] = planeHistograms
         return planeHistograms
     
-    def getModeValue(self):
+    def getModeValue(self) -> float:
         """最頻値を取得（全プレーン統合）"""
         import numpy as np
         
@@ -383,7 +390,7 @@ class FlowData:
         
         return mode_value
     
-    def getQuantile(self, per):
+    def getQuantile(self, per:float) -> float:
         """指定したクォンタイル値(分位数)を取得（キャッシュ付き）"""
         import numpy as np
         
@@ -427,7 +434,7 @@ class FlowData:
                 return result
         return 0.0
     
-    def getHistogram(self, bins=256, log_scale=False):
+    def getHistogram(self, bins:int=256, log_scale:bool=False) -> dict:
         """プレーン別ヒストグラムを取得（キャッシュ付き）"""
         import numpy as np
         from utils import numpy_helpers as nh

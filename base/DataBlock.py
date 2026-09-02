@@ -7,7 +7,13 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from .Constants import CachePolicy
+
+if TYPE_CHECKING:
+    import numpy as np
 
 class DataBlock:
     """データブロック配列のラッパークラス"""
@@ -18,7 +24,7 @@ class DataBlock:
                  'x'          ,
                  'y'          ,
                 )
-    def __init__(self, data, planeIndex=None, x=None, y=None):
+    def __init__(self, data:np.ndarray, planeIndex:int=None, x:int=None, y:int=None):
         """
         キャッシュからの遅延ロードする場合、data を None で初期化する
         """
@@ -33,7 +39,7 @@ class DataBlock:
         self.y = y
     
     @property
-    def data(self):
+    def data(self) -> np.ndarray:
         """遅延ロードでデータを取得"""
         from .CacheManager import CacheManager
         
@@ -43,7 +49,7 @@ class DataBlock:
         return self._data
     
     @data.setter
-    def data(self, data):
+    def data(self, data:np.ndarray):
         """データを設定してキャッシュに保存"""
         from .CacheManager import CacheManager
         
@@ -51,16 +57,16 @@ class DataBlock:
         if not self.blockId is None:
             CacheManager.set(self.blockId, data, self.cachePolicy)
     
-    def isValid(self):
+    def isValid(self) -> bool:
         """データが有効かどうかを確認"""
         from .CacheManager import CacheManager
         
         return CacheManager.isCached(self.blockId)
     
-    def getWidth(self):
+    def getWidth(self) -> int:
         """ブロックの幅を取得"""
         return self.data.shape[1] if self.data.ndim > 1 else 1
     
-    def getHeight(self):
+    def getHeight(self) -> int:
         """ブロックの高さを取得"""
         return self.data.shape[0]

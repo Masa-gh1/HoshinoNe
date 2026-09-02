@@ -7,12 +7,18 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import threading
 from collections import UserDict
 
 from config import MAX_WORKERS
 from .Constants import CachePolicy
 from .FlowData import FlowData
+
+if TYPE_CHECKING:
+    from .DataBlock import DataBlock
 
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
@@ -25,7 +31,7 @@ class LazyFlowData(FlowData):
                  '_blockLocks'    ,
                 )
     
-    def __init__(self, sourceFlowDatas, *args, **kwargs):
+    def __init__(self, sourceFlowDatas:list[FlowData], *args, **kwargs):
         super().__init__(None)
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowData  = sourceFlowDatas[0] if isinstance(sourceFlowDatas, (list,tuple)) else sourceFlowDatas
@@ -38,7 +44,7 @@ class LazyFlowData(FlowData):
         
         self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*4)]
     
-    def getBlock(self, planeIndex, x, y):
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock:
         """指定位置からブロックを取得（遅延評価）"""
         from utils import measurement as mes
         block = super().getBlock(planeIndex, x, y)
@@ -71,7 +77,7 @@ class LazyFlowData(FlowData):
                     self.setBlock(block)
                     return block
     
-    def operation(self, flowDatas, planeIndex, x, y, *args, **kwargs):
+    def operation(self, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, *args, **kwargs) -> DataBlock:
         """遅延評価を実行"""
         from utils import measurement as mes
         from base import BroadcastMixin
@@ -83,15 +89,15 @@ class LazyFlowData(FlowData):
         else:
             return self.blockOperation(blocks, planeIndex, x, y, *args, **kwargs)
     
-    def blockOperation(self, blocks, planeIndex, x, y, *args, **kwargs):
+    def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int, *args, **kwargs) -> DataBlock:
         """遅延評価を実行"""
         return blocks
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> list[str]:
         """遅延評価対象の header キーを取得"""
         return []
     
-    def headerOperation(self, lazyFlowData, key, *args, **kwargs):
+    def headerOperation(self, lazyFlowData:LazyFlowData, key:str, *args, **kwargs) -> dict:
         """headers 遅延評価"""
         return {}
 
@@ -101,7 +107,7 @@ class LazyHeadersDict(UserDict):
                  'args'         ,
                  'kwargs'       ,
                 )
-    def __init__(self, lazyFlowData, *args, **kwargs):
+    def __init__(self, lazyFlowData:LazyFlowData, *args, **kwargs):
         super().__init__(lazyFlowData.sourceFlowData.headers)
         
         self._lazyFlowData = lazyFlowData
@@ -111,7 +117,7 @@ class LazyHeadersDict(UserDict):
         for key in self._lazyFlowData.getLazyHeaderkeys():
             self.data[key]= "<LazyHeaderOperation>"
     
-    def __getitem__(self, key):
+    def __getitem__(self, key:str):
         if not key in self.data:
             return None
         else:

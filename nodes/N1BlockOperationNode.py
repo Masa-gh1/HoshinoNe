@@ -7,11 +7,18 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from abc import abstractmethod
 from concurrent.futures import as_completed
 
 from base.FlowNode_CONST import *
 from base import FlowNode
+
+if TYPE_CHECKING:
+    from base.DataBlock import DataBlock
+    from base.FlowData import FlowData
 
 class N1BlockOperationNode(FlowNode):
     """データ入出力 N:1 のブロック単位計算ノードの基底クラス"""
@@ -73,7 +80,7 @@ class N1BlockOperationNode(FlowNode):
         
         self.reportProgress(context, "完了")
     
-    def preprocessStreams(self, inputStreams):
+    def preprocessStreams(self, inputStreams: list[list[FlowData]]) -> list[list[FlowData]]:
         """入力ストリームの前処理（サブクラスでオーバーライド可能）
         演算結果のデータタイプを primary 優先とするため、
         primary/auxiliaryで分類し、primaryを前に集める。
@@ -105,7 +112,7 @@ class N1BlockOperationNode(FlowNode):
         streams = sorted(streams, key=getPriority)
         return streams
     
-    def preprocessStream(self, inputStream):
+    def preprocessStream(self, inputStream:list[FlowData]) -> list[FlowData]:
         """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:
@@ -116,7 +123,7 @@ class N1BlockOperationNode(FlowNode):
         """
         return inputStream
     
-    def createFlowData(self, inputDatas):
+    def createFlowData(self, inputDatas:list[FlowData]) -> FlowData:
         """
         FlowDataを作成 (サブクラスでオーバーライド可能)
         
@@ -145,7 +152,7 @@ class N1BlockOperationNode(FlowNode):
         
         return flowData
     
-    def getBaseDataIndex(self, inputDatas):
+    def getBaseDataIndex(self, inputDatas:list[FlowData]) -> int:
         """
         基準データのインデックスを返す (サブクラスでオーバーライド可能)
         
@@ -157,7 +164,7 @@ class N1BlockOperationNode(FlowNode):
         """
         return 0  # デフォルトは最初のデータ
     
-    def getOutputDimensions(self, baseData, inputDatas):
+    def getOutputDimensions(self, baseData, inputDatas:list[FlowData]) -> tuple[int, int]:
         """
         結果画像のサイズを決定 (サブクラスでオーバーライド可能)
         
@@ -170,7 +177,7 @@ class N1BlockOperationNode(FlowNode):
         """
         return baseData.getDimensions()
     
-    def getUnionDimensions(self, inputDatas):
+    def getUnionDimensions(self, inputDatas:list[FlowData]) -> tuple[int, int]:
         """全入力データを包含する最大サイズを計算"""
         width, height = inputDatas[0].getDimensions()
         for data in inputDatas[1:]:
@@ -179,7 +186,7 @@ class N1BlockOperationNode(FlowNode):
             height = max(height, h)
         return width, height
     
-    def processHeaders(self, baseData, inputDatas):
+    def processHeaders(self, baseData, inputDatas:list[FlowData]) -> dict:
         """
         出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
         
@@ -192,7 +199,7 @@ class N1BlockOperationNode(FlowNode):
         """
         return {}
     
-    def operation(self, flowDatas, planeIndex, x, y):
+    def operation(self, flowDatas:list[FlowData], planeIndex:int, x:int, y:int) -> DataBlock:
         """
         単一ブロックの処理 (サブクラスでオーバーライド可能)
         
@@ -203,7 +210,7 @@ class N1BlockOperationNode(FlowNode):
             y: 処理するブロックの y 座標
             
         Returns:
-            処理結果のDataBlock
+            処理結果の DataBlock
         """
         from base import BroadcastMixin
         blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
@@ -212,7 +219,7 @@ class N1BlockOperationNode(FlowNode):
         else:
             return self.blockOperation(blocks, planeIndex, x, y)
 
-    def blockOperation(self, blocks, planeIndex, x, y):
+    def blockOperation(self, blocks:list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:
         """
         単一ブロックの処理 (サブクラスでオーバーライド可能)
         

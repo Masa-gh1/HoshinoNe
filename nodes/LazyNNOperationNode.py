@@ -7,11 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from itertools import zip_longest
 from abc import abstractmethod
 
 from base.FlowNode_CONST import *
 from base import FlowNode
+
+if TYPE_CHECKING:
+    from base.DataBlock import DataBlock
+    from base.FlowData import FlowData
+    from base.LazyFlowData import LazyFlowData
 
 class LazyNNOperationNode(FlowNode):
     """LazyFlowDataを用いるN:N処理ノードの基底クラス"""
@@ -62,7 +70,7 @@ class LazyNNOperationNode(FlowNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessStreams(self, inputStreams):
+    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
         """入力ストリームの前処理（サブクラスでオーバーライド可能）
         演算結果のデータタイプを primary 優先とするため、
         primary/auxiliaryで分類し、primaryを前に集める。
@@ -94,7 +102,7 @@ class LazyNNOperationNode(FlowNode):
         streams = sorted(streams, key=getPriority)
         return streams
     
-    def preprocessStream(self, inputStream):
+    def preprocessStream(self, inputStream:list[FlowData]) -> list[FlowData]:
         """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:
@@ -106,11 +114,11 @@ class LazyNNOperationNode(FlowNode):
         return inputStream
     
     @abstractmethod
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, inputDatas:FlowData|list[FlowData]) -> LazyFlowData:
         """LazyFlowDataを作成（サブクラスで実装）
         
         Args:
-            inputData: 入力FlowData
+            inputDatas: 入力 FlowData のリスト
             
         Returns:
             LazyFlowData

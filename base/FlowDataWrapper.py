@@ -7,7 +7,14 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
-from . import FlowData
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterator
+
+from .FlowData import FlowData
+
+if TYPE_CHECKING:
+    import numpy as np
+    from .DataBlock import DataBlock
 
 class FlowDataWrapper(FlowData):
     __slots__ = ('instanceId' ,
@@ -15,7 +22,7 @@ class FlowDataWrapper(FlowData):
                  'orgFlowData',
                  'headers'    ,
                 )
-    def __init__(self, orgFlowData, updateHeaders={}):
+    def __init__(self, orgFlowData:FlowData, updateHeaders:dict = {}):
         """
         FlowDataをラップし、headerのみ元を変更せず上書き可能にする
         
@@ -33,47 +40,41 @@ class FlowDataWrapper(FlowData):
         self.headers.update(updateHeaders)
         
     # 以下のメソッドは元データに委譲
-    def _loadBlock(self, planeIndex, x, y):
-        return self.orgFlowData._loadBlock(planeIndex, x, y)
-    
-    def _saveBlock(self, planeIndex, x, y, blockData):
-        return self.orgFlowData._saveBlock(planeIndex, x, y, blockData)
-    
-    def setDimensions(self, width, height):
+    def setDimensions(self, width:int, height:int):
         return self.orgFlowData.setDimensions(width, height)
     
-    def getDimensions(self):
+    def getDimensions(self) -> tuple[int, int]:
         return self.orgFlowData.getDimensions()
     
-    def getVariableType(self):
+    def getVariableType(self) -> np.dtype:
         return self.orgFlowData.getVariableType()
     
-    def getArea(self):
+    def getArea(self) -> int:
         return self.orgFlowData.getArea()
     
-    def getBlock(self, planeIndex, x, y):
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock:
         return self.orgFlowData.getBlock(planeIndex, x, y)
     
-    def getBlockCount(self):
+    def getBlockCount(self) -> int:
         return self.orgFlowData.getBlockCount()
     
-    def iterateBlocks(self, planeIndex=None):
+    def iterateBlocks(self, planeIndex:int=None) -> Iterator[DataBlock]:
         return self.orgFlowData.iterateBlocks(planeIndex)
     
-    def setBlock(self, dataBlock):
+    def setBlock(self, dataBlock:DataBlock):
         return self.orgFlowData.setBlock(dataBlock)
     
-    def getMaxValue(self):
+    def getMaxValue(self) -> float:
         return self.orgFlowData.getMaxValue()
     
-    def getMinValue(self):
+    def getMinValue(self) -> float:
         return self.orgFlowData.getMinValue()
     
-    def getModeValue(self):
+    def getModeValue(self) -> float:
         return self.orgFlowData.getModeValue()
 
-    def getQuantile(self, percentile):
-        return self.orgFlowData.getQuantile(percentile)
+    def getQuantile(self, per:float) -> float:
+        return self.orgFlowData.getQuantile(per)
     
-    def getHistogram(self, bins=256, log_scale=False):
+    def getHistogram(self, bins:int=256, log_scale:bool=False) -> dict:
         return self.orgFlowData.getHistogram(bins, log_scale)

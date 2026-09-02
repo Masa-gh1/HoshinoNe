@@ -7,8 +7,15 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from .PolynomialOperationMixin import PolynomialOperationMixin
 from .TensorOperationMixin     import TensorOperationMixin
+
+if TYPE_CHECKING:
+    from .DataBlock import DataBlock
+    from .FlowData import FlowData
 
 class BroadcastMixin:
     """ブロードキャスト処理の共通機能を提供するMixin"""
@@ -37,7 +44,7 @@ class BroadcastMixin:
         return result
 
     @classmethod
-    def calculateBroadcastedBlock(cls, flowDatas, planeIndex, x, y, shape = None):
+    def calculateBroadcastedBlock(cls, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, shape=None) -> tuple[DataBlock|list[DataBlock], tuple]:
         """FlowData 間でブロードキャストを行うブロックを計算する
         
         Args:

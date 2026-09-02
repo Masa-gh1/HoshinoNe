@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from abc import abstractmethod
 import datetime
 import hashlib
@@ -19,6 +22,10 @@ from base.FlowNode_CONST import *
 from base import FlowNode
 from nodes import ConfigurableNode
 
+if TYPE_CHECKING:
+    from base.FlowData import FlowData
+    from main.FlowEditor import FlowEditor
+
 class BaseReaderNode(FlowNode,ConfigurableNode):
     """ファイル読み込みノードの基底クラス"""
     # ノードタイプ
@@ -30,12 +37,12 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
     ioType    = _IO_TYPE_0N
     outputCat = _OUT_CAT_PRI
     
-    def __init__(self, canvas, editor, x, y, **kwargs):
+    def __init__(self, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
         self.filePaths = []
         self.fileTypes = [("files", "*.*")]
 
-    def getText(self):
+    def getText(self) -> str:
         """ノードのテキストを取得"""
         if self.filePaths:
             if len(self.filePaths) == 1:
@@ -47,13 +54,13 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
             displayText = f"{self.name}\n未選択"
         return displayText
     
-    def _getOutputCount(self, path=None):
+    def _getOutputCount(self, path:list[FlowNode]=None) -> int:
         return len(self.filePaths)
 
-    def setFilePaths(self, filePaths):
+    def setFilePaths(self, filePaths:list[str]):
         self.filePaths = filePaths
     
-    def store(self, nodeData):
+    def store(self, nodeData:dict):
         """ノード固有の設定 nodeData に保存"""
         filepaths = []
         for filepath in self.filePaths:
@@ -64,7 +71,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
                 filepaths.append(filepath)
         nodeData["filePaths"] = filepaths
     
-    def restore(self, nodeData):
+    def restore(self, nodeData:dict):
         """ノード固有の設定 nodeData から復元"""
         if "filePaths" in nodeData:
             filepaths = []
@@ -77,7 +84,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
 
             self.filePaths = filepaths
     
-    def getRelativePath(self, filePath):
+    def getRelativePath(self, filePath:str) -> str:
         """相対パスを取得"""
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
@@ -85,7 +92,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         else:
             return None
     
-    def getAbsolutePath(self, filePath):
+    def getAbsolutePath(self, filePath:str) -> str:
         """絶対パスを取得"""
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
@@ -93,7 +100,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         else:
             return None
 
-    def getConfigHash(self):
+    def getConfigHash(self) -> str:
         """基本的な設定ハッシュ（サブクラスでオーバーライド）"""
         config = f"{self.minorType}_{'|'.join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
@@ -128,11 +135,11 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def createSettingWindow(self):
+    def createSettingWindow(self) -> tk.Toplevel:
         """Settings dialogを開く"""
         return BaseReaderSettingsDialog(self.view.editor.root, self)
     
-    def countFileBlocks(self, filePath):
+    def countFileBlocks(self, filePath:str) -> int:
         """ファイルのブロック数を計算（サブクラスでオーバーライド）
         
         Args:
@@ -143,7 +150,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         """
         return 1
     
-    def reportBlockProgress(self, context, message="処理中"):
+    def reportBlockProgress(self, context, message:str="処理中"):
         """ブロック進捗を報告（スレッドセーフ）"""
         if context and 'totalBlocks' in context:
             with context['processedBlocks_lock']:
@@ -153,7 +160,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
             self.reportProgress(context, message, current, total)
     
     @abstractmethod
-    def processFile(self, filePath, context=None):
+    def processFile(self, filePath:str, context=None) -> FlowData | list[FlowData]:
         """単一ファイルの処理（サブクラスで実装）
         
         Args:
@@ -165,7 +172,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         """
         pass
     
-    def getFileInfo(self, filePath):
+    def getFileInfo(self, filePath:str) -> dict:
         """ファイル固有情報を取得（サブクラスでオーバーライド）
         
         Args:
@@ -189,7 +196,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
             }
 
 class BaseReaderSettingsDialog(tk.Toplevel):
-    def __init__(self, parent, node):
+    def __init__(self, parent:tk.Widget, node:BaseReaderNode):
         super().__init__(parent)
         self.node = node
         
@@ -322,14 +329,14 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         
         self.updateFileList()
     
-    def getCustomSettingsWidth(self):
+    def getCustomSettingsWidth(self) -> int:
         """カスタム設定の幅を取得（サブクラスでオーバーライド）
         Returns:
             幅、または None
         """
         return None
     
-    def createCustomSettings(self, parent):
+    def createCustomSettings(self, parent:tk.Widget) -> tk.Frame:
         """カスタム設定項目を作成（サブクラスでオーバーライド）
         
         Returns:
@@ -350,11 +357,11 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         
         self.node.view.onNodeConfigChanged(self.node)
     
-    def getColumns(self):
+    def getColumns(self) -> tuple[str]:
         """列構成を取得（サブクラスでオーバーライド）"""
         return ('filename', 'datetime', 'size')
     
-    def getColumnHeaders(self):
+    def getColumnHeaders(self) -> dict[str, str]:
         """列ヘッダーを取得（サブクラスでオーバーライド）"""
         return {
             'filename': 'ファイル名',
@@ -362,7 +369,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             'size': 'ファイルサイズ'
         }
     
-    def getColumnWidths(self):
+    def getColumnWidths(self) -> dict[str, dict]:
         """列幅設定を取得（サブクラスでオーバーライド）"""
         return {
             'filename': {'width':  40, 'stretch': True},
@@ -370,7 +377,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             'size': {'width': 80, 'stretch': False, 'anchor': 'e'}
         }
     
-    def getFormalFileInfo(self, filePath):
+    def getFormalFileInfo(self, filePath:str) -> dict[str, str]:
         """ファイルの表示用文字列を取得（サブクラスでオーバーライド）"""
         fileInfo = self.node.getFileInfo(filePath)
         
@@ -404,7 +411,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         except Exception as e:
             messagebox.showerror(f"{self.node.name} エラー", f"ソートに失敗しました: {str(e)}")
     
-    def createSortButton(self, parent):
+    def createSortButton(self, parent:tk.Widget) -> tk.Button:
         """ソートボタンを作成（サブクラスでオーバーライド）"""
         return tk.Button(parent, text="ファイル名ソート", command=self.sortByFilename)
     

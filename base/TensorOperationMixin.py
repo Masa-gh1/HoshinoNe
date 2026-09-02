@@ -7,11 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    from .DataBlock import DataBlock
+    from .FlowData import FlowData
+
 class TensorOperationMixin:
     """tensor 操作の共通機能を提供するMixin"""
     
     @classmethod
-    def computeCombinedTensor(cls, tensorDatas, operation):
+    def computeCombinedTensor(cls, tensorDatas:list[FlowData], operation:callable) -> FlowData:
         """
         複数 tensor を統合
         
@@ -74,7 +82,7 @@ class TensorOperationMixin:
         return result
     
     @classmethod
-    def calculateTensorRange(cls, tensor, width, height):
+    def calculateTensorRange(cls, tensor:np.ndarray, width:int, height:int) -> tuple[float, float]:
         """tensor の範囲を計算"""
         import numpy as np
         
@@ -89,7 +97,7 @@ class TensorOperationMixin:
         return minVal, maxVal
     
     @classmethod
-    def calculateTensorBlock(cls, tensorData, planeIndex, x, y, blockShape, defaultValue=0.0):
+    def calculateTensorBlock(cls, tensorData:FlowData, planeIndex:int, x:int, y:int, blockShape:tuple, defaultValue:float=0.0) -> DataBlock:
         """Tensor データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh

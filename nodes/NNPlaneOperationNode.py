@@ -7,12 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from itertools import zip_longest
 from abc import abstractmethod
 from concurrent.futures import as_completed
 
 from base.FlowNode_CONST import *
 from base import FlowNode
+
+if TYPE_CHECKING:
+    from base.DataBlock import DataBlock
+    from base.FlowData import FlowData
 
 class NNPlaneOperationNode(FlowNode):
     """データ入出力 N:N のプレーン単位計算ノードの基底クラス"""
@@ -97,7 +104,7 @@ class NNPlaneOperationNode(FlowNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessStreams(self, inputStreams):
+    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
         """入力ストリームの前処理（サブクラスでオーバーライド可能）
         演算結果のデータタイプを primary 優先とするため、
         primary/auxiliaryで分類し、primaryを前に集める。
@@ -129,7 +136,7 @@ class NNPlaneOperationNode(FlowNode):
         streams = sorted(streams, key=getPriority)
         return streams
     
-    def preprocessStream(self, inputStream):
+    def preprocessStream(self, inputStream:list[FlowData]) -> list[FlowData]:
         """入力データの前処理(サブクラスでオーバーライド可能)
         
         Args:
@@ -140,7 +147,7 @@ class NNPlaneOperationNode(FlowNode):
         """
         return inputStream
     
-    def createFlowData(self, inputDatas):
+    def createFlowData(self, inputDatas:FlowData|list[FlowData]) -> FlowData:
         """LazyFlowDataを作成 (サブクラスでオーバーライド可能)
         
         Args:
@@ -166,7 +173,7 @@ class NNPlaneOperationNode(FlowNode):
         
         return flowData
     
-    def processHeaders(self, inputData):
+    def processHeaders(self, inputData:FlowData) -> dict:
         """
         出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
         
@@ -176,7 +183,7 @@ class NNPlaneOperationNode(FlowNode):
         return {}
     
     @abstractmethod
-    def planeOperation(self, flowDatas, planeIndex):
+    def planeOperation(self, flowDatas:FlowData|list[FlowData], planeIndex:int) -> list[DataBlock]:
         """単一プレーンの処理 (サブクラスで実装)
         
         Args:
