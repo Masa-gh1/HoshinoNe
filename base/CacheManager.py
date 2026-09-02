@@ -70,24 +70,24 @@ class CType:
 class CacheManager:
     """統一キャッシュ管理"""
     # キャッシュ目次
-    _cachedIndex       = {}                                            # 全キャッシュ目次 {id:policy}
-    _memCachedIndex    = OrderedDict()                                 # メモリキャッシュ目次(LRU) OrderedDict({id:((scale,page,index) or first or data, (dims,dtype,size,ctype))})
-    _storagedIndex     = {}                                            # ストレージキャッシュ目次 {id:boolean or (first or data, (dims,dtype,size,ctype))}
+    _cachedIndex       = {}            # 全キャッシュ目次 {id:policy}
+    _memCachedIndex    = OrderedDict() # メモリキャッシュ目次(LRU) OrderedDict({id:((scale,page,index) or first or data, (dims,dtype,size,ctype))})
+    _storagedIndex     = {}            # ストレージキャッシュ目次 {id:boolean or (first or data, (dims,dtype,size,ctype))}
 
     # キャッシュ本体
-    _objectCache       = {}                                            # オブジェクトキャッシュ {id:data}
-    _memCachePage      = []                                            # メモリキャッシュページ [page:numpy配列 uint8 * BLOCK_CACHE_PAGE_SIZE * MAX_BLOCK_SIZE_BYTES]
-    _storageDir        = None                                          # ストレージキャッシュディレクトリ
+    _objectCache       = {}            # オブジェクトキャッシュ {id:data}
+    _memCachePage      = []            # メモリキャッシュページ [page:numpy配列 uint8 * BLOCK_CACHE_PAGE_SIZE * MAX_BLOCK_SIZE_BYTES]
+    _storageDir        = None          # ストレージキャッシュディレクトリ
     
     # キャッシュ操作
-    _memCacheEvent     = {}                                            # メモリキャッシュ使用通知 {id:boolean}
+    _memCacheEvent     = {}            # メモリキャッシュ使用通知 {id:boolean}
 
     # キャッシュ管理
-    _memCacheRemovable = [OrderedDict() for _ in range(END_SCALE + 1)] # 削除可能キャッシュ(LRU) [scale:OrderedDict({id:lastTime})] スケール外は実体無し保存用
-    _memCacheBitmap    = 0                                             # 使用中メモリキャッシュbitmap 0/1=未使用/使用
-    _memCachePageCnt   = 0                                             # メモリキャッシュページ数
+    _memCacheRemovable = OrderedDict() # 削除可能キャッシュ(LRU) OrderedDict({id:lastTime}) スケール外は実体無し保存用
+    _memCacheBitmap    = 0             # 使用中メモリキャッシュbitmap 0/1=未使用/使用
+    _memCachePageCnt   = 0             # メモリキャッシュページ数
 
-    _cacheLock         = LockWrapper()                                 # 時間計測機能付きロック
+    _cacheLock         = LockWrapper() # 時間計測機能付きロック
     
     # 後始末関数登録状態
     _cleanupRegistered = False
@@ -252,7 +252,11 @@ class CacheManager:
 
     @classmethod
     def _lazySave1(cls):
-        """メモリキャッシュへの遅延書き込み"""
+        """
+        メモリキャッシュへの遅延書き込み
+        ここはシングルスレッドで実行される。
+        メインスレッドとの競合を避ける為に、ロック時間を最小にする。
+        """
         import numpy as np
         
         with cls._cacheLock("_lazySave1.locked.9"):
@@ -265,9 +269,9 @@ class CacheManager:
                     else:
                         scale, page, index = pos
                     cls._memCachedIndex.move_to_end(cacheKey) # 最後尾に移動(LRU)
-                    if cacheKey in cls._memCacheRemovable[scale]:
-                        cls._memCacheRemovable[scale][cacheKey] = time.perf_counter_ns()
-                        cls._memCacheRemovable[scale].move_to_end(cacheKey) # 最後尾に移動(LRU)
+                    if cacheKey in cls._memCacheRemovable:
+                        cls._memCacheRemovable[cacheKey] = time.perf_counter_ns()
+                        cls._memCacheRemovable.move_to_end(cacheKey) # 最後尾に移動(LRU)
             cls._memCacheEvent.clear()
         
         while True:
@@ -285,99 +289,71 @@ class CacheManager:
             size  = data.nbytes
             first = data.reshape(-1)[0]
             if np.isnan(data).all() or (data == first).all():
+                # 配列の全要素が同じなので meta データだけ保存する
                 ctype = CType.ALL
+                pos   = first.item()
             elif size <= CACHE_BLOCK_SIZE_BYTES // 256:
+                # 配列の小さいのでオブジェクトのまま保存する
                 ctype = CType.TINY
+                pos   = data
             else:
                 ctype = CType.NORMAL
+                pos   = None
             meta = (dims, dtype, size, ctype)
             if CType.ALL == ctype or CType.TINY == ctype:
-                # 配列の全要素が同じなので meta データだけ保存する
                 scale = -1
+
+                time.sleep(0) # 連続的にロックするのを抑制する
                 with cls._cacheLock("_lazySave1.locked.E"):
                     cls._save1Count += 1
                     cls._objectCache.pop(cacheKey, None)
-                    cls._memCachedIndex[cacheKey] = (first.item(), meta) if CType.ALL == ctype else (data, meta)
-                    
-                    if BLOCK_CACHE_PAGE_SIZE  <= len(cls._memCacheRemovable[scale]):
-                        # 数が多く成ったので古いデータから削除(LRU)
-                        oldKey, oldLast    = cls._memCacheRemovable[scale].popitem(last=False)
-                        pos, oldMeta       = cls._memCachedIndex.pop(oldKey)
-                        oldPolicy          = cls._cachedIndex[oldKey]
-                        
-                        if CachePolicy.PERSISTENT != oldPolicy:
-                            # ポリシー persistent ではないのでキャッシュから削除
-                            cls._purgeCount += 1
-                            cls._cachedIndex.pop(oldKey)
+                    cls._memCachedIndex[cacheKey] = (pos, meta)
                     
                     if CachePolicy.PERSISTENT != cachePolicy:
-                        cls._memCacheRemovable[scale][cacheKey] = time.perf_counter_ns()
-            elif CType.TINY == ctype:
-                # サイズが小さいのでそのまま保存する
-                scale = -1
-                with cls._cacheLock("_lazySave1.locked.F"):
-                    cls._save1Count += 1
-                    cls._objectCache.pop(cacheKey, None)
-                    cls._memCachedIndex[cacheKey] = (data, meta)
-                    
-                    if BLOCK_CACHE_PAGE_SIZE <= len(cls._memCacheRemovable[scale]):
-                        # 数が多く成ったので古いデータから削除(LRU)
-                        oldKey, oldLast    = cls._memCacheRemovable[scale].popitem(last=False)
-                        pos, oldMeta       = cls._memCachedIndex.pop(oldKey)
-                        oldPolicy          = cls._cachedIndex[oldKey]
-                        
-                        if CachePolicy.PERSISTENT != oldPolicy:
-                            # ポリシー persistent ではないのでキャッシュから削除
-                            cls._purgeCount += 1
-                            cls._cachedIndex.pop(oldKey)
-                    
-                    if CachePolicy.PERSISTENT != cachePolicy:
-                        cls._memCacheRemovable[scale][cacheKey] = time.perf_counter_ns()
+                        cls._memCacheRemovable[cacheKey] = time.perf_counter_ns()
             else:
                 scale = getScaleLog(size)
-                time.sleep(0) # 連続的にロックするのを抑制する
                 
+                time.sleep(0) # 連続的にロックするのを抑制する
                 with cls._cacheLock("_lazySave1.locked.B"):
                     oldKey = None
                     oldPos = None
                     while not (pos := cls._memCacheFindFree(scale)):
                         # 空きがないので、一番古いデータを探す
-                        maxv = time.perf_counter_ns() + (1*1000*1000*1000) # 1s
-                        ls = [next(iter(x.values())) if x else maxv for x in cls._memCacheRemovable]
-                        ls = sorted(enumerate(ls), key=lambda x:x[1])
-                        lastScale, lastTime = next(iter(ls))
-                        if maxv == lastTime:
+                        if not cls._memCacheRemovable:
                             # 削除出来るデータが無い
                             oldKey = None
                             oldPos = None
                             break
-                        elif lastScale == scale:
-                            # 同じスケールに削除出来るデータがあるので古い方から解放し再利用する
-                            oldKey, oldLast = cls._memCacheRemovable[lastScale].popitem(last=False)
-                            oldPos, oldMeta = cls._memCachedIndex.pop(oldKey)
-                            oldPolicy          = cls._cachedIndex[oldKey]
-                            if CachePolicy.PERSISTENT != oldPolicy:
-                                # ポリシー persistent ではないのでキャッシュから削除
-                                cls._purgeCount += 1
-                                cls._cachedIndex.pop(oldKey)
-                            break
                         else:
-                            # 他のスケールに削除出来るデータが有るので古い方から解放する
-                            oldKey, oldLast = cls._memCacheRemovable[lastScale].popitem(last=False)
+                            oldKey, oldLast = cls._memCacheRemovable.popitem(last=False)
                             oldPos, oldMeta = cls._memCachedIndex.pop(oldKey)
-                            oldPolicy          = cls._cachedIndex[oldKey]
+                            oldPolicy       = cls._cachedIndex[oldKey]
+                            oldDims, oldDtype, oldSize, oldCtype = oldMeta
+
                             if CachePolicy.PERSISTENT != oldPolicy:
                                 # ポリシー persistent ではないのでキャッシュから削除
                                 cls._purgeCount += 1
                                 cls._cachedIndex.pop(oldKey)
                             
-                            oldDims, oldDtype, oldSize, oldCtype = oldMeta
                             if CType.ALL == oldCtype or CType.TINY == oldCtype:
+                                # オブジェクト保存なので、メモリキャッシュの解放は不要
                                 pass
                             else:
-                                # メモリキャッシュの解放
                                 oldScale, oldPage, oldIndex = oldPos
-                                cls._memCacheFree(oldScale, oldPage, oldIndex)
+                            
+                                if oldScale == scale:
+                                    # 同じスケールに削除出来るデータがあるので古い方から再利用する
+                                    break
+                                else:
+                                    # 他のスケールに削除出来るデータが有るので古い方から解放する
+                                    oldDims, oldDtype, oldSize, oldCtype = oldMeta
+                                    if CType.ALL == oldCtype or CType.TINY == oldCtype:
+                                        pass
+                                    else:
+                                        # メモリキャッシュの解放
+                                        oldScale, oldPage, oldIndex = oldPos
+                                        cls._memCacheFree(oldScale, oldPage, oldIndex)
                     
                     if pos:
                         # ページに空が在るので採用
@@ -388,14 +364,14 @@ class CacheManager:
                             cls._memCachePage.append(np.empty((BLOCK_CACHE_PAGE_SIZE*CACHE_BLOCK_SIZE_BYTES), dtype=np.uint8)) # ページ作成
                             cls._memCachePageCnt += 1
                     elif oldPos:
-                        # 古いデータの後を再利用
+                        # 古いデータの空き地を再利用
                         pos = oldPos
                     else:
                         # ページに空きが無く、削除出来るデータもないので、メモリキャッシュへの遅延書き込みを保留
                         # ストレージキャッシュへの遅延書き込みが進むのを待つ
-                        pos = None
+                        pass
                 
-                if pos is None:
+                if not pos:
                     # 空が無かったのでストレージキャッシュへの遅延書き込みが進むのを待つ
                     CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
                     time.sleep(0.1)
@@ -411,7 +387,7 @@ class CacheManager:
                         cls._objectCache.pop(cacheKey, None)
                         cls._memCachedIndex[cacheKey] = (pos, meta)
                         if CachePolicy.PERSISTENT != cachePolicy:
-                            cls._memCacheRemovable[scale][cacheKey] = time.perf_counter_ns()
+                            cls._memCacheRemovable[cacheKey] = time.perf_counter_ns()
                         if MAX_BLOCK_CACHE_PAGE <= cls._memCachePageCnt and 0 == cls._save1Count % (BLOCK_CACHE_PAGE_SIZE//8):
                             # 空きが1ページ以下に成ったのでストレージキャッシュを開始
                             CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
@@ -419,7 +395,11 @@ class CacheManager:
     
     @classmethod
     def _lazySave2(cls):
-        """ストレージキャッシュへの遅延書き込み"""
+        """
+        ストレージキャッシュへの遅延書き込み
+        ここはシングルスレッドで実行される。
+        メインスレッドとの競合を避ける為に、ロック時間を最小にする。
+        """
         # 古いデータから連続する PERSISTENT を抽出する
         end = False
         req = {}
@@ -440,17 +420,17 @@ class CacheManager:
                     dims, dtype, size, ctype = meta
                     if CType.ALL == ctype or CType.TINY == ctype:
                         scale, page, index = (-1, None, None)
-                        if cacheKey in cls._memCacheRemovable[scale]:
+                        if cacheKey in cls._memCacheRemovable:
                             # 既に削除可能なので何もしない
                             pass
                         else:
-                            # 実体無しなので即時削除可能
+                            # オブジェクト保持なので即時削除可能
                             cls._save2Count += 1
                             cls._storagedIndex[cacheKey] = (pos, meta)
                             req[cacheKey] = (scale, True)
                     else:
                         scale, page, index = pos
-                        if cacheKey in cls._memCacheRemovable[scale]:
+                        if cacheKey in cls._memCacheRemovable:
                             # 既に削除可能なので何もしない
                             pass
                         elif cacheKey in cls._storagedIndex:
@@ -470,9 +450,9 @@ class CacheManager:
             if isRemovable:
                 with cls._cacheLock("_lazySave2.locked.B"):
                     if cacheKey in cls._memCachedIndex:
-                        lastTime = next(iter(cls._memCacheRemovable[scale].values())) if cls._memCacheRemovable[scale] else time.perf_counter_ns()
-                        cls._memCacheRemovable[scale][cacheKey] = lastTime
-                        cls._memCacheRemovable[scale].move_to_end(cacheKey, last=False) # 先頭に移動(LRU)
+                        lastTime = next(iter(cls._memCacheRemovable.values())) if cls._memCacheRemovable else time.perf_counter_ns()
+                        cls._memCacheRemovable[cacheKey] = lastTime
+                        cls._memCacheRemovable.move_to_end(cacheKey, last=False) # 先頭に移動(LRU)
             else:
                 with cls._cacheLock("_lazySave2.locked.C"):
                     if cacheKey in cls._memCachedIndex:
@@ -492,9 +472,9 @@ class CacheManager:
                         if cacheKey in cls._memCachedIndex:
                             cls._save2Count += 1
                             cls._storagedIndex[cacheKey] = True
-                            lastTime = next(iter(cls._memCacheRemovable[scale].values())) if cls._memCacheRemovable[scale] else time.perf_counter_ns()
-                            cls._memCacheRemovable[scale][cacheKey] = lastTime
-                            cls._memCacheRemovable[scale].move_to_end(cacheKey, last=False) # 先頭に移動(LRU)
+                            lastTime = next(iter(cls._memCacheRemovable.values())) if cls._memCacheRemovable else time.perf_counter_ns()
+                            cls._memCacheRemovable[cacheKey] = lastTime
+                            cls._memCacheRemovable.move_to_end(cacheKey, last=False) # 先頭に移動(LRU)
             time.sleep(0) # 連続的にロックするのを抑制する
 
     @classmethod
@@ -576,10 +556,9 @@ class CacheManager:
                 else:
                     scale, page, index = pos
                     cls._memCacheFree(scale, page, index)
-            for d in cls._memCacheRemovable:
-                cls._clearByPartialKey(d, cacheKey) 
-            cls._clearByPartialKey(cls._cachedIndex, cacheKey)
-            cls._clearByPartialKey(cls._objectCache, cacheKey)
+            cls._clearByPartialKey(cls._memCacheRemovable, cacheKey) 
+            cls._clearByPartialKey(cls._cachedIndex      , cacheKey)
+            cls._clearByPartialKey(cls._objectCache      , cacheKey)
     
     @classmethod
     def _clearByPartialKey(cls, cache:dict, cacheKey:str) -> list:
