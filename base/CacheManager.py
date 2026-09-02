@@ -154,7 +154,7 @@ class CacheManager:
     @classmethod
     def _get(cls, cacheKey:str) -> np.ndarray|None:
         with cls._cacheLock("_get.locked.A"):
-            laodStorage = False
+            loadStorage = False
             if cacheKey in cls._objectCache:
                 # オブジェクトキャッシュにあるので採用
                 cls._cacheHitCount += 1
@@ -180,9 +180,9 @@ class CacheManager:
                     cls._memCacheEvent[cacheKey] = True # LRU の順序を更新
                 return data
             else:
-                laodStorage = cls._storagedIndex[cacheKey]
+                loadStorage = cls._storagedIndex[cacheKey] if cacheKey in cls._storagedIndex else False
 
-        if True == laodStorage:
+        if True == loadStorage:
             # ストレージに在るので復元してメモリキャッシュに復帰
             cls._loadCount += 1
             data = cls._loadFromStorage(cacheKey)
@@ -202,10 +202,10 @@ class CacheManager:
                 #ここには来ないはず
                 pass
             return data
-        elif isinstance(laodStorage, tuple):
+        elif isinstance(loadStorage, tuple):
             # meta からのデータ復元
             cls._loadCount += 1
-            pos, meta = laodStorage
+            pos, meta = loadStorage
             dims, dtype, size, ctype = meta
             if CType.ALL == ctype:
                 import numpy as np
