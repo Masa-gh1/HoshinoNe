@@ -167,8 +167,8 @@ class CacheManager:
                 dims, dtype, size, ctype = meta
                 if CType.ALL == ctype:
                     import numpy as np
-                    all = pos
-                    data = np.full(dims, all, dtype=dtype)
+                    value = pos
+                    data = np.full(dims, value, dtype=dtype)
                 elif CType.TINY == ctype:
                     data = pos
                 else:
