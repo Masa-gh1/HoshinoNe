@@ -6,7 +6,15 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+
+from typing import overload
 import math
+
+@overload
+def dispS(value:float, representative:float|None = None) -> str: ...
+
+@overload
+def dispS(value:list[float], representative:float|None = None) -> list[str]:...
 
 def dispS(value, representative = None):
     """数値を表示に適した長さで文字列化(短)する"""
@@ -40,6 +48,12 @@ def dispS(value, representative = None):
         return texts
     else:
         return texts[0]
+
+@overload
+def dispL(value:float, representative:float|None = None) -> str: ...
+
+@overload
+def dispL(value:list[float], representative:float|None = None) -> list[str]:...
 
 def dispL(value, representative = None):
     """数値を表示に適した長さで文字列化(長)する"""

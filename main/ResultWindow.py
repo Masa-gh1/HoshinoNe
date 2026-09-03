@@ -7,6 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+import math
 from fractions import Fraction
 import json
 import io
@@ -41,6 +45,13 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
+if TYPE_CHECKING:
+    import numpy as np
+    import matplotlib
+    import matplotlib.pyplot as plt
+    from PIL import Image, ImageTk
+    from base.FlowData import FlowData
+
 class ResultWindow(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
@@ -61,7 +72,7 @@ class ResultWindow(tk.Toplevel):
         
         tk.Label(data_select_frame, text="表示データ:").pack(side=tk.LEFT)
         self._selected_data_var = tk.StringVar()
-        self._data_combo = tk.ttk.Combobox(data_select_frame, textvariable=self._selected_data_var, state="readonly", width=180)
+        self._data_combo = ttk.Combobox(data_select_frame, textvariable=self._selected_data_var, state="readonly", width=180)
         self._data_combo.pack(side=tk.LEFT, padx=(5,0))
         self._data_combo.bind('<<ComboboxSelected>>', lambda e: self.updateResult())
         self._data_combo.bind('<Key>', self._onComboKeyPress)
@@ -93,6 +104,7 @@ class ResultWindow(tk.Toplevel):
         self._display_levels_var = tk.StringVar(value="display")
         tk.Radiobutton(level_frame, text="display", variable=self._display_levels_var, value="display", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="adaptive", variable=self._display_levels_var, value="adaptive", command=self.updateResult).pack(side=tk.LEFT)
+        tk.Radiobutton(level_frame, text="adaptive per plane", variable=self._display_levels_var, value="adaptive per plane", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="all", variable=self._display_levels_var, value="all", command=self.updateResult).pack(side=tk.LEFT)
         tk.Radiobutton(level_frame, text="isoline", variable=self._display_levels_var, value="isoline", command=self.updateResult).pack(side=tk.LEFT)
         
@@ -387,8 +399,10 @@ class ResultWindow(tk.Toplevel):
                             blockY = 0
                             blockW = 0
                             blockH = 0
-                    value = block.data[y-blockY][x-blockX]
-                    cells.append(value)
+                    if block and not block.data is None:
+                        cells.append(block.data[y-blockY][x-blockX])
+                    else:
+                        cells.append(math.nan)
                 cols.append(sh.dispL(cells))
             
             # ヘッダー行
@@ -444,8 +458,8 @@ class ResultWindow(tk.Toplevel):
                 cells = []
                 for y in range(height):
                     if(  x < blockX or blockX + blockW <= x
-                    or y < blockY or blockY + blockH <= y
-                    ):
+                      or y < blockY or blockY + blockH <= y
+                      ):
                         block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
                         if block and not block.data is None:
                             blockX = x//BLOCK_SIZE*BLOCK_SIZE
@@ -456,8 +470,10 @@ class ResultWindow(tk.Toplevel):
                             blockY = 0
                             blockW = 0
                             blockH = 0
-                    value = block.data[y-blockY][x-blockX]
-                    cells.append(value)
+                    if block and not block.data is None:
+                        cells.append(block.data[y-blockY][x-blockX])
+                    else:
+                        cells.append(math.nan)
                 cols.append(sh.dispL(cells, representative=median))
             
             # ヘッダー行
@@ -482,7 +498,7 @@ class ResultWindow(tk.Toplevel):
         
         return content
     
-    def _generateImageContent(self, flowData):
+    def _generateImageContent(self, flowData:FlowData):
         """画像データの内容を生成"""
         headers = flowData.headers
         
@@ -508,8 +524,9 @@ class ResultWindow(tk.Toplevel):
         content = []
         
         # ヘッダ情報を作成
+        text = ""
         try:
-            text = "\n"
+            text += "\n"
             text += f"Mode: {mode}\n"
             text += f"Planes: {', '.join(planes)}\n"
             text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
@@ -564,7 +581,9 @@ class ResultWindow(tk.Toplevel):
                     for data in histogram_data['planes']:
                         edgeMin = min(edgeMin, data['bin_edges'][0])
                         edgeMax = max(edgeMax, data['bin_edges'][-1])
-                    
+
+                    bin_counts    = []
+                    bin_edges     = []
                     total_samples = 0
                     
                     if "log" == ax_xScale and adpLevelEnd > adpLevelMin:
@@ -602,7 +621,7 @@ class ResultWindow(tk.Toplevel):
                         custom_ticks = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.0]
                         ax.set_xticks(custom_ticks)
                         custom_ticks = [0.10, 0.15, 0.20, None, 0.30, None, None, None, 0.50, None, None, None, 0.70, None, None, None, None, None, 1.0]
-                        ax.set_xticklabels([sh.dispS(tick / xScale - xOffset) if None!=tick else '' for tick in custom_ticks])
+                        ax.set_xticklabels([sh.dispS(tick / xScale - xOffset) if tick else '' for tick in custom_ticks])
                     
                     # グラフを画像に変換
                     buf = io.BytesIO()
@@ -621,6 +640,7 @@ class ResultWindow(tk.Toplevel):
                 Debug.log(type(self).__name__, "Histogram error", e)
                 content.append(f"Histogram error: {str(e)}\n")
         
+        # 画像表示
         if not PIL_AVAILABLE:
             content.append("\nImage is not available.\n\n")
         else:
@@ -630,15 +650,24 @@ class ResultWindow(tk.Toplevel):
                 if "display" == displayLevels:
                     scale = 256.0 / (displayLevelEnd - displayLevelMin)
                     offset = float(displayLevelMin)
-                    scaleFunc = lambda v: (v - offset) * scale
+                    scaleFunc = lambda v, p: (v - offset) * scale
                 elif "adaptive" == displayLevels:
                     scale = 256.0 / (adpLevelEnd - adpLevelMin)
                     offset = float(adpLevelMin)
-                    scaleFunc = lambda v: (v - offset) * scale
+                    scaleFunc = lambda v, p: (v - offset) * scale
+                elif "adaptive per plane" == displayLevels:
+                    adaptivePerPlane = []
+                    for p in range(planeCount):
+                        planeMin = flowData.getQuantile(0.01, p)
+                        planeMax = flowData.getQuantile(0.99, p)
+                        scale = 256.0 / (planeMax - planeMin)
+                        offset = float(planeMin)
+                        adaptivePerPlane.append((scale, offset))
+                    scaleFunc = lambda v, p: (v - adaptivePerPlane[p][1]) * adaptivePerPlane[p][0]
                 elif "all" == displayLevels:
                     scale = 256.0 / (maxValue - minValue)
                     offset = float(minValue)
-                    scaleFunc = lambda v: (v - offset) * scale
+                    scaleFunc = lambda v, p: (v - offset) * scale
                 elif "isoline" == displayLevels:
                     band  = 10
                     isolineMin = flowData.getQuantile(0.05)
@@ -653,7 +682,7 @@ class ResultWindow(tk.Toplevel):
                                 k[y,x] = 1.0
                     k /= k.sum()
                     import scipy.ndimage
-                    def isoline(v):
+                    def isoline(v, p):
                         result = scipy.ndimage.convolve(v, k, mode="reflect")
                         np.add(     result, -offset  , out=result)
                         np.multiply(result, scale    , out=result)
@@ -666,7 +695,7 @@ class ResultWindow(tk.Toplevel):
                 else:
                     scale = 1.0
                     offset = 0.0
-                    scaleFunc = lambda v: (v - offset) * scale
+                    scaleFunc = lambda v, p: (v - offset) * scale
                 
                 if mode.endswith('(DWT)'):
                     # 離散ウェーブレット変換結果かので、分解データをタイル状に表示
@@ -885,7 +914,7 @@ class ResultWindow(tk.Toplevel):
         
         Args:
             flowData (FlowData): FlowDataオブジェクト
-            scaleFunc (float): レベル調整関数
+            scaleFunc (float,planeIndex): レベル調整関数
             d_plane (int): 出力プレーン数
             d_width (int): 出力画像の幅
             d_height (int): 出力画像の高さ
@@ -897,6 +926,10 @@ class ResultWindow(tk.Toplevel):
             Image: 画像
             list: 代用内容
         """
+        assert 0 < d_plane
+        assert 0 < d_width
+        assert 0 < d_height
+        
         # 画像データを構築
         imgArray = np.zeros((d_height, d_width, d_plane), dtype=np.uint8)
         content = []
@@ -932,7 +965,7 @@ class ResultWindow(tk.Toplevel):
                             trimed  = data[cy1-by1:cy2-by1, cx1-bx1:cx2-bx1] # 切り出し
                             if np.iscomplexobj(trimed):
                                 trimed = np.abs(trimed) # 複素数なので、絶対値を取る
-                            leveled = scaleFunc(trimed)                      # レベル調整を適用
+                            leveled = scaleFunc(trimed, sp)                  # レベル調整を適用
                             norm    = np.nan_to_num( leveled, nan=0.0)       # NaN を 0 に変換
                             cliped  = np.clip(norm, 0, 255).astype(np.uint8) # [0,256) にクリップ
                             tmpImg[cy1-sy1:cy2-sy1, cx1-sx1:cx2-sx1, dp] = cliped
@@ -955,8 +988,8 @@ class ResultWindow(tk.Toplevel):
             except (IndexError, TypeError, ValueError) as e:
                 Debug.log(type(self).__name__, "error", e)
                 content.append(f"\nerror: {str(e)}\n\n")
-        
-        if 4 == d_plane:
+
+        if   4 == d_plane:
             # 4 プレーンあるので RGBG として、1,3 プレーンを平均する
             imgArray[:, :, 1] = imgArray[:, :, 1] // 2 + imgArray[:, :, 3] // 2
             img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0:3], 'RGB')
@@ -964,5 +997,7 @@ class ResultWindow(tk.Toplevel):
             img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0:3], 'RGB')
         elif 1 == d_plane:
             img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0].squeeze(), 'L')
+        else:
+            img = Image.fromarray(imgArray[0:d_height, 0:d_width, 0:3], 'RGB')
         
         return(img, content)

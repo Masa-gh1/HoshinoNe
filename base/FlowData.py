@@ -271,7 +271,7 @@ class FlowData:
         """最小値を取得"""
         return self._minValue
     
-    def _getHighResHistograms(self, bins=1024):
+    def _getHighResHistograms(self, bins=1024) -> list[dict]:
         """高解像度ヒストグラム(不等間隔)を取得（キャッシュ用の中間生成物）"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -390,16 +390,19 @@ class FlowData:
         
         return mode_value
     
-    def getQuantile(self, per:float) -> float:
+    def getQuantile(self, per:float, planeIndex:int|None=None) -> float:
         """指定したクォンタイル値(分位数)を取得（キャッシュ付き）"""
         import numpy as np
-        
-        if per in self._percentileCache:
-            return self._percentileCache[per]
+
+        if (per, planeIndex) in self._percentileCache:
+            return self._percentileCache[(per, planeIndex)]
         
         # 高解像度ヒストグラムで全プレーンを取得
         planeCount = self.getPlaneCount()
         planeHistograms = self._getHighResHistograms()
+
+        # planeIndex が指定されている場合はそのプレーンのみを使用
+        planeHistograms = [planeHistograms[planeIndex]] if not planeIndex is None else planeHistograms
         
         if planeHistograms and any(hist is not None for hist in planeHistograms):
             # 全プレーンのビン中央値を収集
@@ -407,7 +410,7 @@ class FlowData:
             all_counts = []
             
             for hist_data in planeHistograms:
-                if hist_data is not None:
+                if not hist_data is None:
                     centers = (hist_data['bin_edges'][:-1] + hist_data['bin_edges'][1:]) / 2
                     all_centers.append(centers)
                     all_counts.append(hist_data['bin_counts'])
@@ -430,7 +433,7 @@ class FlowData:
                 bin_idx = min(bin_idx, len(sorted_centers) - 1)
                 
                 result = sorted_centers[bin_idx]
-                self._percentileCache[per] = result
+                self._percentileCache[(per, planeIndex)] = result
                 return result
         return 0.0
     
