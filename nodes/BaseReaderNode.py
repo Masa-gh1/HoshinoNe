@@ -151,7 +151,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
         return 1
     
     def reportBlockProgress(self, context, message:str="処理中"):
-        """ブロック進捗を報告（スレッドセーフ）"""
+        """ブロック進捗を報告"""
         if context and 'totalBlocks' in context:
             with context['processedBlocks_lock']:
                 context['processedBlocks'] += 1

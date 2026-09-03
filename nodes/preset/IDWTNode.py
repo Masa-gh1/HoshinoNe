@@ -116,7 +116,7 @@ class IDWTNode(NNPlaneOperationNode):
             endY = block.y + blockHeight
             auxPlane[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
         
-        filter_bank = pywt.orthogonal_filter_bank(auxPlane.flatten())
+        filter_bank = pywt.orthogonal_filter_bank(auxPlane.ravel())
         wavelet = pywt.Wavelet(name="custom", filter_bank=filter_bank)
         data = pywt.waverecn(coeffs, wavelet) # 逆DWT
         

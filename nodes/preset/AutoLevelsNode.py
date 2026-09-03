@@ -43,7 +43,7 @@ class AutoLevelsNode(FlowNode):
                 # 全画像データを読み込み
                 blockArrays = []
                 for block in inputData.iterateBlocks():
-                    blockArrays.append(block.data.flatten())
+                    blockArrays.append(block.data.ravel())
                 data = np.concatenate(blockArrays)
                 
                 # NaN値を除外して1%と99%のパーセンタイルを計算

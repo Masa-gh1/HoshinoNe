@@ -56,13 +56,10 @@ class QuadraticFitNode(NNPlaneOperationNode):
 
         width, height = flowData.getDimensions()
         
-        # 座標データを準備（スレッドセーフ: np.meshgrid を置き換え）
-        y_indices = nh.arange(height).reshape(-1, 1)
-        x_indices = nh.arange(width)
-        y_coords = np.broadcast_to(y_indices, (height, width))
-        x_coords = np.broadcast_to(x_indices, (height, width))
-        x_flat = x_coords.flatten()
-        y_flat = y_coords.flatten()
+        # 座標データを準備
+        x_coords, y_coords = np.meshgrid(nh.arange(width), nh.arange(height), copy=False)
+        x_flat = x_coords.ravel()
+        y_flat = y_coords.ravel()
         
         # データを読み込み
         planeData = nh.nans((height, width))
@@ -74,7 +71,7 @@ class QuadraticFitNode(NNPlaneOperationNode):
             endX = block.x + blockWidth
             planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
         
-        z_flat = planeData.flatten()
+        z_flat = planeData.ravel()
         
         # NaN値を除外して有効なピクセルのみ使用
         valid_mask = ~np.isnan(z_flat)

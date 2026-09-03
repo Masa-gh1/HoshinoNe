@@ -126,12 +126,9 @@ class PolynomialOperationMixin:
         coeffMatrix = coeffBlock.data
         maxOrderY, maxOrderX = coeffMatrix.shape
         
-        # ブロック内の座標配列を作成（スレッドセーフ: np.meshgrid 置き換え）
+        # ブロック内の座標配列を作成
         blockHeight, blockWidth = blockShape
-        y_indices = nh.arange(blockHeight).reshape(-1, 1)
-        x_indices = nh.arange(blockWidth)
-        y_coords = y + np.broadcast_to(y_indices, (blockHeight, blockWidth))
-        x_coords = x + np.broadcast_to(x_indices, (blockHeight, blockWidth))
+        x_coords, y_coords = np.meshgrid(nh.arange(x, x+blockWidth), nh.arange(y, y+blockHeight), copy=False, sparse=True)
         
         # numpy 配列演算で多項式計算
         result = nh.zeros(blockShape)

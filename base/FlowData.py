@@ -286,7 +286,7 @@ class FlowData:
         for planeIndex in range(planeCount):
             blockArrays = []
             for block in self.iterateBlocks(planeIndex):
-                blockArrays.append(block.data.flatten())
+                blockArrays.append(block.data.ravel())
             
             if not blockArrays:
                 planeHistograms.append(None)

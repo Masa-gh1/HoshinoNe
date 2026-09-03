@@ -196,7 +196,7 @@ class RawReaderNode(BaseReaderNode):
             else:
                 colorDesc = color_desc.decode('ascii')
                 bayer_pattern = ""
-                for x in raw_pattern.flatten():
+                for x in raw_pattern.flat:
                     bayer_pattern += colorDesc[x]
             
             # raw情報を構築(raw.postprocess 後だと値が変化物がある)

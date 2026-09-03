@@ -378,7 +378,7 @@ class ToneCurveDialog(tk.Toplevel):
             for planeIndex in range(flowData.getPlaneCount()):
                 blockArrays = []
                 for block in flowData.iterateBlocks(planeIndex):
-                    blockArrays.append(block.data.flatten())
+                    blockArrays.append(block.data.ravel())
                 planeData = np.concatenate(blockArrays)
                 validData = planeData[~np.isnan(planeData)]
                 sortedData = np.sort(validData)

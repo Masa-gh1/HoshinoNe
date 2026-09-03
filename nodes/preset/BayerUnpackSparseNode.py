@@ -46,11 +46,8 @@ class BayerUnpackSparseLazyFlowData(LazyFlowData):
         height, width = data.shape
         result = nh.nans((height, width))
         
-        # 座標配列を作成（スレッドセーフ: np.mgrid 置き換え）
-        y_indices = np.arange(height).reshape(-1, 1)
-        x_indices = np.arange(width)
-        y_coords = np.broadcast_to(y_indices, (height, width))
-        x_coords = np.broadcast_to(x_indices, (height, width))
+        # 座標配列を作成
+        x_coords, y_coords = np.meshgrid(nh.arange(width), nh.arange(height), copy=False, sparse=True)
         
         # ベイヤーパターンに応じてマスクを作成     [   R      G1      B       G2  ]
         if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]

@@ -698,7 +698,7 @@ class ColorSpaceCanvas(tk.Canvas):
         # Z=sliceZ 断面の色空間を描画
         
         # スクリーン座標のグリッドを生成
-        y_coords, x_coords = np.mgrid[0:height, 0:width]
+        x_coords, y_coords = np.meshgrid(nh.arange(width), nh.arange(height), copy=False)
 
         # スクリーン座標をワールド座標に変換
         worldX, worldY = self.screenToWorld(x_coords, y_coords)
