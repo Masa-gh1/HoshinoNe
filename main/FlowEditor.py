@@ -972,7 +972,7 @@ class FlowEditor:
 
             blockInfo = f"Block: {getpsStr}, {setpsStr}, {save1psStr}, {save2psStr}"
             objInfo   = f"Object: {ObjectCount}"
-            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount} {purgeCount/setCount:.3f} Save:{save2Count}({save2Count/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
+            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount}({purgeCount/setCount:.3f}) Save:{save2Count}({save2Count/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
             dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageCount}({storageSizeStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         
