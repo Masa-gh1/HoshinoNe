@@ -54,7 +54,6 @@ class FlowData:
         self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
         self._lock             = threading.Lock()
         
-        
         import importlib.util
         import sys
         if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("numpy"):
@@ -81,14 +80,6 @@ class FlowData:
         """モードを取得"""
         if 'mode' in self.headers:
             return self.headers['mode']
-        # プレーン数から推定
-        planeCount = self.getPlaneCount()
-        if planeCount == 3:
-            return 'RGB'
-        elif planeCount == 4:
-            return 'RGBG'
-        elif planeCount == 1:
-            return 'L'
         else:
             return None
     
@@ -96,7 +87,8 @@ class FlowData:
         """プレーン数を取得"""
         if 'planes' in self.headers:
             return len(self.headers['planes'])
-        return None
+        else:
+            return None
     
     def getDimensions(self) -> tuple[int, int]:
         """次元を取得 (width, height)"""
