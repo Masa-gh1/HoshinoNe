@@ -699,17 +699,17 @@ class ResultWindow(tk.Toplevel):
                 
                 if mode.endswith('(DWT)'):
                     # 離散ウェーブレット変換結果かので、分解データをタイル状に表示
+                    dwtLevel = headers["DWT level"]
+                    dwtSize  = headers["DWT size"]
                     displayCorners = "DWT"
                     gridLline = True
                     gridSize  = max(width, height)
-                    d_plane  = 3
-                    dwtLevel = headers["DWT level"]
-                    dwtSize  = headers["DWT size"]
+                    d_plane  = planeCount//(1+3*dwtLevel)
                     src = []
                     dst = []
                     for p in range(d_plane):
-                        src.append((p*(1+(dwtLevel)*3),0,0,dwtSize[0],dwtSize[1]))
-                        dst.append((p                 ,0,0))
+                        src.append((p*(1+3*dwtLevel),0,0,dwtSize[0],dwtSize[1]))
+                        dst.append((p               ,0,0))
                     x = dwtSize[0]
                     y = dwtSize[1]
                     for l in range(dwtLevel):
