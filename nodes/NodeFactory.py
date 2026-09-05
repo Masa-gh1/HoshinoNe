@@ -30,6 +30,7 @@ class NodeFactory:
         ('min'                     , '比較小(N:N)'                  , 'min(a,b)'                  ),
         ('************************', None                           , None                        ),
         ('matrix_product'          , '行列積(N:N)'                  , 'AB'                        ),
+        ('inverse_matrix'          , '逆行列'                       , '1/A'                       ),
         ('------------------------', None                           , None                        ),
         ('sum'                     , '総和(N:1)'                    , 'ΣA'                       ),
         ('product'                 , '総積(N:1)'                    , 'ΠA'                       ),
