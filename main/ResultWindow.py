@@ -135,12 +135,14 @@ class ResultWindow(tk.Toplevel):
         frame = tk.Frame(self)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        text_widget = tk.Text(frame, wrap=tk.WORD)
-        scrollbar = tk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-        
+        text_widget = tk.Text(frame, wrap=tk.NONE)
+        scrollbar_v = tk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
+        scrollbar_h = tk.Scrollbar(frame, orient=tk.HORIZONTAL, command=text_widget.xview)
+        text_widget.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
+
+        scrollbar_v.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar_h.pack(side=tk.BOTTOM, fill=tk.X)
         text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # テキストウィジェット参照を保存
         self._result_text_widget = text_widget
@@ -926,9 +928,9 @@ class ResultWindow(tk.Toplevel):
             Image: 画像
             list: 代用内容
         """
-        assert 0 < d_plane
-        assert 0 < d_width
-        assert 0 < d_height
+        assert 0 < d_plane, "plane is not valid"
+        assert 0 < d_width, "width is not valid"
+        assert 0 < d_height, "height is not valid"
         
         # 画像データを構築
         imgArray = np.zeros((d_height, d_width, d_plane), dtype=np.uint8)

@@ -10,10 +10,6 @@ All rights reserved.
 import numpy as np
 from config import DEFAULT_BLOCK_TYPE
 
-# NumPyのデフォルト浮動小数点型を設定
-# 注意: この設定は一部の関数でのみ有効。確実にするには下記ヘルパー関数を使用
-np.float_ = DEFAULT_BLOCK_TYPE
-
 # 型変換用エイリアス
 BDTYPE = DEFAULT_BLOCK_TYPE  # ブロックデータタイプ 使用例 arr.astype(nh.BDTYPE)
 BDCOMPLEX = np.result_type(DEFAULT_BLOCK_TYPE, np.complex64).type

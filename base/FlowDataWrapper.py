@@ -52,29 +52,29 @@ class FlowDataWrapper(FlowData):
     def getArea(self) -> int:
         return self.orgFlowData.getArea()
     
-    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock:
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock|None:
         return self.orgFlowData.getBlock(planeIndex, x, y)
     
     def getBlockCount(self) -> int:
         return self.orgFlowData.getBlockCount()
     
-    def iterateBlocks(self, planeIndex:int=None) -> Iterator[DataBlock]:
+    def iterateBlocks(self, planeIndex:int|None=None) -> Iterator[DataBlock]:
         return self.orgFlowData.iterateBlocks(planeIndex)
     
     def setBlock(self, dataBlock:DataBlock):
         return self.orgFlowData.setBlock(dataBlock)
     
-    def getMaxValue(self) -> float:
+    def getMaxValue(self) -> float|None:
         return self.orgFlowData.getMaxValue()
     
-    def getMinValue(self) -> float:
+    def getMinValue(self) -> float|None:
         return self.orgFlowData.getMinValue()
     
     def getModeValue(self) -> float:
         return self.orgFlowData.getModeValue()
 
-    def getQuantile(self, per:float) -> float:
-        return self.orgFlowData.getQuantile(per)
+    def getQuantile(self, per:float, planeIndex:int|None=None) -> float:
+        return self.orgFlowData.getQuantile(per,planeIndex)
     
     def getHistogram(self, bins:int=256, log_scale:bool=False) -> dict:
         return self.orgFlowData.getHistogram(bins, log_scale)

@@ -75,11 +75,11 @@ class FlowFile:
             with open( filePath, 'w', encoding='utf-8') as f:
                 import numpy as np
                 class JSONEncoder(json.JSONEncoder):
-                    def default( self, obj):
-                        if isinstance( obj, np.floating):
-                            return float(obj)
+                    def default( self, o):
+                        if isinstance( o, np.floating):
+                            return float(o)
                         else:
-                            return json.JSONEncoder.default(self, obj)
+                            return json.JSONEncoder.default(self, o)
                 
                 json.dump(serial, f, ensure_ascii=False, indent=2, cls=JSONEncoder)
         

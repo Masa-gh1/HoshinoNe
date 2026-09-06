@@ -76,7 +76,7 @@ class FlowData:
             return self.headers['type']
         return 'table'
     
-    def getMode(self) -> str:
+    def getMode(self) -> str|None:
         """モードを取得"""
         if 'mode' in self.headers:
             return self.headers['mode']
@@ -88,7 +88,7 @@ class FlowData:
         if 'planes' in self.headers:
             return len(self.headers['planes'])
         else:
-            return None
+            return 0
     
     def getDimensions(self) -> tuple[int, int]:
         """次元を取得 (width, height)"""
@@ -96,8 +96,13 @@ class FlowData:
     
     def getVariableType(self) -> np.dtype:
         """データ型を取得"""
-        if self._variableType is None:
-            self.getBlock(0,0,0).data
+        from .LazyFlowData import LazyFlowData
+        if not self._variableType and isinstance(self,LazyFlowData):
+            # 型が未設定かつ LazyFlowData の場合、データを取得して型を確定させる
+            block = self.getBlock(0,0,0)
+            assert not block is None, "block is None: planeIndex: 0, x: 0, y: 0"
+            _ = block.data
+        assert not self._variableType is None, "variableType is None"
         return self._variableType
 
     def getArea(self) -> int:
@@ -105,8 +110,20 @@ class FlowData:
         width, height = self.getDimensions()
         return (width*height)
     
-    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock:
-        """指定位置からブロックを取得"""
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock|None:
+        """
+        指定位置からブロックを取得
+
+        指定の座標が存在しない場合、Noneを返す。
+        
+        Args:
+            planeIndex: プレーンインデックス
+            x: x 座標
+            y: y 座標
+        
+        Return:
+            DataBlock 又は None
+        """
         from .DataBlock import DataBlock
         
         width, height = self.getDimensions()
@@ -129,9 +146,8 @@ class FlowData:
             return DataBlock(nh.nans((h, w)), planeIndex, x, y)
         
         # 遅延ロード用のDataBlockを作成
-        block = DataBlock(None, planeIndex, x, y)
+        block = DataBlock(self.instanceId, planeIndex, x, y)
         block.cachePolicy = self.cachePolicy
-        block.blockId = f"{self.instanceId}:{planeIndex}:{x}:{y}"
         return block
     
     def getBlockCount(self) -> int:
@@ -146,22 +162,20 @@ class FlowData:
         
         return planeCount * blocksX * blocksY
     
-    def iterateBlocks(self, planeIndex:int=None) -> Iterator[DataBlock]:
+    def iterateBlocks(self, planeIndex:int|None=None) -> Iterator[DataBlock]:
         """全ブロックを順次取得するジェネレータ"""
-        width, height = self.getDimensions()
-        planeCount = self.getPlaneCount()
-        if 0 == planeCount:
-            return None
-        
         # Z階数曲線でブロックを返す
         from utils.order import zOrderGenerator
         if planeIndex is None:
+            width, height = self.getDimensions()
+            planeCount = self.getPlaneCount()
             for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
                 for planeIndex in range(planeCount):
                     block = self.getBlock(planeIndex, x, y)
                     if block:
                         yield block
         else:
+            width, height = self.getDimensions()
             for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
                 block = self.getBlock(planeIndex, x, y)
                 if block:
@@ -195,8 +209,8 @@ class FlowData:
                 else:
                     data = data
         
-        # DataBlock を再利用
-        dataBlock.blockId = f"{self.instanceId}:{dataBlock.planeIndex}:{dataBlock.x}:{dataBlock.y}"
+        # DataBlock をこのFlowData用に再設定
+        dataBlock.__init__( self.instanceId, dataBlock.planeIndex, dataBlock.x, dataBlock.y)
         dataBlock.cachePolicy = self.cachePolicy
         dataBlock.data = data
     
@@ -246,20 +260,20 @@ class FlowData:
                 
                 with self._lock:
                     if self._maxValue is None or self._maxValue < blockMax:
-                        self._maxValue = blockMax
+                        self._maxValue = float(blockMax)
                     if self._minValue is None or blockMin < self._minValue:
-                        self._minValue = blockMin
+                        self._minValue = float(blockMin)
                     
                     # データ更新時にキャッシュをクリア
                     self._percentileCache.clear()
                     self._histogramCache.clear()
                     self._highResHistCache.clear()
     
-    def getMaxValue(self) -> float:
+    def getMaxValue(self) -> float|None:
         """最大値を取得"""
         return self._maxValue
     
-    def getMinValue(self) -> float:
+    def getMinValue(self) -> float|None:
         """最小値を取得"""
         return self._minValue
     
@@ -278,7 +292,8 @@ class FlowData:
         for planeIndex in range(planeCount):
             blockArrays = []
             for block in self.iterateBlocks(planeIndex):
-                blockArrays.append(block.data.ravel())
+                if block:
+                    blockArrays.append(block.data.ravel())
             
             if not blockArrays:
                 planeHistograms.append(None)
@@ -296,6 +311,9 @@ class FlowData:
                     maxVal = sortedData[-1]
                     minEdge = minVal
                     maxEdge = maxVal
+                    
+                    linear_edges = nh.array([minVal,maxVal])
+                    log_edges    = nh.array([minVal,maxVal])
                     
                     while minEdge < maxEdge:
                         # linear bins

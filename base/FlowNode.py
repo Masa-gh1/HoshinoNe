@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from abc import ABC as AbstractBaseClass, abstractmethod
 import hashlib
@@ -129,19 +129,21 @@ class FlowNode(AbstractBaseClass):
     
     def execute(self, context=None):
         """ノードの処理を実行"""
+        assert not self.view.editor is None
         self.process(context)
         # 実行時設定ハッシュの更新
         self._lastInputHash = self.getInputHashe()
         self._lastConfigHash = self.getConfigHash()
         self.view.editor.root.after(0,self.view.updateResult)
     
-    def reportProgress(self, context, message:str, current:int=None, total:int=None):
+    def reportProgress(self, context, message:str, current:int|None=None, total:int|None=None):
         """処理経過を報告"""
         if context and 'progress_callback' in context:
             context['progress_callback'](message, current, total)
 
     def preview(self):
         """プレビュー専用処理（ノード個別実行）"""
+        assert not self.view.editor is None
         self.view.editor.executeFlow(self)
     
     def needsReprocessing(self) -> bool:
@@ -203,7 +205,7 @@ class FlowNode(AbstractBaseClass):
         pass
     
 class FlowNodeView():
-    def __init__(self, majorType: str, ioType: str, outputCat: str, text: str, canvas: tk.Canvas, editor: FlowEditor, x: int, y: int, **kwargs):
+    def __init__(self, majorType:str, ioType:str, outputCat:str, text:str, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
         self.majorType = majorType
         self.ioType    = ioType
         self.outputCat = outputCat
@@ -238,6 +240,10 @@ class FlowNodeView():
         self.canvasBind('<Double-Button-1>', self.onDoubleClick)
     
     def cleanUp(self):
+        # クリーンアップ
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         # UIウィンドウを閉じる
         for window in self._window.values():
             window.destroy()
@@ -247,7 +253,7 @@ class FlowNodeView():
         for sequence,fid in self._binds:
             self.canvas.unbind(sequence,fid)
         self._binds = []
-            
+        
         # ノード図を削除
         self.canvas.delete(self.rect)
         self.canvas.delete(self.label)
@@ -308,7 +314,7 @@ class FlowNodeView():
         margin = 5
         return (min(xs)-margin, min(ys)-margin, max(xs)+margin, max(ys)+margin)
     
-    def getConnectionPoint(self, dx:int, dy:int) -> tuple[int, int]:
+    def getConnectionPoint(self, dx:int, dy:int) -> tuple[float, float]:
         """接続点を返す (dx, dy: 接続先への方向ベクトル)"""
         if dx == 0 and dy == 0:
             return (self.x, self.y)
@@ -328,8 +334,8 @@ class FlowNodeView():
             p1x, p1y = self.shapePoints[i]
             p2x, p2y = self.shapePoints[(i+1) % n]
             
-            # 線分 (0,0)-(ndx*1000, ndy*1000) と (p1x,p1y)-(p2x,p2y) の交点
-            point = self._lineIntersection(0, 0, ndx*1000, ndy*1000, p1x, p1y, p2x, p2y)
+            # 線分 (0,0)-(ndx*10000, ndy*10000) と (p1x,p1y)-(p2x,p2y) の交点
+            point = self._lineIntersection(0, 0, ndx*10000, ndy*10000, p1x, p1y, p2x, p2y)
             if point:
                 px, py = point
                 dist = px*ndx + py*ndy  # 方向ベクトル方向の距離
@@ -339,26 +345,33 @@ class FlowNodeView():
         
         return bestPoint
     
-    def _lineIntersection(self, x1:int, y1:int, x2:int, y2:int, x3:int, y3:int, x4:int, y4:int) -> tuple[int, int]:
+    def _lineIntersection(self, x1:float, y1:float, x2:float, y2:float, x3:float, y3:float, x4:float, y4:float) -> tuple[float, float]|None:
         """2線分の交点を計算"""
         denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
         if abs(denom) < 1e-10:
             return None
         
-        t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / denom
+        t =  ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / denom
         u = -((x1-x2)*(y1-y3) - (y1-y2)*(x1-x3)) / denom
         
         if 0 <= t <= 1 and 0 <= u <= 1:
             return (x1 + t*(x2-x1), y1 + t*(y2-y1))
-        return None
+        else:
+            return None
     
-    def canvasBind(self, sequence:str, callback:callable):
+    def canvasBind(self, sequence:str, callback:Callable):
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         fid1 = self.canvas.tag_bind( self.rect , sequence, callback)
         fid2 = self.canvas.tag_bind( self.label, sequence, callback)
         self._binds.append((sequence,fid1))
         self._binds.append((sequence,fid2))
     
     def updatePosition(self):
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         points = []
         for dx, dy in self.shapePoints:
             points.extend([self.x + dx, self.y + dy])
@@ -366,11 +379,13 @@ class FlowNodeView():
         self.canvas.coords(self.label, self.x, self.y)
 
     def updatePositionAndAppearance(self, node:FlowNode):
+        assert not self.editor is None
         """位置と外観を更新"""
         self.updatePosition()
         self.editor.onNodeConfigChanged(node)
 
     def onNodeConfigChanged(self, node:FlowNode):
+        assert not self.editor is None
         self.text = node.getText()
         self.editor.onNodeConfigChanged(node)
 
@@ -380,6 +395,8 @@ class FlowNodeView():
         self.isDragging = False
     
     def onDrag(self, event:tk.Event):
+        assert not self.canvas is None
+        assert not self.editor is None
         if self.isDoubleClick:
             return
         
@@ -418,30 +435,35 @@ class FlowNodeView():
         
         if not self.isDragging:
             # クリックとして処理
+            assert not self.editor is None
             self.editor.onNodeClick(self)
         self.isDragging = False
     
     def onDoubleClick(self, event:tk.Event):
+        assert not self.editor is None
         self.isDoubleClick = True
         self.editor.onNodeDoubleClick(self)
     
     def onRightPress(self, event:tk.Event):
+        assert not self.editor is None
         self.editor.onNodeRightClick(self, event)
     
     def onEdit(self, node:FlowNode):
         """編集メニューから呼び出される編集処理"""
-        if not hasattr(node, 'createSettingWindow'):
+        createSettingWindow = getattr(node, 'createSettingWindow', None)
+        if not createSettingWindow:
             pass
         elif not 'settings_dialog' in self._window:
-            self._window["settings_dialog"] = node.createSettingWindow()
+            self._window["settings_dialog"] = createSettingWindow()
         elif not self._window["settings_dialog"].winfo_exists():
             self._window["settings_dialog"].destroy()
-            self._window["settings_dialog"] = node.createSettingWindow()
+            self._window["settings_dialog"] = createSettingWindow()
         else:
             self._window["settings_dialog"].lift()
     
     def onResult(self, node:FlowNode):
         """ノードの処理結果を表示"""
+        assert not self.editor is None
         if not 'result_window' in self._window:
             self._window["result_window"] = ResultWindow(self.editor.root, node)
         elif not self._window["result_window"].winfo_exists():
@@ -465,5 +487,8 @@ class FlowNodeView():
 
     def lift(self):
         """ノードを最前面に表示"""
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         self.canvas.tag_raise(self.rect)
         self.canvas.tag_raise(self.label)

@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     import numpy as np
@@ -19,7 +19,7 @@ class PolynomialOperationMixin:
     """polynomial 操作の共通機能を提供するMixin"""
     
     @classmethod
-    def computeCombinedPolynomial(cls, polynomialDatas:list[FlowData], operation:callable) -> FlowData:
+    def computeCombinedPolynomial(cls, polynomialDatas:list[FlowData], operation:Callable) -> FlowData|None:
         """
         複数 polynomial を統合
         
@@ -28,6 +28,7 @@ class PolynomialOperationMixin:
             operation: 係数演算関数
         """
         import numpy as np
+        from utils import numpy_helpers as nh
         from base import FlowData
         from base import DataBlock
 
@@ -62,14 +63,16 @@ class PolynomialOperationMixin:
             for planeIndex in range(planeCount):
                 # 最初の polynomial の係数行列を取得
                 coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
-                h, w = coeffBlock.data.shape
-                result.setDimensions(w, h)
-                data = coeffBlock.data.copy()
+                data = coeffBlock.data.copy() if coeffBlock else None
 
                 # 残りの polynomial を順次適用
                 for polynomialData in polynomialDatas[1:]:
                     otherBlock = polynomialData.getBlock(planeIndex, 0, 0)
-                    data = operation(data, otherBlock.data)
+                    data = operation(data, otherBlock.data if otherBlock else None)
+
+                assert data is not None, "Failed to calculate polynomial"
+                h, w = data.shape
+                result.setDimensions(w, h)
                 result.setBlock(DataBlock(data, planeIndex, 0, 0))
         
         # headers 更新

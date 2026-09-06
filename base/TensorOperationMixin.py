@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     import numpy as np
@@ -19,7 +19,7 @@ class TensorOperationMixin:
     """tensor 操作の共通機能を提供するMixin"""
     
     @classmethod
-    def computeCombinedTensor(cls, tensorDatas:list[FlowData], operation:callable) -> FlowData:
+    def computeCombinedTensor(cls, tensorDatas:list[FlowData], operation:Callable) -> FlowData|None:
         """
         複数 tensor を統合
         

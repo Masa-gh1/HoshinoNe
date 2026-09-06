@@ -64,8 +64,7 @@ class N1BlockOperationNode(FlowNode):
             futures = []
             for block in flowData.iterateBlocks():
                 planeIndex = block.planeIndex
-                x, y = block.x, block.y
-                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.operation, processedDatas, planeIndex, x, y)
+                future = ParallelExecutor.submit(self, mes.elapsedThreading, self.operation, processedDatas, planeIndex, block.x, block.y)
                 futures.append(future)
             
             # 全ブロックの処理完了を待つ
