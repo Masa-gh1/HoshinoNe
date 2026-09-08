@@ -56,7 +56,7 @@ class InverseMatrixNode(NNPlaneOperationNode):
             endX = block.x + blockWidth
             planeData[block.y:endY, block.x:endX] = block.data[:blockHeight, :blockWidth]
 
-        #逆行列を計算
+        # 逆行列を計算
         try:
             result = np.linalg.inv(planeData)
         except np.linalg.LinAlgError:
