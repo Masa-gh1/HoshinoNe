@@ -45,23 +45,28 @@ class Tray:
         col=0
         row=0
         for nodeType, label, tooltip in NodeFactory.getMenuItems() + [('***', None, None)]:
-            if '---' in nodeType:
+            if   not nodeType:
+                self.contextMenu.add_command(label=label, accelerator=tooltip, columnbreak=columnbreak)
+                columnbreak = False
+                row += 1
+            elif '---' in nodeType:
                 self.contextMenu.add_separator()
                 row += 1
             elif '***' in nodeType:
-                columnbreak = True
                 if 0 == col:
                     self.contextMenu.add_separator()
                     self.contextMenu.add_separator()
                     self.contextMenu.add_command(label="編集", command=self.editTray)
                     self.contextMenu.add_command(label="最背面", command=self.lower)
                     self.contextMenu.add_command(label="削除", command=self.deleteTray)
+                    row += 5
+                columnbreak = True
                 col += 1
                 row = 0
             else:
                 self.contextMenu.add_command(label=label, accelerator=tooltip, command=lambda nt=nodeType: self.editor.addNodeAtPosition(nt), columnbreak=columnbreak)
                 columnbreak = False
-                row += 2
+                row += 1
 
     def onPress(self, event):
         self.startX = event.x
