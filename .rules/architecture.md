@@ -5,7 +5,7 @@
 - 各ノードは単一責任の原則に従う
 - LazyFlowData を活用してメモリ効率を最適化
 - LazyFlowData を出力するノードは LazyNNOperationNode を継承
-- 計算コストが重いノードは N1BlockOperationNode NNBlockOperationNode を継承
+- 計算コストが重いノードは N1BlockOperationNode NNBlockOperationNode NNPlaneOperationNode を継承
 - 設定可能なノードは ConfigurableNode を継承
 
 ## データフロー
