@@ -30,7 +30,7 @@ class NodeFactory:
         ('------------------------', None                           , None                ),
         ('natural_logarithm'       , '自然対数(N:N)'                , 'log(a)'            ),
         ('natural_exponential'     , '自然指数(N:N)'                , 'e^a'               ),
-        ('squared_norm'            , 'ノルムの二乗(N:N)'            , '‖a‖^2'           ),
+        ('squared_norm'            , 'ノルムの二乗(N:N)'            , '‖a‖²'            ),
         ('conjugate'               , '共役(N:N)'                    , 'a*'                ),
         ('fill_0'                  , '0 埋め(N:N)'                  , '0+0a'              ),
         ('fill_1'                  , '1 埋め(N:N)'                  , '1+0a'              ),
