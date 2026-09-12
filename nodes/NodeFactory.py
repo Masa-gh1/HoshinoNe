@@ -7,6 +7,14 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import tkinter as tk
+    from base import FlowNode
+    from main.FlowEditor import FlowEditor
+
 class NodeFactory:
     nodeLabels = [
         # minor type                 label                            tooltip
@@ -86,12 +94,31 @@ class NodeFactory:
     nodeList = None
     
     @classmethod
-    def createNode(cls, nodeType, canvas, editor, x, y, **kwargs):
+    def createNode(cls, nodeType:str, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs) -> FlowNode:
+        """
+        ノード作成
+
+        Args:
+            nodeType: ノード
+            canvas: キャンバス
+            editor: エディタ
+            x: X座標
+            y: Y座標
+        
+        Returns:
+            FlowNode: 新規ノード
+        """
         nodeClass = cls.loadNodeClass(nodeType)
         return nodeClass(canvas, editor, x, y, **kwargs)
     
     @classmethod
-    def getMenuItems(cls):
+    def getMenuItems(cls) -> list[tuple[str, str, str]]:
+        """
+        ノードのメニュー項目を取得
+
+        Returns:
+            メニュー項目のリスト (minorType, label, tooltip)
+        """
         return cls.nodeLabels
     
     @classmethod
@@ -119,7 +146,7 @@ class NodeFactory:
                 if modInfo.ispkg:
                     pass
                 else:
-                    spec = modInfo.module_finder.find_spec(modInfo.name)
+                    spec = modInfo.module_finder.find_spec(modInfo.name, None)
                     if spec is None:
                         pass
                     elif spec.origin is None:
@@ -158,3 +185,5 @@ class NodeFactory:
                   ):
                     minorType =  str(item.value.value)
                     return minorType
+        
+        return None
