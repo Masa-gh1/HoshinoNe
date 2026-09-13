@@ -22,19 +22,6 @@ class MaximumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def getOutputDimensions(self, baseData, inputDatas):
-        """最大では全入力データを包含するサイズを使用"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-        
-        variableType = nh.BDTYPE
-        for data in inputDatas:
-            variableType = np.result_type(variableType, data.getVariableType())
-        self._variableType = variableType
-        
-        self._outputDimensions = self.getUnionDimensions(inputDatas)
-        return self._outputDimensions
-    
     def blockOperation(self, blocks, planeIndex, x, y):
         """単一ブロックの最大処理"""
         import numpy as np

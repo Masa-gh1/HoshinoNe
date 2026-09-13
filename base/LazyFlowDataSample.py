@@ -20,7 +20,7 @@ class LazyOperations:
     @staticmethod
     def offsetDisplayLevels(lazyFlowData, offsetValue):
         """オフセット加算後のdisplay_levelsを計算"""
-        sourceHeaders = lazyFlowData.sourceFlowData.headers
+        sourceHeaders = lazyFlowData.baseFlowData.headers
         if not sourceHeaders or 'display_levels' not in sourceHeaders:
             return None
         
@@ -36,7 +36,7 @@ class LazyOperations:
     @staticmethod
     def scaleDisplayLevels(lazyFlowData, scaleValue):
         """スケール乗算後のdisplay_levelsを計算"""
-        sourceHeaders = lazyFlowData.sourceFlowData.headers
+        sourceHeaders = lazyFlowData.baseFlowData.headers
         if not sourceHeaders or 'display_levels' not in sourceHeaders:
             return None
         

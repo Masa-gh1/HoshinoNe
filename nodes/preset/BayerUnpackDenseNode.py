@@ -91,7 +91,7 @@ class BayerUnpackDenseLazyFlowData(LazyFlowData):
         return ['mode', 'planes', 'width', 'height']
 
     def headerOperation(self, lazyFlowData, key):
-        sourceHeaders = lazyFlowData.sourceFlowData.headers
+        sourceHeaders = lazyFlowData.baseFlowData.headers
         return {
             'mode'  : 'RGBG',
             'planes': ['R', 'G1', 'B', 'G2'],

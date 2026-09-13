@@ -20,11 +20,6 @@ class CountNode(N1BlockOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def getOutputDimensions(self, baseData, inputDatas):
-        """カウントでは全入力データを包含するサイズを使用"""
-        self._outputDimensions = self.getUnionDimensions(inputDatas)
-        return self._outputDimensions
-    
     def processHeaders(self, baseData, inputDatas):
         """入力データ数に基づくdisplay_levelsを設定"""
         dataCount = len(inputDatas)

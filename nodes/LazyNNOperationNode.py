@@ -14,14 +14,14 @@ from itertools import zip_longest
 from abc import abstractmethod
 
 from base.FlowNode_CONST import *
-from base import FlowNode
+from .NxBlockOperationNode import NxBlockOperationNode
 
 if TYPE_CHECKING:
     from base.DataBlock import DataBlock
     from base.FlowData import FlowData
     from base.LazyFlowData import LazyFlowData
 
-class LazyNNOperationNode(FlowNode):
+class LazyNNOperationNode(NxBlockOperationNode):
     """LazyFlowDataを用いるN:N処理ノードの基底クラス"""
     # ノードタイプ
     majorType = 'Lazy_NN_operation'
@@ -69,49 +69,6 @@ class LazyNNOperationNode(FlowNode):
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
-    
-    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
-        """入力ストリームの前処理（サブクラスでオーバーライド可能）
-        演算結果のデータタイプを primary 優先とするため、
-        primary/auxiliaryで分類し、primaryを前に集める。
-        
-        Args:
-            inputStreams: 入力ストリームのリスト
-            
-        Returns:
-            処理対象ストリームのリスト
-        """
-        def getPriority(stream):
-            category = stream[0].headers.get("category", "primary")
-            dataType = stream[0].headers.get("type", "table")
-            n        = len(stream)
-            
-            if   "primary"   == category: priority =     0
-            elif "auxiliary" == category: priority = 10000
-            else                        : priority = 20000
-            
-            if   "tensor"     == dataType: priority += 1000
-            elif "polynomial" == dataType: priority += 2000
-            else                         : priority +=    0
-            
-            priority += max(0, min(999, 1000 - n))
-            
-            return priority
-        
-        streams = filter(lambda s: s, inputStreams)
-        streams = sorted(streams, key=getPriority)
-        return streams
-    
-    def preprocessStream(self, inputStream:list[FlowData]) -> list[FlowData]:
-        """入力データの前処理(サブクラスでオーバーライド可能)
-        
-        Args:
-            inputStream: 入力ストリーム
-            
-        Returns:
-            処理対象データのリスト
-        """
-        return inputStream
     
     @abstractmethod
     def createLazyFlowData(self, inputDatas:FlowData|list[FlowData]) -> LazyFlowData:

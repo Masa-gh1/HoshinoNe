@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
     __slots__ = ('cachePolicy'    ,
-                 'sourceFlowData' ,
+                 'baseFlowData'   ,
                  'sourceFlowDatas',
                  'headers'        ,
                  'args'           ,
@@ -33,14 +33,36 @@ class LazyFlowData(FlowData):
     
     def __init__(self, sourceFlowDatas:list[FlowData], *args, **kwargs):
         super().__init__(None)
+        
+        # 最もプレーン数が多いデータを基準とする
+        if isinstance(sourceFlowDatas, (list,tuple)):
+            baseFlowData  = sourceFlowDatas[0]
+            maxPlaneCount = sourceFlowDatas[0].getPlaneCount()
+            for flowData in sourceFlowDatas[1:]:
+                planeCount = flowData.getPlaneCount()
+                if maxPlaneCount < planeCount:
+                    maxPlaneCount = planeCount
+                    baseFlowData = flowData
+        else:
+            baseFlowData = sourceFlowDatas
+        
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
-        self.sourceFlowData  = sourceFlowDatas[0] if isinstance(sourceFlowDatas, (list,tuple)) else sourceFlowDatas
+        self.baseFlowData    = baseFlowData
         self.sourceFlowDatas = sourceFlowDatas
         self.headers         = LazyHeadersDict(self, *args, **kwargs)
         self.args            = args
         self.kwargs          = kwargs
-        
-        self.setDimensions(*self.sourceFlowData.getDimensions())
+
+        # 全入力データを包含する最大サイズ
+        if isinstance(sourceFlowDatas, (list,tuple)):
+            width, height = sourceFlowDatas[0].getDimensions()
+            for data in sourceFlowDatas[1:]:
+                w, h = data.getDimensions()
+                width  = max(width, w)
+                height = max(height, h)
+        else:
+            width, height = sourceFlowDatas.getDimensions()
+        self.setDimensions(width, height)
         
         self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*4)]
     
@@ -55,13 +77,14 @@ class LazyFlowData(FlowData):
         else:
             from utils.ThreadPool import ParallelExecutor
             # 有効なブロックが無いので遅延評価を実行
-            lockKey = hash((planeIndex, x, y)) % len(self._blockLocks)
-            if self._blockLocks[lockKey].locked():
+            lockIndex = hash((planeIndex, x, y)) % len(self._blockLocks)
+            lock = self._blockLocks[lockIndex]
+            if lock.locked():
                 ParallelExecutor.enterWait() # 長時間の待ちが考えられることを通知する
                 isWait = True
             else:
                 isWait = False
-            with self._blockLocks[lockKey]: # 既に計算中の場合、終了を待つ
+            with lock: # 既に計算中の場合、終了を待つ
                 if isWait:
                     ParallelExecutor.exitWait() # 長時間の待ちが終わった事を通知する
                 if block.isValid():
@@ -110,7 +133,7 @@ class LazyHeadersDict(UserDict):
                  'kwargs'       ,
                 )
     def __init__(self, lazyFlowData:LazyFlowData, *args, **kwargs):
-        super().__init__(lazyFlowData.sourceFlowData.headers)
+        super().__init__(lazyFlowData.baseFlowData.headers)
         
         self._lazyFlowData = lazyFlowData
         self.args          = args

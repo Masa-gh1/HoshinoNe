@@ -15,13 +15,13 @@ from abc import abstractmethod
 from concurrent.futures import as_completed
 
 from base.FlowNode_CONST import *
-from base import FlowNode
+from .NxBlockOperationNode import NxBlockOperationNode
 
 if TYPE_CHECKING:
     from base.DataBlock import DataBlock
     from base.FlowData import FlowData
 
-class NNBlockOperationNode(FlowNode):
+class NNBlockOperationNode(NxBlockOperationNode):
     """データ入出力 N:N のブロック単位計算ノードの基底クラス"""
     # ノードタイプ
     majorType = 'NN_block_operation'
@@ -72,8 +72,7 @@ class NNBlockOperationNode(FlowNode):
                 for block in flowData.iterateBlocks():
                     planeIndex = block.planeIndex
                     x, y = block.x, block.y
-                    blocks = [inputData.getBlock(planeIndex, x, y) for inputData in inputDatas]
-                    future = ParallelExecutor.submit(self, mes.elapsedThreading, self.blockOperation, blocks, planeIndex, x, y)
+                    future = ParallelExecutor.submit(self, mes.elapsedThreading, self.operation, inputDatas, planeIndex, x, y)
                     futureToDatas[future] = flowData
                     futureCountPerDatas[flowData] += 1
             else:
@@ -84,8 +83,7 @@ class NNBlockOperationNode(FlowNode):
                 for block in flowData.iterateBlocks():
                     planeIndex = block.planeIndex
                     x, y = block.x, block.y
-                    block = inputDatas[0].getBlock(planeIndex, x, y)
-                    future = ParallelExecutor.submit(self, mes.elapsedThreading, self.blockOperation, block, planeIndex, x, y)
+                    future = ParallelExecutor.submit(self, mes.elapsedThreading, self.operation, inputDatas[0], planeIndex, x, y)
                     futureToDatas[future] = flowData
                     futureCountPerDatas[flowData] += 1
         
@@ -110,86 +108,25 @@ class NNBlockOperationNode(FlowNode):
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
-        """入力ストリームの前処理（サブクラスでオーバーライド可能）
-        演算結果のデータタイプを primary 優先とするため、
-        primary/auxiliaryで分類し、primaryを前に集める。
+    def operation(self, flowDatas:list[FlowData], planeIndex:int, x:int, y:int) -> DataBlock:
+        """
+        単一ブロックの処理 (サブクラスでオーバーライド可能)
         
         Args:
-            inputStreams: 入力ストリームのリスト
+            flowDatas: 入力 FlowDatas
+            planeIndex: 処理する plane のインデックス
+            x: 処理するブロックの x 座標
+            y: 処理するブロックの y 座標
             
         Returns:
-            処理対象ストリームのリスト
+            処理結果の DataBlock
         """
-        def getPriority(stream):
-            category = stream[0].headers.get("category", "primary")
-            dataType = stream[0].headers.get("type", "table")
-            n        = len(stream)
-            
-            if   "primary"   == category: priority =     0
-            elif "auxiliary" == category: priority = 10000
-            else                        : priority = 20000
-            
-            if   "tensor"     == dataType: priority += 1000
-            elif "polynomial" == dataType: priority += 2000
-            else                         : priority +=    0
-            
-            priority += max(0, min(999, 1000 - n))
-            
-            return priority
-        
-        streams = filter(lambda s: s, inputStreams)
-        streams = sorted(streams, key=getPriority)
-        return streams
-    
-    def preprocessStream(self, inputStream:list[FlowData]) -> list[FlowData]:
-        """入力データの前処理(サブクラスでオーバーライド可能)
-        
-        Args:
-            inputStream: 入力ストリーム
-            
-        Returns:
-            処理対象データのリスト
-        """
-        return inputStream
-    
-    def createFlowData(self, inputDatas:FlowData|list[FlowData]) -> FlowData:
-        """LazyFlowDataを作成 (サブクラスでオーバーライド可能)
-        
-        Args:
-            inputData: 入力FlowData
-            
-        Returns:
-            LazyFlowData
-        """
-        from base import FlowData
-
-        inputData = inputDatas[0] if isinstance(inputDatas, (list, tuple)) else inputDatas
-        
-        # headers を生成
-        headers = inputData.headers.copy()
-        headers.update(self.processHeaders(inputData))
-
-        # サイズを決定
-        width, height = inputData.getDimensions()
-        
-        # 結果用の FlowData を生成
-        flowData = FlowData(headers)
-        flowData.setDimensions(width, height)
-
-        return flowData
-
-    def processHeaders(self, inputData:FlowData) -> dict:
-        """
-        出力 FlowData の headers を処理 (サブクラスでオーバーライド可能)
-        
-        Args:
-            inputFlowData: 入力FlowData
-        
-        Returns:
-            出力 FlowData の追加 headers
-        """
-        return {}
+        from base import BroadcastMixin
+        blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
+        if not blocks:
+            return None
+        else:
+            return self.blockOperation(blocks, planeIndex, x, y)
     
     @abstractmethod
     def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:
