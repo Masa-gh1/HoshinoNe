@@ -263,8 +263,8 @@ class ResultWindow(tk.Toplevel):
         content.append(text)
         
         if   dataType == 'image'     : result = self._generateImageContent(flowData)
-        elif dataType == 'polynomial': result = self._generatePolynomialContent(flowData)
         elif dataType == 'table'     : result = self._generateTableContent(flowData)
+        elif dataType == 'polynomial': result = self._generatePolynomialContent(flowData)
         else:                          result = self._generateGenericContent(flowData)
         
         if isinstance(result, list):
@@ -304,6 +304,8 @@ class ResultWindow(tk.Toplevel):
         for planeIndex, planeName in enumerate(planes):
             content += f"\n[plane: {planeName}]\n"
             
+            median = flowData.getQuantile(0.5)
+            
             block = None
             blockX = 0
             blockY = 0
@@ -332,7 +334,7 @@ class ResultWindow(tk.Toplevel):
                             blockH = 0
                     value = block.data[y-blockY][x-blockX]
                     cells.append(value)
-                cols.append(sh.dispL(cells))
+                cols.append(sh.dispL(cells, representative=median))
             
             # ヘッダー行
             if width:
@@ -356,6 +358,72 @@ class ResultWindow(tk.Toplevel):
                         row.append("...")
                     row.append(cols[x][y])
                 content += "\t".join(row) + "\n"
+        
+        return content
+    
+    def _generatePolynomialContent(self, flowData):
+        """Polynomialデータの内容を生成"""
+        headers = flowData.headers
+        content = "\n"
+        
+        planes  = headers.get('planes', [])
+        lines   = headers.get('lines', [])
+        columns = headers.get('columns', [])
+        
+        width, height = flowData.getDimensions()
+        
+        for planeIndex, planeName in enumerate(planes):
+            content += f"\n[plane: {planeName}]\n"
+            
+            median = flowData.getQuantile(0.5)
+            
+            block = None
+            blockX = 0
+            blockY = 0
+            blockW = 0
+            blockH = 0
+            cols = []
+            for x in range(width):
+                cells = []
+                for y in range(height):
+                    if(  x < blockX or blockX + blockW <= x
+                      or y < blockY or blockY + blockH <= y
+                      ):
+                        block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
+                        if block and not block.data is None:
+                            blockX = x//BLOCK_SIZE*BLOCK_SIZE
+                            blockY = y//BLOCK_SIZE*BLOCK_SIZE
+                            blockH, blockW = block.data.shape
+                        else:
+                            blockX = 0
+                            blockY = 0
+                            blockW = 0
+                            blockH = 0
+                    if block and not block.data is None:
+                        cells.append(block.data[y-blockY][x-blockX])
+                    else:
+                        cells.append(math.nan)
+                cols.append(sh.dispL(cells, representative=median))
+            
+            # ヘッダー行
+            if columns:
+                length = max([len(label) for label in lines])
+                content += "\t"*(length//8)
+                for x, column in enumerate(columns):
+                    content += "\t"
+                    content += column.ljust(max([len(t) for t in cols[x]]))
+                content += "\n"
+            
+            # データ行
+            for y in range(height):
+                row = [lines[y] if y < len(lines) else f"row_{y}"]
+                for x in range(width):
+                    row.append(cols[x][y])
+                if width > width:
+                    row.append("...")
+                content += "\t".join(row) + "\n"
+            if height > height:
+                content += "...\n"
         
         return content
     
@@ -432,72 +500,6 @@ class ResultWindow(tk.Toplevel):
                     row.append(cols[x][y])
                 content += "\t".join(row) + "\n"
             
-        return content
-    
-    def _generatePolynomialContent(self, flowData):
-        """Polynomialデータの内容を生成"""
-        headers = flowData.headers
-        content = "\n"
-        
-        planes  = headers.get('planes', [])
-        lines   = headers.get('lines', [])
-        columns = headers.get('columns', [])
-        
-        width, height = flowData.getDimensions()
-        
-        for planeIndex, planeName in enumerate(planes):
-            content += f"\n[plane: {planeName}]\n"
-            
-            median = flowData.getQuantile(0.5)
-            
-            block = None
-            blockX = 0
-            blockY = 0
-            blockW = 0
-            blockH = 0
-            cols = []
-            for x in range(width):
-                cells = []
-                for y in range(height):
-                    if(  x < blockX or blockX + blockW <= x
-                      or y < blockY or blockY + blockH <= y
-                      ):
-                        block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
-                        if block and not block.data is None:
-                            blockX = x//BLOCK_SIZE*BLOCK_SIZE
-                            blockY = y//BLOCK_SIZE*BLOCK_SIZE
-                            blockH, blockW = block.data.shape
-                        else:
-                            blockX = 0
-                            blockY = 0
-                            blockW = 0
-                            blockH = 0
-                    if block and not block.data is None:
-                        cells.append(block.data[y-blockY][x-blockX])
-                    else:
-                        cells.append(math.nan)
-                cols.append(sh.dispL(cells, representative=median))
-            
-            # ヘッダー行
-            if columns:
-                length = max([len(label) for label in lines])
-                content += "\t"*(length//8)
-                for x, column in enumerate(columns):
-                    content += "\t"
-                    content += column.ljust(max([len(t) for t in cols[x]]))
-                content += "\n"
-            
-            # データ行
-            for y in range(height):
-                row = [lines[y] if y < len(lines) else f"row_{y}"]
-                for x in range(width):
-                    row.append(cols[x][y])
-                if width > width:
-                    row.append("...")
-                content += "\t".join(row) + "\n"
-            if height > height:
-                content += "...\n"
-        
         return content
     
     def _generateImageContent(self, flowData:FlowData):
