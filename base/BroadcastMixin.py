@@ -57,29 +57,51 @@ class BroadcastMixin:
         Returns:
             tuple: (DataBlock のリスト, ブロックの形状)
         """
-        if isinstance(flowDatas, (list,tuple)):
-            blocks = []
-            for flowData in flowDatas:
-                block, shape = cls.calculateBroadcastedBlock(flowData, planeIndex, x, y, shape)
-                blocks.append(block)
-            return(blocks, shape)
-        else:
-            if 1 == flowDatas.getPlaneCount():
-                # プレーンが1枚なので複数枚プレーンにブロードキャストする
-                planeIndex = 0
-
-            dataType = flowDatas.headers.get('type', 'table')
-            if   shape and 'tensor'     == dataType:
-                import numpy as np
-                block = TensorOperationMixin.calculateTensorBlock(flowDatas, planeIndex, x, y, shape, defaultValue=np.nan)
-            elif shape and 'polynomial' == dataType:
-                import numpy as np
-                block = PolynomialOperationMixin.calculatePolynomialBlock(flowDatas, planeIndex, x, y, shape, defaultValue=np.nan)
-            elif dataType in ('tensor', 'polynomial'):
-                block = flowDatas.getBlock(planeIndex, x, y)
-            elif shape:
-                block = flowDatas.getBlock(planeIndex, x, y)
+        import numpy as np
+        inputFlowDatas = flowDatas if isinstance(flowDatas, (list,tuple)) else [flowDatas]
+        
+        dataTypes = []
+        blocks    = []
+        maxShape  = [0,0]
+        for flowData in inputFlowDatas:
+            dataType = flowData.headers.get('type', 'table')
+            dataTypes.append(dataType)
+            if 1 == flowData.getPlaneCount():
+                block = flowData.getBlock(0, x, y)
             else:
-                block = flowDatas.getBlock(planeIndex, x, y)
-                shape = block.data.shape if block else None # shape が指定されていない場合、先頭のブロックの shape を使用する
-            return(block, shape)
+                block = flowData.getBlock(planeIndex, x, y)
+            blocks.append(block)
+            if 'polynomial' == dataType:
+                pass
+            else:
+                if block:
+                    maxShape = [max(a,b) for a,b in zip(maxShape, block.data.shape)]
+        
+        maxShape = tuple(maxShape)
+        
+        # ブロックの計算
+        retBlocks = []
+        for flowData, dataType, block in zip(inputFlowDatas, dataTypes, blocks):
+            if not np.all(maxShape):
+                # ブロックに面積がない
+                pass
+            elif 'tensor' == dataType:
+                block = TensorOperationMixin.calculateTensorBlock(flowData, planeIndex, x, y, maxShape, defaultValue=np.nan)
+            elif 'polynomial' == dataType:
+                block = PolynomialOperationMixin.calculatePolynomialBlock(flowData, planeIndex, x, y, maxShape, defaultValue=np.nan)
+            else:
+                pass
+            
+            retBlocks.append(block)
+
+        if retBlocks and np.all(maxShape) and maxShape != retBlocks[0].data.shape:
+            # 1つ目のデータの大きさが異なるので、1つ目だけブロードキャスト適用する。
+            # これにより、サブクラスでの実装でを簡潔にする。(インプレース演算(+=)を使える)
+            from .DataBlock import DataBlock
+            data = np.zeros(maxShape, dtype=retBlocks[0].data.dtype) + retBlocks[0].data
+            retBlocks[0] = DataBlock(data, planeIndex, x, y)
+        
+        if isinstance(flowDatas, (list,tuple)):
+            return(retBlocks, maxShape)
+        else:
+            return(retBlocks[0], maxShape)
