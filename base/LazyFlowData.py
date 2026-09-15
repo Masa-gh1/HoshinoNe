@@ -10,6 +10,7 @@ All rights reserved.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import time
 import threading
 from collections import UserDict
 
@@ -64,7 +65,7 @@ class LazyFlowData(FlowData):
             width, height = sourceFlowDatas.getDimensions()
         self.setDimensions(width, height)
         
-        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*4)]
+        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*8)]
     
     def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock|None:
         """指定位置からブロックを取得（遅延評価）"""
@@ -84,7 +85,12 @@ class LazyFlowData(FlowData):
                 isWait = True
             else:
                 isWait = False
+            start = time.perf_counter_ns()
             with lock: # 既に計算中の場合、終了を待つ
+                t = time.perf_counter_ns() - start
+                if 1000 < t:
+                    from base import CacheManager
+                    CacheManager.elapsedLogging("lazyFlowData lock waitting", t)
                 if isWait:
                     ParallelExecutor.exitWait() # 長時間の待ちが終わった事を通知する
                 if block.isValid():
