@@ -94,7 +94,7 @@ class BroadcastMixin:
             
             retBlocks.append(block)
 
-        if retBlocks and np.all(maxShape) and maxShape != retBlocks[0].data.shape:
+        if retBlocks and np.all(maxShape) and maxShape != retBlocks[0].data.shape and (1 in maxShape or 1 in retBlocks[0].data.shape):
             # 1つ目のデータの大きさが異なるので、1つ目だけブロードキャスト適用する。
             # これにより、サブクラスでの実装でを簡潔にする。(インプレース演算(+=)を使える)
             from .DataBlock import DataBlock
