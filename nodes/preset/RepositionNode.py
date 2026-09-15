@@ -24,22 +24,15 @@ class RepositionNode(LazyNNOperationNode):
     #outputCat = スーパークラスを継承
 
     def preprocessStreams(self, inputStreams):
-        """入力ストリームの前処理：primary/auxiliaryで分類"""
-        primaryStreams = []
-        auxiliarys     = []
-        
-        for stream in inputStreams:
-            if stream:
-                category = stream[0].headers.get('category', _OUT_CAT_PRI)
-                if _OUT_CAT_AUX == category:
-                    auxiliarys.extend(stream)
-                else:
-                    primaryStreams.append(stream)
-        
+        """入力ストリームの前処理"""
+        inputStreams = super().preprocessStreams(inputStreams)
+        stream = inputStreams[0]
+        param  = [d for s in inputStreams[1:] for d in s]
+                
         # auxiliary データから変換パラメータを取得
-        self._params = self._loadParams(auxiliarys)
+        self._params = self._loadParams(param)
         
-        return primaryStreams
+        return [stream]
 
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
