@@ -23,7 +23,7 @@ class ConjugateNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return ConjugateLazyFlowData(inputData)
+        return ConjugateLazyFlowData(self.getOutputCategory(), inputData)
 
 class ConjugateLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

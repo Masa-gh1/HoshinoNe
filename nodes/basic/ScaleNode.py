@@ -23,7 +23,7 @@ class ScaleNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return ScaleLazyFlowData(inputDatas)
+        return ScaleLazyFlowData(self.getOutputCategory(), inputDatas)
 
 class ScaleLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

@@ -37,9 +37,7 @@ _IO_TYPE_N1 = 'N:1' # N入力:1出力
 
 _OUT_CAT_PRI = 'primary'   # 主データを出力
 _OUT_CAT_AUX = 'auxiliary' # 補正値を出力
-_OUT_CAT_PAS = 'pass'      # 入力カテゴリを変えない
 _OUT_CAT_ETC = 'etc'       # その他(実行レポートなどの出力が在るノードはこちら)
-_OUT_CAT_NON = 'none'      # なし
 
 class FlowNode(AbstractBaseClass):
     # ノードタイプ(サブクラスでオーバーライド)
@@ -52,7 +50,7 @@ class FlowNode(AbstractBaseClass):
     outputCat = _OUT_CAT_PRI
 
     def __init__(self, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
-        self.view = FlowNodeView( self.majorType, self.ioType, self.outputCat, self.name, canvas, editor, x, y, **kwargs)
+        self.view = FlowNodeView( self.majorType, self.ioType, self.name, canvas, editor, x, y, **kwargs)
 
         self.outputNodes = [] # 接続先ノードの一覧
         self.inputNodes  = [] # 入力元ノードの一覧
@@ -61,8 +59,7 @@ class FlowNode(AbstractBaseClass):
         self._lastInputHash  = None
         self._lastConfigHash = None
         
-        self.fileTypes = [("CSV files", "*.csv")]
-        self.defaultOutputExtension = ".csv"
+        self._outputCat = self.outputCat
 
     def cleanUp(self):
         # 接続の初期化
@@ -79,21 +76,13 @@ class FlowNode(AbstractBaseClass):
         return self.name
     
     def getOutputCategory(self) -> str:
-        """ノードへの入力を考慮した出力カテゴリを取得"""
-        return self._getOutputCategory()
-    
-    def _getOutputCategory(self, path:list[FlowNode]|None=None) -> str:
-        catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
-        if _OUT_CAT_PAS == self.outputCat:
-            path = path.copy() if path else []
-            path.append(self) # 循環参照を除く
-            inCats = [catList.index(x._getOutputCategory(path)) for x in self.inputNodes if x not in path]
-            if inCats:
-                return catList[min(inCats)]
-            else:
-                return _OUT_CAT_NON
-        else:
-            return self.outputCat
+        """ノードへの出力カテゴリを取得"""
+        return self._outputCat
+
+    def setOutputCategory(self, category:str):
+        """ノードへの出力カテゴリを設定"""
+        self._outputCat = category if category else self.outputCat
+        self.view.onNodeConfigChanged(self)
     
     def getOutputCount(self) -> int:
         """ノードへの入力を考慮した出力数を取得
@@ -167,24 +156,30 @@ class FlowNode(AbstractBaseClass):
     
     def getConfigHash(self) -> str:
         """ノード固有の設定ハッシュを取得（サブクラスでオーバーライド）"""
-        return hashlib.md5(str(self.minorType).encode()).hexdigest()
+        config = f"{self.minorType}_{self._outputCat}"
+        return hashlib.md5(config.encode()).hexdigest()
     
     def serialize(self) -> dict:
         """ノードをシリアライズ"""
         serial = {
-            "type": self.minorType,
-            "text": self.name,
-            "x"   : self.view.x,
-            "y"   : self.view.y,
+            "type"    : self.minorType,
+            "text"    : self.name,
+            "x"       : self.view.x,
+            "y"       : self.view.y,
         }
+        
+        if _OUT_CAT_PRI != self._outputCat:
+            serial["category"] = self._outputCat
+
         self.store(serial)
         serial["connections"] = [id(node) for node in self.outputNodes]
         return serial
     
     def deserialize(self, serial: dict):
         """ノードをデシリアライズ"""
-        self.view.x = serial["x"]
-        self.view.y = serial["y"]
+        self.view.x     = serial["x"]
+        self.view.y     = serial["y"]
+        self._outputCat = serial["category"] if "category" in serial else _OUT_CAT_PRI
         self.restore(serial)
         self.view.onNodeConfigChanged(self)
 
@@ -205,10 +200,9 @@ class FlowNode(AbstractBaseClass):
         pass
     
 class FlowNodeView():
-    def __init__(self, majorType:str, ioType:str, outputCat:str, text:str, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
+    def __init__(self, majorType:str, ioType:str, text:str, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
         self.majorType = majorType
         self.ioType    = ioType
-        self.outputCat = outputCat
         self.text      = text
 
         self.canvas  = canvas

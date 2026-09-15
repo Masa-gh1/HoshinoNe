@@ -25,7 +25,7 @@ class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
 
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return RGBConverterLazyFlowData(inputData)
+        return RGBConverterLazyFlowData(self.getOutputCategory(), inputData)
     
 class RGBConverterLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):

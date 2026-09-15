@@ -22,9 +22,7 @@ from ..FlowNode import _IO_TYPE_N1
 
 from ..FlowNode import _OUT_CAT_PRI
 from ..FlowNode import _OUT_CAT_AUX
-from ..FlowNode import _OUT_CAT_PAS
 from ..FlowNode import _OUT_CAT_ETC
-from ..FlowNode import _OUT_CAT_NON
 
 __all__ = [
     '_MAJOR_TYPE_FUNC',
@@ -40,7 +38,5 @@ __all__ = [
     '_IO_TYPE_N1',
     '_OUT_CAT_PRI',
     '_OUT_CAT_AUX',
-    '_OUT_CAT_PAS',
     '_OUT_CAT_ETC',
-    '_OUT_CAT_NON',
 ]

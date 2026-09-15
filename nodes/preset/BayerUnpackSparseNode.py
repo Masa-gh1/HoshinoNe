@@ -27,7 +27,7 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return BayerUnpackSparseLazyFlowData(inputData)
+        return BayerUnpackSparseLazyFlowData(self.getOutputCategory(), inputData)
     
 class BayerUnpackSparseLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):

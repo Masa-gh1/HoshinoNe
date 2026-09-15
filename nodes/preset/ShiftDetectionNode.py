@@ -137,8 +137,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         auxiliaryStreams = []
         
         for stream in inputStreams:
-            category = stream[0].headers.get('category', 'primary')
-            if category == 'auxiliary':
+            category = stream[0].headers.get('category', _OUT_CAT_PRI)
+            if _OUT_CAT_AUX == category:
                 auxiliaryStreams.append(stream)
             else:
                 primaryStreams.append(stream)
@@ -309,7 +309,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         # ヘッダー情報を設定
         headers = {
-            'category': 'auxiliary',
+            'category': self.getOutputCategory(),
             'type'    : 'table',
             'mode'    : '2D',
             'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
@@ -908,7 +908,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         return ShiftDetectionSettingsDialog(self.view.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
+        config = f"{self.minorType}_{self._outputCat}_{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
         return hashlib.md5(config.encode()).hexdigest()
 
 

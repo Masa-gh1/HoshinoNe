@@ -95,7 +95,7 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
             return None
     
     def getConfigHash(self) -> str:
-        config = f"{self.minorType}_{self.outputFilePath}"
+        config = f"{self.minorType}_{self._outputCat}_{self.outputFilePath}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def process(self, context=None):

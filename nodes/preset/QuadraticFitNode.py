@@ -30,15 +30,15 @@ class QuadraticFitNode(NNPlaneOperationNode):
         
         # Polynomial形式でデータを構築 (3x3の係数Polynomial)
         headers = {
-            'category': 'auxiliary',
-            'type': 'polynomial',
-            'mode': '2D',
-            'axes': ['x_order', 'y_order'],
-            'columns': ['x^0', 'x^1', 'x^2'],
-            'lines': ['y^0', 'y^1', 'y^2'],
-            'planes': planeNames,
+            'category'      : self.getOutputCategory(),
+            'type'          : 'polynomial',
+            'mode'          : '2D',
+            'axes'          : ['x_order', 'y_order'],
+            'columns'       : ['x^0', 'x^1', 'x^2'],
+            'lines'         : ['y^0', 'y^1', 'y^2'],
+            'planes'        : planeNames,
             'display_levels': displayLevels,
-            'max_orders': [2, 2],
+            'max_orders'    : [2, 2],
         }
         
         # 結果用の FlowData を生成

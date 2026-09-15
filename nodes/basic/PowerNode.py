@@ -23,7 +23,7 @@ class PowerNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return PowerLazyFlowData(inputDatas)
+        return PowerLazyFlowData(self.getOutputCategory(), inputDatas)
 
 class PowerLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

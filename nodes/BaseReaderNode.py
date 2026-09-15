@@ -35,7 +35,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
     name      = 'BaseReaderNode'
     # 入出力タイプ
     ioType    = _IO_TYPE_0N
-    outputCat = _OUT_CAT_PRI
+    #outputCat = スーパークラスを継承
     
     def __init__(self, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
@@ -102,7 +102,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
 
     def getConfigHash(self) -> str:
         """基本的な設定ハッシュ（サブクラスでオーバーライド）"""
-        config = f"{self.minorType}_{'|'.join(self.filePaths)}"
+        config = f"{self.minorType}_{self._outputCat}_{'|'.join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def process(self, context=None):

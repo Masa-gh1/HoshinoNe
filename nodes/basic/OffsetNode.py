@@ -23,7 +23,7 @@ class OffsetNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return OffsetLazyFlowData(inputDatas)
+        return OffsetLazyFlowData(self.getOutputCategory(), inputDatas)
 
 class OffsetLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

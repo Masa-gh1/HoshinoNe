@@ -66,10 +66,6 @@ class FlowData:
         except Exception as e:
             Debug.log(type(self).__name__, "Warning: cleanup", e)
 
-    def setDimensions(self, width, height):
-        """次元を設定"""
-        self._dimensions = (width, height)
-    
     def getType(self) -> str:
         """型を取得"""
         if 'type' in self.headers:
@@ -93,6 +89,10 @@ class FlowData:
     def getDimensions(self) -> tuple[int, int]:
         """次元を取得 (width, height)"""
         return self._dimensions
+    
+    def setDimensions(self, width, height):
+        """次元を設定"""
+        self._dimensions = (width, height)
     
     def getVariableType(self) -> np.dtype:
         """データ型を取得"""

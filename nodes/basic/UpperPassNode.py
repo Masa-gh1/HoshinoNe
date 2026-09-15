@@ -23,7 +23,7 @@ class UpperPassNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return UpperPassLazyFlowData(inputDatas)
+        return UpperPassLazyFlowData(self.getOutputCategory(), inputDatas)
 
 class UpperPassLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

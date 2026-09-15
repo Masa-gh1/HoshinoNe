@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
     __slots__ = ('cachePolicy'    ,
+                 'category'       ,
                  'baseFlowData'   ,
                  'sourceFlowDatas',
                  'headers'        ,
@@ -32,7 +33,7 @@ class LazyFlowData(FlowData):
                  '_blockLocks'    ,
                 )
     
-    def __init__(self, sourceFlowDatas:list[FlowData], *args, **kwargs):
+    def __init__(self, category:str, sourceFlowDatas:list[FlowData], *args, **kwargs):
         super().__init__(None)
         
         # 最もプレーン数が多いデータを基準とする
@@ -48,6 +49,7 @@ class LazyFlowData(FlowData):
             baseFlowData = sourceFlowDatas
         
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
+        self.category        = category
         self.baseFlowData    = baseFlowData
         self.sourceFlowDatas = sourceFlowDatas
         self.headers         = LazyHeadersDict(self, *args, **kwargs)
@@ -144,6 +146,8 @@ class LazyHeadersDict(UserDict):
         self._lazyFlowData = lazyFlowData
         self.args          = args
         self.kwargs        = kwargs
+
+        self.data["category"] = lazyFlowData.category
 
         for key in self._lazyFlowData.getLazyHeaderkeys():
             self.data[key]= "<LazyHeaderOperation>"

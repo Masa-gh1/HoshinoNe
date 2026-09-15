@@ -23,7 +23,7 @@ class SignNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return SignLazyFlowData(inputData)
+        return SignLazyFlowData(self.getOutputCategory(), inputData)
 
 class SignLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

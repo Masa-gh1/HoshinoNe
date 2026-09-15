@@ -29,7 +29,7 @@ class N1BlockOperationNode(NxBlockOperationNode):
     name      = 'N1BlockOperationNode'
     # 入出力タイプ
     ioType    = _IO_TYPE_N1
-    outputCat = _OUT_CAT_PAS
+    #outputCat = スーパークラスを継承
     
     def process(self, context=None):
         from utils import measurement as mes

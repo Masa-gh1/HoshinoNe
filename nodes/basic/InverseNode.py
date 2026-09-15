@@ -23,7 +23,7 @@ class InverseNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return InverseLazyFlowData(inputData)
+        return InverseLazyFlowData(self.getOutputCategory(), inputData)
 
 class InverseLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

@@ -106,10 +106,11 @@ class FileReaderNode(BaseReaderNode):
             
             # FlowDataを作成してブロック単位で保存
             flowHeaders = {
-                'type': dataType,
-                'mode': '2D',
-                'columns': headers,
-                'lines': rowHeaders,
+                'category'   : self.getOutputCategory(),
+                'type'       : dataType,
+                'mode'       : '2D',
+                'columns'    : headers,
+                'lines'      : rowHeaders,
                 'source_file': self.getRelativePath(filePath),
             }
             if planeNames:

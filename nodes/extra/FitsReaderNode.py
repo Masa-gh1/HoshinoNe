@@ -187,6 +187,7 @@ class FitsReaderNode(BaseReaderNode):
                             continue
                 
                 headers = {
+                    'category'      : self.getOutputCategory(),
                     'type'          : 'image',
                     'mode'          : mode,
                     'width'         : width,
@@ -324,7 +325,7 @@ class FitsReaderNode(BaseReaderNode):
             }
     
     def getConfigHash(self):
-        config = f"{self.minorType}_{"|".join(self.filePaths)}"
+        config = f"{self.minorType}_{self._outputCat}_{"|".join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def _processBlock(self, data, x, y, planeCount, width, height):

@@ -27,7 +27,7 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = BayerUnpackDenseLazyFlowData(inputData)
+        lazyFlowData = BayerUnpackDenseLazyFlowData(self.getOutputCategory(), inputData)
         width, height = inputData.getDimensions()
         lazyFlowData.setDimensions(width // 2, height // 2)
         return lazyFlowData

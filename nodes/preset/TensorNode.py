@@ -22,11 +22,10 @@ class TensorNode(FlowNode,ConfigurableNode):
     name      = '数列'
     # 入出力タイプ
     ioType    = _IO_TYPE_0N
-    outputCat = _OUT_CAT_NON
+    outputCat = _OUT_CAT_AUX
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self.outputCat = _OUT_CAT_AUX # オーバーライド
         self.planes = ["Plane 0","Plane 1","Plane 2"]
         self.xOrder = 1
         self.yOrder = 1
@@ -52,15 +51,12 @@ class TensorNode(FlowNode,ConfigurableNode):
         return displayText
     
     def store(self, nodeData):
-        nodeData["category"] = self.outputCat
         nodeData["planes"  ] = self.planes
         nodeData["xOrder"  ] = self.xOrder
         nodeData["yOrder"  ] = self.yOrder
         nodeData["tensor"  ] = self.tensor
     
     def restore(self, nodeData):
-        if "category" in nodeData:
-            self.outputCat = nodeData["category"]
         if "planes" in nodeData:
             self.planes = nodeData["planes"]
         if "xOrder" in nodeData:
@@ -73,8 +69,7 @@ class TensorNode(FlowNode,ConfigurableNode):
     def createSettingWindow(self):
         return TensorSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, outputCat, planes, xOrder, yOrder, tensor):
-        self.outputCat = outputCat
+    def applySettings(self, planes, xOrder, yOrder, tensor):
         self.planes    = planes
         self.xOrder    = xOrder
         self.yOrder    = yOrder
@@ -110,7 +105,7 @@ class TensorNode(FlowNode,ConfigurableNode):
         lines   = [f'{j}' for j in range(height)]
         
         headers = {
-            'category'  : self.outputCat,
+            'category'  : self.getOutputCategory(),
             'type'      : 'tensor',
             'mode'      : mode,
             'planes'    : self.planes,
@@ -144,14 +139,13 @@ class TensorNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         tensorStr = str(sorted(self.tensor.items()))
-        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.xOrder}_{self.yOrder}_{tensorStr}"
+        config = f"{self.minorType}_{self._outputCat}_{self.planes}_{self.xOrder}_{self.yOrder}_{tensorStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node   = node
-        self.outputCat = tk.BooleanVar(value=node.outputCat == _OUT_CAT_AUX)
         self.planes    = node.planes.copy()
         self.xOrder    = node.xOrder
         self.yOrder    = node.yOrder
@@ -178,8 +172,6 @@ class TensorSettingsDialog(tk.Toplevel):
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(node.yOrder))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
-        
-        tk.Checkbutton(basicFrame, text="補正値", variable=self.outputCat).grid(row=0, column=6, sticky="w", padx=5, pady=2)
         
         tk.Button(basicFrame, text="項数サイズ更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
@@ -288,12 +280,11 @@ class TensorSettingsDialog(tk.Toplevel):
                     from utils.Debug import Debug
                     Debug.log(type(self).__name__, f"Warning: Invalid tensor value for {key}")
             
-            outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
             self.planes = planes
             self.xOrder = xOrder
             self.yOrder = yOrder
             self.tensor = tensor
-            self.node.applySettings(outputCat, planes, xOrder, yOrder, tensor)
+            self.node.applySettings(planes, xOrder, yOrder, tensor)
     
     def onClose(self):
         self.destroy()

@@ -23,7 +23,7 @@ class MinNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return MinLazyFlowData(inputDatas)
+        return MinLazyFlowData(self.getOutputCategory(), inputDatas)
     
 class MinLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

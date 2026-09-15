@@ -502,6 +502,9 @@ class FlowEditor:
                     if None != menu.index(tk.END):
                         menu.add_separator()
                     
+                    # 補正値トグル
+                    category = tk.BooleanVar(value=(_OUT_CAT_AUX == node.getOutputCategory()))
+                    menu.add_checkbutton(label="補正値", variable=category, command=lambda: node.setOutputCategory(_OUT_CAT_AUX if category.get() else _OUT_CAT_PRI))
                     menu.add_command(label="削除", command=lambda: self.deleteNode(node))
                     
                     node.view._window["menu"] = menu

@@ -23,7 +23,7 @@ class NaturalLogarithmNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return AbsoluteLazyFlowData(inputData)
+        return AbsoluteLazyFlowData(self.getOutputCategory(), inputData)
 
 class AbsoluteLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

@@ -18,7 +18,7 @@ class AutoLevelsNode(FlowNode):
     name      = '自動レベル'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
-    outputCat = _OUT_CAT_PAS
+    outputCat = _OUT_CAT_PRI
     
     def process(self, context=None):
         import numpy as np

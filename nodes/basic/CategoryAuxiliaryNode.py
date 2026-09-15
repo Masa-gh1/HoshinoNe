@@ -19,6 +19,12 @@ class CategoryAuxiliaryNode(FlowNode):
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_AUX
+
+    def setOutputCategory(self, category: str):
+        return super().setOutputCategory(_OUT_CAT_AUX)
+
+    def restore(self, nodeData: dict):
+        self._outputCat = _OUT_CAT_AUX
     
     def process(self, context=None):
         from base import FlowDataWrapper
@@ -36,7 +42,7 @@ class CategoryAuxiliaryNode(FlowNode):
         # FlowDataWrapperを使用して category: auxiliary を後方のみに伝える
         resultFlowDatas = []
         for inputData in inputStreams[0]:
-            updatedHeaders = {'category': 'auxiliary'}
+            updatedHeaders = {'category': _OUT_CAT_AUX}
             wrappedData = FlowDataWrapper(inputData, updatedHeaders)
             resultFlowDatas.append(wrappedData)
         

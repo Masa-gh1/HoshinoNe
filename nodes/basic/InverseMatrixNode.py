@@ -28,14 +28,7 @@ class InverseMatrixNode(NNPlaneOperationNode):
         if width != height:
             raise ValueError(f"逆行列の計算ができません: 列数({widthA})と行数({heightB})が一致しません。")
         
-        # headers を生成
-        headers = inputData.headers.copy()
-
-        # 結果用の FlowData を生成
-        flowData = FlowData(headers)
-        flowData.setDimensions(width, height)
-        
-        return flowData
+        return super().createFlowData(inputData)
 
     def planeOperation(self, flowData, planeIndex):
         """行列積処理"""

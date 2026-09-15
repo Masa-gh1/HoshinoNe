@@ -23,7 +23,7 @@ class NegateNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return NegateLazyFlowData(inputData)
+        return NegateLazyFlowData(self.getOutputCategory(), inputData)
 
 class NegateLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

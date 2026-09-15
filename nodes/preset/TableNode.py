@@ -22,11 +22,10 @@ class TableNode(FlowNode,ConfigurableNode):
     name      = '表'
     # 入出力タイプ
     ioType    = _IO_TYPE_0N
-    outputCat = _OUT_CAT_NON
+    outputCat = _OUT_CAT_AUX
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self.outputCat = _OUT_CAT_AUX # オーバーライド
         self.planes  = ["Plane 0"]
         self.columns = ["A", "B", "C"]
         self.lines   = ["1", "2", "3"]
@@ -58,15 +57,12 @@ class TableNode(FlowNode,ConfigurableNode):
         return displayText
     
     def store(self, nodeData):
-        nodeData["category"] = self.outputCat
         nodeData["planes"  ] = self.planes
         nodeData["columns" ] = self.columns
         nodeData["lines"   ] = self.lines
         nodeData["table"   ] = self.table
     
     def restore(self, nodeData):
-        if "category" in nodeData:
-            self.outputCat = nodeData["category"]
         if "planes" in nodeData:
             self.planes = nodeData["planes"]
         if "columns" in nodeData:
@@ -79,8 +75,7 @@ class TableNode(FlowNode,ConfigurableNode):
     def createSettingWindow(self):
         return TensorSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, outputCat, planes, columns, lines, table):
-        self.outputCat = outputCat
+    def applySettings(self, planes, columns, lines, table):
         self.planes    = planes
         self.columns   = columns
         self.lines     = lines
@@ -114,7 +109,7 @@ class TableNode(FlowNode,ConfigurableNode):
             mode = "2D"
         
         headers = {
-            'category': self.outputCat,
+            'category': self.getOutputCategory(),
             'type'    : 'table',
             'mode'    : mode,
             'planes'  : self.planes,
@@ -155,14 +150,13 @@ class TableNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         tableStr = str(sorted(self.table.items())) if isinstance(self.table, dict) else str(self.table)
-        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.columns}_{self.lines}_{tableStr}"
+        config = f"{self.minorType}_{self._outputCat}_{self.planes}_{self.columns}_{self.lines}_{tableStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class TensorSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node      = node
-        self.outputCat = tk.BooleanVar(value=node.outputCat == _OUT_CAT_AUX)
         self.planes    = node.planes.copy()
         if isinstance(node.columns, int):
             self.columnCnt = node.columns
@@ -202,8 +196,6 @@ class TensorSettingsDialog(tk.Toplevel):
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(self.lineCnt))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
-        
-        tk.Checkbutton(basicFrame, text="補正値", variable=self.outputCat).grid(row=0, column=6, sticky="w", padx=5, pady=2)
         
         tk.Button(basicFrame, text="表サイズ更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
@@ -345,10 +337,9 @@ class TensorSettingsDialog(tk.Toplevel):
     def onApply(self):
         if not self.columnEntries and not self.lineEntries and not self.tableEntries:
             planes = [entry.get() for entry in self.planeEntries]
-            outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
             self.planes = planes
             self.table  = 0
-            self.node.applySettings(outputCat, planes, self.columnCnt, self.lineCnt, self.table)
+            self.node.applySettings(planes, self.columnCnt, self.lineCnt, self.table)
         else:
             planes  = [entry.get() for entry in self.planeEntries]
             columns = [entry.get() for entry in self.columnEntries]
@@ -366,12 +357,11 @@ class TensorSettingsDialog(tk.Toplevel):
                         from utils.Debug import Debug
                         Debug.log(type(self).__name__, f"Warning: Invalid table value for {key}")
                 
-                outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
                 self.planes  = planes
                 self.columns = columns
                 self.lines   = lines
                 self.table   = table
-                self.node.applySettings(outputCat, planes, columns, lines, table)
+                self.node.applySettings(planes, columns, lines, table)
     
     def onClose(self):
         self.destroy()

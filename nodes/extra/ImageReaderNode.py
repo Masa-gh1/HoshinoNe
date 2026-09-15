@@ -97,6 +97,7 @@ class ImageReaderNode(BaseReaderNode):
         norm, exif_info = exif.getExif(filePath)
         
         headers = {
+            'category'      : self.getOutputCategory(),
             'type'          : 'image',
             'mode'          : img.mode,
             'width'         : width,
@@ -147,7 +148,7 @@ class ImageReaderNode(BaseReaderNode):
         }
     
     def getConfigHash(self):
-        config = f"{self.minorType}_{'|'.join(self.filePaths)}"
+        config = f"{self.minorType}_{self._outputCat}_{'|'.join(self.filePaths)}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def _processBlock(self, pixels, x, y, planeCount, width, height):

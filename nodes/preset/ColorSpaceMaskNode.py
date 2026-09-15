@@ -63,12 +63,10 @@ class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
         self.view.onNodeConfigChanged(self)
     
     def createLazyFlowData(self, inputData):
-        return ColorSpaceMaskLazyFlowData(inputData, self.colorSpace, self.mask3dPoints)
+        return ColorSpaceMaskLazyFlowData(self.getOutputCategory(), inputData, self.colorSpace, self.mask3dPoints)
     
     def getConfigHash(self):
-        import numpy as np
-        
-        config = f"{self.colorSpace}_{self.mask3dPoints}"
+        config = f"{self.minorType}_{self._outputCat}_{self.colorSpace}_{self.mask3dPoints}"
         return hashlib.sha256(config.encode()).hexdigest()
 
 class ColorSpaceMaskLazyFlowData(LazyFlowData):

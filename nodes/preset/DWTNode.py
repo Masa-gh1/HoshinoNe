@@ -31,6 +31,7 @@ class DWTNode(NNPlaneOperationNode):
         
         # headers を生成
         headers = inputData.headers.copy()
+        headers["category"] = self.getOutputCategory()
         
         # DWT 後のプレーンを設定
         if "DWT level" in headers:

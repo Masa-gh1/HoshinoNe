@@ -22,11 +22,10 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     name      = '係数'
     # 入出力タイプ
     ioType    = _IO_TYPE_0N
-    outputCat = _OUT_CAT_NON
+    outputCat = _OUT_CAT_AUX
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
-        self.outputCat = _OUT_CAT_AUX # オーバーライド
         self.planes = ["Plane 0","Plane 1","Plane 2"]
         self.xOrder = 0
         self.yOrder = 0
@@ -52,15 +51,12 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         return displayText
     
     def store(self, nodeData):
-        nodeData["category"    ] = self.outputCat
         nodeData["planes"      ] = self.planes
         nodeData["xOrder"      ] = self.xOrder
         nodeData["yOrder"      ] = self.yOrder
         nodeData["coefficients"] = self.coefficients
     
     def restore(self, nodeData):
-        if "category" in nodeData:
-            self.outputCat = nodeData["category"]
         if "planes" in nodeData:
             self.planes = nodeData["planes"]
         if "xOrder" in nodeData:
@@ -71,10 +67,9 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
             self.coefficients = nodeData["coefficients"]
     
     def createSettingWindow(self):
-        return PolynomialSettingsDialog(self.view.editor.root, self)
+        return CoefficientsSettingsDialog(self.view.editor.root, self)
     
-    def applySettings(self, outputCat, planes, xOrder, yOrder, coefficients):
-        self.outputCat    = outputCat
+    def applySettings(self, planes, xOrder, yOrder, coefficients):
         self.planes       = planes
         self.xOrder       = xOrder
         self.yOrder       = yOrder
@@ -110,7 +105,7 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         lines   = [f'y^{j}' for j in range(height)]
         
         headers = {
-            'category'  : self.outputCat,
+            'category'  : self.getOutputCategory(),
             'type'      : 'polynomial',
             'mode'      : mode,
             'planes'    : self.planes,
@@ -145,14 +140,13 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
     
     def getConfigHash(self):
         coeffStr = str(sorted(self.coefficients.items()))
-        config = f"{self.minorType}_{self.outputCat}_{self.planes}_{self.xOrder}_{self.yOrder}_{coeffStr}"
+        config = f"{self.minorType}_{self._outputCat}_{self.planes}_{self.xOrder}_{self.yOrder}_{coeffStr}"
         return hashlib.md5(config.encode()).hexdigest()
 
-class PolynomialSettingsDialog(tk.Toplevel):
+class CoefficientsSettingsDialog(tk.Toplevel):
     def __init__(self, parent, node):
         super().__init__(parent)
         self.node   = node
-        self.outputCat = tk.BooleanVar(value=node.outputCat == _OUT_CAT_AUX)
         self.planes    = node.planes.copy()
         self.xOrder    = node.xOrder
         self.yOrder    = node.yOrder
@@ -179,8 +173,6 @@ class PolynomialSettingsDialog(tk.Toplevel):
         self.yOrderEntry = tk.Entry(basicFrame, width=5)
         self.yOrderEntry.insert(0, str(node.yOrder))
         self.yOrderEntry.grid(row=0, column=5, padx=5, pady=2)
-        
-        tk.Checkbutton(basicFrame, text="補正値", variable=self.outputCat).grid(row=0, column=6, sticky="w", padx=5, pady=2)
         
         tk.Button(basicFrame, text="次数サイズ更新", command=self.updateOrder).grid(row=1, column=0, columnspan=6, pady=10)
         
@@ -289,12 +281,11 @@ class PolynomialSettingsDialog(tk.Toplevel):
                     from utils.Debug import Debug
                     Debug.log(type(self).__name__, f"Warning: Invalid coefficient value for {key}")
             
-            outputCat = _OUT_CAT_AUX if self.outputCat.get() else _OUT_CAT_PRI
             self.planes = planes
             self.xOrder = xOrder
             self.yOrder = yOrder
             self.coeff  = coeff
-            self.node.applySettings(outputCat, planes, xOrder, yOrder, coeff)
+            self.node.applySettings(planes, xOrder, yOrder, coeff)
     
     def onClose(self):
         self.destroy()

@@ -164,7 +164,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         }
     
     def getConfigHash(self):
-        config = f"{self.outputMin}_{self.outputEnd}_{self.controlPoints}_{self.boundaryCondition}"
+        config = f"{self.minorType}_{self._outputCat}_{self.outputMin}_{self.outputEnd}_{self.controlPoints}_{self.boundaryCondition}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class ToneCurveDialog(tk.Toplevel):

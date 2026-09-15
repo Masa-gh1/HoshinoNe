@@ -32,11 +32,7 @@ class MatrixProductNode(NNPlaneOperationNode):
         if widthA != heightB:
             raise ValueError(f"行列積の計算ができません: Aの列数({widthA})とBの行数({heightB})が一致しません。")
         
-        # headers を生成
-        headers = inputDataA.headers.copy()
-
-        # 結果用の FlowData を生成
-        flowData = FlowData(headers)
+        flowData = super().createFlowData(inputDatas)
         flowData.setDimensions(widthB, heightA)
         
         return flowData

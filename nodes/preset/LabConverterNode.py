@@ -25,7 +25,7 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     
     def createLazyFlowData(self, inputData):
         """LazyFlowDataを作成"""
-        return LabConverterLazyFlowData(inputData)
+        return LabConverterLazyFlowData(self.getOutputCategory(), inputData)
 
 class LabConverterLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):

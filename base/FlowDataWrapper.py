@@ -40,11 +40,11 @@ class FlowDataWrapper(FlowData):
         self.headers.update(updateHeaders)
         
     # 以下のメソッドは元データに委譲
-    def setDimensions(self, width:int, height:int):
-        return self.orgFlowData.setDimensions(width, height)
-    
     def getDimensions(self) -> tuple[int, int]:
         return self.orgFlowData.getDimensions()
+    
+    def setDimensions(self, width:int, height:int):
+        return self.orgFlowData.setDimensions(width, height)
     
     def getVariableType(self) -> np.dtype:
         return self.orgFlowData.getVariableType()

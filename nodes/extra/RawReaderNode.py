@@ -255,6 +255,7 @@ class RawReaderNode(BaseReaderNode):
             info, exif_info = exif.getExif(filePath)
             
             headers = {
+                'category'      : self.getOutputCategory(),
                 'type'          : 'image',
                 'mode'          : mode,
                 'width'         : width,
@@ -335,7 +336,7 @@ class RawReaderNode(BaseReaderNode):
         }
     
     def getConfigHash(self):
-        config = f"{self.minorType}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
+        config = f"{self.minorType}_{self._outputCat}_{"|".join(self.filePaths)}_{self.demosaicAlgorithm}_{self.outputColorspace}_{self.whiteBalance}_{self.gammaPower}_{self.gammaSlope}"
         return hashlib.md5(config.encode()).hexdigest()
     
 class RawSettingsDialog(BaseReaderSettingsDialog):

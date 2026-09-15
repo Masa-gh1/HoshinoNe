@@ -23,7 +23,7 @@ class MaxNode(LazyNNOperationNode):
     
     def createLazyFlowData(self, inputDatas):
         """LazyFlowDataを作成"""
-        return MaxLazyFlowData(inputDatas)
+        return MaxLazyFlowData(self.getOutputCategory(), inputDatas)
     
 class MaxLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):
