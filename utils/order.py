@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+#分散処理用カウンタ
+count = 0
+
 # Z階数曲線の生成
 def zOrderGenerator(x1, y1, x2, y2, xStep=1, yStep=1):
     """
@@ -21,22 +24,34 @@ def zOrderGenerator(x1, y1, x2, y2, xStep=1, yStep=1):
     """
     if x2 <= x1 or y2 <= y1:
         return
-
+    
     xSteps = (x2 - x1 + xStep - 1)//xStep
     ySteps = (y2 - y1 + yStep - 1)//yStep
 
     if 1 == xSteps and 1 == ySteps:
         yield x1, y1
         return
-
+    
+    global count
+    count += 1
+    h = hash(count)%2 # 並列処理で衝突を避けるため順序を変える
+    
     # Z順（再帰的二分割）で走査
     if ySteps <= xSteps:
         # 横長なので左右に分割
         width = (xSteps // 2) * xStep
-        yield from zOrderGenerator(x1        , y1, x1 + width, y2, xStep, yStep)
-        yield from zOrderGenerator(x1 + width, y1, x2        , y2, xStep, yStep)
+        if 0==h: # 並列処理で衝突を避けるため順序を変える
+            yield from zOrderGenerator(x1        , y1, x1 + width, y2, xStep, yStep)
+            yield from zOrderGenerator(x1 + width, y1, x2        , y2, xStep, yStep)
+        else:
+            yield from zOrderGenerator(x1 + width, y1, x2        , y2, xStep, yStep)
+            yield from zOrderGenerator(x1        , y1, x1 + width, y2, xStep, yStep)
     else:
         # 縦長なので上下に分割
         height = (ySteps // 2) * yStep
-        yield from zOrderGenerator(x1, y1         , x2, y1 + height, xStep, yStep)
-        yield from zOrderGenerator(x1, y1 + height, x2, y2         , xStep, yStep)
+        if 0==h: # 並列処理で衝突を避けるため順序を変える
+            yield from zOrderGenerator(x1, y1         , x2, y1 + height, xStep, yStep)
+            yield from zOrderGenerator(x1, y1 + height, x2, y2         , xStep, yStep)
+        else:
+            yield from zOrderGenerator(x1, y1 + height, x2, y2         , xStep, yStep)
+            yield from zOrderGenerator(x1, y1         , x2, y1 + height, xStep, yStep)
