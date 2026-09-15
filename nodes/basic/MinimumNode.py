@@ -66,7 +66,7 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 np.logical_and(inv, invalidA, out=inv)
 
                 # 値の最小
-                np.nan_to_num(data, nan=0.0, copy=False)
+                data[invalidA] = np.inf
                 np.minimum( res, data, out=res)
         
         # nan の位置を適用

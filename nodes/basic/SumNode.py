@@ -66,7 +66,7 @@ class SumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperationMix
                 np.logical_and(inv, invalidA, out=inv)
 
                 # 値の加算
-                np.nan_to_num(data, nan=0.0, copy=False)
+                data[invalidA] = 0.0
                 res += data
         
         # nan の位置を適用

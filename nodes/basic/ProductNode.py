@@ -66,7 +66,7 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 np.logical_and(inv, invalidA, out=inv)
 
                 # 値の乗算
-                np.nan_to_num(data, nan=0.0, copy=False)
+                data[invalidA] = 1.0
                 res *= data
         
         # nan の位置を適用

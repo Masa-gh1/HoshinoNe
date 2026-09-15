@@ -67,7 +67,7 @@ class CountNode(N1BlockOperationNode):
                 
                 # NaNでない有効なピクセルのみカウント
                 np.isnan(data, out=invalidA)
-                np.logical_not(invalidA, out=invalidA)
+                np.invert(invalidA, out=invalidA)
                 res += invalidA
         
         return DataBlock(result, planeIndex, x, y)
