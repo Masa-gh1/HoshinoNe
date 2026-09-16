@@ -91,10 +91,11 @@
     {
       "index": 8,
       "zOrder": 21,
-      "type": "category_auxiliary",
-      "text": "補正値",
+      "type": "pass",
+      "text": "通点",
       "x": 40.0,
       "y": 102.0,
+      "category": "auxiliary",
       "connections": [
         2,
         3
