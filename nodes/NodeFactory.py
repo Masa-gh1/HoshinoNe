@@ -64,9 +64,6 @@ class NodeFactory:
         ('quadratic_fit'           , '2次関数近似(N:N)'             , None             ),
         ('auto_levels'             , '自動レベル(N:N)'              , None             ),
         ('tone_curve'              , 'トーンカーブ(N:N)'            , None             ),
-        ('------------------------', None                           , None             ),
-        ('category_auxiliary'      , '補正値に変換'                 , None             ),
-        ('pass'                    , '通過点(何もしない)'           , None             ),
         ('************************', None                           , None             ),
         ('bayer_unpack_sparse'     , 'ベイヤー分離(疎)(N:N)'        , 'RGGB→R,G1,B,G2'),
         ('bayer_unpack_dense'      , 'ベイヤー分離(密)(N:N)'        , 'RGGB→R,G1,B,G2'),
@@ -91,6 +88,9 @@ class NodeFactory:
         ('------------------------', None                           , None             ),
         ('chroma_denoise'          , '色空間分離ノイズ除去(N:N)'    , None             ),
         ('wavelet_denoise'         , 'ウェーブレットノイズ除去(N:N)', None             ),
+        ('------------------------', None                           , None             ),
+        #('category_auxiliary'      , '補正値に変換'                 , None             ), # 廃止
+        ('pass'                    , '通過点(何もしない)'           , None             ),
     ]    
     nodeList = None
     
