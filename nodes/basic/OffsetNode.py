@@ -21,9 +21,9 @@ class OffsetNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return OffsetLazyFlowData(self.getOutputCategory(), inputDatas)
+        return OffsetLazyFlowData(headers, inputDatas)
 
 class OffsetLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

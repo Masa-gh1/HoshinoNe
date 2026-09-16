@@ -21,9 +21,9 @@ class MinNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return MinLazyFlowData(self.getOutputCategory(), inputDatas)
+        return MinLazyFlowData(headers, inputDatas)
     
 class MinLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

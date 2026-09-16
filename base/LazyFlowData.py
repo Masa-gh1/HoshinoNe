@@ -24,48 +24,23 @@ if TYPE_CHECKING:
 class LazyFlowData(FlowData):
     """遅延評価FlowData"""
     __slots__ = ('cachePolicy'    ,
-                 'category'       ,
-                 'baseFlowData'   ,
                  'sourceFlowDatas',
+                 'sourceHeaders'     ,
                  'headers'        ,
                  'args'           ,
                  'kwargs'         ,
                  '_blockLocks'    ,
                 )
     
-    def __init__(self, category:str, sourceFlowDatas:list[FlowData], *args, **kwargs):
+    def __init__(self, headers:dict, sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
         super().__init__(None)
         
-        # 最もプレーン数が多いデータを基準とする
-        if isinstance(sourceFlowDatas, (list,tuple)):
-            baseFlowData  = sourceFlowDatas[0]
-            maxPlaneCount = sourceFlowDatas[0].getPlaneCount()
-            for flowData in sourceFlowDatas[1:]:
-                planeCount = flowData.getPlaneCount()
-                if maxPlaneCount < planeCount:
-                    maxPlaneCount = planeCount
-                    baseFlowData = flowData
-        else:
-            baseFlowData = sourceFlowDatas
-        
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
-        self.category        = category
-        self.baseFlowData    = baseFlowData
         self.sourceFlowDatas = sourceFlowDatas
-        self.headers         = LazyHeadersDict(self, *args, **kwargs)
+        self.sourceHeaders   = headers
+        self.headers         = LazyHeadersDict(self, headers, *args, **kwargs)
         self.args            = args
         self.kwargs          = kwargs
-
-        # 全入力データを包含する最大サイズ
-        if isinstance(sourceFlowDatas, (list,tuple)):
-            width, height = sourceFlowDatas[0].getDimensions()
-            for data in sourceFlowDatas[1:]:
-                w, h = data.getDimensions()
-                width  = max(width, w)
-                height = max(height, h)
-        else:
-            width, height = sourceFlowDatas.getDimensions()
-        self.setDimensions(width, height)
         
         self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*8)]
     
@@ -136,20 +111,23 @@ class LazyFlowData(FlowData):
 
 class LazyHeadersDict(UserDict):
     """遅延評価対応のheaders辞書"""
-    __slots__ = ('_lazyFlowData',
+    __slots__ = ('lazyFlowData' ,
+                 'sourceHeaders',
                  'args'         ,
                  'kwargs'       ,
                 )
-    def __init__(self, lazyFlowData:LazyFlowData, *args, **kwargs):
-        super().__init__(lazyFlowData.baseFlowData.headers)
+    def __init__(self, lazyFlowData:LazyFlowData, headers:dict, *args, **kwargs):
+        super().__init__()
         
-        self._lazyFlowData = lazyFlowData
+        self.lazyFlowData = lazyFlowData
+        self.sourceHeaders = headers
         self.args          = args
         self.kwargs        = kwargs
 
-        self.data["category"] = lazyFlowData.category
-
-        for key in self._lazyFlowData.getLazyHeaderkeys():
+        for key in self.sourceHeaders.keys():
+            self.data[key]= "<sourceHeaders>"
+    
+        for key in self.lazyFlowData.getLazyHeaderkeys():
             self.data[key]= "<LazyHeaderOperation>"
     
     def __getitem__(self, key:str):
@@ -158,7 +136,17 @@ class LazyHeadersDict(UserDict):
         else:
             value = self.data[key]
             if isinstance(value, str) and "<LazyHeaderOperation>"==value:
-                lazyResult = self._lazyFlowData.headerOperation(self._lazyFlowData, key, *self.args, **self.kwargs)
+                lazyResult = self.lazyFlowData.headerOperation(self.lazyFlowData, key, *self.args, **self.kwargs)
                 self.data.update(lazyResult)
                 value = self.data[key]
+            elif isinstance(value, str) and "<sourceHeaders>"==value:
+                value = self.sourceHeaders[key]
             return value
+    
+    def copy(self) -> LazyHeadersDict:
+        o = super().copy()
+        o.lazyFlowData  = self.lazyFlowData
+        o.sourceHeaders = self.sourceHeaders
+        o.args          = self.args
+        o.kwargs        = self.kwargs
+        return o

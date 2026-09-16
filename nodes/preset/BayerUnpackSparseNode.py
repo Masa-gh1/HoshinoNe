@@ -25,9 +25,9 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
         """ベイヤーデータのみを抽出"""
         return [data for data in inputStream if data.headers.get('is_bayer', False)]
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return BayerUnpackSparseLazyFlowData(self.getOutputCategory(), inputData)
+        return BayerUnpackSparseLazyFlowData(headers, inputData)
     
 class BayerUnpackSparseLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):

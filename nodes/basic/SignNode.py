@@ -21,9 +21,9 @@ class SignNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return SignLazyFlowData(self.getOutputCategory(), inputData)
+        return SignLazyFlowData(headers, inputData)
 
 class SignLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

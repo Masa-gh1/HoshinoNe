@@ -50,7 +50,7 @@ class TransformNode(LazyNNOperationNode):
         
         return [stream]
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
         if not self._params or not self._extendParams:
@@ -61,7 +61,7 @@ class TransformNode(LazyNNOperationNode):
         
         if not transformParams:
             expand_left, expand_top, new_width, new_height = self._extendParams
-            return TransformLazyFlowData(self.getOutputCategory(), inputData, expand_left, expand_top, 0, 1, new_width, new_height)
+            return TransformLazyFlowData(headers, inputData, expand_left, expand_top, 0, 1, new_width, new_height)
         else:
             expand_left, expand_top, new_width, new_height = self._extendParams
             dx, dy, rotation, scale, left, top, width, height = transformParams
@@ -71,7 +71,7 @@ class TransformNode(LazyNNOperationNode):
             height = height if height else new_height
             dx -= left
             dy -= top
-            return TransformLazyFlowData(self.getOutputCategory(), inputData, dx, dy, rotation, scale, width, height)
+            return TransformLazyFlowData(headers, inputData, dx, dy, rotation, scale, width, height)
         
     def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
@@ -197,8 +197,8 @@ class TransformNode(LazyNNOperationNode):
         return( dx, dy, rotation, scale, left, top, width, height)
 
 class TransformLazyFlowData(LazyFlowData):
-    def __init__(self, category, flowData, dx, dy, rotation, scale, new_width, new_height):
-        super().__init__(category, flowData, dx, dy, rotation, scale, new_width, new_height)
+    def __init__(self, headers, flowData, dx, dy, rotation, scale, new_width, new_height):
+        super().__init__(headers, flowData, dx, dy, rotation, scale, new_width, new_height)
         self.setDimensions(new_width, new_height)
     
     def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, scale, new_width, new_height):

@@ -21,9 +21,9 @@ class UpperPassNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return UpperPassLazyFlowData(self.getOutputCategory(), inputDatas)
+        return UpperPassLazyFlowData(headers, inputDatas)
 
 class UpperPassLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

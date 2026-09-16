@@ -21,9 +21,9 @@ class NegateNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return NegateLazyFlowData(self.getOutputCategory(), inputData)
+        return NegateLazyFlowData(headers, inputData)
 
 class NegateLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):

@@ -61,18 +61,45 @@ class LazyNNOperationNode(NxBlockOperationNode):
             if not inputDatas:
                 pass
             elif 1 < len(inputDatas):
-                lazyFlowData = self.createLazyFlowData(inputDatas)
+                lazyFlowData = self.createFlowData(inputDatas)
                 resultFlowDatas.append(lazyFlowData)
             else:
-                lazyFlowData = self.createLazyFlowData(inputDatas[0])
+                lazyFlowData = self.createFlowData(inputDatas[0])
                 resultFlowDatas.append(lazyFlowData)
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
+    def createFlowData(self, inputDatas:FlowData|list[FlowData]) -> FlowData:
+        from base import FlowData
+        
+        _inputDatas = inputDatas if isinstance(inputDatas, (list,tuple)) else [inputDatas]
+        
+        # 基準データを決定
+        baseDataIndex = self.getBaseDataIndex(_inputDatas)
+        baseData = _inputDatas[baseDataIndex]
+
+        # headers を生成
+        headers = baseData.headers.copy() if baseData.headers else {}
+        headers["category"] = self.getOutputCategory()
+        headers.update(self.processHeaders(baseData, _inputDatas))
+
+        # サイズを決定
+        width, height = self.getOutputDimensions(baseData, _inputDatas)
+        
+        # 結果用の FlowData を生成
+        flowData = self.createLazyFlowData(headers, inputDatas)
+        if (0,0) == flowData.getDimensions():
+            flowData.setDimensions(width, height)
+        
+        return flowData
+        
     @abstractmethod
-    def createLazyFlowData(self, inputDatas:FlowData|list[FlowData]) -> LazyFlowData:
+    def createLazyFlowData(self, headers:dict, inputDatas:FlowData|list[FlowData]) -> LazyFlowData:
         """LazyFlowDataを作成（サブクラスで実装）
+        
+        実装例
+        return LazyFlowData(headers, inputDatas)
         
         Args:
             inputDatas: 入力 FlowData のリスト

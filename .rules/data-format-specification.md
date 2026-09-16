@@ -83,7 +83,6 @@
 
 ### 読み込みノード（BaseReaderNode継承）
 #### 共通ヘッダー（全読み込みノード）
-- `category`: 'primary' (デフォルト)
 - `source_file`: 元ファイルパス
 - `width`: データ幅
 - `height`: データ高さ
@@ -126,21 +125,16 @@
 
 ### 生成ノード
 #### TableNode
-- category='auxiliary', type='table'
+- type='table'
 - columns, lines
 
 #### CoefficientsNode
-- category='auxiliary', type='polynomial'
+- type='polynomial'
 - mode, axes, columns, lines, max_orders, equations を設定
 
 #### TensorNode
-- category='auxiliary', type='tensor'
+- type='tensor'
 - mode, axes, columns, lines, max_orders を設定
-
-### 分類ノード
-#### CategoryAuxiliary
-- category='auxiliary'に変更
-- その他は入力を継承
 
 ## Headers 継承ルール
 1. 入力 headers をベースとして継承

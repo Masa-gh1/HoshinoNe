@@ -21,9 +21,9 @@ class MaxNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return MaxLazyFlowData(self.getOutputCategory(), inputDatas)
+        return MaxLazyFlowData(headers, inputDatas)
     
 class MaxLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

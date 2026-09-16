@@ -21,9 +21,9 @@ class PowerNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return PowerLazyFlowData(self.getOutputCategory(), inputDatas)
+        return PowerLazyFlowData(headers, inputDatas)
 
 class PowerLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

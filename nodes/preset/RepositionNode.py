@@ -34,7 +34,7 @@ class RepositionNode(LazyNNOperationNode):
         
         return [stream]
 
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
         if not self._params:
@@ -47,7 +47,7 @@ class RepositionNode(LazyNNOperationNode):
             return inputData
         else:
             shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height  = params
-            return RepositionLazyFlowData(self.getOutputCategory(), inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+            return RepositionLazyFlowData(headers, inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
 
     def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
@@ -125,8 +125,8 @@ class RepositionNode(LazyNNOperationNode):
         return (shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
 
 class RepositionLazyFlowData(LazyFlowData):
-    def __init__(self, category, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
-        super().__init__(category, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+    def __init__(self, headers, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
+        super().__init__(headers, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
         
         # 出力サイズを計算
         w, h = flowData.getDimensions()

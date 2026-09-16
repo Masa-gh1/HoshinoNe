@@ -25,9 +25,9 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         """ベイヤーデータのみを抽出"""
         return [data for data in inputStream if data.headers.get('is_bayer', False)]
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        lazyFlowData = BayerUnpackDenseLazyFlowData(self.getOutputCategory(), inputData)
+        lazyFlowData = BayerUnpackDenseLazyFlowData(headers, inputData)
         width, height = inputData.getDimensions()
         lazyFlowData.setDimensions(width // 2, height // 2)
         return lazyFlowData
@@ -91,10 +91,7 @@ class BayerUnpackDenseLazyFlowData(LazyFlowData):
         return ['mode', 'planes', 'width', 'height']
 
     def headerOperation(self, lazyFlowData, key):
-        sourceHeaders = lazyFlowData.baseFlowData.headers
         return {
             'mode'  : 'RGBG',
             'planes': ['R', 'G1', 'B', 'G2'],
-            'width' : sourceHeaders['width'] // 2,
-            'height': sourceHeaders['height'] // 2
         }

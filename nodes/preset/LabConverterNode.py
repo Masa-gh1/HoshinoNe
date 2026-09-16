@@ -23,9 +23,9 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return LabConverterLazyFlowData(self.getOutputCategory(), inputData)
+        return LabConverterLazyFlowData(headers, inputData)
 
 class LabConverterLazyFlowData(LazyFlowData):
     def operation(self, flowData, planeIndex, x, y):

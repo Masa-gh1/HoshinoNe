@@ -21,9 +21,9 @@ class ScaleNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return ScaleLazyFlowData(self.getOutputCategory(), inputDatas)
+        return ScaleLazyFlowData(headers, inputDatas)
 
 class ScaleLazyFlowData(LazyFlowData):
     def blockOperation(self, blocks, planeIndex, x, y):

@@ -21,9 +21,9 @@ class Fill1Node(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return AbsoluteLazyFlowData(self.getOutputCategory(), inputData)
+        return AbsoluteLazyFlowData(headers, inputData)
 
 class AbsoluteLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):
