@@ -1,0 +1,124 @@
+{
+  "version": "0.3.20260814",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 3,
+      "type": "shift_detection",
+      "text": "ズレ検出",
+      "x": 134.0,
+      "y": 43.0,
+      "usePreviousOffset": true,
+      "alignmentPlane": 1,
+      "starThreshold": 95,
+      "starMinDiameter": 2,
+      "starMaxDiameter": 16,
+      "starSampleRadius": 100,
+      "saturationThreshold": 95,
+      "useSaturationMask": false,
+      "maxAspectRatio": 2.0,
+      "gridRows": 3,
+      "gridCols": 3,
+      "starsPerGrid": 8,
+      "ransacIterations": 100,
+      "ransacSeed": 2725,
+      "phaseMaxOffset": 100,
+      "templateSearchRange": 150,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 7,
+      "type": "transform",
+      "text": "変形",
+      "x": 132.0,
+      "y": 157.0,
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 5,
+      "type": "matrix_product",
+      "text": "行列積",
+      "x": 132.0,
+      "y": 101.0,
+      "category": "auxiliary",
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 9,
+      "type": "tensor",
+      "text": "数列",
+      "x": 217.0,
+      "y": 102.0,
+      "category": "auxiliary",
+      "planes": [
+        "(0,4),(1,4)=X移動,Y移動"
+      ],
+      "xOrder": 5,
+      "yOrder": 5,
+      "tensor": {
+        "0,0,0": 1.0,
+        "0,1,1": 1.0,
+        "0,2,2": 1.0,
+        "0,3,3": 1.0,
+        "0,0,4": 0.007,
+        "0,1,4": -0.006,
+        "0,4,4": 1.0
+      },
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 11,
+      "type": "pass",
+      "text": "通点",
+      "x": 43.0,
+      "y": 40.0,
+      "category": "auxiliary",
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 13,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 100.0,
+      "connections": [
+        0,
+        1
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 15,
+      "type": "pass",
+      "text": "通点",
+      "x": 232.0,
+      "y": 156.0,
+      "connections": []
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 138.0,
+      "y": 89.0,
+      "width": 210,
+      "height": 207,
+      "title": "メトカーフ法 行列で移動量を指定"
+    }
+  ]
+}

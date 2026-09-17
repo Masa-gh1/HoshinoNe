@@ -1,0 +1,87 @@
+{
+  "version": "0.3.20260814",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 3,
+      "type": "shift_detection",
+      "text": "ズレ検出",
+      "x": 138.0,
+      "y": 46.0,
+      "category": "auxiliary",
+      "usePreviousOffset": true,
+      "alignmentPlane": 1,
+      "starThreshold": 95,
+      "starMinDiameter": 2,
+      "starMaxDiameter": 16,
+      "starSampleRadius": 100,
+      "saturationThreshold": 95,
+      "useSaturationMask": false,
+      "maxAspectRatio": 2.0,
+      "gridRows": 3,
+      "gridCols": 3,
+      "starsPerGrid": 8,
+      "ransacIterations": 100,
+      "ransacSeed": 2725,
+      "phaseMaxOffset": 100,
+      "templateSearchRange": 150,
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 5,
+      "type": "transform",
+      "text": "変形",
+      "x": 138.0,
+      "y": 104.0,
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 9,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 40.0,
+      "category": "auxiliary",
+      "connections": [
+        0
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 7,
+      "type": "pass",
+      "text": "通点",
+      "x": 41.0,
+      "y": 104.0,
+      "connections": [
+        0,
+        1
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 11,
+      "type": "pass",
+      "text": "通点",
+      "x": 231.0,
+      "y": 104.0,
+      "connections": []
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 142.0,
+      "y": 64.0,
+      "width": 210,
+      "height": 152,
+      "title": "位置合わせ"
+    }
+  ]
+}
