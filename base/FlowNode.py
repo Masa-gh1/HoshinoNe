@@ -95,7 +95,7 @@ class FlowNode(AbstractBaseClass):
         elif _IO_TYPE_NN == self.ioType:
             return max([0]+[x.getOutputCount(False) for x in self.inputNodes])
         elif _IO_TYPE_0N == self.ioType:
-            assert False, f"Please override `getOutputCount` in the {self.__class__.__name__}"
+            assert False, f"Please override `getOutputCount` in the {self.__class__.__name__}."
         else:
             return 0
 

@@ -26,7 +26,7 @@ class DataBlock:
                  'y'          ,
                 )
 
-    def __init__(self, data:np.ndarray|str, planeIndex:int, x:int, y:int):
+    def __init__(self, data:np.ndarray|list|str, planeIndex:int, x:int, y:int):
         """
         data に str を渡した場合、id をして扱われキャッシュ機構用に用いられます。
         """
