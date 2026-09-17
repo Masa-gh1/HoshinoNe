@@ -49,7 +49,7 @@ class BayerUnpackSparseLazyFlowData(LazyFlowData):
         # 座標配列を作成
         x_coords, y_coords = np.meshgrid(nh.arange(width), nh.arange(height), copy=False, sparse=True)
         
-        # ベイヤーパターンに応じてマスクを作成     [   R      G1      B       G2  ]
+        # ベイヤーパターンに応じてマスクを作成  [   R      G1      B       G2  ]
         if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]
         elif bayer_pattern == 'GRBG': offsets = [(0, 1), (0, 0), (1, 0), (1, 1)]
         elif bayer_pattern == 'GBRG': offsets = [(1, 0), (1, 1), (0, 1), (0, 0)]
