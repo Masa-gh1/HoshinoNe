@@ -50,6 +50,9 @@ class CoefficientsNode(FlowNode,ConfigurableNode):
         displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.xOrder}x{self.yOrder}\n{constVal}"
         return displayText
     
+    def getOutputCount(self, withCheck: bool = True) -> int:
+        return 1
+    
     def store(self, nodeData):
         nodeData["planes"      ] = self.planes
         nodeData["xOrder"      ] = self.xOrder

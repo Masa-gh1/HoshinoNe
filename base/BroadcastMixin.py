@@ -44,7 +44,7 @@ class BroadcastMixin:
         return result
 
     @classmethod
-    def calculateBroadcastedBlock(cls, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, shape=None) -> tuple[DataBlock|list[DataBlock]|None, tuple|None]:
+    def calculateBroadcastedBlock(cls, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, shape=None) -> tuple[DataBlock|list[DataBlock], tuple]:
         """FlowData 間でブロードキャストを行うブロックを計算する
         
         Args:

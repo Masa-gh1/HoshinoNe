@@ -78,16 +78,18 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
 
             self.outputFilePath = filepath
     
-    def getRelativePath(self, filePath:str) -> str:
+    def getRelativePath(self, filePath:str) -> str|None:
         """相対パスを取得"""
+        assert not self.view.editor is None
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.relpath(filePath, flowDir)
         else:
             return None
     
-    def getAbsolutePath(self, filePath:str) -> str:
+    def getAbsolutePath(self, filePath:str) -> str|None:
         """絶対パスを取得"""
+        assert not self.view.editor is None
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.abspath(os.path.join(flowDir, filePath))
@@ -144,6 +146,8 @@ class BaseWriterNode(FlowNode,ConfigurableNode):
         
     def createSettingWindow(self) -> tk.Toplevel:
         """Settings dialogを開く"""
+        assert not self.view is None
+        assert not self.view.editor is None
         return BaseWriterSettingsDialog(self.view.editor.root, self)
 
     def _createFlowData(self, fileInfos:list[tuple[str, int, int, int, int]]):
@@ -238,6 +242,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.onClose)
     
     def browseFile(self):
+        assert not self.node.view.editor is None
         filepath = self.node.view.editor.openOutputFileSelector(
             parent=self,
             title=f"{self.node.name} - 出力ファイルを選択",
@@ -255,7 +260,7 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         Returns:
             作成したフレーム、またはNone
         """
-        return None
+        assert False, f"Please override `createCustomSettings` in the {self.__class__.__name__}."
     
     def customOnApply(self):
         """カスタム設定の適用（サブクラスでオーバーライド）"""

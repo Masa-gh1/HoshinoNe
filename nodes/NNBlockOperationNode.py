@@ -123,10 +123,7 @@ class NNBlockOperationNode(NxBlockOperationNode):
         """
         from base import BroadcastMixin
         blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
-        if not blocks:
-            return None
-        else:
-            return self.blockOperation(blocks, planeIndex, x, y)
+        return self.blockOperation(blocks, planeIndex, x, y)
     
     @abstractmethod
     def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:

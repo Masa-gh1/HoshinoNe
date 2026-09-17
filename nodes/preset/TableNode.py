@@ -56,6 +56,9 @@ class TableNode(FlowNode,ConfigurableNode):
             displayText = f"{self.name}\nP:{len(self.planes)} xy:{len(self.columns)}x{len(self.lines)}\n{constVal}"
         return displayText
     
+    def getOutputCount(self, withCheck: bool = True) -> int:
+        return 1
+    
     def store(self, nodeData):
         nodeData["planes"  ] = self.planes
         nodeData["columns" ] = self.columns

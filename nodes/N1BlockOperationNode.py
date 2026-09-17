@@ -94,12 +94,9 @@ class N1BlockOperationNode(NxBlockOperationNode):
         """
         from base import BroadcastMixin
         blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
-        if not blocks:
-            return None
-        else:
-            return self.blockOperation(blocks, planeIndex, x, y)
-
-    def blockOperation(self, blocks:list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:
+        return self.blockOperation(blocks, planeIndex, x, y)
+    
+    def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:
         """
         単一ブロックの処理 (サブクラスでオーバーライド可能)
         
@@ -112,4 +109,4 @@ class N1BlockOperationNode(NxBlockOperationNode):
         Returns:
             処理結果の DataBlock
         """
-        return None
+        assert False, f"Please override `blockOperation` in the {self.__class__.__name__}."

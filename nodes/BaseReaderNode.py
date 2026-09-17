@@ -54,7 +54,7 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
             displayText = f"{self.name}\n未選択"
         return displayText
     
-    def _getOutputCount(self, path:list[FlowNode]=None) -> int:
+    def getOutputCount(self, withCheck:bool=True) -> int:
         return len(self.filePaths)
 
     def setFilePaths(self, filePaths:list[str]):
@@ -84,16 +84,18 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
 
             self.filePaths = filepaths
     
-    def getRelativePath(self, filePath:str) -> str:
+    def getRelativePath(self, filePath:str) -> str|None:
         """相対パスを取得"""
+        assert not self.view.editor is None
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.relpath(filePath, flowDir)
         else:
             return None
     
-    def getAbsolutePath(self, filePath:str) -> str:
+    def getAbsolutePath(self, filePath:str) -> str|None:
         """絶対パスを取得"""
+        assert not self.view.editor is None
         if self.view.editor.currentFlowPath:
             flowDir = os.path.dirname(self.view.editor.currentFlowPath)
             return os.path.abspath(os.path.join(flowDir, filePath))
@@ -137,6 +139,8 @@ class BaseReaderNode(FlowNode,ConfigurableNode):
     
     def createSettingWindow(self) -> tk.Toplevel:
         """Settings dialogを開く"""
+        assert not self.view is None
+        assert not self.view.editor is None
         return BaseReaderSettingsDialog(self.view.editor.root, self)
     
     def countFileBlocks(self, filePath:str) -> int:
@@ -297,6 +301,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             self.fileTreeview.insert('', 'end', values=values)
     
     def addFiles(self):
+        assert not self.node.view.editor is None
         filePaths = self.node.view.editor.openFilesSelector(
             parent=self,
             title=f"{self.node.name} - ファイルを追加",
@@ -329,7 +334,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         
         self.updateFileList()
     
-    def getCustomSettingsWidth(self) -> int:
+    def getCustomSettingsWidth(self) -> int|None:
         """カスタム設定の幅を取得（サブクラスでオーバーライド）
         Returns:
             幅、または None
@@ -342,7 +347,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         Returns:
             作成したフレーム、または None
         """
-        return None
+        assert False, f"Please override `createCustomSettings` in the {self.__class__.__name__}."
     
     def customOnApply(self):
         """カスタム設定の適用（サブクラスでオーバーライド）"""
@@ -357,7 +362,7 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         
         self.node.view.onNodeConfigChanged(self.node)
     
-    def getColumns(self) -> tuple[str]:
+    def getColumns(self) -> tuple[str,...]:
         """列構成を取得（サブクラスでオーバーライド）"""
         return ('filename', 'datetime', 'size')
     

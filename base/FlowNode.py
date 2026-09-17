@@ -84,28 +84,38 @@ class FlowNode(AbstractBaseClass):
         self._outputCat = category if category else self.outputCat
         self.view.onNodeConfigChanged(self)
     
-    def getOutputCount(self) -> int:
-        """ノードへの入力を考慮した出力数を取得
-        (オーバーライドする場合、_getOutputCountを実装すること)
-        """
-        return self._getOutputCount()
-    
-    def _getOutputCount(self, path:list[FlowNode]|None=None) -> int:
-        """ノードへの入力を考慮した出力数を取得
-        (オーバーライドする場合、_getOutputCountを実装すること)
-        """
-        if   _IO_TYPE_N0 == self.ioType:
+    def getOutputCount(self, withCheck:bool=True) -> int:
+        """ノードへの入力を考慮した出力数を取得"""
+        if _IO_TYPE_N0 == self.ioType:
             return 0
         elif _IO_TYPE_N1 == self.ioType:
             return 1
-        elif(  _IO_TYPE_0N == self.ioType
-            or _IO_TYPE_NN == self.ioType
-            ):
-            path = path.copy() if path else []
-            path.append(self) # 循環参照を除く
-            return max([0]+[x._getOutputCount(path) for x in self.inputNodes if not x in path])
+        elif withCheck and not self.isConnectedSuccess():
+            return 0
+        elif _IO_TYPE_NN == self.ioType:
+            return max([0]+[x.getOutputCount(False) for x in self.inputNodes])
+        elif _IO_TYPE_0N == self.ioType:
+            assert False, f"Please override `getOutputCount` in the {self.__class__.__name__}"
         else:
             return 0
+
+    def isConnectedSuccess(self) -> bool:
+        """ノード接続チェック
+        ・循環パスに成っていないかチェックする
+        
+        Return:
+           True 問題なし、False 循環パスに含まれる
+        """
+        return self._isConnectedSuccess()
+    
+    def _isConnectedSuccess(self, path:set[FlowNode]|None=None) -> bool:
+        """ノード接続チェック"""
+        path = path.copy() if path else set()
+        if self in path:
+            return False # 循環参照
+        else:
+            path.add(self)
+            return all([x._isConnectedSuccess(path) for x in self.inputNodes])
     
     @abstractmethod
     def process(self, context=None):
@@ -118,12 +128,13 @@ class FlowNode(AbstractBaseClass):
     
     def execute(self, context=None):
         """ノードの処理を実行"""
-        assert not self.view.editor is None
         self.process(context)
         # 実行時設定ハッシュの更新
         self._lastInputHash = self.getInputHashe()
         self._lastConfigHash = self.getConfigHash()
-        self.view.editor.root.after(0,self.view.updateResult)
+        if self.view:
+            assert not self.view.editor is None
+            self.view.editor.root.after(0,self.view.updateResult)
     
     def reportProgress(self, context, message:str, current:int|None=None, total:int|None=None):
         """処理経過を報告"""
@@ -132,8 +143,9 @@ class FlowNode(AbstractBaseClass):
 
     def preview(self):
         """プレビュー専用処理（ノード個別実行）"""
-        assert not self.view.editor is None
-        self.view.editor.executeFlow(self)
+        if self.view:
+            assert not self.view.editor is None
+            self.view.editor.executeFlow(self)
     
     def needsReprocessing(self) -> bool:
         """再処理が必要かどうかを判定"""
