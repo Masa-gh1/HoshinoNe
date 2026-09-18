@@ -159,7 +159,7 @@ class FlowFile:
         return nodes, trays, connections, zOrderObj
 
     def sort(self, nodes:list[FlowNode]) -> list[FlowNode]:
-        # 1. 依存関係の解析
+        # 依存関係の収集
         nodeMap = {}
         for node in nodes:
             endId = id(node)
@@ -171,12 +171,10 @@ class FlowFile:
                 "node": node,
             }
         
-        # 2. 逆方向のトポロジカルソートによるパス長の確定
-        # 出力がないノード（シンク）を初期状態としてキューに入れる
+        # 後ろからのトポロジカルソートによるパス長計算
         backends = [nid for nid, data in nodeMap.items() if 0 == data["out_degree"]]
         path_lens = {nid: 0 for nid in backends}
         
-        # 逆方向に伝播させながらパス長を確定
         while backends:
             next_backends = []
             for endId in backends:
@@ -184,21 +182,18 @@ class FlowFile:
                 for inId in nodeMap[endId]["in_nodes"]:
                     nodeMap[inId]["out_degree"] -= 1
                     if nodeMap[inId]["out_degree"] == 0:
-                        # 最も最後に処理された子ノード（＝最も長い枝の先）のパス長を反映
-                        # 逆方向トポロジカルソートの性質により、これが最大値となる。
+                        # 最も最後に処理されたノードからパス長を継承する
                         path_lens[inId] = path_lens[endId] + 1
                         next_backends.append(inId)
             backends = next_backends
 
-        # 3. 前方向の重み付きトポロジカルソート
-        # 入力がないノードを候補(ready)として管理
+        # 重み付きトポロジカルソート
         ready = [nodeId for nodeId, data in nodeMap.items() if 0 == data["in_degree"]]
         sortedNodeIds = []
         last = None
         
         while ready:
             # スコア計算: (直前のノードが親であるか, パスの長さ, -Y座標, -X座標)
-            # パス長が大きいものを優先し、同等なら上から下、左から右へ
             best_nid = max(ready, key=lambda nodeId: (
                 1 if last in nodeMap[nodeId]["in_nodes"] else 0,
                 path_lens.get(nodeId, 0), 
@@ -210,15 +205,13 @@ class FlowFile:
             last = best_nid
             ready.remove(best_nid)
             
-            # 順方向の依存関係を解消
             for outId in nodeMap[best_nid]["out_nodes"]:
                 nodeMap[outId]["in_degree"] -= 1
                 if 0 == nodeMap[outId]["in_degree"]:
                     ready.append(outId)
 
-        # ソート済みノードオブジェクトを取得
+        # ソート済みノードリストを返却
         sorted_nodes = [nodeMap[nid]["node"] for nid in sortedNodeIds]
-        
         return sorted_nodes
 
 ######################
