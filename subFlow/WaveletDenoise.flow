@@ -36,34 +36,55 @@
         "0,7,0": 0.2303778133088965
       },
       "connections": [
-        10,
-        11
+        11,
+        1
       ]
     },
     {
       "index": 1,
+      "zOrder": 21,
+      "type": "dwt",
+      "text": "DWT",
+      "x": 40.0,
+      "y": 44.0,
+      "connections": [
+        2,
+        9
+      ]
+    },
+    {
+      "index": 2,
       "zOrder": 9,
       "type": "absolute",
       "text": "絶対値",
       "x": 158.0,
       "y": 107.0,
       "connections": [
-        2
-      ]
-    },
-    {
-      "index": 2,
-      "zOrder": 13,
-      "type": "offset",
-      "text": "加算",
-      "x": 221.0,
-      "y": 169.0,
-      "connections": [
-        4
+        6
       ]
     },
     {
       "index": 3,
+      "zOrder": 7,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 61.0,
+      "y": 168.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": -10.0
+      },
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 4,
       "zOrder": 25,
       "type": "coefficients",
       "text": "係数",
@@ -97,22 +118,33 @@
         "11,0,0": 1.0
       },
       "connections": [
-        7
+        5
       ]
     },
     {
-      "index": 4,
-      "zOrder": 17,
-      "type": "max",
-      "text": "比較大",
-      "x": 282.0,
-      "y": 168.0,
+      "index": 5,
+      "zOrder": 5,
+      "type": "scale",
+      "text": "乗算",
+      "x": 155.0,
+      "y": 167.0,
       "connections": [
         6
       ]
     },
     {
-      "index": 5,
+      "index": 6,
+      "zOrder": 13,
+      "type": "offset",
+      "text": "加算",
+      "x": 221.0,
+      "y": 169.0,
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 7,
       "zOrder": 23,
       "type": "coefficients",
       "text": "係数",
@@ -126,49 +158,18 @@
       "yOrder": 0,
       "coefficients": {},
       "connections": [
-        4
-      ]
-    },
-    {
-      "index": 6,
-      "zOrder": 15,
-      "type": "scale",
-      "text": "乗算",
-      "x": 281.0,
-      "y": 108.0,
-      "connections": [
-        10
-      ]
-    },
-    {
-      "index": 7,
-      "zOrder": 5,
-      "type": "scale",
-      "text": "乗算",
-      "x": 155.0,
-      "y": 167.0,
-      "connections": [
-        2
+        8
       ]
     },
     {
       "index": 8,
-      "zOrder": 7,
-      "type": "coefficients",
-      "text": "係数",
-      "x": 61.0,
+      "zOrder": 17,
+      "type": "max",
+      "text": "比較大",
+      "x": 282.0,
       "y": 168.0,
-      "category": "auxiliary",
-      "planes": [
-        "Plane 0"
-      ],
-      "xOrder": 0,
-      "yOrder": 0,
-      "coefficients": {
-        "0,0,0": -10.0
-      },
       "connections": [
-        7
+        10
       ]
     },
     {
@@ -179,29 +180,28 @@
       "x": 218.0,
       "y": 106.0,
       "connections": [
-        6
+        10
       ]
     },
     {
       "index": 10,
+      "zOrder": 15,
+      "type": "scale",
+      "text": "乗算",
+      "x": 281.0,
+      "y": 108.0,
+      "connections": [
+        11
+      ]
+    },
+    {
+      "index": 11,
       "zOrder": 19,
       "type": "idwt",
       "text": "IDWT",
       "x": 282.0,
       "y": 40.0,
       "connections": []
-    },
-    {
-      "index": 11,
-      "zOrder": 21,
-      "type": "dwt",
-      "text": "DWT",
-      "x": 40.0,
-      "y": 44.0,
-      "connections": [
-        1,
-        9
-      ]
     }
   ],
   "trays": [

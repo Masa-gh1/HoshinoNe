@@ -1,8 +1,19 @@
 {
-  "version": "0.2.20260227",
+  "version": "0.3.20260814",
   "nodes": [
     {
       "index": 0,
+      "zOrder": 5,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 43.0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 1,
       "zOrder": 9,
       "type": "table",
       "text": "表",
@@ -34,39 +45,28 @@
         "0,2,2": 0.0625
       },
       "connections": [
-        1
+        2
       ]
     },
     {
-      "index": 1,
+      "index": 2,
       "zOrder": 3,
       "type": "convolution",
       "text": "畳み込み",
       "x": 135.0,
       "y": 45.0,
       "connections": [
-        2
+        3
       ]
     },
     {
-      "index": 2,
+      "index": 3,
       "zOrder": 7,
       "type": "pass",
       "text": "通点",
       "x": 227.0,
       "y": 40.0,
       "connections": []
-    },
-    {
-      "index": 3,
-      "zOrder": 5,
-      "type": "pass",
-      "text": "通点",
-      "x": 40.0,
-      "y": 43.0,
-      "connections": [
-        1
-      ]
     }
   ],
   "trays": [

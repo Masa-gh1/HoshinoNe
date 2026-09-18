@@ -3,6 +3,17 @@
   "nodes": [
     {
       "index": 0,
+      "zOrder": 11,
+      "type": "lab_converter",
+      "text": "Lab変換",
+      "x": 40.0,
+      "y": 50.0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 1,
       "zOrder": 7,
       "type": "table",
       "text": "表",
@@ -46,11 +57,11 @@
         "2,2,2": 0.0625
       },
       "connections": [
-        1
+        2
       ]
     },
     {
-      "index": 1,
+      "index": 2,
       "zOrder": 5,
       "type": "convolution",
       "text": "畳み込み",
@@ -58,17 +69,6 @@
       "y": 49.0,
       "connections": [
         3
-      ]
-    },
-    {
-      "index": 2,
-      "zOrder": 11,
-      "type": "lab_converter",
-      "text": "Lab変換",
-      "x": 40.0,
-      "y": 50.0,
-      "connections": [
-        1
       ]
     },
     {

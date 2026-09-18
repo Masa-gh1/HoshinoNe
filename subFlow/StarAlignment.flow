@@ -3,6 +3,30 @@
   "nodes": [
     {
       "index": 0,
+      "zOrder": 9,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 40.0,
+      "category": "auxiliary",
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 7,
+      "type": "pass",
+      "text": "通点",
+      "x": 41.0,
+      "y": 104.0,
+      "connections": [
+        2,
+        3
+      ]
+    },
+    {
+      "index": 2,
       "zOrder": 3,
       "type": "shift_detection",
       "text": "ズレ検出",
@@ -26,11 +50,11 @@
       "phaseMaxOffset": 100,
       "templateSearchRange": 150,
       "connections": [
-        1
+        3
       ]
     },
     {
-      "index": 1,
+      "index": 3,
       "zOrder": 5,
       "type": "transform",
       "text": "変形",
@@ -38,30 +62,6 @@
       "y": 104.0,
       "connections": [
         4
-      ]
-    },
-    {
-      "index": 2,
-      "zOrder": 9,
-      "type": "pass",
-      "text": "通点",
-      "x": 40.0,
-      "y": 40.0,
-      "category": "auxiliary",
-      "connections": [
-        0
-      ]
-    },
-    {
-      "index": 3,
-      "zOrder": 7,
-      "type": "pass",
-      "text": "通点",
-      "x": 41.0,
-      "y": 104.0,
-      "connections": [
-        0,
-        1
       ]
     },
     {
