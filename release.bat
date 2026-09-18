@@ -19,10 +19,10 @@ echo Thumbs.db      >> EXCLUDE.lst
 echo EXCLUDE.lst    >> EXCLUDE.lst
 echo .bak           >> EXCLUDE.lst
 xcopy /E /S /EXCLUDE:EXCLUDE.lst .             ..\HoshinoNe_%VERSION_DATE%_src
-xcopy /E /S                      .\dist        ..\HoshinoNe_%VERSION_DATE%
-xcopy /E /S                      .\subFlow     ..\HoshinoNe_%VERSION_DATE%\subFlow
+xcopy /E /S                      .\dist        ..\HoshinoNe_%VERSION_DATE%_windows
+xcopy /E /S                      .\subFlow     ..\HoshinoNe_%VERSION_DATE%_windows\subFlow
 xcopy /E /S                      .\sample\raw  ..\HoshinoNe_%VERSION_DATE%_sample_raw
-xcopy /E /S                      .\sample\fits ..\HoshinoNe_%VERSION_DATE%_sample_ftis
+xcopy /E /S                      .\sample\fits ..\HoshinoNe_%VERSION_DATE%_sample_fits
 
 del EXCLUDE.lst
 pause
