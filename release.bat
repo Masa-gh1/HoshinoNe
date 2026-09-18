@@ -8,6 +8,7 @@ echo .git\          >> EXCLUDE.lst
 echo .vscode\       >> EXCLUDE.lst
 echo .agents\       >> EXCLUDE.lst
 echo .amazonq\      >> EXCLUDE.lst
+echo .continue\     >> EXCLUDE.lst
 echo debug\         >> EXCLUDE.lst
 echo build\         >> EXCLUDE.lst
 echo dist\          >> EXCLUDE.lst
