@@ -13,14 +13,20 @@ For detailed usage, visit [https://www.hoshinone.highwell.jp/](https://www.hoshi
 ## Quick start
 
 ### 1. Clone the repository
+```
 git clone https://github.com/Masa-gh1/HoshinoNe.git
 cd HoshinoNe
+```
 
 ### 2. Install dependencies
+```
 pip install -r requirements.txt
+```
 
 ### 3. Run
+```
 python HoshinoNe.py
+```
 
 ## Development
 
