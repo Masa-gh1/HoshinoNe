@@ -190,7 +190,7 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
         return {
             'type': 'image',
             'mode': 'L',
-            'planes': ['Mask'] * len(self.sourceHeaders['planes']),
+            'planes': ['Mask'] * len(self.headers.sourceHeaders['planes']),
             'display_levels': {'min': 0.0, 'exclusive_upper': 1.0}
         }
 
