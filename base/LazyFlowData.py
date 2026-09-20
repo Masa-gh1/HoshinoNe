@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import time
 import threading
@@ -25,19 +25,17 @@ class LazyFlowData(FlowData):
     """遅延評価FlowData"""
     __slots__ = ('cachePolicy'    ,
                  'sourceFlowDatas',
-                 'sourceHeaders'     ,
                  'headers'        ,
                  'args'           ,
                  'kwargs'         ,
                  '_blockLocks'    ,
                 )
     
-    def __init__(self, headers:dict, sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
-        super().__init__(None)
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+        super().__init__()
         
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowDatas = sourceFlowDatas
-        self.sourceHeaders   = headers
         self.headers         = LazyHeadersDict(self, headers, *args, **kwargs)
         self.args            = args
         self.kwargs          = kwargs
@@ -109,14 +107,14 @@ class LazyFlowData(FlowData):
         """headers 遅延評価"""
         return {}
 
-class LazyHeadersDict(UserDict):
+class LazyHeadersDict(UserDict[str,Any]):
     """遅延評価対応のheaders辞書"""
     __slots__ = ('lazyFlowData' ,
                  'sourceHeaders',
                  'args'         ,
                  'kwargs'       ,
                 )
-    def __init__(self, lazyFlowData:LazyFlowData, headers:dict, *args, **kwargs):
+    def __init__(self, lazyFlowData:LazyFlowData, headers:dict[str,Any], *args, **kwargs):
         super().__init__()
         
         self.lazyFlowData = lazyFlowData
@@ -130,23 +128,20 @@ class LazyHeadersDict(UserDict):
         for key in self.lazyFlowData.getLazyHeaderkeys():
             self.data[key]= "<LazyHeaderOperation>"
     
-    def __getitem__(self, key:str):
+    def __getitem__(self, key:str) -> Any:
         if not key in self.data:
             return None
         else:
             value = self.data[key]
-            if isinstance(value, str) and "<LazyHeaderOperation>"==value:
+            if isinstance(value, str) and "<LazyHeaderOperation>" == value:
                 lazyResult = self.lazyFlowData.headerOperation(self.lazyFlowData, key, *self.args, **self.kwargs)
                 self.data.update(lazyResult)
                 value = self.data[key]
-            elif isinstance(value, str) and "<sourceHeaders>"==value:
+            elif isinstance(value, str) and "<sourceHeaders>" == value:
                 value = self.sourceHeaders[key]
             return value
     
     def copy(self) -> LazyHeadersDict:
-        o = super().copy()
-        o.lazyFlowData  = self.lazyFlowData
-        o.sourceHeaders = self.sourceHeaders
-        o.args          = self.args
-        o.kwargs        = self.kwargs
+        o = LazyHeadersDict(self.lazyFlowData, self.sourceHeaders, *self.args, **self.kwargs)
+        o.data.update(self.data)
         return o

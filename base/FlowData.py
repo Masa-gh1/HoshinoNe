@@ -8,7 +8,7 @@ All rights reserved.
 '''
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Iterator, Any
 
 import uuid
 import threading
@@ -38,7 +38,7 @@ class FlowData:
                  '_existingBlocks'  ,
                  '_lock'            ,
                 )
-    def __init__(self, headers={}):
+    def __init__(self, headers:dict[str,Any]={}):
         self.instanceId = str(uuid.uuid4())
         
         self.cachePolicy = CachePolicy.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
@@ -492,9 +492,9 @@ class FlowData:
                 # 目標ビンエッジを作成
                 if log_scale:
                     bin_edges = np.logspace(np.log10(0.1), np.log10(1.0), bins + 1)
-                    scale = 0.9 / (range_max - range_min)
-                    offset = -range_min + 0.1 / scale
-                    bin_edges = bin_edges / scale - offset
+                    scale = (range_max - range_min) / 0.9
+                    offset = -range_min + 0.1 * scale
+                    bin_edges = bin_edges * scale - offset
                 else:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 
