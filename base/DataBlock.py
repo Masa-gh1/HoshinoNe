@@ -10,43 +10,28 @@ All rights reserved.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from abc import ABC as AbstractBaseClass, abstractmethod
+
 from .Constants import CachePolicy
 
 if TYPE_CHECKING:
     import numpy as np
-    import numpy.typing as npt
 
-class DataBlock:
+class AbstractDataBlock(AbstractBaseClass):
     """データブロック配列のラッパークラス"""
-    __slots__ = ('blockId'    ,
+    __slots__ = ('id'         ,
+                 'blockId'    ,
                  'cachePolicy',
                  '_data'      ,
-                 'planeIndex' ,
-                 'x'          ,
-                 'y'          ,
                 )
-
-    def __init__(self, data:np.ndarray|list|str, planeIndex:int, x:int, y:int):
-        """
-        data に str を渡した場合、id をして扱われキャッシュ機構用に用いられます。
-        """
-        if isinstance(data, str):
-            instanceId = data
-            self.blockId = f"{instanceId}:{planeIndex}:{x}:{y}" # キャッシュ用の ID 、キャッシュする場合に設定する
-            self._data = None
-        else:
-            self.blockId = None
-            self._data = data # 保存するデータ
-        
-        self.cachePolicy = CachePolicy.CALCULABLE  # デフォルト
-        
-        # 付属情報(DataBlockでは使用しない)
-        self.planeIndex = planeIndex
-        self.x = x
-        self.y = y
+    
+    @abstractmethod
+    def createId(self) -> str:
+        """IDを生成"""
+        pass
     
     @property
-    def data(self) -> npt.NDArray:
+    def data(self) -> np.ndarray|list:
         """遅延ロードでデータを取得"""
         from .CacheManager import CacheManager
 
@@ -60,17 +45,71 @@ class DataBlock:
     @data.setter
     def data(self, data:np.ndarray):
         """データを設定してキャッシュに保存"""
-        from .CacheManager import CacheManager
-        
         self._data = data
-        if not self.blockId is None:
-            CacheManager.set(self.blockId, data, self.cachePolicy)
+        if self.blockId:
+            from .CacheManager import CacheManager
+            self._data = self._normalizeData(self._data)
+            CacheManager.set(self.blockId, self._data, self.cachePolicy)
+
+    def setID(self, id:str):
+        """IDを設定(キャッシュ有効化)"""
+        self.id = id
+        self.blockId = self.createId() # キャッシュ用の ID
+        if not self._data is None:
+            from .CacheManager import CacheManager
+            self._data = self._normalizeData(self._data)
+            CacheManager.set(self.blockId, self._data, self.cachePolicy)
     
     def isValid(self) -> bool:
         """データが有効かどうかを確認"""
         from .CacheManager import CacheManager
         
         return CacheManager.isCached(self.blockId) if self.blockId else False
+    
+    def _normalizeData(self, data:np.ndarray|list) -> np.ndarray:
+        """データを正規化"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+        
+        # numpy配列として正規化
+        if isinstance(data, np.ndarray):
+            if np.iscomplexobj(data):
+                # 複素数
+                if data.dtype != nh.BDCOMPLEX:
+                    ret = data.astype(nh.BDCOMPLEX)
+                else:
+                    ret = data
+            else:
+                # 実数
+                if data.dtype != nh.BDTYPE:
+                    ret = data.astype(nh.BDTYPE)
+                else:
+                    ret = data
+        elif isinstance(data, list):
+            if np.iscomplexobj(data):
+                # 複素数
+                ret = np.array(data, dtype=nh.BDCOMPLEX)
+            else:
+                # 実数
+                ret = nh.array(data)
+        else:
+            assert False, "Unsupported data type: " + str(type(data))
+        
+        return ret
+
+class DataBlock2D(AbstractDataBlock):
+    __slots__ = ('blockId'    ,
+                 'cachePolicy',
+                 '_data'      ,
+                 'id'         ,
+                 'planeIndex' ,
+                 'x'          ,
+                 'y'          ,
+                )
+    
+    def createId(self) -> str:
+        """IDを生成"""
+        return f"{self.id}:{self.planeIndex}:{self.x}:{self.y}" # キャッシュ用の ID
     
     def getWidth(self) -> int:
         """ブロックの幅を取得"""
@@ -79,3 +118,49 @@ class DataBlock:
     def getHeight(self) -> int:
         """ブロックの高さを取得"""
         return self.data.shape[0]
+
+class DataBlock(DataBlock2D):
+    """新規用のDataBlockクラス(コンストラクタ オーバーロード)"""
+    __slots__ = (
+                )
+    
+    def __init__(self, data:np.ndarray|list, planeIndex:int, x:int, y:int):
+        """
+        Args:
+            data: データ配列
+            planeIndex: プレーンインデックス
+            x: x 座標
+            y: y 座標
+        """
+        self.blockId = None
+        self._data = data # データ を保存
+        self.cachePolicy = CachePolicy.CALCULABLE  # デフォルト
+        
+        # 付属情報(DataBlockでは使用しない)
+        self.id = None
+        self.planeIndex = planeIndex
+        self.x = x
+        self.y = y
+
+class _DataBlock(DataBlock2D):
+    """遅延ロード用のDataBlockクラス(コンストラクタ オーバーロード)"""
+    __slots__ = (
+                )
+    
+    def __init__(self, id:str, planeIndex:int, x:int, y:int):
+        """
+        Args:
+            id: キャッシュ用 ID
+            planeIndex: プレーンインデックス
+            x: x 座標
+            y: y 座標
+        """
+        # 付属情報(DataBlockでは使用しない)
+        self.id = id
+        self.planeIndex = planeIndex
+        self.x = x
+        self.y = y
+        
+        self.blockId = self.createId() # キャッシュ用の ID
+        self._data = None
+        self.cachePolicy = CachePolicy.CALCULABLE  # デフォルト

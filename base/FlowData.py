@@ -146,7 +146,8 @@ class FlowData:
             return DataBlock(nh.nans((h, w)), planeIndex, x, y)
         
         # 遅延ロード用のDataBlockを作成
-        block = DataBlock(self.instanceId, planeIndex, x, y)
+        from base.DataBlock import _DataBlock
+        block = _DataBlock(self.instanceId, planeIndex, x, y)
         block.cachePolicy = self.cachePolicy
         return block
     
@@ -183,36 +184,9 @@ class FlowData:
     
     def setBlock(self, dataBlock:DataBlock):
         """ブロックデータを保存"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-        
-        # numpy配列として正規化
-        data = dataBlock.data
-        if isinstance(data, list):
-            if np.iscomplexobj(data):
-                # 複素数
-                data = np.array(data, dtype=nh.BDCOMPLEX)
-            else:
-                # 実数
-                data = nh.array(data)
-        else:
-            if np.iscomplexobj(data):
-                # 複素数
-                if data.dtype != nh.BDCOMPLEX:
-                    data = data.astype(nh.BDCOMPLEX)
-                else:
-                    data = data
-            else:
-                # 実数
-                if data.dtype != nh.BDTYPE:
-                    data = data.astype(nh.BDTYPE)
-                else:
-                    data = data
-        
-        # DataBlock をこのFlowData用に再設定
-        dataBlock.__init__( self.instanceId, dataBlock.planeIndex, dataBlock.x, dataBlock.y)
+        # DataBlock をこの FlowData 用に設定
         dataBlock.cachePolicy = self.cachePolicy
-        dataBlock.data = data
+        dataBlock.setID(self.instanceId)
     
         # 統計情報更新
         self._updateStatistics(dataBlock)
