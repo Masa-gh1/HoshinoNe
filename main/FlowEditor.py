@@ -7,6 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from typing import cast, Literal
+
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import sys
@@ -36,7 +38,7 @@ class FlowEditor:
         self.connectionLines = [] # (fromNode, toNode, line)
         self.flowControl     = FlowControl()
 
-        self.applicationHome = None
+        self.applicationHome = "."
         self.currentFlowPath = None
         self.lastDirectory   = None
         
@@ -94,10 +96,10 @@ class FlowEditor:
                 self.contextMenu.add_command(label=label, accelerator=tooltip, columnbreak=columnbreak)
                 columnbreak = False
                 row += 1
-            elif '---' in nodeType:
+            elif "---" in nodeType:
                 self.contextMenu.add_separator()
                 row += 1
-            elif '***' in nodeType:
+            elif "***" in nodeType:
                 if 0 == col:
                     self.contextMenu.add_separator()
                     self.contextMenu.add_separator()
@@ -530,14 +532,20 @@ class FlowEditor:
             node.setOutputFilePath(outputPath)
             node.view.onNodeConfigChanged(node)
     
-    def openFilesSelector(self, *args, **kwargs):
-        return self._openFileSelector(filedialog.askopenfilenames, *args, **kwargs)
+    def openFilesSelector(self, *args, **kwargs) -> tuple[str,...]|Literal['']:
+        ret =  self._openFileSelector(filedialog.askopenfilenames, *args, **kwargs)
+        assert isinstance(ret, tuple) or ""==ret
+        return cast(tuple[str, ...] | Literal[''], ret)
     
-    def openFileSelector(self, *args, **kwargs):
-        return self._openFileSelector(filedialog.askopenfilename, *args, **kwargs)
-    
-    def openOutputFileSelector(self, *args, **kwargs):
-        return self._openFileSelector(filedialog.asksaveasfilename, *args, **kwargs)
+    def openFileSelector(self, *args, **kwargs) -> str:
+        ret = self._openFileSelector(filedialog.askopenfilename, *args, **kwargs)
+        assert isinstance(ret, str)
+        return ret
+
+    def openOutputFileSelector(self, *args, **kwargs) -> str:
+        ret = self._openFileSelector(filedialog.asksaveasfilename, *args, **kwargs)
+        assert isinstance(ret, str)
+        return ret
     
     def _openFileSelector(self, func, *args, **kwargs):
         newKwargs = kwargs.copy()
@@ -651,7 +659,7 @@ class FlowEditor:
             Debug.log(type(self).__name__, f"保存に失敗しました", e)
             messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
-    def loadFlow(self, targetX=0, targetY=0, appendMode=False, filePath=None, initialdir=None):
+    def loadFlow(self, targetX=0.0, targetY=0.0, appendMode=False, filePath=None, initialdir=None):
         if not filePath:
             filePath = self.openFileSelector(
                 title="フローをインポート" if appendMode else "フローを読み込む",
@@ -891,7 +899,7 @@ class FlowEditor:
                 del self.activeProgressBars[nodeId]
         
         from utils.Debug import Debug
-        if Debug.isTestMode() and current and int(current)==(total*9)//10:
+        if Debug.isTestMode() and 0==hash((nodeId, nodeName, message, current, total))%100:
             import gc
             objectCount = len(gc.get_objects())
             self.maxObjectCount = max(self.maxObjectCount, objectCount)

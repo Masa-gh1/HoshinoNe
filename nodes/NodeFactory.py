@@ -95,7 +95,7 @@ class NodeFactory:
     nodeList = None
     
     @classmethod
-    def createNode(cls, nodeType:str, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs) -> FlowNode:
+    def createNode(cls, nodeType:str, canvas:tk.Canvas, editor:FlowEditor, x:float, y:float, **kwargs) -> FlowNode:
         """
         ノード作成
 
