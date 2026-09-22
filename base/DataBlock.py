@@ -33,9 +33,8 @@ class AbstractDataBlock(AbstractBaseClass):
     @property
     def data(self) -> np.ndarray|list:
         """遅延ロードでデータを取得"""
-        from .CacheManager import CacheManager
-
         if self._data is None:
+            from .CacheManager import CacheManager
             assert not self.blockId is None, "blockId is None"
             data = CacheManager.get(self.blockId)
             self._data = data
