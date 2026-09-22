@@ -26,7 +26,9 @@ if TYPE_CHECKING:
     import numpy as np
 
 # キャッシュページの最大数
-MAX_BLOCK_CACHE_PAGE = MAX_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
+MAX_CACHE_PAGES = MAX_CACHE_SIZE // BLOCK_CACHE_PAGE_SIZE
+
+# ブロックスケール指数上限
 END_SCALE = (BLOCK_CACHE_PAGE_SIZE-1).bit_length() + 1
 
 class LockWrapper():
@@ -401,7 +403,7 @@ class CacheManager:
                         cls._memCachedIndex[cacheKey] = (pos, meta)
                         if CachePolicy.PERSISTENT != cachePolicy:
                             cls._memCacheRemovable[cacheKey] = time.perf_counter_ns()
-                        if MAX_BLOCK_CACHE_PAGE <= cls._memCachePageCnt and 0 == cls._save1Count % (BLOCK_CACHE_PAGE_SIZE//8):
+                        if MAX_CACHE_PAGES <= cls._memCachePageCnt and 0 == cls._save1Count % (BLOCK_CACHE_PAGE_SIZE//8):
                             # 空きが1ページ以下に成ったのでストレージキャッシュを開始
                             CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
                     time.sleep(0) # 連続的にロックするのを抑制する
@@ -594,7 +596,7 @@ class CacheManager:
     
     # _memCacheBitmap 用ビット定義  [0]=11....11, [0]=0101....0101, [0]=00010001....00010001
     _scaleBit = [0 for s in range(END_SCALE)]
-    for i in range(MAX_BLOCK_CACHE_PAGE):
+    for i in range(MAX_CACHE_PAGES):
         _scaleBit[END_SCALE-1] |= 1 << (BLOCK_CACHE_PAGE_SIZE * i)
     for i in range(END_SCALE-1, 0, -1):
         _scaleBit[i-1] = _scaleBit[i] | _scaleBit[i] << (BLOCK_CACHE_PAGE_SIZE >> (END_SCALE-i))
