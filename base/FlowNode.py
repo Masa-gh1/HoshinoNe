@@ -49,7 +49,7 @@ class FlowNode(AbstractBaseClass):
     ioType    = '0:0'
     outputCat = _OUT_CAT_PRI
 
-    def __init__(self, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
+    def __init__(self, canvas:tk.Canvas, editor:FlowEditor, x:float, y:float, **kwargs):
         self.view = FlowNodeView( self.majorType, self.ioType, self.name, canvas, editor, x, y, **kwargs)
 
         self.outputNodes = [] # 接続先ノードの一覧
@@ -212,7 +212,7 @@ class FlowNode(AbstractBaseClass):
         pass
     
 class FlowNodeView():
-    def __init__(self, majorType:str, ioType:str, text:str, canvas:tk.Canvas, editor:FlowEditor, x:int, y:int, **kwargs):
+    def __init__(self, majorType:str, ioType:str, text:str, canvas:tk.Canvas, editor:FlowEditor, x:float, y:float, **kwargs):
         self.majorType = majorType
         self.ioType    = ioType
         self.text      = text
@@ -313,7 +313,7 @@ class FlowNodeView():
         }
         return colorMap.get(self.majorType, 'lightgreen')
     
-    def getShapeBounds(self) -> tuple[int, int, int, int]:
+    def getShapeBounds(self) -> tuple[float, float, float, float]:
         """形状の境界を返す (ハイライト用)"""
         xs = [self.x + dx for dx, dy in self.shapePoints]
         ys = [self.y + dy for dx, dy in self.shapePoints]

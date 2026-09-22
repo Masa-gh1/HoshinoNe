@@ -89,7 +89,7 @@ class FlowEditor:
         columnbreak = False
         col=0
         row=0
-        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [('***', None, None)]:
+        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [("***", "", "")]:
             if   not nodeType:
                 self.contextMenu.add_command(label=label, accelerator=tooltip, columnbreak=columnbreak)
                 columnbreak = False
