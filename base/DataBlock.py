@@ -31,7 +31,7 @@ class AbstractDataBlock(AbstractBaseClass):
         pass
     
     @property
-    def data(self) -> np.ndarray|list:
+    def data(self) -> np.ndarray:
         """遅延ロードでデータを取得"""
         if self._data is None:
             from .CacheManager import CacheManager
@@ -39,6 +39,8 @@ class AbstractDataBlock(AbstractBaseClass):
             data = CacheManager.get(self.blockId)
             self._data = data
             assert not self._data is None, "data is None"
+        if isinstance(self._data, list):
+            self._data = self._normalizeData(self._data)
         return self._data
     
     @data.setter
@@ -141,7 +143,7 @@ class DataBlock(DataBlock2D):
         self.x = x
         self.y = y
 
-class _DataBlock(DataBlock2D):
+class _DataBlock(DataBlock):
     """遅延ロード用のDataBlockクラス(コンストラクタ オーバーロード)"""
     __slots__ = (
                 )
