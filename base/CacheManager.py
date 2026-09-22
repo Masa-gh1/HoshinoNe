@@ -403,8 +403,10 @@ class CacheManager:
                         cls._memCachedIndex[cacheKey] = (pos, meta)
                         if CachePolicy.PERSISTENT != cachePolicy:
                             cls._memCacheRemovable[cacheKey] = time.perf_counter_ns()
-                        if MAX_CACHE_PAGES <= cls._memCachePageCnt and 0 == cls._save1Count % (BLOCK_CACHE_PAGE_SIZE//8):
-                            # 空きが1ページ以下に成ったのでストレージキャッシュを開始
+                        if(   (BLOCK_CACHE_PAGE_SIZE*MAX_CACHE_PAGES*95//100) < cls._memCacheBitmap.bit_count()
+                          and 0 == cls._save1Count % (BLOCK_CACHE_PAGE_SIZE//8)
+                          ):
+                            # 空きが5%以下に成ったのでストレージキャッシュを開始
                             CoalescingExecutor.submit(cls._lazySave2, cls._lazySave2) # ストレージキャッシュへの遅延書き込み
                     time.sleep(0) # 連続的にロックするのを抑制する
     
