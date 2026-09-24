@@ -10,11 +10,14 @@ All rights reserved.
 '''
 
 from types import SimpleNamespace
-import os
+
+import hashlib
+
 import tkinter as tk
 from tkinter import messagebox
 import numpy as np
 
+from config import CATALOG_PATH
 from base.FlowNode_CONST import *
 from base import FlowNode
 from base import FlowData
@@ -32,7 +35,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
     # ノード名
     name      = '星抽出'
     # 入出力タイプ
-    ioType    = _IO_TYPE_N1
+    ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_AUX
 
     def __init__(self, canvas, editor, x, y, **kwargs):
@@ -60,7 +63,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.star.ransac.seed         = 2725                  # RANSAC乱数シード
 
         # カタログ照合パラメータ
-        self.catalogPath       = "./sample/I_311_HIS2.tsv"    # カタログファイルパス
+        self.catalogPath       = CATALOG_PATH                 # カタログファイルパス
         self.matchRadius       = 0.5                          # カタログ照合許容半径 (deg)
         self.catalogMagLimit   = 8.0                          # カタログ等級上限 (mag)
         self.estimatedFovDeg   = 10.0                         # 推定画角 (deg)
@@ -98,7 +101,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         nodeData["starSampleRadius"]    = self.star.ransac.sampleRadius
         nodeData["ransacIterations"]    = self.star.ransac.iterations
         nodeData["ransacSeed"]          = self.star.ransac.seed
-        nodeData["catalogPath"]         = self.catalogPath
         nodeData["matchRadius"]         = self.matchRadius
         nodeData["catalogMagLimit"]     = self.catalogMagLimit
         nodeData["estimatedFovDeg"]     = self.estimatedFovDeg
@@ -136,8 +138,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             self.star.ransac.iterations = nodeData["ransacIterations"]
         if "ransacSeed" in nodeData:
             self.star.ransac.seed = nodeData["ransacSeed"]
-        if "catalogPath" in nodeData:
-            self.catalogPath = nodeData["catalogPath"]
         if "matchRadius" in nodeData:
             self.matchRadius = nodeData["matchRadius"]
         if "catalogMagLimit" in nodeData:
@@ -151,29 +151,20 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         if "useApproxCoords" in nodeData:
             self.useApproxCoords = nodeData["useApproxCoords"]
 
-    def createSettingWindow(self):
-        """設定ダイアログを作成"""
-        return StarExtractionSettingsDialog(self.view.editor.root, self)
-
     def preprocessStreams(self, inputStreams):
-        """
-        入力ストリームの前処理
-        image 型を主ストリーム、table 型（カタログ）を補助ストリームとして分離
-        """
-        imageStreams   = []
-        catalogStreams = []
-
+        """入力データの前処理：primary/auxiliaryで分類"""
+        primaryStreams = []
+        auxiliaryStreams = []
+        
         for stream in inputStreams:
-            if not stream or not stream[0]:
-                continue
-            dataType = stream[0].headers.get('type', 'image')
-            if 'table' == dataType:
-                catalogStreams.append(stream)
+            category = stream[0].headers.get('category', _OUT_CAT_PRI)
+            if _OUT_CAT_AUX == category:
+                auxiliaryStreams.append(stream)
             else:
-                imageStreams.append(stream)
+                primaryStreams.append(stream)
 
-        self._catalogStream = catalogStreams[0] if 0 < len(catalogStreams) else None
-        return imageStreams
+        self._catalogStream = auxiliaryStreams[0] if 0 < len(auxiliaryStreams) else None
+        return primaryStreams
 
     def process(self, context=None):
         """星抽出処理のメイン実行"""
@@ -184,21 +175,22 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         for node in self.inputNodes:
             inputStreams.append(node.flowDatas)
 
+        # primary/auxiliaryで分類
         primaryStreams = self.preprocessStreams(inputStreams)
         if 0 == len(primaryStreams) or not primaryStreams[0]:
             self.flowDatas = []
             return
 
-        inputDatas = primaryStreams[0]
+        inputStream = primaryStreams[0]
 
         # カタログデータの準備
         catalogData = self._getCatalogData()
 
         # 各画像から星を抽出し、カタログ照合
         outputFlowDatas = []
-        totalImages     = len(inputDatas)
+        totalImages     = len(inputStream)
 
-        for i, flowData in enumerate(inputDatas):
+        for i, flowData in enumerate(inputStream):
             self.reportProgress(context, f"画像 {i + 1}/{totalImages} 処理中", i, totalImages)
             
             # 画像プレーンを numpy 配列として取得
@@ -455,7 +447,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     if minDistDeg <= self.matchRadius:
                         catRow = candidateCatalog[minIdx]
                         matchedRows.append({
-                            'hip_id'     : float(catRow[0]),
+                            'hip'        : float(catRow[0]),
                             'x'          : float(sx),
                             'y'          : float(sy),
                             'brightness' : float(sbright),
@@ -544,7 +536,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                         if minDistPx <= 5.0: # 5 px 以内をインライアとして確定
                             catRow = candidateCatalog[minIdx]
                             matchedRows.append({
-                                'hip_id'     : float(catRow[0]),
+                                'hip'        : float(catRow[0]),
                                 'x'          : float(s[0]),
                                 'y'          : float(s[1]),
                                 'brightness' : float(s[2]),
@@ -564,11 +556,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
         # 初期照合または十分なマッチが得られなかった場合
         if len(matchedStars) < 3:
-            # 検出星の上位星をそのままリスト化し、カタログ未照合星 (hip_id=NaN) として出力
+            # 検出星の上位星をそのままリスト化し、カタログ未照合星 (hip=NaN) として出力
             matchedStars = []
             for i, (sx, sy, sbright, _) in enumerate(selectedStars):
                 matchedStars.append({
-                    'hip_id'     : float('nan'),
+                    'hip'        : float('nan'),
                     'x'          : float(sx),
                     'y'          : float(sy),
                     'brightness' : float(sbright),
@@ -589,13 +581,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         """星リストから Table 型 FlowData を作成"""
         from config import BLOCK_SIZE
 
-        columns = ['hip_id', 'x', 'y', 'brightness', 'catalog_ra', 'catalog_dec']
+        columns = ['hip', 'x', 'y', 'brightness', 'catalog_ra', 'catalog_dec']
         lines   = [f"star_{i}" for i in range(len(matchedStars))]
 
         tableRows = []
         for star in matchedStars:
             row = [
-                star['hip_id'],
+                star['hip'],
                 star['x'],
                 star['y'],
                 star['brightness'],
@@ -673,23 +665,49 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             return np.zeros((height, width), dtype=np.uint8)
 
         return image.astype(np.uint8)
-
+    
+    def createSettingWindow(self):
+        """設定ダイアログを作成"""
+        return StarExtractionSettingsDialog(self.view.editor.root, self)
+    
+    def getConfigHash(self):
+        config =(f"{self.minorType}_"
+                 f"{self._outputCat}_"
+                 f"{self.usePreviousOffset}_"
+                 f"{self.alignmentPlane}_"
+                 f"{self.saturationThreshold}_"
+                 f"{self.star.threshold}_"
+                 f"{self.star.useSaturationMask}_"
+                 f"{self.star.minDiameter}_"
+                 f"{self.star.maxDiameter}_"
+                 f"{self.star.maxAspectRatio}_"
+                 f"{self.star.grid.rows}_"
+                 f"{self.star.grid.cols}_"
+                 f"{self.star.grid.starsPerGrid}_"
+                 f"{self.star.ransac.sampleRadius}_"
+                 f"{self.star.ransac.iterations}_"
+                 f"{self.star.ransac.seed}_"
+                 f"{self.catalogPath}_"
+                 f"{self.matchRadius}_"
+                 f"{self.catalogMagLimit}_"
+                 f"{self.estimatedFovDeg}_"
+                 f"{self.approxRa}_"
+                 f"{self.approxDec}_"
+                 f"{self.useApproxCoords}_"
+                )
+        return hashlib.md5(config.encode()).hexdigest()
 
 class StarExtractionSettingsDialog(tk.Toplevel):
     """StarExtractionNode 用設定ダイアログ"""
 
-    def __init__(self, parent, node: StarExtractionNode):
+    def __init__(self, parent, node:StarExtractionNode):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.name} 設定")
-        self.geometry("540x680")
-        self.resizable(True, True)
-
-        self.transient(parent)
-        self.grab_set()
-
+        self.geometry("450x700")
+        
         self._createWidgets()
-
+    
     def _createWidgets(self):
         """UI ウィジェットを生成"""
         mainFrame = tk.Frame(self, padx=10, pady=10)
@@ -721,15 +739,6 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.thresholdEntry.insert(0, str(self.node.star.threshold))
         self.thresholdEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(thrFrame, text="% (上位%の明るい星を選択)").pack(side=tk.LEFT)
-
-        # 飽和閾値
-        satFrame = tk.Frame(mainFrame)
-        satFrame.pack(fill=tk.X, pady=2)
-        tk.Label(satFrame, text="  飽和閾値:").pack(side=tk.LEFT)
-        self.satEntry = tk.Entry(satFrame, width=5)
-        self.satEntry.insert(0, str(self.node.saturationThreshold))
-        self.satEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(satFrame, text="% (飽和画素判定)").pack(side=tk.LEFT)
 
         # 飽和マスク
         maskFrame = tk.Frame(mainFrame)
@@ -775,16 +784,35 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.starsPerGridEntry.insert(0, str(self.node.star.grid.starsPerGrid))
         self.starsPerGridEntry.pack(side=tk.LEFT, padx=2)
 
+        # 星サンプル半径
+        starDistFrame = tk.Frame(mainFrame)
+        starDistFrame.pack(fill=tk.X, pady=2)
+        tk.Label(starDistFrame, text="    星サンプル半径:").pack(side=tk.LEFT)
+        self.starDistEntry = tk.Entry(starDistFrame, width=5)
+        self.starDistEntry.insert(0, str(self.node.star.ransac.sampleRadius))
+        self.starDistEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(starDistFrame, text="px (統計処理用サンプル収集範囲)").pack(side=tk.LEFT)
+        
+        # RANSAC試行回数
+        ransacFrame = tk.Frame(mainFrame)
+        ransacFrame.pack(fill=tk.X, pady=2)
+        tk.Label(ransacFrame, text="    RANSAC試行回数:").pack(side=tk.LEFT)
+        self.ransacEntry = tk.Entry(ransacFrame, width=5)
+        self.ransacEntry.insert(0, str(self.node.star.ransac.iterations))
+        self.ransacEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(ransacFrame, text="回 (外れ値耐性用繰り返し回数)").pack(side=tk.LEFT)
+        
+        # RANSAC乱数シード
+        seedFrame = tk.Frame(mainFrame)
+        seedFrame.pack(fill=tk.X, pady=2)
+        tk.Label(seedFrame, text="    RANSAC乱数シード:").pack(side=tk.LEFT)
+        self.ransacSeedEntry = tk.Entry(seedFrame, width=5)
+        self.ransacSeedEntry.insert(0, str(self.node.star.ransac.seed))
+        self.ransacSeedEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(seedFrame, text="(1以上、結果が悪い場合は変更)").pack(side=tk.LEFT)
+        
         # カタログ照合セクション
         tk.Label(mainFrame, text="■ カタログ照合パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
-
-        # カタログパス
-        catFrame = tk.Frame(mainFrame)
-        catFrame.pack(fill=tk.X, pady=2)
-        tk.Label(catFrame, text="  カタログファイル:").pack(side=tk.LEFT)
-        self.catPathEntry = tk.Entry(catFrame, width=28)
-        self.catPathEntry.insert(0, str(self.node.catalogPath))
-        self.catPathEntry.pack(side=tk.LEFT, padx=5)
 
         # 許容半径
         radFrame = tk.Frame(mainFrame)
@@ -825,21 +853,22 @@ class StarExtractionSettingsDialog(tk.Toplevel):
     def onApply(self):
         """適用ボタンクリックハンドラ"""
         try:
-            self.node.usePreviousOffset   = self.usePrevOffsetVar.get()
-            self.node.alignmentPlane      = max(0, int(self.planeEntry.get()))
-            self.node.star.threshold      = max(1, min(99, int(self.thresholdEntry.get())))
-            self.node.saturationThreshold = max(1, min(100, int(self.satEntry.get())))
-            self.node.star.useSaturationMask = self.useSatMaskVar.get()
-            self.node.star.minDiameter    = max(1, int(self.minDiaEntry.get()))
-            self.node.star.maxDiameter    = max(self.node.star.minDiameter, int(self.maxDiaEntry.get()))
-            self.node.star.maxAspectRatio = max(1.0, float(self.aspectRatioEntry.get()))
-            self.node.star.grid.rows      = max(1, int(self.gridRowsEntry.get()))
-            self.node.star.grid.cols      = max(1, int(self.gridColsEntry.get()))
-            self.node.star.grid.starsPerGrid = max(1, int(self.starsPerGridEntry.get()))
-            self.node.catalogPath         = self.catPathEntry.get().strip()
-            self.node.matchRadius         = max(0.001, float(self.matchRadEntry.get()))
-            self.node.catalogMagLimit     = float(self.magLimitEntry.get())
-            self.node.estimatedFovDeg     = max(0.01, float(self.fovEntry.get()))
+            self.node.usePreviousOffset        = self.usePrevOffsetVar.get()
+            self.node.alignmentPlane           = max(0, int(self.planeEntry.get()))
+            self.node.star.threshold           = max(1, min(99, int(self.thresholdEntry.get())))
+            self.node.star.useSaturationMask   = self.useSatMaskVar.get()
+            self.node.star.minDiameter         = max(1, int(self.minDiaEntry.get()))
+            self.node.star.maxDiameter         = max(self.node.star.minDiameter, int(self.maxDiaEntry.get()))
+            self.node.star.maxAspectRatio      = max(1.0, float(self.aspectRatioEntry.get()))
+            self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
+            self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
+            self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
+            self.node.star.ransac.sampleRadius = max(10, int(self.starDistEntry.get()))
+            self.node.star.ransac.iterations   = max(10, min(1000, int(self.ransacEntry.get())))
+            self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
+            self.node.matchRadius              = max(0.001, float(self.matchRadEntry.get()))
+            self.node.catalogMagLimit          = float(self.magLimitEntry.get())
+            self.node.estimatedFovDeg          = max(0.01, float(self.fovEntry.get()))
 
             self.node.view.onNodeConfigChanged(self.node)
         except ValueError:

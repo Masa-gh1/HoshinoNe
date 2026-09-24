@@ -6,11 +6,14 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+
 from types import SimpleNamespace
+
 import hashlib
 import datetime
+
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 from base.FlowNode_CONST import *
 from base import FlowNode
@@ -42,31 +45,31 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         # 設定パラメータ
         # 基準画像選択（auxiliaryでマークされた画像を使用）
-        self.usePreviousOffset = True  # 前の画像のズレを考慮する
+        self.usePreviousOffset        = True              # 前の画像のズレを考慮する
         # オフセット計算
-        self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B ...）
-        self.saturationThreshold = 95  # 飽和閾値（%）
+        self.alignmentPlane           = 1                 # 位置合わせ用プレーン（0:R, 1:G, 2:B ...）
+        self.saturationThreshold      = 95                # 飽和閾値（%）
         # オフセット計算 優先順位1: 星点検出法
-        self.star = SimpleNamespace()
-        self.star.threshold = 95  # 星検出閾値（パーセンタイル）
-        self.star.useSaturationMask = False  # 飽和マスクを使用する
-        self.star.minDiameter = 2  # 星最小直径（ピクセル）
-        self.star.maxDiameter = 16  # 星最大直径（ピクセル）
-        self.star.maxAspectRatio = 2.0  # 星の最大アスペクト比（形状フィルタ）
-        self.star.grid = SimpleNamespace()
-        self.star.grid.rows = 3  # グリッド行数
-        self.star.grid.cols = 3  # グリッド列数
-        self.star.grid.starsPerGrid = 8  # グリッド当たりの選択星数
-        self.star.ransac = SimpleNamespace()
-        self.star.ransac.sampleRadius = 100  # RANSAC対応点サンプル半径（ピクセル）
-        self.star.ransac.iterations = 100  # RANSAC試行回数
-        self.star.ransac.seed = 2725  # RANSAC乱数シード（１以上）
+        self.star                     = SimpleNamespace()
+        self.star.threshold           = 95                # 星検出閾値（パーセンタイル）
+        self.star.useSaturationMask   = False             # 飽和マスクを使用する
+        self.star.minDiameter         = 2                 # 星最小直径（ピクセル）
+        self.star.maxDiameter         = 16                # 星最大直径（ピクセル）
+        self.star.maxAspectRatio      = 2.0               # 星の最大アスペクト比（形状フィルタ）
+        self.star.grid                = SimpleNamespace()
+        self.star.grid.rows           = 3                 # グリッド行数
+        self.star.grid.cols           = 3                 # グリッド列数
+        self.star.grid.starsPerGrid   = 8                 # グリッド当たりの選択星数
+        self.star.ransac              = SimpleNamespace()
+        self.star.ransac.sampleRadius = 100               # RANSAC対応点サンプル半径（ピクセル）
+        self.star.ransac.iterations   = 100               # RANSAC試行回数
+        self.star.ransac.seed         = 2725              # RANSAC乱数シード（１以上）
         # オフセット計算 優先順位2: 位相相関法
-        self.phase = SimpleNamespace()
-        self.phase.maxOffset = 100  # 位相相関最大オフセット（ピクセル）
+        self.phase                    = SimpleNamespace()
+        self.phase.maxOffset          = 100               # 位相相関最大オフセット（ピクセル）
         # オフセット計算 優先順位3: テンプレートマッチング法
-        self.template = SimpleNamespace()
-        self.template.searchRange = 150  # テンプレート検索範囲（ピクセル）
+        self.template                 = SimpleNamespace()
+        self.template.searchRange     = 150               # テンプレート検索範囲（ピクセル）
 
         import importlib.util
         import sys
@@ -168,11 +171,13 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             self.flowDatas = []
             return
         
+        inputStream = primaryStreams[0]
+        
         # シフト検出を実行
-        results = self._calculateShifts(self._referenceData, primaryStreams[0], context)
+        results = self._calculateShifts(self._referenceData, inputStream, context)
         
         # table形式でFlowDataを生成
-        self.flowDatas = [self._createTableOutput(primaryStreams[0], results)]
+        self.flowDatas = [self._createTableOutput(inputStream, results)]
         
         self.reportProgress(context, "完了")
     
@@ -908,7 +913,25 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         return ShiftDetectionSettingsDialog(self.view.editor.root, self)
     
     def getConfigHash(self):
-        config = f"{self.minorType}_{self._outputCat}_{self.usePreviousOffset}_{self.alignmentPlane}_{self.star.threshold}_{self.star.minDiameter}_{self.star.maxDiameter}_{self.star.maxAspectRatio}_{self.star.ransac.sampleRadius}_{self.saturationThreshold}_{self.star.useSaturationMask}_{self.star.grid.rows}_{self.star.grid.cols}_{self.star.grid.starsPerGrid}_{self.star.ransac.iterations}_{self.star.ransac.seed}_{self.phase.maxOffset}_{self.template.searchRange}"
+        config =(f"{self.minorType}_"
+                 f"{self._outputCat}_"
+                 f"{self.usePreviousOffset}_"
+                 f"{self.alignmentPlane}_"
+                 f"{self.saturationThreshold}_"
+                 f"{self.star.threshold}_"
+                 f"{self.star.useSaturationMask}_"
+                 f"{self.star.minDiameter}_"
+                 f"{self.star.maxDiameter}_"
+                 f"{self.star.maxAspectRatio}_"
+                 f"{self.star.grid.rows}_"
+                 f"{self.star.grid.cols}_"
+                 f"{self.star.grid.starsPerGrid}_"
+                 f"{self.star.ransac.sampleRadius}_"
+                 f"{self.star.ransac.iterations}_"
+                 f"{self.star.ransac.seed}_"
+                 f"{self.phase.maxOffset}_"
+                 f"{self.template.searchRange}_"
+                )
         return hashlib.md5(config.encode()).hexdigest()
 
 
@@ -1072,22 +1095,21 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
     
     def onApply(self):
         try:
-            self.node.star.grid.rows = max(1, int(self.gridRowsEntry.get()))
-            self.node.star.grid.cols = max(1, int(self.gridColsEntry.get()))
-            self.node.star.grid.starsPerGrid = max(1, int(self.starsEntry.get()))
-            self.node.alignmentPlane = max(0, int(self.planeEntry.get()))
-            self.node.star.threshold = max(50, min(99, int(self.thresholdEntry.get())))
-
-            self.node.phase.maxOffset = max(10, int(self.phaseOffsetEntry.get()))
+            self.node.usePreviousOffset        = self.usePrevOffsetVar.get()
+            self.node.alignmentPlane           = max(0, int(self.planeEntry.get()))
+            self.node.star.threshold           = max(50, min(99, int(self.thresholdEntry.get())))
+            self.node.star.useSaturationMask   = self.useSaturationMaskVar.get()
+            self.node.star.minDiameter         = max(1, int(self.starMinDiameterEntry.get()))
+            self.node.star.maxDiameter         = max(self.node.star.minDiameter, int(self.starMaxDiameterEntry.get()))
+            self.node.star.maxAspectRatio      = max(1.0, float(self.aspectRatioEntry.get()))
+            self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
+            self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
+            self.node.star.grid.starsPerGrid   = max(1, int(self.starsEntry.get()))
             self.node.star.ransac.sampleRadius = max(10, int(self.starDistEntry.get()))
-            self.node.star.minDiameter = max(1, int(self.starMinDiameterEntry.get()))
-            self.node.star.maxDiameter = max(self.node.star.minDiameter, int(self.starMaxDiameterEntry.get()))
-            self.node.template.searchRange = max(10, int(self.templateSearchEntry.get()))
-            self.node.star.ransac.iterations = max(10, min(1000, int(self.ransacEntry.get())))
-            self.node.star.ransac.seed = max(1, int(self.ransacSeedEntry.get()))
-            self.node.usePreviousOffset = self.usePrevOffsetVar.get()
-            self.node.star.useSaturationMask = self.useSaturationMaskVar.get()
-            self.node.star.maxAspectRatio = max(1.0, float(self.aspectRatioEntry.get()))
+            self.node.star.ransac.iterations   = max(10, min(1000, int(self.ransacEntry.get())))
+            self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
+            self.node.phase.maxOffset          = max(10, int(self.phaseOffsetEntry.get()))
+            self.node.template.searchRange     = max(10, int(self.templateSearchEntry.get()))
             
             self.node.view.onNodeConfigChanged(self.node)
                 
