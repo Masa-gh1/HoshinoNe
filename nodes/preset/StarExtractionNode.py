@@ -42,7 +42,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         super().__init__(canvas, editor, x, y, **kwargs)
         
         # 設定パラメータ (ShiftDetectionNodeの星検出設定を完全継承)
-        self.usePreviousOffset   = True                       # 前の画像の方向を考慮する
+        self.usePreviousOffset   = False                      # 前の画像の方向を考慮する
         self.alignmentPlane      = 1                          # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
         self.saturationThreshold = 95                         # 飽和閾値 (%)
         
@@ -66,9 +66,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.catalogPath       = CATALOG_PATH                 # カタログファイルパス
         self.matchRadius       = 0.5                          # カタログ照合許容半径 (deg)
         self.catalogMagLimit   = 8.0                          # カタログ等級上限 (mag)
-        self.estimatedFovDeg   = 10.0                         # 推定画角 (deg)
-        self.approxRa          = 0.0                          # 推定中心赤経 (deg)
-        self.approxDec         = 0.0                          # 推定中心赤緯 (deg)
+        self.estimatedFovDeg   = 3.5                          # 推定画角 (deg)
+        self.approxRa          = 255.0                        # 推定中心赤経 (deg)
+        self.approxDec         = -12.0                        # 推定中心赤緯 (deg)
         self.useApproxCoords   = False                        # 推定中心座標を使用するか
 
         # 内部状態
@@ -189,7 +189,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         # 各画像から星を抽出し、カタログ照合
         outputFlowDatas = []
         totalImages     = len(inputStream)
-
+        
+        # 前回の変換情報をリセット
+        self._previousTransform = None
+        
         for i, flowData in enumerate(inputStream):
             self.reportProgress(context, f"画像 {i + 1}/{totalImages} 処理中", i, totalImages)
             
@@ -372,13 +375,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 gridSelectedCounts.append(len(selected))
 
         return distributedStars, gridSelectedCounts
-
-    def _matchCatalog(self,
-                      detectedStars: list,
-                      catalogData: np.ndarray,
-                      imageShape: tuple,
-                      headers: dict,
-                      prevTransform: dict = None):
+    
+    def _matchCatalog(self, detectedStars:list, catalogData:np.ndarray, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
         """
         検出星とカタログ星を照合し、星リストと変換情報を返す
         
@@ -390,193 +388,161 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
         h, w = imageShape
         cx, cy = w / 2.0, h / 2.0
-
+        
+        # RANSAC用固定シードを設定
+        np.random.seed(self.star.ransac.seed)
+        
         # 分散星を選択し明るさ順にソート
         selectedStars, _ = self._selectDistributedStars(detectedStars, imageShape)
         selectedStars.sort(key=lambda s: s[2], reverse=True)
 
-        # 中心候補座標の決定 (EXIF/ヘッダー/前回変換/設定値)
-        crval1 = self.approxRa
-        crval2 = self.approxDec
-        fovDeg = self.estimatedFovDeg
-
+        # 中心候補座標
         if prevTransform and "crval1" in prevTransform and "crval2" in prevTransform:
             crval1 = prevTransform["crval1"]
             crval2 = prevTransform["crval2"]
             if "fovDeg" in prevTransform:
                 fovDeg = prevTransform["fovDeg"]
-        elif "exif" in headers and headers["exif"]:
-            exif = headers["exif"]
-            if "GPSLatitude" in exif and "GPSLongitude" in exif:
-                # GPS情報が存在する場合の補助
-                pass
-
-        # 視野周辺のカタログ星を抽出
-        radiusDeg    = max(0.5, fovDeg * 0.75)
+            else:
+                fovDeg = self.estimatedFovDeg
+        else:
+            crval1 = self.approxRa
+            crval2 = self.approxDec
+            fovDeg = self.estimatedFovDeg
+        
+        # 探索範囲の決定
+        searchRadius = max(0.5, fovDeg * 2.0)
+        candidateCatalog = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalogMagLimit)
+        print("DEBUG", list(np.min(candidateCatalog,axis=0)))
+        print("DEBUG", list(np.max(candidateCatalog,axis=0)))
         matchedStars = []
         bestTransform = None
-
-        candidateCatalog = CatalogHelper.queryStars(
-            catalogData, crval1, crval2, radiusDeg, magLimit=self.catalogMagLimit
-        )
-
+        
         if 3 <= len(candidateCatalog) and 3 <= len(selectedStars):
             # カタログ星を接平面座標 (xi, eta) [rad] に投影
             catXi, catEta = CatalogHelper.gnomonicProjection(
                 candidateCatalog[:, 1], candidateCatalog[:, 2], crval1, crval2
             )
+        
+            # 前回の変換が利用可能な場合
+            if False:
+                pass #未実装
 
-            # 前回の変換が利用可能な場合、直接予測位置で照合
-            if prevTransform and "scale" in prevTransform and "rotation" in prevTransform:
-                scaleRadPerPx = prevTransform["scale"] # [rad/px]
-                rotRad        = np.radians(prevTransform["rotation"])
-                cosR, sinR    = np.cos(rotRad), np.sin(rotRad)
+            # 初回または前推定がない場合: RANSACによる幾何照合
+            # 検出星の中心相対座標
+            detU = np.array([s[0] - cx for s in selectedStars])
+            detV = np.array([s[1] - cy for s in selectedStars])
+            
+            # 推定ピクセルスケール [rad/px]
+            nominalScale = np.radians(fovDeg / ((w*w+h*h)**0.5)) # 対角
+            minScale     = 0.7 * nominalScale
+            maxScale     = 1.3 * nominalScale
 
-                # 各検出星の画像中心基準座標から接平面座標を予測
+            nDet = min(12, len(selectedStars))
+            nCat = min(30, len(candidateCatalog))
+            
+            # 最初に使うための「有効な」検出星を抽出
+            valid_det_idx = []
+            for i in range(nDet):
+                is_valid = True
+                for j in range(nDet):
+                    if i == j: continue
+                    if np.hypot(detU[i] - detU[j], detV[i] - detV[j]) < 20.0:
+                        is_valid = False
+                        break
+                if is_valid: valid_det_idx.append(i)
+            
+            if len(valid_det_idx) < 2:
+                valid_det_idx = list(range(min(nDet, len(selectedStars))))
+
+            bestInliers = 0
+            bestModel   = None
+            
+            # RANSACループ
+            for _ in range(self.star.ransac.iterations):
+                idx1 = np.random.choice(valid_det_idx)
+                idx2 = np.random.choice([i for i in valid_det_idx if i != idx1])
+                
+                pIdx1 = np.random.randint(0, nCat - 1)
+                pIdx2 = np.random.randint(0, nCat - 1)
+                if pIdx1 == pIdx2: continue
+                
+                dImg = np.hypot(detU[idx1] - detU[idx2], detV[idx1] - detV[idx2])
+                if dImg < 20.0: continue
+                angImg = np.arctan2(detV[idx2] - detV[idx1], detU[idx2] - detU[idx1])
+                
+                dSky = np.hypot(catXi[pIdx1] - catXi[pIdx2], catEta[pIdx1] - catEta[pIdx2])
+                pairScale = dSky / dImg
+                
+                if not (minScale <= pairScale <= maxScale):
+                    continue
+                
+                angSky = np.arctan2(catEta[pIdx2] - catEta[pIdx1], catXi[pIdx2] - catXi[pIdx1])
+                rot = -(angSky + angImg)
+                cR, sR = np.cos(rot), np.sin(rot)
+                
+                # オフセット項の計算
+                predXi0  = ( detU[idx1] * cR - detV[idx1] * sR) * pairScale
+                predEta0 = (-detU[idx1] * sR - detV[idx1] * cR) * pairScale
+                dXi  = catXi[pIdx1] - predXi0
+                dEta = catEta[pIdx1] - predEta0
+                
+                # 全ての検出点に対して、オフセットを考慮した予測座標を計算
+                predXiAll  = ( (detU[valid_det_idx] * cR - detV[valid_det_idx] * sR) * pairScale + dXi )
+                predEtaAll = ( (-detU[valid_det_idx] * sR - detV[valid_det_idx] * cR) * pairScale + dEta )
+                
+                # インライア判定
+                currentInliers = 0
+                for k in range(len(valid_det_idx)):
+                    dists = np.hypot(catXi - predXiAll[k], catEta - predEtaAll[k])
+                    if np.min(dists) / pairScale < 5.0:
+                        currentInliers += 1
+                
+                if currentInliers > bestInliers:
+                    bestInliers = currentInliers
+                    bestModel   = (pairScale, rot, dXi, dEta)
+            
+            if bestModel is not None and 3 <= bestInliers:
+                bestScale, bestRot, bestDXi, bestDEta = bestModel
+                cR, sR = np.cos(bestRot), np.sin(bestRot)
+                
                 matchedRows = []
-                for sx, sy, sbright, _ in selectedStars:
-                    dx = sx - cx
-                    dy = sy - cy
-                    predXi  = ( dx * cosR - dy * sinR) * scaleRadPerPx
-                    predEta = (-dx * sinR - dy * cosR) * scaleRadPerPx
-
-                    dists = np.sqrt((catXi - predXi)**2 + (catEta - predEta)**2)
+                for s in selectedStars:
+                    u = s[0] - cx
+                    v = s[1] - cy
+                    
+                    # 最終的な座標変換: 回転・スケール + RANSACで求めたオフセット
+                    predXi  = ( u * cR - v * sR) * bestScale + bestDXi
+                    predEta = (-u * sR - v * cR) * bestScale + bestDEta
+                    
+                    dists = np.hypot(catXi - predXi, catEta - predEta)
                     minIdx = np.argmin(dists)
-                    minDistDeg = np.degrees(dists[minIdx])
-
-                    if minDistDeg <= self.matchRadius:
+                    minDistPx = dists[minIdx] / bestScale
+                    
+                    if minDistPx <= 5.0:
                         catRow = candidateCatalog[minIdx]
                         matchedRows.append({
                             'hip'        : float(catRow[0]),
-                            'x'          : float(sx),
-                            'y'          : float(sy),
-                            'brightness' : float(sbright),
+                            'x'          : float(s[0]),
+                            'y'          : float(s[1]),
+                            'brightness' : float(s[2]),
                             'catalog_ra' : float(catRow[1]),
                             'catalog_dec': float(catRow[2]),
                         })
 
                 if 3 <= len(matchedRows):
-                    matchedStars  = matchedRows
-                    bestTransform = prevTransform
-
-            # 初回または前推定がない場合: RANSAC による星パターン幾何照合
-            if len(matchedStars) < 3:
-                # 検出星の中心相対座標
-                detU = np.array([s[0] - cx for s in selectedStars])
-                detV = np.array([s[1] - cy for s in selectedStars])
-                
-                # 推定ピクセルスケール [rad/px] (視野角から算出、+-30%の許容幅)
-                nominalScale = np.radians(fovDeg / max(w, h))
-                minScale     = 0.7 * nominalScale
-                maxScale     = 1.3 * nominalScale
-
-                nDet = min(12, len(selectedStars))
-                nCat = min(20, len(candidateCatalog))
-
-                bestInliers = 0
-                bestModel   = None
-
-                for i in range(nDet):
-                    for j in range(i + 1, nDet):
-                        dImg = np.hypot(detU[i] - detU[j], detV[i] - detV[j])
-                        if dImg < 20.0:
-                            continue
-                        angImg = np.arctan2(detV[j] - detV[i], detU[j] - detU[i])
-
-                        for p in range(nCat):
-                            for q in range(nCat):
-                                if p == q:
-                                    continue
-                                dSky = np.hypot(catXi[p] - catXi[q], catEta[p] - catEta[q])
-                                pairScale = dSky / dImg
-
-                                if not (minScale <= pairScale <= maxScale):
-                                    continue
-
-                                angSky = np.arctan2(catEta[q] - catEta[p], catXi[q] - catXi[p])
-                                rot = -(angSky + angImg)
-                                cR, sR = np.cos(rot), np.sin(rot)
-
-                                # オフセット算出
-                                predXi0  = ( detU[i] * cR - detV[i] * sR) * pairScale
-                                predEta0 = (-detU[i] * sR - detV[i] * cR) * pairScale
-                                dXi  = catXi[p] - predXi0
-                                dEta = catEta[p] - predEta0
-
-                                # 全検出星の検証
-                                predXiAll  = ( detU[:nDet] * cR - detV[:nDet] * sR) * pairScale + dXi
-                                predEtaAll = (-detU[:nDet] * sR - detV[:nDet] * cR) * pairScale + dEta
-
-                                inliers = 0
-                                for k in range(nDet):
-                                    dist = np.min(np.hypot(catXi[:nCat] - predXiAll[k], catEta[:nCat] - predEtaAll[k]))
-                                    if (dist / pairScale) < 5.0: # 5 px 以内
-                                        inliers += 1
-
-                                if bestInliers < inliers:
-                                    bestInliers = inliers
-                                    bestModel   = (pairScale, rot, dXi, dEta)
-
-                # 最良モデルから照合星リストを構築
-                if bestModel is not None and 3 <= bestInliers:
-                    bestScale, bestRot, bestDXi, bestDEta = bestModel
-                    cR, sR = np.cos(bestRot), np.sin(bestRot)
-
-                    matchedRows = []
-                    for s in selectedStars:
-                        u = s[0] - cx
-                        v = s[1] - cy
-                        predXi  = ( u * cR - v * sR) * bestScale + bestDXi
-                        predEta = (-u * sR - v * cR) * bestScale + bestDEta
-
-                        dists = np.hypot(catXi - predXi, catEta - predEta)
-                        minIdx = np.argmin(dists)
-                        minDistPx = dists[minIdx] / bestScale
-
-                        if minDistPx <= 5.0: # 5 px 以内をインライアとして確定
-                            catRow = candidateCatalog[minIdx]
-                            matchedRows.append({
-                                'hip'        : float(catRow[0]),
-                                'x'          : float(s[0]),
-                                'y'          : float(s[1]),
-                                'brightness' : float(s[2]),
-                                'catalog_ra' : float(catRow[1]),
-                                'catalog_dec': float(catRow[2]),
-                            })
-
-                    if 3 <= len(matchedRows):
-                        matchedStars = matchedRows
-                        bestTransform = {
-                            'crval1'  : crval1,
-                            'crval2'  : crval2,
-                            'fovDeg'  : fovDeg,
-                            'scale'   : bestScale,
-                            'rotation': float(np.degrees(bestRot) % 360.0),
-                        }
-
-        # 初期照合または十分なマッチが得られなかった場合
+                    matchedStars = matchedRows
+                    bestTransform = {
+                        'crval1'  : crval1,
+                        'crval2'  : crval2,
+                        'fovDeg'  : fovDeg,
+                    }
+        
         if len(matchedStars) < 3:
-            # 検出星の上位星をそのままリスト化し、カタログ未照合星 (hip=NaN) として出力
-            matchedStars = []
-            for i, (sx, sy, sbright, _) in enumerate(selectedStars):
-                matchedStars.append({
-                    'hip'        : float('nan'),
-                    'x'          : float(sx),
-                    'y'          : float(sy),
-                    'brightness' : float(sbright),
-                    'catalog_ra' : float('nan'),
-                    'catalog_dec': float('nan'),
-                })
-            bestTransform = {
-                'crval1'  : crval1,
-                'crval2'  : crval2,
-                'fovDeg'  : fovDeg,
-                'scale'   : np.radians(fovDeg / max(w, h)),
-                'rotation': 0.0,
-            }
-
-        return matchedStars, bestTransform
-
+            # 失敗時
+            return [], None
+        else:
+            return matchedStars, bestTransform
+    
     def _createTableOutput(self, matchedStars: list, parentHeaders: dict) -> FlowData:
         """星リストから Table 型 FlowData を作成"""
         from config import BLOCK_SIZE
@@ -869,11 +835,11 @@ class StarExtractionSettingsDialog(tk.Toplevel):
             self.node.matchRadius              = max(0.001, float(self.matchRadEntry.get()))
             self.node.catalogMagLimit          = float(self.magLimitEntry.get())
             self.node.estimatedFovDeg          = max(0.01, float(self.fovEntry.get()))
-
+            
             self.node.view.onNodeConfigChanged(self.node)
         except ValueError:
             messagebox.showerror("エラー", "入力値が正しくありません")
-
+    
     def onClose(self):
         """ダイアログを閉じる"""
         self.destroy()
