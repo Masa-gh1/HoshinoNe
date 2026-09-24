@@ -48,6 +48,18 @@
 - `columns`: 列名リスト (['dx', 'dy', 'rotation', 'scale'] 順不同)
 - `lines`: 行名リスト (ファイル名)
 
+#### StarExtractionNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['hip_id', 'x', 'y', 'brightness', 'catalog_ra', 'catalog_dec'])
+- `lines`: 行名リスト (星識別子)
+
+#### OrientationNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['crval1', 'crval2', 'rotation', 'pixel_scale', 'confidence'])
+- `lines`: 行名リスト (ファイル名/画像識別子)
+
+#### DistortionAnalysisNode の出力 Table 固有ヘッダー (FITS SIP 準拠)
+- `columns`: 列名リスト (['CRPIX1', 'CRPIX2', 'A_ORDER', 'B_ORDER', 'A_2_0', 'A_1_1', 'A_0_2', 'A_3_0', 'A_2_1', 'A_1_2', 'A_0_3', 'B_2_0', 'B_1_1', 'B_0_2', 'B_3_0', 'B_2_1', 'B_1_2', 'B_0_3', 'RMS_ERROR'])
+- `lines`: 行名リスト (ファイル名/画像識別子)
+
 ### Polynomial データ (type: 'polynomial')
 #### mode 値
 - `0D`, `1D`, `2D`: 多項式次元
