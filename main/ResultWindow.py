@@ -338,6 +338,7 @@ class ResultWindow(tk.Toplevel):
             
             # ヘッダー行
             if width:
+                content += "LABEL"
                 for x in  range(width):
                     if displayCols < width and displayCols//2 == x:
                         content += "\t..."
@@ -407,8 +408,9 @@ class ResultWindow(tk.Toplevel):
             
             # ヘッダー行
             if columns:
+                content += "LABEL"
                 length = max([len(label) for label in lines])
-                content += "\t"*(length//8)
+                content += "\t"*((length-5)//8)
                 for x, column in enumerate(columns):
                     content += "\t"
                     content += column.ljust(max([len(t) for t in cols[x]]))
@@ -476,8 +478,9 @@ class ResultWindow(tk.Toplevel):
                 cols.append(sh.dispL(cells))
             
             # ヘッダー行
+            content += "LABEL"
             length = max([len(label) for label in lines]) if lines else 7
-            content += "\t"*(length//8)
+            content += "\t"*((length-5)//8)
             for x in range(displayCols):
                 if displayCols < width and displayCols//2 == x:
                     content += "\t..."
