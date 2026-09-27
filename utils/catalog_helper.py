@@ -143,6 +143,7 @@ class CatalogHelper:
     def angularDistance(ra1Deg, dec1Deg, ra2Deg, dec2Deg):
         """
         天球上の2点間の角距離 ( deg ) を計算する
+        ハヴァースィン公式を用いて、小距離における数値的安定性を確保
         
         Args:
             ra1Deg: 点1の赤経 ( deg )
@@ -153,16 +154,30 @@ class CatalogHelper:
         Returns:
             角距離 ( deg )
         """
-        r1 = np.radians(ra1Deg)
-        d1 = np.radians(dec1Deg)
-        r2 = np.radians(ra2Deg)
-        d2 = np.radians(dec2Deg)
+        r1 = np.asanyarray(np.radians(ra1Deg))
+        d1 = np.asanyarray(np.radians(dec1Deg))
+        r2 = np.asanyarray(np.radians(ra2Deg))
+        d2 = np.asanyarray(np.radians(dec2Deg))
 
-        deltaR = r1 - r2
-        cosD = np.sin(d1) * np.sin(d2) + np.cos(d1) * np.cos(d2) * np.cos(deltaR)
-        cosD = np.clip(cosD, -1.0, 1.0)
-        return np.degrees(np.arccos(cosD))
+        deltaR = r2 - r1
+        deltaD = d2 - d1
 
+        # haversine formula: 
+        # a = sin^2(Δdec/2) + cos(dec1) * cos(dec2) * sin^2(Δra/2)
+        a = np.sin(deltaD / 2)**2 + np.cos(d1) * np.cos(d2) * np.sin(deltaR / 2)**2
+        
+        # 数値誤差により a が 1.0 を超えないようクリップ
+        a = np.clip(a, 0.0, 1.0)
+        
+        # d = 2 * arcsin(sqrt(a))
+        distRad = 2 * np.arcsin(np.sqrt(a))
+        distDeg = np.degrees(distRad)
+
+        if distDeg.ndim == 0:
+            return distDeg.item()
+        else:
+            return distDeg
+    
     @staticmethod
     def gnomonicProjection(raDeg, decDeg, crval1Deg, crval2Deg):
         """
