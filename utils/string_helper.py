@@ -63,20 +63,19 @@ def dispL(value, representative = None):
         values = [value]
     
     if representative:
-        abss   = [abs(representative)]
-        absMax = max(abss)
+        rep = abs(representative)
     else:
-        abss   = [abs(v) if not math.isnan(v) else 0.0 for v in values]
-        absMax = max(abss)
+        reps = [abs(v) if not math.isnan(v) else 0.0 for v in values]
+        rep  = max(reps)-min(reps)
     
     threshold = [100.0,  0.1, 0.0001, 0.0000001]
     format    = [".0f",".3f",  ".6f",     ".9f"]
-    if 0.0 == absMax:
+    if 0.0 == rep:
         fm = ".3f"
     else:
         fm = format[-1]
         for th,fm in zip(threshold,format):
-            if th <= absMax:
+            if th <= rep:
                 break
     
     texts = [f"{v:{fm}}" for v in values]

@@ -28,10 +28,11 @@ class Fill1Node(LazyNNOperationNode):
 class AbsoluteLazyFlowData(LazyFlowData):
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
+        from utils import numpy_helpers as nh
         from base import DataBlock
         
         result = np.where(np.isnan(block.data),
-                          np.array(np.nan, dtype=block.data.dtype),
+                          np.array(nh.nan, dtype=block.data.dtype),
                           np.array(     1, dtype=block.data.dtype)
                          )
         
