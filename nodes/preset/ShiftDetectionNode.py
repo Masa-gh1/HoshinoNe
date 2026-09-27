@@ -6,6 +6,9 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from types import SimpleNamespace
 import hashlib
 import datetime
@@ -15,6 +18,11 @@ from tkinter import messagebox, ttk
 from base.FlowNode_CONST import *
 from base import FlowNode
 from nodes import ConfigurableNode
+
+if TYPE_CHECKING:
+    import numpy as np
+    from base.DataBlock import DataBlock
+    from base.FlowData import FlowData
 
 class AlignmentResult:
     def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, time=None, method="", extra_info={}):
@@ -190,7 +198,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         # 基準画像を検出用に処理
         if context:
             self.reportProgress(context, "基準画像処理中", globalProcessedBlocks, totalGlobalBlocks)
-        refGray = self._flowDataToImage(referenceData, planeIndex=alignmentPlane, normalize_for_detection=True)
+        refGray = self._flowDataToImage(referenceData, planeIndex=alignmentPlane, normalizeForDetection=True)
         
         # 基準画像の星を一度だけ検出して保存
         self._cached_ref_stars = self._detectStars(refGray)
@@ -206,7 +214,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         for i, inputData in enumerate(inputDatas):
             # 対象画像を検出用に処理
-            targetGray = self._flowDataToImage(inputData, planeIndex=alignmentPlane, normalize_for_detection=True)
+            targetGray = self._flowDataToImage(inputData, planeIndex=alignmentPlane, normalizeForDetection=True)
             globalProcessedBlocks += 1
             if context:
                 self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
@@ -330,61 +338,44 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         return flowData
     
-    def _flowDataToImage(self, flowData, planeIndex=None, normalize_for_detection=False):
+    def _flowDataToImage(self, flowData:FlowData, planeIndex:int|None = None, normalizeForDetection:bool = False) -> np.ndarray:
         """FlowDataから画像配列を構築"""
         import numpy as np
         from utils import numpy_helpers as nh
 
         width, height = flowData.getDimensions()
         
-        if planeIndex is not None:
-            # 特定プレーンのみを使用
-            image = nh.zeros((height, width))
-            for block in flowData.iterateBlocks():
-                if block and block.planeIndex == planeIndex:
-                    y1, y2 = block.y, block.y + block.getHeight()
-                    x1, x2 = block.x, block.x + block.getWidth()
-                    if len(block.data.shape) == 3:
-                        image[y1:y2, x1:x2] = block.data[:, :, 0]
-                    else:
-                        image[y1:y2, x1:x2] = block.data
-            
-            # 星検出用の正規化処理（統計的手法）
-            if normalize_for_detection:
-                min_val = np.min(image)
-                max_val = np.max(image)
-                margin = (max_val - min_val) * float(self.saturationThreshold) / 100
-                saturation_threshold_l = min_val + margin
-                saturation_threshold_h = max_val - margin
-                valid_mask = (image > saturation_threshold_l) & (image < saturation_threshold_h)
-                valid_pixels = image[valid_mask]
-                if np.any(valid_mask):
-                    mean_val = np.mean(valid_pixels)
-                    std_val = np.std(valid_pixels)
-                else:
-                    mean_val = np.mean(image)
-                    std_val = np.std(image)
-                if std_val > 0:
-                    image = (image - mean_val) / std_val
-                    image = np.clip((image + 3) / 6 * 255, 0, 255)
-                else:
-                    image = np.zeros_like(image)
-                image = image.astype(np.uint8)
-            # それ以外は入力値域を維持
-        else:
+        if planeIndex is None:
             # 全プレーンを使用（従来の動作）
-            firstBlock = next(flowData.iterateBlocks())
-            if firstBlock and len(firstBlock.data.shape) == 3:
-                channels = firstBlock.data.shape[2]
-                image = np.zeros((height, width, channels), dtype=np.uint8)
-            else:
-                image = np.zeros((height, width), dtype=np.uint8)
-            
+            image   = nh.zeros((height, width))
+            invalid = np.ones((height, width), dtype=bool)
             for block in flowData.iterateBlocks():
                 if block:
-                    y1, y2 = block.y, block.y + block.getHeight()
-                    x1, x2 = block.x, block.x + block.getWidth()
-                    image[y1:y2, x1:x2] = block.data
+                    x, y = block.x, block.y
+                    h, w = block.data.shape
+                    image[y:y+h, x:x+w] += block.data
+                    invalid[y:y+h, x:x+w] &= np.isnan(block.data)
+            image[invalid] = nh.nan
+        else:
+            # 特定プレーンのみを使用
+            image = nh.nans((height, width))
+            for block in flowData.iterateBlocks(planeIndex):
+                if block:
+                    x, y = block.x, block.y
+                    h, w = block.data.shape
+                    image[y:y+h, x:x+w] = block.data
+        
+        # 星検出用の正規化処理（統計的手法）
+        if normalizeForDetection:
+            mean_val = np.nanmean(image)
+            std_val  = np.nanstd(image)
+            if std_val > 0:
+                image = (image - mean_val) / std_val
+                image = np.clip((image + 3) / 6 * 255, 0, 255)
+                np.nan_to_num(image, nan=127, copy=False)
+                image = image.astype(np.uint8)
+            else:
+                image = np.zeros((height, width), dtype=np.uint8)
         
         return image
     
@@ -750,8 +741,16 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         return grid_match_counts
     
-    def _detectStars(self, image):
-        """画像から星点を検出"""
+    def _detectStars(self, image:np.ndarray):
+        """
+        画像から星を検出
+        
+        Args:
+            image: 検出用グレースケール画像 (uint8)
+            
+        Returns:
+            list[tuple[float, float, float, float]]: (cx, cy, brightness, aspectRatio) のリスト
+        """
         import numpy as np
         import cv2
         
@@ -766,16 +765,13 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         if self.star.useSaturationMask:
             # 飽和領域マスク
-            saturation_mask = self._createSaturationMask(subtracted)
-            masked_subtracted = np.where(saturation_mask, subtracted, 0)
+            saturationMask = self._createSaturationMask(subtracted)
+            maskedSubtracted = np.where(saturationMask, subtracted, 0)
+            subtracted = maskedSubtracted
             
-            # 閾値処理
-            threshold = np.nanpercentile(masked_subtracted[masked_subtracted > 0], self.star.threshold)
-            _, binary = cv2.threshold(masked_subtracted, threshold, 255, cv2.THRESH_BINARY)
-        else:
-            # 閾値処理
-            threshold = np.nanpercentile(subtracted[subtracted > 0], self.star.threshold)
-            _, binary = cv2.threshold(subtracted, threshold, 255, cv2.THRESH_BINARY)
+        # 閾値処理
+        threshold = np.nanpercentile(subtracted[subtracted > 0], self.star.threshold)
+        _, binary = cv2.threshold(subtracted, threshold, 255, cv2.THRESH_BINARY)
         
         # 連結成分で星点を検出
         try:
@@ -791,9 +787,9 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         stars = contours
         
         # 面積フィルタ
-        min_area = np.pi * (self.star.minDiameter / 2) ** 2
-        max_area = np.pi * (self.star.maxDiameter / 2) ** 2
-        areaFiltered = [c for c in stars if min_area <= cv2.contourArea(c) <= max_area]
+        minArea = np.pi * (self.star.minDiameter / 2.0) ** 2
+        maxArea = np.pi * (self.star.maxDiameter / 2.0) ** 2
+        areaFiltered = [c for c in stars if minArea <= cv2.contourArea(c) <= maxArea]
         stars = areaFiltered
 
         # アスペクト比フィルタ
@@ -804,7 +800,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             (center), (width, height), angle = cv2.minAreaRect(star)
             
             # アスペクト比計算
-            if width > 0 and height > 0:
+            if 0 < width and 0 < height:
                 aspectRatio = max(width, height) / min(width, height)
                 if aspectRatio <= self.star.maxAspectRatio:
                     aspectFiltered.append(star)
@@ -815,15 +811,14 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         positions = []
         brightnesses = []
         for star in stars:
-            area = cv2.contourArea(star)
             # 重心を計算
             M = cv2.moments(star)
             if M['m00'] <= 0:
                 positions.append(None)
                 brightnesses.append(None)
             else:
-                cx = M['m10'] / M['m00']
-                cy = M['m01'] / M['m00']
+                cx = float(M['m10'] / M['m00'])
+                cy = float(M['m01'] / M['m00'])
                 positions.append((cx, cy))
                 
                 # その点の明度を取得
@@ -856,53 +851,46 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         return mask == 0  # 有効領域のマスク
     
-    def _selectDistributedStars(self, stars, image_shape):
+    def _selectDistributedStars(self, stars, imageShape):
         """画像全体に分散した星を選択"""
         if len(stars) < 10:
             return stars, []
         
-        h, w = image_shape
-        grid_rows, grid_cols = self.star.grid.rows, self.star.grid.cols
+        h, w = imageShape
+        gridRows, gridCols = self.star.grid.rows, self.star.grid.cols
         
         # 各グリッド領域のサイズ
-        cell_h = h // grid_rows
-        cell_w = w // grid_cols
+        cellH = h // gridRows
+        cellW = w // gridCols
         
-        distributed_stars = []
-        grid_selected_counts = []
+        distributedStars = []
+        gridSelectedCounts = []
         
-        # 各グリッドから最大5個の明るい星を選択
-        for row in range(grid_rows):
-            for col in range(grid_cols):
-                y_min = row * cell_h
-                y_max = (row + 1) * cell_h if row < grid_rows - 1 else h
-                x_min = col * cell_w
-                x_max = (col + 1) * cell_w if col < grid_cols - 1 else w
+        # 各グリッドから最大n個の明るい星を選択
+        for row in range(gridRows):
+            for col in range(gridCols):
+                yMin = row * cellH
+                yEnd = (row + 1) * cellH if row < gridRows - 1 else h
+                xMin = col * cellW
+                xEnd = (col + 1) * cellW if col < gridCols - 1 else w
                 
                 # このグリッド内の星を抽出
-                grid_stars = []
-                for x, y, brightness, aspectRatio in stars:
-                    if x_min <= x < x_max and y_min <= y < y_max:
-                        grid_stars.append((x, y, brightness, aspectRatio))
+                gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
                 
                 # 明度順でソートして上位指定数を選択
-                selected_count = 0
-                if grid_stars:
-                    grid_stars.sort(key=lambda x: x[2], reverse=True)
-                    selected = grid_stars[:self.star.grid.starsPerGrid]
-                    distributed_stars.extend(selected)
-                    selected_count = len(selected)
-                
-                grid_selected_counts.append(selected_count)
+                gridStars.sort(key=lambda x: x[2], reverse=True)
+                selected = gridStars[:self.star.grid.starsPerGrid]
+                distributedStars.extend(selected)
+                gridSelectedCounts.append(len(selected))
         
         # 全体からも明るい星を追加（重複除去）
-        max_total_stars = grid_rows * grid_cols * self.star.grid.starsPerGrid + 20
+        maxTotalStars = gridRows * gridCols * self.star.grid.starsPerGrid + 20
         all_bright = sorted(stars, key=lambda x: x[2], reverse=True)
         for star in all_bright:
-            if star not in distributed_stars and len(distributed_stars) < max_total_stars:
-                distributed_stars.append(star)
+            if star not in distributedStars and len(distributedStars) < maxTotalStars:
+                distributedStars.append(star)
         
-        return distributed_stars[:max_total_stars], grid_selected_counts
+        return distributedStars[:maxTotalStars], gridSelectedCounts
     
     def createSettingWindow(self):
         return ShiftDetectionSettingsDialog(self.view.editor.root, self)
