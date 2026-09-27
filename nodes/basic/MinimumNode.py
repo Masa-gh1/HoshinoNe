@@ -71,7 +71,7 @@ class MinimumNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
         
         # nan の位置を適用
         if invalid.any():
-            result[invalid] = np.nan
+            result[invalid] = nh.nan
         
         return DataBlock(result, planeIndex, x, y)
     
