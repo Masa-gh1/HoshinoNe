@@ -425,23 +425,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         # 探索範囲はユーザーの推定画角をガイドとするが、
         # 実際の同定（判定）は、この範囲内で見つかった星の中から「形と相対位置」が一致するかで行う。
-        candidateCatalog = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalogMagLimit)
-        if len(candidateCatalog) < 3:
+        catalog = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalogMagLimit)
+        if len(catalog) < 3:
             return [], None
         
-        ###################
-        # テストカタログ
-        #from utils import numpy_helpers as nh
-        #candidateCatalog = nh.array([
-        #[83372,  255.59425, -10.952174,  7.5811],
-        #[83555,  256.13895, -11.088457,  7.0335],
-        #[83711,  256.62317, -10.806351,  7.7672],
-        #[83867,  257.10452, -12.033326,  7.8085],
-        #])
-        ###################
-        
-        # candidateCatalog を明るさ順にソート
-        candidateCatalog = candidateCatalog[np.argsort(candidateCatalog[:, 3])]
+        # 一括処理用に列ごとに分割
+        catalogRa  = catalog[:, 1]
+        catalogDec = catalog[:, 2]
+        catalogMag = catalog[:, 3]
         
         degPerPixel = self.estimatedFovDeg / np.hypot(w, h)
         bestMatchCount = 0
@@ -450,7 +441,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         starNum = len(selectedStars)
         from utils.Debug import Debug
-        Debug.log(type(self).__name__, f"stars:{starNum} catalog:{len(candidateCatalog)}")
+        Debug.log(type(self).__name__, f"stars:{starNum} catalog:{len(catalog)}")
 
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
             # 画像側で3点を選択し、形状比率を計算
@@ -458,37 +449,33 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             p0,p1,p2 = [selectedStars[i] for i in indices]
             if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
                 p1,p2 = p2,p1 # 時計回りに修正
-            d0 = np.hypot(p0[0]-p1[0], p0[1]-p1[1]) * degPerPixel # ⊿p0,p1
-            d1 = np.hypot(p1[0]-p2[0], p1[1]-p2[1]) * degPerPixel # ⊿p1,p2
-            d2 = np.hypot(p2[0]-p0[0], p2[1]-p0[1]) * degPerPixel # ⊿p2,p0
-            if d0 < 1e-7 or d1 < 1e-7 or d2 < 1e-7: continue
-
-            sortD = np.sort([d0,d1,d2])
-            if sortD[0] / sortD[2] < 0.2:
-               # 極端に短い辺が在るのでスキップ
-               continue
+            dp01 = np.hypot(p0[0]-p1[0], p0[1]-p1[1]) * degPerPixel # ⊿p0,p1
+            dp12 = np.hypot(p1[0]-p2[0], p1[1]-p2[1]) * degPerPixel # ⊿p1,p2
+            dp20 = np.hypot(p2[0]-p0[0], p2[1]-p0[1]) * degPerPixel # ⊿p2,p0
+            dp = nh.array([dp01,dp12,dp20])
+            if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
             # 画像側での距離比
-            pBaseRatio = nh.array([d0/d1,d1/d2,d2/d0])
+            pBaseRatio = nh.array([dp01/dp12,dp12/dp20,dp20/dp01])
             
             # カタログ側で3点を選択し、形状比率を計算
-            indices = np.random.choice(len(candidateCatalog), 3, replace=False)
-            c0,c1,c2 = [candidateCatalog[i] for i in indices]
+            indices = np.random.choice(len(catalog), 3, replace=False)
+            c0,c1,c2 = [catalog[i] for i in indices]
             if 0 < (c1[0] - c0[0]) * (c2[1] - c0[1]) - (c1[1] - c0[1]) * (c2[0] - c0[0]):
                 c1,c2 = c2,c1 # 時計回りに修正
-            d0 = CatalogHelper.angularDistance(c0[1], c0[2], c1[1], c1[2]) # ⊿c0,c1
-            d1 = CatalogHelper.angularDistance(c1[1], c1[2], c2[1], c2[2]) # ⊿c1,c2
-            d2 = CatalogHelper.angularDistance(c2[1], c2[2], c0[1], c0[2]) # ⊿c2,c0
-            if d0 < 1e-7 or d1 < 1e-7 or d2 < 1e-7: continue
+            dc01 = CatalogHelper.angularDistance(c0[1], c0[2], c1[1], c1[2]) # ⊿c0,c1
+            dc12 = CatalogHelper.angularDistance(c1[1], c1[2], c2[1], c2[2]) # ⊿c1,c2
+            dc20 = CatalogHelper.angularDistance(c2[1], c2[2], c0[1], c0[2]) # ⊿c2,c0
+            dc = nh.array([dc01,dc12,dc20])
+            if np.any(dc < 1e-7) or np.min(dc) / np.max(dc) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
             # カタログ側での距離比
-            cBaseRatio = nh.array([d0/d1, d1/d2, d2/d0])
+            cBaseRatio = nh.array([dc01/dc12, dc12/dc20, dc20/dc01])
 
             if np.allclose(cBaseRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0):
                 # 画像3点とカタログ3点が相似だった
                 currentInliers = 3
                 # ratio_cat_base と ratio_img_base のズレの総和の記録
-                currentError = np.sum(np.abs(cBaseRatio - pBaseRatio))
                 currentMatched = [
                     { 'hip'        : float(c[0]),
                       'ra'         : float(c[1]),
@@ -501,9 +488,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 ]
                 
                 # 確定した星を除く index を作成
-                candidateCatalogIndices = [i for i in range(len(candidateCatalog)) if i not in indices]
+                candidateCatalogIndices = [i for i in range(len(catalog)) if i not in indices]
                 
-                # 画像内の全星について、基準となる三角形(P0, P1, P2)に対する距離比を検証
+                # 画像内の全星について、確定した星との三角形(P0, P1, P2)に対する距離比を検証
                 for i in range(len(selectedStars)):
                     # currentMatched の中から p0 に近い2つ取り出す。
                     p0 = selectedStars[i]
@@ -517,70 +504,117 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     c2 = currentMatched[nearIndices[1]]
                     c1 = (c1['hip'], c1['ra'], c1['dec'], c1['mag'])
                     c2 = (c2['hip'], c2['ra'], c2['dec'], c2['mag'])
-                                        
+                    
                     if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
                         p1,p2 = p2,p1 # 時計回りに修正
                         c1,c2 = c2,c1 # 時計回りに修正
                     
-                    d0 = np.hypot(p0[0]-p1[0], p0[1]-p1[1]) * degPerPixel # ⊿p0,p1
-                    d1 = np.hypot(p1[0]-p2[0], p1[1]-p2[1]) * degPerPixel # ⊿p1,p2
-                    d2 = np.hypot(p2[0]-p0[0], p2[1]-p0[1]) * degPerPixel # ⊿p2,p0
-                    if d0 < 1e-7 or d1 < 1e-7 or d2 < 1e-7: continue
-
-                    sortD = np.sort([d0,d1,d2])
+                    # 画像側での距離
+                    dp01 = np.hypot(p0[0]-p1[0], p0[1]-p1[1]) * degPerPixel # ⊿p0,p1
+                    dp12 = np.hypot(p1[0]-p2[0], p1[1]-p2[1]) * degPerPixel # ⊿p1,p2
+                    dp20 = np.hypot(p2[0]-p0[0], p2[1]-p0[1]) * degPerPixel # ⊿p2,p0
+                    if dp01 < 1e-7 or dp12 < 1e-7 or dp20 < 1e-7: continue
+                    
+                    sortD = np.sort([dp01,dp12,dp20])
                     if sortD[0] / sortD[2] < 0.2:
                         # 極端に短い辺が在るのでスキップ
                         continue
                     
                     # 画像側での距離比
-                    pBaseRatio = nh.array([d0/d1,d1/d2,d2/d0])
+                    pBaseRatio = nh.array([dp01/dp12,dp12/dp20,dp20/dp01])
                     
-                    # candidateCatalogIndices から未検索リストをコピー
-                    unsearchedCatalogIndices = candidateCatalogIndices.copy()
+                    # カタログ側での距離
+                    dcn1 = CatalogHelper.angularDistance(c1[1], c1[2], catalogRa, catalogDec)
+                    dc12 = CatalogHelper.angularDistance(c1[1], c1[2], c2[1],     c2[2])
+                    dc2n = CatalogHelper.angularDistance(c2[1], c2[2], catalogRa, catalogDec)
+
+                    # カタログ側での距離比
+                    cRatio = np.stack([dcn1/dc12, dc12/dc2n, dc2n/dcn1], axis=1)
                     
-                    # カタログ内の全星について、この距離比が一致するか検証
-                    for _ in range(len(candidateCatalogIndices)):
-                        tops = max(2, len(unsearchedCatalogIndices) // 10) # 上位10％からランダムに選択
-                        j = unsearchedCatalogIndices.pop(np.random.randint(min(len(unsearchedCatalogIndices), tops)))
-                        c0 = candidateCatalog[j]
-                        d0 = CatalogHelper.angularDistance(c0[1], c0[2], c1[1], c1[2]) # ⊿c0,c1
-                        d1 = CatalogHelper.angularDistance(c1[1], c1[2], c2[1], c2[2]) # ⊿c1,c2
-                        d2 = CatalogHelper.angularDistance(c2[1], c2[2], c0[1], c0[2]) # ⊿c2,c0c0
-                        if d0 < 1e-7 or d1 < 1e-7 or d2 < 1e-7: continue
+                    isClose = np.isclose(cRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0)
+                    isCloseAll = np.all(isClose, axis=1)
+                    matchIndices = np.where(isCloseAll)[0]
+                    matchIndices = [i for i in matchIndices if i not in indices]
+                    
+                    if 0 < len(matchIndices):
+                        if 1== len(matchIndices):
+                            # 1つしか候補がない
+                            matchIndex = matchIndices[0]
+                        else:
+                            # 辺比を計算
+                            dp01 = np.hypot(p0[0]-p1[0], p0[1]-p1[1]) * degPerPixel # ⊿p0,p1
+                            dp12 = np.hypot(p1[0]-p2[0], p1[1]-p2[1]) * degPerPixel # ⊿p1,p2
+                            dp20 = np.hypot(p2[0]-p0[0], p2[1]-p0[1]) * degPerPixel # ⊿p2,p0
+                            dp01r = dp01 / dp12
+                            dp12r = dp12 / dp20
+                            dp20r = dp20 / dp01
+
+                            # 等級差(輝度比)を比較 ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2)
+                            # 画像側3つの星の等級差(輝度比)を計算
+                            p01Mag = -2.5 * np.log10(p0[2] / p1[2])
+                            p12Mag = -2.5 * np.log10(p1[2] / p2[2])
+                            p20Mag = -2.5 * np.log10(p2[2] / p0[2])
+                            
+                            # カタログ側マッチ配列
+                            cn = catalog[matchIndices]
+                            
+                            # 辺比を計算
+                            dcn1 =                 CatalogHelper.angularDistance(cn[:,1], cn[:,2], c1[  1], c1[  2])
+                            dc12 = np.broadcast_to(CatalogHelper.angularDistance(c1[  1], c1[  2], c2[  1], c2[  2]), dcn1.shape)
+                            dc2n =                 CatalogHelper.angularDistance(c2[  1], c2[  2], cn[:,1], cn[:,2])
+                            dcn1r = dcn1 / dc12
+                            dc12r = dc12 / dc12
+                            dc2nr = dc2n / dc12
+
+                            # カタログ側3つの星の等級差を計算
+                            cn1Mag =                 cn[:,3] - c1[  3]
+                            c12Mag = np.broadcast_to(c1[  3] - c2[  3], cn1Mag.shape)
+                            c2nMag =                 c2[  3] - cn[:,3]
+
+                            # 画像側に近い明るさ比のカタログを採用する
+                            # 3つの差の最も小さいものを採用
+                            pSet = np.array([[dp01r], [dp12r], [dp20r],  [p01Mag], [p12Mag], [p20Mag]])
+                            cSet = np.array([ dcn1r ,  dc12r ,  dc2nr ,   cn1Mag ,  c12Mag ,  c2nMag  ])
+                            
+                            matchError = np.sum((cSet - pSet)**2, axis=0)
+                            
+                            errorIndex = np.argmin(matchError)
+                            matchIndex = matchIndices[errorIndex]
                         
-                        # カタログ側での距離比
-                        cBaseRatio = nh.array([d0/d1, d1/d2, d2/d0])
-                        
-                        # 2つの独立した距離比が共に一致するかを判定。
-                        if np.allclose(cBaseRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0):
-                            currentInliers += 1
-                            currentError += np.sum(np.abs(cBaseRatio - pBaseRatio))
-                            currentMatched.append({
-                                'hip'        : float(candidateCatalog[j][0]),
-                                'ra'         : float(candidateCatalog[j][1]),
-                                'dec'        : float(candidateCatalog[j][2]),
-                                'mag'        : float(candidateCatalog[j][3]),
-                                'x'          : float(selectedStars[i][0]),
-                                'y'          : float(selectedStars[i][1]),
-                                'brightness' : float(selectedStars[i][2]),
-                            })
-                            # 確定した星を除く
-                            candidateCatalogIndices.remove(j)
-                            break
+                        currentInliers += 1
+                        currentMatched.append({
+                            'hip'        : float(catalog[matchIndex, 0]),
+                            'ra'         : float(catalog[matchIndex, 1]),
+                            'dec'        : float(catalog[matchIndex, 2]),
+                            'mag'        : float(catalog[matchIndex, 3]),
+                            'x'          : float(selectedStars[i][0]),
+                            'y'          : float(selectedStars[i][1]),
+                            'brightness' : float(selectedStars[i][2]),
+                        })
 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
                     # 等級を比較する
                     currentMagError = 0.0
                     for i in range(len(currentMatched)):
-                        for j in range(i + 1, len(currentMatched)):
-                            s1 = currentMatched[i]
-                            s2 = currentMatched[j]
-                            mag_diff = abs(s1['mag'] - s2['mag'])
-                            b1 = max(s1['brightness'], 1e-6)
-                            b2 = max(s2['brightness'], 1e-6)
-                            img_mag_diff = abs(2.5 * np.log10(b1 / b2)) # 等級差(輝度比)を計算 mag = -2.5 log10 br
-                            currentMagError += abs(mag_diff - img_mag_diff)
+                        j = (i + 1) % len(currentMatched)
+                        k = (i + 2) % len(currentMatched)
+                        mat0 = currentMatched[i]
+                        mat1 = currentMatched[j]
+                        mat2 = currentMatched[k]
+                        dc01 = CatalogHelper.angularDistance(mat0['ra'], mat0['dec'], mat1['ra'], mat1['dec'])
+                        dc12 = CatalogHelper.angularDistance(mat1['ra'], mat1['dec'], mat2['ra'], mat2['dec'])
+                        cd   = dc01 / dc12
+                        cMag = mat0['mag'] - mat1['mag']
+                        dp01 = np.hypot(mat0['x'] - mat1['x'], mat0['y'] - mat1['y'])
+                        dp12 = np.hypot(mat1['x'] - mat2['x'], mat1['y'] - mat2['y'])
+                        pd   = dp01 / dp12
+                        p0br = max(mat0['brightness'], 1e-6)
+                        p1br = max(mat1['brightness'], 1e-6)
+                        pMag = -2.5 * np.log10(p0br / p1br)
+                        currentMagError += (cd - pd)**2 + (cMag - pMag)**2 # 等級差(輝度比)を比較 ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2)
+                    currentMagError /= len(currentMatched)
+                    # インライア数が同じでも、誤差が小さい方が優先
                     if bestMatchCount < currentInliers or currentMagError < bestMatchError:
                         bestMatchCount = currentInliers
                         bestMatchError = currentMagError
