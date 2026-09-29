@@ -432,7 +432,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         # 一括処理用に列ごとに分割
         catalogRa  = catalog[:, 1]
         catalogDec = catalog[:, 2]
-        catalogMag = catalog[:, 3]
         
         degPerPixel = self.estimatedFovDeg / np.hypot(w, h)
         bestMatchCount = 0
@@ -456,26 +455,43 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
             # 画像側での距離比
-            pBaseRatio = nh.array([dp01/dp12,dp12/dp20,dp20/dp01])
+            pBaseRatio = self._calcRatio([p0,p1,p2])
             
             # カタログ側で3点1000組を選択し、形状比率を一括計算
             cIndices = []
             n = len(catalog)
-            c = (n*(n-1)*(n-2))//(3*2*1) if n <= 19 else 1000 # 19C3=965 以上の場合 1000 にする。
-            c0i = np.random.choice(n  , c)
-            c1i = np.random.choice(n-1, c)
-            c2i = np.random.choice(n-2, c)
-            c1i += (c0i <= c1i)
-            c2i += (c0i <= c2i)
-            c2i += (c1i <= c2i)
+            if n <= 40:
+                # 40C3 = 9880 以下は総組み合わせ
+                c0_2d, c1_2d = np.triu_indices(n - 2)
+                c0_2d = c0_2d.astype(np.int32)
+                c1_2d = c1_2d.astype(np.int32)
+                counts = (n - 2) - c1_2d
+                c0i = np.repeat(c0_2d, counts)
+                c1i = np.repeat(c1_2d, counts)
+                c2_start = c1i
+                c2i =(  c2_start
+                     + ( np.arange(len(c0i), dtype=np.int32)
+                       - np.repeat(np.cumsum(counts, dtype=np.int32) - counts, counts)
+                       )
+                     )
+                c1i += 1
+                c2i += 2
+            else:
+                c = 10000
+                c0i = np.random.choice(n  , c)
+                c1i = np.random.choice(n-1, c)
+                c2i = np.random.choice(n-2, c)
+                c1i += (c0i <= c1i)
+                c2i += (c0i <= c2i)
+                c2i += (c1i <= c2i)
             c0 = catalog[c0i]
             c1 = catalog[c1i]
             c2 = catalog[c2i]
-            dc01 = CatalogHelper.angularDistance(c0[:, 1], c0[:, 2], c1[:, 1], c1[:, 2]) # ⊿c0,c1
-            dc12 = CatalogHelper.angularDistance(c1[:, 1], c1[:, 2], c2[:, 1], c2[:, 2]) # ⊿c1,c2
-            dc20 = CatalogHelper.angularDistance(c2[:, 1], c2[:, 2], c0[:, 1], c0[:, 2]) # ⊿c2,c0
-            dc = nh.array([dc01, dc12, dc20])
-            cBaseRatio = np.stack([dc01/dc12, dc12/dc20, dc20/dc01], axis=1)
+            ccw = 0 < (c1[:, 0] - c0[:, 0]) * (c2[:, 1] - c0[:, 1]) - (c1[:, 1] - c0[:, 1]) * (c2[:, 0] - c0[:, 0])
+            c1[ccw],c2[ccw] = c2[ccw],c1[ccw] # 時計回りに修正
+            
+            # カタログ側での距離比
+            cBaseRatio = self._calcCatalogRatio(np.stack([c0,c1,c2],axis=1))
             
             # 3点の距離比が近似一致するものを抽出
             isClose = np.isclose(cBaseRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0)
@@ -486,36 +502,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     # 1つしか候補がない
                     matchIndex = matchIndices[0]
                 else:
-                    # 画像側
-                    # 辺比
-                    dp01r = pBaseRatio[0]
-                    dp12r = pBaseRatio[1]
-                    dp20r = pBaseRatio[2]
-
-                    # 等級差(輝度比)を比較 ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2)
-                    # 画像側3つの星の等級差(輝度比)を計算
-                    p01Mag = -2.5 * np.log10(p0[2] / p1[2])
-                    p12Mag = -2.5 * np.log10(p1[2] / p2[2])
-                    p20Mag = -2.5 * np.log10(p2[2] / p0[2])
-                    
-                    # カタログ側
-                    # 辺比
-                    dc01r = cBaseRatio[matchIndices, 0]
-                    dc12r = cBaseRatio[matchIndices, 1]
-                    dc20r = cBaseRatio[matchIndices, 2]
-
-                    # 等級差を計算
-                    c01Mag = c0[matchIndices, 3] - c1[matchIndices, 3]
-                    c12Mag = c1[matchIndices, 3] - c2[matchIndices, 3]
-                    c20Mag = c2[matchIndices, 3] - c0[matchIndices, 3]
-
-                    # 画像側に近い明るさ比のカタログを採用する
-                    # 3つの差の最も小さいものを採用
-                    pSet = np.array([[dp01r], [dp12r], [dp20r],  [p01Mag], [p12Mag], [p20Mag]])
-                    cSet = np.array([ dc01r ,  dc12r ,  dc20r ,   c01Mag ,  c12Mag ,  c20Mag  ])
-                    
-                    matchError = np.sum((cSet - pSet)**2, axis=0)
-                    
+                    # 画像側の比に近いカタログを採用する
+                    pSet = pBaseRatio
+                    cSet = cBaseRatio[matchIndices]
+                    matchError = np.sum((cSet - pSet)**2, axis=1)
                     errorIndex = np.argmin(matchError)
                     matchIndex = matchIndices[errorIndex]
                 
@@ -733,7 +723,94 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             from utils.Debug import Debug
             Debug.log(type(self).__name__, f"bestMatchCount: 0 match")
             return [], None
+    
+    def _calcRatio(self, star:np.ndarray|list) -> np.ndarray:
+        """星の配置からレートを計算する
+        star に列方向に組になる星を入れ、行方向は任意で無くてもよい。
+        例: 3点の組み合わせが3組ある場合
+           [[p00, p01, p02],     [[ratio001, ratio012, ratio020]
+            [p10, p11, p12],  ->  [ratio101, ratio112, ratio120]
+            [p20, p21, p22]]      [ratio201, ratio212, ratio220]]
+        例: 3点の組み合わせが1組しかない場合、以下でもよい
+            [p00, p01, p02]   ->  [ratio001, ratio012, ratio020]
         
+        Args:
+            star: 星の座標と明るさ [[[x, y, brightness],...],...]
+        Returns:
+            ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
+        Raises:
+            ValueError: 星が3点未満の場合
+        """
+        import numpy as np
+        # n点間の距離(位置差)を計算 (n-1番目は0との差)
+        # n点間の輝度差を計算 (n-1番目は0との差)
+        return self._calcRatioImpl(star,
+                                   lambda s0, s1: (s0[:, :, 0] - s1[:, :, 0])**2 + (s0[:, :, 1] - s1[:, :, 1])**2,
+                                   lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])**2
+                                  )
+    
+    def _calcCatalogRatio(self, star:np.ndarray|list) -> np.ndarray:
+        """星の配置からレートを計算する
+        star に列方向に組になる星を入れ、行方向は任意で無くてもよい。
+        例: 3点の組み合わせが3組ある場合
+           [[p00, p01, p02],     [[ratio001, ratio012, ratio020]
+            [p10, p11, p12],  ->  [ratio101, ratio112, ratio120]
+            [p20, p21, p22]]      [ratio201, ratio212, ratio220]]
+        例: 3点の組み合わせが1組しかない場合、以下でもよい
+            [p00, p01, p02]   ->  [ratio001, ratio012, ratio020]
+        
+        Args:
+            star: 星の座標と明るさ [[[id, ra, deg, mag],...],...]
+        Returns:
+            ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
+        Raises:
+            ValueError: 星が3点未満の場合
+        """
+        from utils.catalog_helper import CatalogHelper
+        # n点間の角距離(位置差)を計算 (n-1番目は0との差)
+        # n点間の輝度差を計算 (n-1番目は0との差) ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2) 実装は m2 を0等級を基準(1)とした
+        return self._calcRatioImpl(star,
+                                   lambda s0, s1: CatalogHelper.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2])**2,
+                                   lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))**2
+                                  )
+    
+    def _calcRatioImpl(self, star:np.ndarray|list, func0, func1) -> np.ndarray:
+        """星の配置からレートを計算する
+        計算式をテンプレートパターンで外部から得る
+        Args:
+            star: 星の情報
+            func0: 距離計算関数
+            func1: 等級計算関数
+        Returns:
+            ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
+        Raises:
+            ValueError: 星が3点未満の場合
+        """
+        import numpy as np
+        
+        star = np.asarray(star)
+        if star.ndim == 2:
+            _star = star[np.newaxis, ...]
+        else:
+            _star = star
+        
+        if _star.shape[1] < 3:
+            raise ValueError("入力には少なくとも3点の星が必要です。")
+        
+        _starN = np.roll(_star, shift=-1, axis=1)
+        ret0 = func0(_star, _starN)
+        ret1 = func1(_star, _starN)
+        
+        # n点間の比を計算 (n-1番目は0との比)
+        ratio0 = ret0 / np.roll(ret0, shift=-1, axis=1)
+        ratio1 = ret1 / np.roll(ret1, shift=-1, axis=1)
+        ratio = ratio0 + 0.00001 * ratio1
+        
+        if star.ndim == 2:
+            return ratio[0]
+        else:
+            return ratio
+    
     def _createTableOutput(self, matchedStars: list, parentHeaders: dict) -> FlowData:
         """星リストから Table 型 FlowData を作成"""
         from utils import numpy_helpers as nh
