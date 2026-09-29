@@ -445,8 +445,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
             # 画像側で3点を選択し、形状比率を計算
-            indices = np.random.choice(starNum, 3, replace=False)
-            p0,p1,p2 = [selectedStars[i] for i in indices]
+            pIndices = list(np.random.choice(starNum, 3, replace=False))
+            p0,p1,p2 = [selectedStars[i] for i in pIndices]
             if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
                 p1,p2 = p2,p1 # 時計回りに修正
             dp01 = np.hypot(p0[0]-p1[0], p0[1]-p1[1]) * degPerPixel # ⊿p0,p1
@@ -458,21 +458,67 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # 画像側での距離比
             pBaseRatio = nh.array([dp01/dp12,dp12/dp20,dp20/dp01])
             
-            # カタログ側で3点を選択し、形状比率を計算
-            indices = np.random.choice(len(catalog), 3, replace=False)
-            c0,c1,c2 = [catalog[i] for i in indices]
-            if 0 < (c1[0] - c0[0]) * (c2[1] - c0[1]) - (c1[1] - c0[1]) * (c2[0] - c0[0]):
-                c1,c2 = c2,c1 # 時計回りに修正
-            dc01 = CatalogHelper.angularDistance(c0[1], c0[2], c1[1], c1[2]) # ⊿c0,c1
-            dc12 = CatalogHelper.angularDistance(c1[1], c1[2], c2[1], c2[2]) # ⊿c1,c2
-            dc20 = CatalogHelper.angularDistance(c2[1], c2[2], c0[1], c0[2]) # ⊿c2,c0
-            dc = nh.array([dc01,dc12,dc20])
-            if np.any(dc < 1e-7) or np.min(dc) / np.max(dc) < 0.2: continue # 極端に短い辺が在るのでスキップ
+            # カタログ側で3点1000組を選択し、形状比率を一括計算
+            cIndices = []
+            n = len(catalog)
+            c = (n*(n-1)*(n-2))//(3*2*1) if n <= 19 else 1000 # 19C3=965 以上の場合 1000 にする。
+            c0i = np.random.choice(n  , c)
+            c1i = np.random.choice(n-1, c)
+            c2i = np.random.choice(n-2, c)
+            c1i += (c0i <= c1i)
+            c2i += (c0i <= c2i)
+            c2i += (c1i <= c2i)
+            c0 = catalog[c0i]
+            c1 = catalog[c1i]
+            c2 = catalog[c2i]
+            dc01 = CatalogHelper.angularDistance(c0[:, 1], c0[:, 2], c1[:, 1], c1[:, 2]) # ⊿c0,c1
+            dc12 = CatalogHelper.angularDistance(c1[:, 1], c1[:, 2], c2[:, 1], c2[:, 2]) # ⊿c1,c2
+            dc20 = CatalogHelper.angularDistance(c2[:, 1], c2[:, 2], c0[:, 1], c0[:, 2]) # ⊿c2,c0
+            dc = nh.array([dc01, dc12, dc20])
+            cBaseRatio = np.stack([dc01/dc12, dc12/dc20, dc20/dc01], axis=1)
             
-            # カタログ側での距離比
-            cBaseRatio = nh.array([dc01/dc12, dc12/dc20, dc20/dc01])
+            # 3点の距離比が近似一致するものを抽出
+            isClose = np.isclose(cBaseRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0)
+            isCloseAll = np.all(isClose, axis=1)
+            matchIndices = np.where(isCloseAll)[0]
+            if 0 < len(matchIndices):
+                if 1== len(matchIndices):
+                    # 1つしか候補がない
+                    matchIndex = matchIndices[0]
+                else:
+                    # 画像側
+                    # 辺比
+                    dp01r = pBaseRatio[0]
+                    dp12r = pBaseRatio[1]
+                    dp20r = pBaseRatio[2]
 
-            if np.allclose(cBaseRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0):
+                    # 等級差(輝度比)を比較 ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2)
+                    # 画像側3つの星の等級差(輝度比)を計算
+                    p01Mag = -2.5 * np.log10(p0[2] / p1[2])
+                    p12Mag = -2.5 * np.log10(p1[2] / p2[2])
+                    p20Mag = -2.5 * np.log10(p2[2] / p0[2])
+                    
+                    # カタログ側
+                    # 辺比
+                    dc01r = cBaseRatio[matchIndices, 0]
+                    dc12r = cBaseRatio[matchIndices, 1]
+                    dc20r = cBaseRatio[matchIndices, 2]
+
+                    # 等級差を計算
+                    c01Mag = c0[matchIndices, 3] - c1[matchIndices, 3]
+                    c12Mag = c1[matchIndices, 3] - c2[matchIndices, 3]
+                    c20Mag = c2[matchIndices, 3] - c0[matchIndices, 3]
+
+                    # 画像側に近い明るさ比のカタログを採用する
+                    # 3つの差の最も小さいものを採用
+                    pSet = np.array([[dp01r], [dp12r], [dp20r],  [p01Mag], [p12Mag], [p20Mag]])
+                    cSet = np.array([ dc01r ,  dc12r ,  dc20r ,   c01Mag ,  c12Mag ,  c20Mag  ])
+                    
+                    matchError = np.sum((cSet - pSet)**2, axis=0)
+                    
+                    errorIndex = np.argmin(matchError)
+                    matchIndex = matchIndices[errorIndex]
+                
                 # 画像3点とカタログ3点が相似だった
                 currentInliers = 3
                 # ratio_cat_base と ratio_img_base のズレの総和の記録
@@ -484,11 +530,12 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                       'x'          : float(p[0]),
                       'y'          : float(p[1]),
                       'brightness' : float(p[2]),
-                    } for c,p in ((c0,p0),(c1,p1),(c2,p2))
+                    } for c,p in ((c0[matchIndex],p0),(c1[matchIndex],p1),(c2[matchIndex],p2))
                 ]
-                
-                # 確定した星を除く index を作成
-                candidateCatalogIndices = [i for i in range(len(catalog)) if i not in indices]
+
+                cIndices.append(c0i[matchIndex])
+                cIndices.append(c1i[matchIndex])
+                cIndices.append(c2i[matchIndex])
                 
                 # 画像内の全星について、確定した星との三角形(P0, P1, P2)に対する距離比を検証
                 for i in range(len(selectedStars)):
@@ -534,7 +581,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     isClose = np.isclose(cRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0)
                     isCloseAll = np.all(isClose, axis=1)
                     matchIndices = np.where(isCloseAll)[0]
-                    matchIndices = [i for i in matchIndices if i not in indices]
+                    matchIndices = [i for i in matchIndices if i not in cIndices]
                     
                     if 0 < len(matchIndices):
                         if 1== len(matchIndices):
@@ -592,9 +639,18 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                             'brightness' : float(selectedStars[i][2]),
                         })
 
+                        #重複チェック
+                        for i in range(len(currentMatched)):
+                            for j in range(i+1,len(currentMatched)):
+                                assert currentMatched[i]['hip'] != currentMatched[j]['hip'], "重複が発生しています。"
+
+                        pIndices.append(i)
+                        cIndices.append(matchIndex)
+                
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
                     # 等級を比較する
+                    currentMatched.sort(key=lambda x: x['mag']) # 等級順にソート
                     currentMagError = 0.0
                     for i in range(len(currentMatched)):
                         j = (i + 1) % len(currentMatched)
