@@ -604,33 +604,20 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    # 等級を比較する
-                    currentMatched.sort(key=lambda x: x['mag']) # 等級順にソート
-                    currentMagError = 0.0
-                    for i in range(len(currentMatched)):
-                        j = (i + 1) % len(currentMatched)
-                        k = (i + 2) % len(currentMatched)
-                        mat0 = currentMatched[i]
-                        mat1 = currentMatched[j]
-                        mat2 = currentMatched[k]
-                        dc01 = CatalogHelper.angularDistance(mat0['ra'], mat0['dec'], mat1['ra'], mat1['dec'])
-                        dc12 = CatalogHelper.angularDistance(mat1['ra'], mat1['dec'], mat2['ra'], mat2['dec'])
-                        cd   = dc01 / dc12
-                        cMag = mat0['mag'] - mat1['mag']
-                        dp01 = np.hypot(mat0['x'] - mat1['x'], mat0['y'] - mat1['y'])
-                        dp12 = np.hypot(mat1['x'] - mat2['x'], mat1['y'] - mat2['y'])
-                        pd   = dp01 / dp12
-                        p0br = max(mat0['brightness'], 1e-6)
-                        p1br = max(mat1['brightness'], 1e-6)
-                        pMag = -2.5 * np.log10(p0br / p1br)
-                        currentMagError += (cd - pd)**2 + (cMag - pMag)**2 # 等級差(輝度比)を比較 ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2)
-                    currentMagError /= len(currentMatched)
+                    # 誤差算出
+                    currentMatched.sort(key=lambda x: x['mag']) # カタログ等級順にソート
+                    p = nh.array([[star['x'  ], star['y' ], star['brightness']             ] for star in currentMatched])
+                    c = nh.array([[star['hip'], star['ra'], star['dec'       ], star['mag']] for star in currentMatched])
+                    pr = self._calcRatio(p)
+                    cr = self._calcCatalogRatio(c)
+                    currentError = np.mean(np.abs(pr**0.5 - cr**0.5))
+                    
                     # インライア数が同じでも、誤差が小さい方が優先
-                    if bestMatchCount < currentInliers or currentMagError < bestMatchError:
+                    if bestMatchCount < currentInliers or currentError < bestMatchError:
                         bestMatchCount = currentInliers
-                        bestMatchError = currentMagError
+                        bestMatchError = currentError
                         bestMatchedStars = currentMatched
-
+        
         if 3 <= bestMatchCount:
             import cv2
             src_pts = np.array([[star['x'], star['y']] for star in bestMatchedStars], dtype=np.float32)
@@ -776,7 +763,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         ratio1 = diff1 / np.roll(diff1, shift=-1, axis=1)
         
         # 算出した比を合成
-        ratio = ratio0 + 0.00001 * ratio1
+        ratio = ratio0 + 0.0001 * ratio1
         
         if star.ndim == 2:
             return ratio[0]
