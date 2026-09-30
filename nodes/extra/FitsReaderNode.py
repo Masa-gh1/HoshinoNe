@@ -209,38 +209,38 @@ class FitsReaderNode(BaseReaderNode):
 
                 # EXIF 追加
                 headers['exif'] = {
-                    'ImageWidth'               : int(         hduHeader.get('NAXIS1'  ,  0)             ), #   256 0100h 画像の幅
-                    'ImageLength'              : int(         hduHeader.get('NAXIS2'  ,  0)             ), #   257 0101h 画像の高さ
-                    'BitsPerSample'            : int(         hduHeader.get('BITPIX'  ,  0)             ), #   258 0102h 画像のビットの深さ
-                    'Make'                     : str(         hduHeader.get('ORIGIN'  , '')             ), #   271 010Fh 画像入力機器のメーカ名
-                    'Model'                    : str(         hduHeader.get('TELESCOP', '')             ), #   272 0110h 画像入力機器のモデル名
-                   #'Orientation'              : int(                                                   ), #   274 0112h 画像方向
-                    'XResolution'              : Fraction(                                     72,     1), #   282 011Ah 画像の幅の解像度
-                    'YResolution'              : Fraction(                                     72,     1), #   283 011Bh 画像の高さの解像度
-                    'ResolutionUnit'           : 2                                                       , #   296 0128h 画像の幅と高さの解像度の単位
-                    'DateTime'                 : dateTime                                                , #   306 0132h ファイル変更日時
-                   #'Artist'                   : str(                                                   ), #   315 013Bh アーティスト
-                   #'Copyright'                : str(                                                   ), # 33432 8298h 撮影著作権者/編集著作権者
-                    'ExposureTime'             : Fraction(int(hduHeader.get('EXPTIME' ,  0)*1000),  1000), # 33434 829Ah 露出時間
-                   #'FNumber'                  : Fraction(                                              ), # 33437 829Dh F ナンバー
-                   #'PhotographicSensitivity'  : int(                                                   ), # 34855 8827h 撮影感度
-                   #'SensitivityType'          : int(                                                   ), # 34864 8830h 感度種別
-                   #'StandardOutputSensitivity': int(                                                   ), # 34865 8831h 標準出力感度
-                   #'RecommendedExposureIndex' : int(                                                   ), # 34866 8832h 推奨露光指数
-                   #'ISOSpeed'                 : int(                                                   ), # 34867 8833h ISO スピード
-                    'DateTimeOriginal'         : dateTime                                                , # 36867 9003h 原画像データの生成日時
-                    'DateTimeDigitized'        : dateTime                                                , # 36868 9004h デジタルデータの作成日時
-                    'FocalLength'              : Fraction(int(hduHeader.get('FOCALLEN',  0))             ,     1), # 37386 920Ah レンズ焦点距離
-                    'SubSecTime'               : subsec                                                  , # 37520 9290h DateTime のサブセック
-                    'SubSecTimeOriginal'       : subsec                                                  , # 37521 9291h DateTimeOriginal のサブセック
-                    'SubSecTimeDigitized'      : subsec                                                  , # 37522 9292h DateTimeDigitized のサブセック
-                    'PixelXDimension'          : int(         hduHeader.get('NAXIS1'  ,  0)             ), # 40962 A002h 実効画像幅
-                    'PixelYDimension'          : int(         hduHeader.get('NAXIS2'  ,  0)             ), # 40963 A003h 実効画像高さ
-                    'FocalPlaneXResolution'    : Fraction(int(hduHeader.get('XPIXSZ'  ,  0))     , 10000), # 41486 A20Eh 焦点面の幅の解像度
-                    'FocalPlaneYResolution'    : Fraction(int(hduHeader.get('YPIXSZ'  ,  0))     , 10000), # 41487 A20Fh 焦点面の高さの解像度
-                    'FocalPlaneResolutionUnit' : 3                                                       , # 41488 A210h 焦点面解像度単位
-                    'LensMake'                 : str(         hduHeader.get('ORIGIN'  , '')             ), # 42035 A433h レンズのメーカ名
-                    'LensModel'                : str(         hduHeader.get('CAMERA'  , '')             ), # 42036 A434h レンズのモデル名
+                    'ImageWidth'               : int(                hduHeader.get('NAXIS1'  ,  0)            ), #   256 0100h 画像の幅
+                    'ImageLength'              : int(                hduHeader.get('NAXIS2'  ,  0)            ), #   257 0101h 画像の高さ
+                    'BitsPerSample'            : int(                hduHeader.get('BITPIX'  ,  0)            ), #   258 0102h 画像のビットの深さ
+                    'Make'                     : str(                hduHeader.get('ORIGIN'  , '')            ), #   271 010Fh 画像入力機器のメーカ名
+                    'Model'                    : str(                hduHeader.get('TELESCOP', '')            ), #   272 0110h 画像入力機器のモデル名
+                   #'Orientation'              : int(                                                         ), #   274 0112h 画像方向
+                    'XResolution'              : Fraction(                                            72,    1), #   282 011Ah 画像の幅の解像度
+                    'YResolution'              : Fraction(                                            72,    1), #   283 011Bh 画像の高さの解像度
+                    'ResolutionUnit'           : 2                                                             , #   296 0128h 画像の幅と高さの解像度の単位
+                    'DateTime'                 : dateTime                                                      , #   306 0132h ファイル変更日時
+                   #'Artist'                   : str(                                                         ), #   315 013Bh アーティスト
+                   #'Copyright'                : str(                                                         ), # 33432 8298h 撮影著作権者/編集著作権者
+                    'ExposureTime'             : Fraction(       int(hduHeader.get('EXPTIME' ,  0)*1000), 1000), # 33434 829Ah 露出時間
+                   #'FNumber'                  : Fraction(                                                    ), # 33437 829Dh F ナンバー
+                   #'PhotographicSensitivity'  : int(                                                         ), # 34855 8827h 撮影感度
+                   #'SensitivityType'          : int(                                                         ), # 34864 8830h 感度種別
+                   #'StandardOutputSensitivity': int(                                                         ), # 34865 8831h 標準出力感度
+                   #'RecommendedExposureIndex' : int(                                                         ), # 34866 8832h 推奨露光指数
+                   #'ISOSpeed'                 : int(                                                         ), # 34867 8833h ISO スピード
+                    'DateTimeOriginal'         : dateTime                                                      , # 36867 9003h 原画像データの生成日時
+                    'DateTimeDigitized'        : dateTime                                                      , # 36868 9004h デジタルデータの作成日時
+                    'FocalLength'              : Fraction(       int(hduHeader.get('FOCALLEN',  0))            ,     1), # 37386 920Ah レンズ焦点距離
+                    'SubSecTime'               : subsec                                                        , # 37520 9290h DateTime のサブセック
+                    'SubSecTimeOriginal'       : subsec                                                        , # 37521 9291h DateTimeOriginal のサブセック
+                    'SubSecTimeDigitized'      : subsec                                                        , # 37522 9292h DateTimeDigitized のサブセック
+                    'PixelXDimension'          : int(                hduHeader.get('NAXIS1'  ,  0)            ), # 40962 A002h 実効画像幅
+                    'PixelYDimension'          : int(                hduHeader.get('NAXIS2'  ,  0)            ), # 40963 A003h 実効画像高さ
+                    'FocalPlaneXResolution'    : Fraction(10000, int(hduHeader.get('XPIXSZ'  ,  0))           ), # 41486 A20Eh 焦点面の幅の解像度
+                    'FocalPlaneYResolution'    : Fraction(10000, int(hduHeader.get('YPIXSZ'  ,  0))           ), # 41487 A20Fh 焦点面の高さの解像度
+                    'FocalPlaneResolutionUnit' : 3                                                             , # 41488 A210h 焦点面解像度単位
+                    'LensMake'                 : str(                hduHeader.get('ORIGIN'  , '')            ), # 42035 A433h レンズのメーカ名
+                    'LensModel'                : str(                hduHeader.get('CAMERA'  , '')            ), # 42036 A434h レンズのモデル名
                 }
                 
                 flowData = FlowData(headers)
