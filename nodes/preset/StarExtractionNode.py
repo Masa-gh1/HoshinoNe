@@ -63,7 +63,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.star.ransac.sampleRadius = 100                   # RANSAC対応点サンプル半径 [px]
         self.star.ransac.iterations   = 100                   # RANSAC試行回数
         self.star.ransac.seed         = 2725                  # RANSAC乱数シード
-
+        
+        # 画像パラメータ
+        self.fovDeg            = 3.5                          # 画角 [deg]
+        self.useHeader         = False                        # 画像ヘッダから推定する
+        
         # カタログ照合パラメータ
         self.catalogPath       = CATALOG_PATH                 # カタログファイルパス
         self.catalogMatchLimit = 5                            # カタログ照合許容比 [%]
@@ -103,6 +107,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         nodeData["starSampleRadius"]    = self.star.ransac.sampleRadius
         nodeData["ransacIterations"]    = self.star.ransac.iterations
         nodeData["ransacSeed"]          = self.star.ransac.seed
+        nodeData["fovDeg"]              = self.fovDeg
+        nodeData["useHeader"]           = self.useHeader
         nodeData["catalogMatchLimit"]   = self.catalogMatchLimit
         nodeData["catalogMagLimit"]     = self.catalogMagLimit
         nodeData["estimatedRa"]         = self.estimatedRa
@@ -140,6 +146,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             self.star.ransac.iterations = nodeData["ransacIterations"]
         if "ransacSeed" in nodeData:
             self.star.ransac.seed = nodeData["ransacSeed"]
+        if "fovDeg" in nodeData:
+            self.fovDeg = nodeData["fovDeg"]
+        if "useHeader" in nodeData:
+            self.useHeader = nodeData["useHeader"]
         if "catalogMatchLimit" in nodeData:
             self.catalogMatchLimit = nodeData["catalogMatchLimit"]
         if "catalogMagLimit" in nodeData:
@@ -420,19 +430,19 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             crval1, crval2 = self.estimatedRa, self.estimatedDec
             searchRadius = self.estimatedFovDeg / 2.0
         else:
-            crval1, crval2 = 0.0, 0.0
-            searchRadius = 180
+            crval1, crval2 = None, None
+            searchRadius = self.fovDeg / 2.0 * 2.0
         
         # 探索範囲はユーザーの推定画角をガイドとするが、
         # 実際の同定（判定）は、この範囲内で見つかった星の中から「形と相対位置」が一致するかで行う。
-        catalog = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalogMagLimit)
-        if len(catalog) < 3:
-            return [], None
+        if not crval1 or not crval2:
+            catalogMaster = None
+        else:
+            catalogMaster = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalogMagLimit)
+            if len(catalogMaster) < 3:
+                return [], None
         
-        # 一括処理用に列ごとに分割
-        catalogRa  = catalog[:, 1]
-        catalogDec = catalog[:, 2]
-        
+        #  (((tanθ/θ) - 1)
         degPerPixel = self.estimatedFovDeg / np.hypot(w, h)
         bestMatchCount = 0
         bestMatchError = np.inf
@@ -440,6 +450,12 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         starNum = len(selectedStars)
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
+            if not catalogMaster is None:
+                catalog = catalogMaster
+            else:
+                # ランダムな緯度経度でカタログを抽出
+                catalog = CatalogHelper.queryStars(catalogData, np.random.uniform(0, 360), np.random.uniform(-90, 90), searchRadius, magLimit=self.catalogMagLimit)
+            
             # 画像側で3点を選択し、形状比率を計算
             pIndices = list(np.random.choice(starNum, 3, replace=False))
             p0,p1,p2 = [selectedStars[i] for i in pIndices]
@@ -453,7 +469,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 p1,p2 = p2,p1 # 時計回りに修正
             
             # 画像側での距離比
-            pBaseRatio = self._calcRatio([p0, p1, p2])
+            pBaseRatio = self._calcRatio([p0, p1, p2], w, h, self.fovDeg)
             
             # カタログ側で3点10000組を選択し、形状比率を一括計算
             n = len(catalog)
@@ -557,7 +573,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                         c1,c2 = c2,c1 # 時計回りに修正
                     
                     # 画像側での距離比
-                    pRatio = self._calcRatio([p0, p1, p2])
+                    pRatio = self._calcRatio([p0, p1, p2], w, h, self.fovDeg)
                     
                     # カタログ側での距離比
                     c1 = np.broadcast_to([c1['hip'], c1['ra'], c1['dec'], c1['mag']], catalog.shape)
@@ -608,7 +624,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     currentMatched.sort(key=lambda x: x['mag']) # カタログ等級順にソート
                     p = nh.array([[star['x'  ], star['y' ], star['brightness']             ] for star in currentMatched])
                     c = nh.array([[star['hip'], star['ra'], star['dec'       ], star['mag']] for star in currentMatched])
-                    pr = self._calcRatio(p)
+                    pr = self._calcRatio(p, w, h, self.fovDeg)
                     cr = self._calcCatalogRatio(c)
                     currentError = np.mean(np.abs(pr**0.5 - cr**0.5))
                     
@@ -678,7 +694,36 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             Debug.log(type(self).__name__, f"bestMatchCount: 0 match")
             return [], None
     
-    def _calcRatio(self, star:np.ndarray|list) -> np.ndarray:
+    def _calcAngDist(self, x1: np.ndarray|float, y1: np.ndarray|float, x2: np.ndarray|float, y2: np.ndarray|float, w:int, h:int, fovDeg:float) -> np.ndarray|float:
+        """画像上の2点から角距離を求める（中心投影レンズを前提）
+        
+        Args:
+            x1: 点1のx
+            y1: 点1のy
+            x2: 点2のx
+            y2: 点2のy
+            w: 画像幅
+            h: 画像高さ
+            fovDeg: 対角画角 (度)
+        Returns:
+            2点間の角距離 (度)
+        """
+        import numpy as np
+        cx, cy = w / 2.0, h / 2.0                           # 画像の中心座標
+        diagonalPx = np.sqrt(w**2 + h**2)                   # 画像の対角線サイズ [px]
+        fovRd = np.radians(fovDeg)
+        fPx = diagonalPx / (2.0 * np.tan(fovRd / 2.0))      # 焦点距離 f [px] レンズから投影面までの距離
+        v1_x, v1_y = x1 - cx, y1 - cy                       # 中央からのベクトル1
+        v2_x, v2_y = x2 - cx, y2 - cy                       # 中央からのベクトル2
+        dot_product = v1_x * v2_x + v1_y * v2_y + fPx * fPx # ベクトルの内積 x1*x2 + y1*y2 + z1*z2
+        norm_v1 = np.sqrt(v1_x**2 + v1_y**2 + fPx**2)       # レンズから投影点までの距離
+        norm_v2 = np.sqrt(v2_x**2 + v2_y**2 + fPx**2)       # レンズから投影点までの距離
+        cosTheta = dot_product / (norm_v1 * norm_v2)        # レンズから見た2点のコサイン値
+        cosTheta = np.clip(cosTheta, -1.0, 1.0)             # 浮動小数点誤差による 1.0 超え/ -1.0 未満をクリップ
+        rad = np.arccos(cosTheta)                           # レンズから見た2点の角度
+        return np.degrees(rad)
+
+    def _calcRatio(self, star:np.ndarray|list, w:int, h:int, fovDeg:float) -> np.ndarray:
         """星の配置からレートを計算する
         star に列方向に組になる星を入れ、行方向は任意で無くてもよい。
         例: 3点の組み合わせが3組ある場合
@@ -690,6 +735,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         Args:
             star: 星の座標と明るさ [[[x, y, brightness],...],...]
+            w: 画像幅
+            h: 画像高さ
+            fovDeg: 対角画角 (度)
         Returns:
             ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
         Raises:
@@ -699,7 +747,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         # n点間の距離(位置差)を計算 (n-1番目は0との差)
         # n点間の輝度差を計算 (n-1番目は0との差)
         return self._calcRatioImpl(star,
-                                   lambda s0, s1: (s0[:, :, 0] - s1[:, :, 0])**2 + (s0[:, :, 1] - s1[:, :, 1])**2,
+                                   lambda s0, s1: (self._calcAngDist(s0[:, :, 0], s0[:, :, 1], s1[:, :, 0], s1[:, :, 1], w, h, fovDeg))**2,
                                    lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])**2
                                   )
     
@@ -742,7 +790,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         """
         import numpy as np
         
-        star = np.asarray(star)
+        star = np.asanyarray(star)
         if star.ndim == 2:
             _star = star[np.newaxis, ...]
         else:
@@ -888,6 +936,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                  f"{self.star.ransac.sampleRadius}_"
                  f"{self.star.ransac.iterations}_"
                  f"{self.star.ransac.seed}_"
+                 f"{self.fovDeg}_"
+                 f"{self.useHeader}_"
                  f"{self.catalogPath}_"
                  f"{self.catalogMatchLimit}_"
                  f"{self.catalogMagLimit}_"
@@ -1012,6 +1062,24 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.ransacSeedEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(seedFrame, text="(1以上、結果が悪い場合は変更)").pack(side=tk.LEFT)
         
+        # 画像パラメータセクション
+        tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
+        
+        # 画角
+        fovDegFrame = tk.Frame(mainFrame)
+        fovDegFrame.pack(fill=tk.X, pady=2)
+        tk.Label(fovDegFrame, text="  画角:").pack(side=tk.LEFT)
+        self.fovDegEntry = tk.Entry(fovDegFrame, width=6)
+        self.fovDegEntry.insert(0, str(self.node.fovDeg))
+        self.fovDegEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(fovDegFrame, text="deg (画像の画角)").pack(side=tk.LEFT)
+
+        # ヘッダー情報から推定
+        useHdrFrame = tk.Frame(mainFrame)
+        useHdrFrame.pack(fill=tk.X, pady=2)
+        self.useHeaderVar = tk.BooleanVar(value=self.node.useHeader)
+        tk.Checkbutton(useHdrFrame, text="ヘッダー情報から画角を推定", variable=self.useHeaderVar).pack(side=tk.LEFT)
+        
         # カタログ照合セクション
         tk.Label(mainFrame, text="■ カタログ照合パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
 
@@ -1087,11 +1155,13 @@ class StarExtractionSettingsDialog(tk.Toplevel):
             self.node.star.ransac.sampleRadius = max(10, int(self.starDistEntry.get()))
             self.node.star.ransac.iterations   = max(10, min(100000, int(self.ransacEntry.get())))
             self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
+            self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
+            self.node.useHeader                = self.useHeaderVar.get()
             self.node.catalogMatchLimit        = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
-            self.node.catalogMagLimit          = float(self.magLimitEntry.get())
-            self.node.estimatedRa              = float(self.raEntry.get())
-            self.node.estimatedDec             = float(self.decEntry.get())
-            self.node.estimatedFovDeg          = max(0.01, float(self.fovEntry.get()))
+            self.node.catalogMagLimit          = max(1, min(20, float(self.magLimitEntry.get())))
+            self.node.estimatedRa              = max(0.0, min(360, float(self.raEntry.get())))
+            self.node.estimatedDec             = max(-90.0, min(90.0, float(self.decEntry.get())))
+            self.node.estimatedFovDeg          = max(0.0, float(self.fovEntry.get()))
             self.node.useEstimated             = self.useEstimatedVar.get()
             
             self.node.view.onNodeConfigChanged(self.node)
