@@ -69,17 +69,20 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.useHeader         = False                        # 画像ヘッダから推定する
         
         # カタログ照合パラメータ
-        self.catalogPath       = CATALOG_PATH                 # カタログファイルパス
-        self.catalogMatchLimit = 5                            # カタログ照合許容比 [%]
-        self.catalogMagLimit   = 8.0                          # カタログ等級上限 [mag]
-        self.estimatedRa       = 255.996                      # 推定中心赤経 [deg]
-        self.estimatedDec      = -11.381                      # 推定中心赤緯 [deg]
-        self.estimatedFovDeg   = 3.5                          # 推定画角 [deg]
-        self.useEstimated      = False                        # 推定中心座標を使用するか
+        self.catalog            = SimpleNamespace()
+        self.catalog.path       = CATALOG_PATH                 # カタログファイルパス
+        self.catalog.matchLimit = 5                            # カタログ照合許容比 [%]
+        self.catalog.magLimit   = 8.0                          # カタログ等級上限 [mag]
 
+        self.explore            = SimpleNamespace()
+        self.explore.ra         = 255.996                      # 探索赤経 [deg]
+        self.explore.dec        = -11.381                      # 探索赤緯 [deg]
+        self.explore.fovDeg     = 3.5                          # 探索画角 [deg]
+        self.useExplore         = False                        # 探索範囲を使用するか
+        
         # 内部状態
         self._previousTransform = None                        # 前画像で推定された変換情報
-
+        
         import importlib.util
         import sys
         if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
@@ -88,7 +91,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
     def getText(self):
         """ノードのテキストを取得"""
-        displayText = f"{self.name}\nThr:{self.star.threshold}% Match:{self.catalogMatchLimit} %"
+        displayText = f"{self.name}\nThr:{self.star.threshold}% Match:{self.catalog.matchLimit} %"
         return displayText
 
     def store(self, nodeData):
@@ -109,12 +112,12 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         nodeData["ransacSeed"]          = self.star.ransac.seed
         nodeData["fovDeg"]              = self.fovDeg
         nodeData["useHeader"]           = self.useHeader
-        nodeData["catalogMatchLimit"]   = self.catalogMatchLimit
-        nodeData["catalogMagLimit"]     = self.catalogMagLimit
-        nodeData["estimatedRa"]         = self.estimatedRa
-        nodeData["estimatedDec"]        = self.estimatedDec
-        nodeData["estimatedFovDeg"]     = self.estimatedFovDeg
-        nodeData["useApproxCoords"]     = self.useEstimated
+        nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
+        nodeData["catalog.magLimit"]    = self.catalog.magLimit
+        nodeData["explore.ra"]          = self.explore.ra
+        nodeData["explore.dec"]         = self.explore.dec
+        nodeData["explore.fovDeg"]      = self.explore.fovDeg
+        nodeData["useExplore"]          = self.useExplore
 
     def restore(self, nodeData):
         """辞書からノード設定を復元"""
@@ -150,18 +153,18 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             self.fovDeg = nodeData["fovDeg"]
         if "useHeader" in nodeData:
             self.useHeader = nodeData["useHeader"]
-        if "catalogMatchLimit" in nodeData:
-            self.catalogMatchLimit = nodeData["catalogMatchLimit"]
-        if "catalogMagLimit" in nodeData:
-            self.catalogMagLimit = nodeData["catalogMagLimit"]
-        if "estimatedRa" in nodeData:
-            self.estimatedRa = nodeData["estimatedRa"]
-        if "estimatedDec" in nodeData:
-            self.estimatedDec = nodeData["estimatedDec"]
-        if "estimatedFovDeg" in nodeData:
-            self.estimatedFovDeg = nodeData["estimatedFovDeg"]
-        if "useApproxCoords" in nodeData:
-            self.useEstimated = nodeData["useApproxCoords"]
+        if "catalog.matchLimit" in nodeData:
+            self.catalog.matchLimit = nodeData["catalog.matchLimit"]
+        if "catalog.magLimit" in nodeData:
+            self.catalog.magLimit = nodeData["catalog.magLimit"]
+        if "explore.ra" in nodeData:
+            self.explore.ra = nodeData["explore.ra"]
+        if "explore.dec" in nodeData:
+            self.explore.dec = nodeData["explore.dec"]
+        if "explore.fovDeg" in nodeData:
+            self.explore.fovDeg = nodeData["explore.fovDeg"]
+        if "useExplore" in nodeData:
+            self.useExplore = nodeData["useExplore"]
 
     def preprocessStreams(self, inputStreams):
         """入力データの前処理：primary/auxiliaryで分類"""
@@ -251,7 +254,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 return blocks[0].data
 
         # ファイルから読み込み
-        return CatalogHelper.loadCatalog(self.catalogPath)
+        return CatalogHelper.loadCatalog(self.catalog.path)
 
     def _detectStars(self, image:np.ndarray):
         """
@@ -400,7 +403,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         return distributedStars, gridSelectedCounts
     
-    def _matchCatalog(self, detectedStars: list, catalogData: np.ndarray, imageShape: tuple, headers: dict, prevTransform: dict | None = None):
+    def _matchCatalog(self, detectedStars:list, catalogData:np.ndarray, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
         """
         【真の純粋実装：座標変換を数学的に完全に排除】
         
@@ -426,35 +429,51 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         if prevTransform and "crval1" in prevTransform and "crval2" in prevTransform and "fovDeg" in prevTransform:
             crval1, crval2 = prevTransform["crval1"], prevTransform["crval2"]
             searchRadius = prevTransform["fovDeg"] / 2.0
-        elif self.useEstimated:
-            crval1, crval2 = self.estimatedRa, self.estimatedDec
-            searchRadius = self.estimatedFovDeg / 2.0
+        elif self.useExplore:
+            crval1, crval2 = self.explore.ra, self.explore.dec
+            searchRadius = self.explore.fovDeg / 2.0
         else:
             crval1, crval2 = None, None
-            searchRadius = self.fovDeg / 2.0 * 2.0
+            searchRadius = self.fovDeg / 2.0
         
         # 探索範囲はユーザーの推定画角をガイドとするが、
         # 実際の同定（判定）は、この範囲内で見つかった星の中から「形と相対位置」が一致するかで行う。
         if not crval1 or not crval2:
             catalogMaster = None
         else:
-            catalogMaster = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalogMagLimit)
+            catalogMaster = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalog.magLimit)
             if len(catalogMaster) < 3:
                 return [], None
         
-        #  (((tanθ/θ) - 1)
-        degPerPixel = self.estimatedFovDeg / np.hypot(w, h)
+        # 探索結果
         bestMatchCount = 0
         bestMatchError = np.inf
         bestMatchedStars = []
         
         starNum = len(selectedStars)
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
-            if not catalogMaster is None:
-                catalog = catalogMaster
+            # 探索範囲の決定
+            if not self.useExplore:
+                # 探索範囲が全天なのでランダムな緯度経度でカタログを抽出
+                ra = np.random.uniform(0, 360)          # RA は均等
+                sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1
+                dec = np.degrees(np.arcsin(sinDec))    # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
+                catalog = CatalogHelper.queryStars(catalogData, ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
+            elif self.fovDeg < self.explore.fovDeg:
+                # 画角より探索範囲が大きいので探索範囲内をランダムな緯度経度でカタログを抽出
+                fovDog = (self.explore.fovDeg - self.fovDeg)
+                raMin = self.explore.ra - fovDog / 2.0
+                raMax = self.explore.ra + fovDog / 2.0
+                decMin = max(-90.0, self.explore.dec - fovDog / 2.0)
+                decMax = min( 90.0, self.explore.dec + fovDog / 2.0)
+                ra = np.random.uniform(raMin, raMax) % 360.0 # RA は均等
+                sinMin = np.sin(np.radians(decMin))
+                sinMax = np.sin(np.radians(decMax))
+                sinDec = np.random.uniform(sinMin, sinMax)
+                dec = np.degrees(np.arcsin(sinDec))          # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
+                catalog = CatalogHelper.queryStars(catalogData, ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
             else:
-                # ランダムな緯度経度でカタログを抽出
-                catalog = CatalogHelper.queryStars(catalogData, np.random.uniform(0, 360), np.random.uniform(-90, 90), searchRadius, magLimit=self.catalogMagLimit)
+                catalog = catalogMaster
             
             # 画像側で3点を選択し、形状比率を計算
             pIndices = list(np.random.choice(starNum, 3, replace=False))
@@ -517,7 +536,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             cBaseRatio = self._calcCatalogRatio(np.stack([c0, c1, c2], axis=1))
             
             # 3点の距離比が近似一致するものを抽出
-            isClose = np.isclose(cBaseRatio, pBaseRatio, rtol=self.catalogMatchLimit/100.0)
+            isClose = np.isclose(cBaseRatio, pBaseRatio, rtol=self.catalog.matchLimit/100.0)
             isCloseAll = np.all(isClose, axis=1)
             matchIndices = np.where(isCloseAll)[0]
             if 0 < len(matchIndices):
@@ -581,7 +600,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     cRatio = self._calcCatalogRatio(np.stack([catalog, c1, c2], axis=1))
                     
                     # 3点の距離比が近似一致するものを抽出
-                    isClose = np.isclose(cRatio, pRatio, rtol=self.catalogMatchLimit/100.0)
+                    isClose = np.isclose(cRatio, pRatio, rtol=self.catalog.matchLimit/100.0)
                     isCloseAll = np.all(isClose, axis=1)
                     matchIndices = np.where(isCloseAll)[0]
                     matchIndices = [i for i in matchIndices if i not in currentCatalogIndices] # 既存の点を除く
@@ -938,13 +957,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                  f"{self.star.ransac.seed}_"
                  f"{self.fovDeg}_"
                  f"{self.useHeader}_"
-                 f"{self.catalogPath}_"
-                 f"{self.catalogMatchLimit}_"
-                 f"{self.catalogMagLimit}_"
-                 f"{self.estimatedRa}_"
-                 f"{self.estimatedDec}_"
-                 f"{self.estimatedFovDeg}_"
-                 f"{self.useEstimated}_"
+                 f"{self.catalog.path}_"
+                 f"{self.catalog.matchLimit}_"
+                 f"{self.catalog.magLimit}_"
+                 f"{self.explore.ra}_"
+                 f"{self.explore.dec}_"
+                 f"{self.explore.fovDeg}_"
+                 f"{self.useExplore}_"
                 )
         return hashlib.md5(config.encode()).hexdigest()
 
@@ -1072,7 +1091,7 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.fovDegEntry = tk.Entry(fovDegFrame, width=6)
         self.fovDegEntry.insert(0, str(self.node.fovDeg))
         self.fovDegEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(fovDegFrame, text="deg (画像の画角)").pack(side=tk.LEFT)
+        tk.Label(fovDegFrame, text="deg").pack(side=tk.LEFT)
 
         # ヘッダー情報から推定
         useHdrFrame = tk.Frame(mainFrame)
@@ -1088,7 +1107,7 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         radFrame.pack(fill=tk.X, pady=2)
         tk.Label(radFrame, text="  照合許容半径:").pack(side=tk.LEFT)
         self.catalogMatchLimitEntry = tk.Entry(radFrame, width=6)
-        self.catalogMatchLimitEntry.insert(0, str(self.node.catalogMatchLimit))
+        self.catalogMatchLimitEntry.insert(0, str(self.node.catalog.matchLimit))
         self.catalogMatchLimitEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(radFrame, text="% (カタログ対応付けのズレ許容比)").pack(side=tk.LEFT)
 
@@ -1097,38 +1116,38 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         magFrame.pack(fill=tk.X, pady=2)
         tk.Label(magFrame, text="  カタログ等級上限:").pack(side=tk.LEFT)
         self.magLimitEntry = tk.Entry(magFrame, width=6)
-        self.magLimitEntry.insert(0, str(self.node.catalogMagLimit))
+        self.magLimitEntry.insert(0, str(self.node.catalog.magLimit))
         self.magLimitEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(magFrame, text="mag (これより暗い星を除外)").pack(side=tk.LEFT)
 
-        # 推定座標
+        # 探索座標
         coordFrame = tk.Frame(mainFrame)
         coordFrame.pack(fill=tk.X, pady=2)
-        tk.Label(coordFrame, text=" 推定赤経(RA):").pack(side=tk.LEFT)
+        tk.Label(coordFrame, text=" 探索赤経(RA):").pack(side=tk.LEFT)
         self.raEntry = tk.Entry(coordFrame, width=8)
-        self.raEntry.insert(0, str(self.node.estimatedRa))
+        self.raEntry.insert(0, str(self.node.explore.ra))
         self.raEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(coordFrame, text=" 赤緯(DEC):").pack(side=tk.LEFT)
         self.decEntry = tk.Entry(coordFrame, width=8)
-        self.decEntry.insert(0, str(self.node.estimatedDec))
+        self.decEntry.insert(0, str(self.node.explore.dec))
         self.decEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(coordFrame, text="deg (初期推定値)").pack(side=tk.LEFT)
+        tk.Label(coordFrame, text="deg (初期探索値)").pack(side=tk.LEFT)
         
-        # 推定画角
+        # 探索画角
         fovFrame = tk.Frame(mainFrame)
         fovFrame.pack(fill=tk.X, pady=2)
-        tk.Label(fovFrame, text="  推定画角:").pack(side=tk.LEFT)
+        tk.Label(fovFrame, text="  探索画角:").pack(side=tk.LEFT)
         self.fovEntry = tk.Entry(fovFrame, width=6)
-        self.fovEntry.insert(0, str(self.node.estimatedFovDeg))
+        self.fovEntry.insert(0, str(self.node.explore.fovDeg))
         self.fovEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(fovFrame, text="deg (初期推定値)").pack(side=tk.LEFT)
+        tk.Label(fovFrame, text="deg (初期探索値)").pack(side=tk.LEFT)
 
-        # 推定の使用
-        useEstimatedFrame = tk.Frame(mainFrame)
-        useEstimatedFrame.pack(fill=tk.X, pady=2)
-        self.useEstimatedVar = tk.BooleanVar(value=self.node.useEstimated)
-        tk.Checkbutton(useEstimatedFrame, text="推定座標を使用する", variable=self.useEstimatedVar).pack(side=tk.LEFT)
-        tk.Label(useEstimatedFrame, text="初期推定値を使用する").pack(side=tk.LEFT)
+        # 探索範囲を使用
+        useExploreFrame = tk.Frame(mainFrame)
+        useExploreFrame.pack(fill=tk.X, pady=2)
+        self.useExploreVar = tk.BooleanVar(value=self.node.useExplore)
+        tk.Checkbutton(useExploreFrame, text="探索座標を使用する", variable=self.useExploreVar).pack(side=tk.LEFT)
+        tk.Label(useExploreFrame, text="初期探索値を使用する").pack(side=tk.LEFT)
         
         # ボタンフレーム
         btnFrame = tk.Frame(self)
@@ -1157,12 +1176,12 @@ class StarExtractionSettingsDialog(tk.Toplevel):
             self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
             self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
             self.node.useHeader                = self.useHeaderVar.get()
-            self.node.catalogMatchLimit        = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
-            self.node.catalogMagLimit          = max(1, min(20, float(self.magLimitEntry.get())))
-            self.node.estimatedRa              = max(0.0, min(360, float(self.raEntry.get())))
-            self.node.estimatedDec             = max(-90.0, min(90.0, float(self.decEntry.get())))
-            self.node.estimatedFovDeg          = max(0.0, float(self.fovEntry.get()))
-            self.node.useEstimated             = self.useEstimatedVar.get()
+            self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
+            self.node.catalog.magLimit         = max(1, min(20, float(self.magLimitEntry.get())))
+            self.node.explore.ra               = max(0.0, min(360, float(self.raEntry.get())))
+            self.node.explore.dec              = max(-90.0, min(90.0, float(self.decEntry.get())))
+            self.node.explore.fovDeg           = max(0.0, float(self.fovEntry.get()))
+            self.node.useExplore               = self.useExploreVar.get()
             
             self.node.view.onNodeConfigChanged(self.node)
         except ValueError:
