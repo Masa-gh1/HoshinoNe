@@ -19,7 +19,6 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox
 
-from config import CATALOG_PATH
 from base.FlowNode_CONST import *
 from base import FlowNode
 from nodes import ConfigurableNode
@@ -70,7 +69,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         # カタログ照合パラメータ
         self.catalog            = SimpleNamespace()
-        self.catalog.path       = CATALOG_PATH                 # カタログファイルパス
         self.catalog.matchLimit = 5                            # カタログ照合許容比 [%]
         self.catalog.magLimit   = 8.0                          # カタログ等級上限 [mag]
 
@@ -254,7 +252,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 return blocks[0].data
 
         # ファイルから読み込み
-        return CatalogHelper.loadCatalog(self.catalog.path)
+        return CatalogHelper.loadCatalog()
 
     def _detectStars(self, image:np.ndarray):
         """
@@ -337,14 +335,21 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 positions.append((cx, cy))
                 
                 # 星の明度を取得
-                # 輪郭にからマスクを作成して、星像を取得
+                # 星は無限遠の点なので分散している明るさを合計する
+                # 輪郭からマスクを作成して、星像を取得
                 mask = np.zeros(subtracted.shape, dtype=np.uint8)
                 cv2.drawContours(mask, [star], -1, 255, thickness=cv2.FILLED)
+                
+                # 輪郭の少し外まで採る(直径を1.4倍)
+                r = np.sqrt(np.sum(mask > 0)/np.pi)
+                k = int(np.ceil(r * (1.4 - 1))) * 2 + 1
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+                mask = cv2.dilate(mask, kernel, iterations=1)
                 
                 # 元の画像をマスク
                 starAreaValues = subtracted[mask > 0]
                 
-                # 星は無限遠の点なので分散している明るさを合計する
+                # 分散している明るさを合計
                 if starAreaValues.size > 0:
                     brightness = float(np.sum(starAreaValues))
                     brightnesses.append(brightness)
@@ -449,6 +454,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchCount = 0
         bestMatchError = np.inf
         bestMatchedStars = []
+        catalogTotal = 0
+        catalogCont  = 0
         
         starNum = len(selectedStars)
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
@@ -475,6 +482,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             else:
                 catalog = catalogMaster
             
+            catalogTotal += len(catalog)
+            catalogCont  += 1
+
             # 画像側で3点を選択し、形状比率を計算
             pIndices = list(np.random.choice(starNum, 3, replace=False))
             p0,p1,p2 = [selectedStars[i] for i in pIndices]
@@ -697,7 +707,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             decMin = min([star['dec'] for star in bestMatchedStars])
             decMax = max([star['dec'] for star in bestMatchedStars])
             debug  = f"stars:{starNum}"
-            debug += f" catalog:{len(catalog)}"
+            debug += f" catalog:{catalogTotal//catalogCont}"
             debug += f" bestMatchCount:{bestMatchCount}"
             debug += f" ra:{raMin:0.3f}_{raMax:0.3f}"
             debug += f" dec:{decMin:0.3f}_{decMax:0.3f}"
@@ -830,7 +840,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         ratio1 = diff1 / np.roll(diff1, shift=-1, axis=1)
         
         # 算出した比を合成
-        ratio = ratio0 + 0.0001 * ratio1
+        ratio = ratio0 + 0.001 * ratio1
         
         if star.ndim == 2:
             return ratio[0]
@@ -957,7 +967,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                  f"{self.star.ransac.seed}_"
                  f"{self.fovDeg}_"
                  f"{self.useHeader}_"
-                 f"{self.catalog.path}_"
                  f"{self.catalog.matchLimit}_"
                  f"{self.catalog.magLimit}_"
                  f"{self.explore.ra}_"
