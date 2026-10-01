@@ -244,8 +244,19 @@ HEADERS_EXIF = [
 
 ###############################################################################
 # StarExtractionNode 用
-# 星カタログファイルの位置
-CATALOG_PATH = "./sample/I_311_HIS2.tsv"
+# CATALOG_PATH    星カタログファイルの識別子とパス
+# CATALOG_HEADERS 星カタログヘッダの読み込み対象とする情報
+#
+# 下記は VizieR から得た Hipparcos カタログ I/311/hip2 のTSVファイルでの例
+# https://vizier.unistra.fr/
+CATALOG_PATH = ("HIP", "./sample/I_311_HIS2.tsv")
+CATALOG_HEADERS = [
+    # name  catalog
+    ("ID" , "HIP"  ),
+    ("RA" , "RArad"),
+    ("Dec", "DErad"),
+    ("Mag", "Hpmag"),
+]
 
 ###############################################################################
 # RawReaderNode 用
