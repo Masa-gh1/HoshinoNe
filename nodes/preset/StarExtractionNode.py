@@ -709,13 +709,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             debug  = f"stars:{starNum}"
             debug += f" catalog:{catalogTotal//catalogCont}"
             debug += f" bestMatchCount:{bestMatchCount}"
-            debug += f" ra:{raMin:0.3f}_{raMax:0.3f}"
-            debug += f" dec:{decMin:0.3f}_{decMax:0.3f}"
+            debug += f" ra:{(raMax+raMin)/2.0:0.1f}±{(raMax-raMin)/2.0:0.1f}"
+            debug += f" dec:{(decMax+decMin)/2.0:0.1f}±{(decMax-decMin)/2.0:0.1f}"
             debug += f" estimated"
             debug += f" ra:{est_ra:0.3f}"
             debug += f" dec:{est_dec:0.3f}"
             debug += f" fov:{est_fov:0.3f}"
-            debug += f" mag error:{bestMatchError:0.3f}"
+            debug += f" error:{bestMatchError:0.3f}"
             Debug.log(type(self).__name__, f"{debug}")
             return bestMatchedStars, bestModelInfo
         else:
