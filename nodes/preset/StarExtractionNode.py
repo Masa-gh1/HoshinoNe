@@ -212,12 +212,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # 画像プレーンを numpy 配列として取得
             planeIndex = min(self.alignmentPlane, flowData.getPlaneCount() - 1)
             imageArray = self._flowDataToImage(flowData, planeIndex=planeIndex, normalizeForDetection=True)
-
-            ###################
-            # テストパラメタ
-            #self.star.minDiameter = 6
-            #self.star.maxDiameter = 12
-            ###################
             
             # 星点を検出
             detectedStars = self._detectStars(imageArray)
@@ -439,10 +433,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             searchRadius = self.explore.fovDeg / 2.0
         else:
             crval1, crval2 = None, None
-            searchRadius = self.fovDeg / 2.0
+            searchRadius = None
         
-        # 探索範囲はユーザーの推定画角をガイドとするが、
-        # 実際の同定（判定）は、この範囲内で見つかった星の中から「形と相対位置」が一致するかで行う。
+        # 探索範囲はのカタログを取得
         if not crval1 or not crval2:
             catalogMaster = None
         else:
@@ -498,7 +491,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 p1,p2 = p2,p1 # 時計回りに修正
             
             # 画像側での距離比
-            pBaseRatio = self._calcRatio([p0, p1, p2], w, h, self.fovDeg)
+            pBaseRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
             
             # カタログ側で3点10000組を選択し、形状比率を一括計算
             n = len(catalog)
@@ -545,8 +538,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # カタログ側での距離比
             cBaseRatio = self._calcCatalogRatio(np.stack([c0, c1, c2], axis=1))
             
-            # 3点の距離比が近似一致するものを抽出
-            isClose = np.isclose(cBaseRatio, pBaseRatio, rtol=self.catalog.matchLimit/100.0)
+            # 3点の距離比が近似するものを抽出
+            isClose = np.isclose(cBaseRatio[:,:3], pBaseRatio[:3], rtol=self.catalog.matchLimit/100.0)
             isCloseAll = np.all(isClose, axis=1)
             matchIndices = np.where(isCloseAll)[0]
             if 0 < len(matchIndices):
@@ -557,7 +550,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     # 画像側の比に近いカタログを採用する
                     pSet = pBaseRatio
                     cSet = cBaseRatio[matchIndices]
-                    matchError = np.sum(cSet - pSet, axis=1)
+                    matchError = np.sum(np.abs(cSet - pSet), axis=1)
                     errorIndex = np.argmin(matchError)
                     matchIndex = matchIndices[errorIndex]
                 
@@ -580,7 +573,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     c2i[matchIndex],
                 ]
                 
-                # 画像内の全星について、確定した星に対する位置を検証
+                # 一致した星に対し、画像内の全星について位置関係を検証
                 for i in range(len(selectedStars)):
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
                     p0 = selectedStars[i]
@@ -602,18 +595,18 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                         c1,c2 = c2,c1 # 時計回りに修正
                     
                     # 画像側での距離比
-                    pRatio = self._calcRatio([p0, p1, p2], w, h, self.fovDeg)
+                    pRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
                     
                     # カタログ側での距離比
                     c1 = np.broadcast_to([c1['hip'], c1['ra'], c1['dec'], c1['mag']], catalog.shape)
                     c2 = np.broadcast_to([c2['hip'], c2['ra'], c2['dec'], c2['mag']], catalog.shape)
                     cRatio = self._calcCatalogRatio(np.stack([catalog, c1, c2], axis=1))
                     
-                    # 3点の距離比が近似一致するものを抽出
-                    isClose = np.isclose(cRatio, pRatio, rtol=self.catalog.matchLimit/100.0)
+                    # 3点の距離比が近似するものを抽出
+                    isClose = np.isclose(cRatio[:,:3], pRatio[:3], rtol=self.catalog.matchLimit/100.0)
                     isCloseAll = np.all(isClose, axis=1)
                     matchIndices = np.where(isCloseAll)[0]
-                    matchIndices = [i for i in matchIndices if i not in currentCatalogIndices] # 既存の点を除く
+                    matchIndices = [i for i in matchIndices if i not in currentCatalogIndices] # 既知の点を除く
                     if 0 < len(matchIndices):
                         if 1== len(matchIndices):
                             # 1つしか候補がない
@@ -623,7 +616,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                             pSet = pRatio
                             cSet = cRatio[matchIndices]
                             
-                            matchError = np.sum(cSet - pSet, axis=1)
+                            matchError = np.sum(np.abs(cSet - pSet), axis=1)
                             
                             errorIndex = np.argmin(matchError)
                             matchIndex = matchIndices[errorIndex]
@@ -653,7 +646,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     currentMatched.sort(key=lambda x: x['mag']) # カタログ等級順にソート
                     p = nh.array([[star['x'  ], star['y' ], star['brightness']             ] for star in currentMatched])
                     c = nh.array([[star['hip'], star['ra'], star['dec'       ], star['mag']] for star in currentMatched])
-                    pr = self._calcRatio(p, w, h, self.fovDeg)
+                    pr = self._calcStarRatio(p, w, h, self.fovDeg)
                     cr = self._calcCatalogRatio(c)
                     currentError = np.mean(np.abs(pr**0.5 - cr**0.5))
                     
@@ -708,7 +701,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             decMax = max([star['dec'] for star in bestMatchedStars])
             debug  = f"stars:{starNum}"
             debug += f" catalog:{catalogTotal//catalogCont}"
-            debug += f" bestMatchCount:{bestMatchCount}"
+            debug += f" match:{bestMatchCount}"
             debug += f" ra:{(raMax+raMin)/2.0:0.1f}±{(raMax-raMin)/2.0:0.1f}"
             debug += f" dec:{(decMax+decMin)/2.0:0.1f}±{(decMax-decMin)/2.0:0.1f}"
             debug += f" estimated"
@@ -723,7 +716,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             Debug.log(type(self).__name__, f"bestMatchCount: 0 match")
             return [], None
     
-    def _calcAngDist(self, x1: np.ndarray|float, y1: np.ndarray|float, x2: np.ndarray|float, y2: np.ndarray|float, w:int, h:int, fovDeg:float) -> np.ndarray|float:
+    def _calcAngDistance(self, x1: np.ndarray|float, y1: np.ndarray|float, x2: np.ndarray|float, y2: np.ndarray|float, w:int, h:int, fovDeg:float) -> np.ndarray|float:
         """画像上の2点から角距離を求める（中心投影レンズを前提）
         
         Args:
@@ -752,7 +745,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         rad = np.arccos(cosTheta)                           # レンズから見た2点の角度
         return np.degrees(rad)
 
-    def _calcRatio(self, star:np.ndarray|list, w:int, h:int, fovDeg:float) -> np.ndarray:
+    def _calcStarRatio(self, star:np.ndarray|list, w:int, h:int, fovDeg:float) -> np.ndarray:
         """星の配置からレートを計算する
         star に列方向に組になる星を入れ、行方向は任意で無くてもよい。
         例: 3点の組み合わせが3組ある場合
@@ -775,10 +768,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         import numpy as np
         # n点間の距離(位置差)を計算 (n-1番目は0との差)
         # n点間の輝度差を計算 (n-1番目は0との差)
-        return self._calcRatioImpl(star,
-                                   lambda s0, s1: (self._calcAngDist(s0[:, :, 0], s0[:, :, 1], s1[:, :, 0], s1[:, :, 1], w, h, fovDeg))**2,
-                                   lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])**2
-                                  )
+        return self._calcRatio(star,
+                               lambda s0, s1: (self._calcAngDistance(s0[:, :, 0], s0[:, :, 1], s1[:, :, 0], s1[:, :, 1], w, h, fovDeg))**2,
+                               lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])**2
+                              )
     
     def _calcCatalogRatio(self, star:np.ndarray|list) -> np.ndarray:
         """星の配置からレートを計算する
@@ -799,13 +792,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         """
         from utils.catalog_helper import CatalogHelper
         # n点間の角距離(位置差)を計算 (n-1番目は0との差)
-        # n点間の輝度差を計算 (n-1番目は0との差) ポグソンの式:m1 - m2 = -2.5 log10 (l1 -l2) 実装は m2 を0等級を基準(1)とした
-        return self._calcRatioImpl(star,
-                                   lambda s0, s1: CatalogHelper.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2])**2,
-                                   lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))**2
-                                  )
+        # n点間の輝度差を計算 (n-1番目は0との差) ポグソンの式:m1 - m2 = -2.5 log10 (l1 - l2) 実装は m2 を0等級を基準(1)とした
+        return self._calcRatio(star,
+                               lambda s0, s1: CatalogHelper.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2])**2,
+                               lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))**2
+                              )
     
-    def _calcRatioImpl(self, star:np.ndarray|list, func0, func1) -> np.ndarray:
+    def _calcRatio(self, star:np.ndarray|list, func0, func1) -> np.ndarray:
         """星の配置からレートを計算する
         計算式をテンプレートパターンで外部から得る
         Args:
@@ -820,7 +813,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         import numpy as np
         
         star = np.asanyarray(star)
-        if star.ndim == 2:
+        if 2 == star.ndim:
             _star = star[np.newaxis, ...]
         else:
             _star = star
@@ -839,10 +832,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         ratio0 = diff0 / np.roll(diff0, shift=-1, axis=1)
         ratio1 = diff1 / np.roll(diff1, shift=-1, axis=1)
         
-        # 算出した比を合成
-        ratio = ratio0 + 0.001 * ratio1
+        # 算出した比を結合
+        ratio = np.concatenate([ratio0, ratio1], axis=1)
         
-        if star.ndim == 2:
+        if 2 == star.ndim:
             return ratio[0]
         else:
             return ratio
