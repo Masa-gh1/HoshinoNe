@@ -404,10 +404,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
     
     def _matchCatalog(self, detectedStars:list, catalogData:np.ndarray, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
         """
-        【真の純粋実装：座標変換を数学的に完全に排除】
-        
-        投影（Mapping）を一切行わず、幾何学的な「相似比」の比較のみで
-        全星の同定（インライア判定）を行う。
+        画像座標と天球座標の間で投影（Mapping）を行わず、
+        幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
+        これにより、レンズ歪みの影響を最小化する。
         """
         import numpy as np
         from utils import numpy_helpers as nh
