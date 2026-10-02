@@ -447,7 +447,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchError = np.inf
         bestMatchedStars = []
         catalogTotal = 0
-        catalogCont  = 0
+        catalogCount  = 0
         
         starNum = len(selectedStars)
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
@@ -475,8 +475,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 catalog = catalogMaster
             
             catalogTotal += len(catalog)
-            catalogCont  += 1
-
+            catalogCount += 1
+            
             # 画像側で3点を選択し、形状比率を計算
             pIndices = list(np.random.choice(starNum, 3, replace=False))
             p0,p1,p2 = [selectedStars[i] for i in pIndices]
@@ -699,7 +699,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             decMin = min([star['dec'] for star in bestMatchedStars])
             decMax = max([star['dec'] for star in bestMatchedStars])
             debug  = f"stars:{starNum}"
-            debug += f" catalog:{catalogTotal//catalogCont}"
+            debug += f" catalog:{catalogTotal//catalogCount}"
             debug += f" match:{bestMatchCount}"
             debug += f" ra:{(raMax+raMin)/2.0:0.1f}±{(raMax-raMin)/2.0:0.1f}"
             debug += f" dec:{(decMax+decMin)/2.0:0.1f}±{(decMax-decMin)/2.0:0.1f}"
