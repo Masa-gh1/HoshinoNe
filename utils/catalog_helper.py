@@ -299,18 +299,23 @@ class Catalog:
     def count(self) -> int:
         return len(self._catalog)
     
-    def searchTriangle(self, side0, side1, side2, relativeError):
+    def searchTriangle(self, side0:float, side1:float, side2:float, relativeError:float) -> np.ndarray:
         import numpy as np
-        key = np.stack([side0/side1, side1/side2, side2/side0])
-        idx = self._keyTree.query_ball_point(key, r=np.max(key) * relativeError)
-        n = len(idx)
-        cids = self._values[idx]
-        cids = np.concatenate([cids[:,0], cids[:,1], cids[:,2]], axis=0)
-        cidx = np.searchsorted(self._catalog[:,0], cids)
-        c0 = self._catalog[cidx[   :n  ]]
-        c1 = self._catalog[cidx[n  :n+n]]
-        c2 = self._catalog[cidx[n+n:   ]]
-        c  = np.stack([c0, c1, c2], axis=1)
+        c = []
+        for pos in range(3):
+            side0, side1, side2 = np.roll([side0, side1, side2], -pos) # 順序を回す
+            key = np.stack([side0/side1, side1/side2, side2/side0])
+            idx = self._keyTree.query_ball_point(key, r=np.max(key) * relativeError)
+            n = len(idx)
+            cids = self._values[idx]
+            cids = np.concatenate([cids[:,0], cids[:,1], cids[:,2]], axis=0)
+            cidx = np.searchsorted(self._catalog[:,0], cids)
+            c0 = self._catalog[cidx[   :n  ]]
+            c1 = self._catalog[cidx[n  :n+n]]
+            c2 = self._catalog[cidx[n+n:   ]]
+            c0, c1, c2 = np.roll([c0, c1, c2], pos, axis=1) # 元の順序に戻す
+            c.append(np.stack([c0, c1, c2], axis=1))
+        c = np.concatenate(c, axis=0)
         return c
     
     def queryStars(self,
