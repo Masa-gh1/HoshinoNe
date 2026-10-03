@@ -196,8 +196,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
         inputStream = primaryStreams[0]
 
-        # カタログデータの準備
-        catalogData = self._getCatalogData()
+        # カタログの準備
+        catalog = self._getCatalog()
 
         # 各画像から星を抽出し、カタログ照合
         outputFlowDatas = []
@@ -219,7 +219,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # カタログ照合
             matchedStars, currentTransform = self._matchCatalog(
                 detectedStars,
-                catalogData,
+                catalog,
                 imageArray.shape,
                 flowData.headers,
                 self._previousTransform if self.usePreviousOffset else None
@@ -235,18 +235,24 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.flowDatas = outputFlowDatas
         self.reportProgress(context, "完了")
 
-    def _getCatalogData(self) -> np.ndarray:
+    def _getCatalog(self) -> np.ndarray:
         """カタログデータを取得（入力ストリームまたはファイルから）"""
-        from utils.catalog_helper import CatalogHelper
+        from utils.catalog_helper import Catalog
         if self._catalogStream and self._catalogStream[0]:
             tableFlowData = self._catalogStream[0]
-            # Table FlowData から配列化
-            blocks = list(tableFlowData.iterateBlocks())
-            if 0 < len(blocks) and blocks[0].data is not None:
-                return blocks[0].data
+            width, height = tableFlowData.getDimensions()
 
+            # Table FlowData から配列化
+            table = nh.nans((height, width))
+            for block in flowData.iterateBlocks(planeIndex):
+                if block:
+                    x, y = block.x, block.y
+                    h, w = block.data.shape
+                    table[y:y+h, x:x+w] = block.data
+            return Catalog(table)
+            
         # ファイルから読み込み
-        return CatalogHelper.loadCatalog()
+        return Catalog()
 
     def _detectStars(self, image:np.ndarray):
         """
@@ -402,7 +408,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         return distributedStars, gridSelectedCounts
     
-    def _matchCatalog(self, detectedStars:list, catalogData:np.ndarray, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
+    def _matchCatalog(self, detectedStars:list, catalog, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
         """
         画像座標と天球座標の間で投影（Mapping）を行わず、
         幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
@@ -410,9 +416,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         """
         import numpy as np
         from utils import numpy_helpers as nh
-        from utils.catalog_helper import CatalogHelper
+        from utils.catalog_helper import Catalog
         
-        if len(detectedStars) < 3 or len(catalogData) < 3:
+        if len(detectedStars) < 3 or catalog.count() < 3:
             return [], None
         
         h, w = imageShape
@@ -420,9 +426,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         # 画像側のサンプリング
         selectedStars, _ = self._selectDistributedStars(detectedStars, imageShape)
-        if len(selectedStars) < 3:
+        starCnt = len(selectedStars)
+        if starCnt < 3:
             return [], None
-
+        selectedStars = np.array(selectedStars)
+        
         # 探索範囲の決定
         if prevTransform and "crval1" in prevTransform and "crval2" in prevTransform and "fovDeg" in prevTransform:
             crval1, crval2 = prevTransform["crval1"], prevTransform["crval2"]
@@ -438,7 +446,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         if not crval1 or not crval2:
             catalogMaster = None
         else:
-            catalogMaster = CatalogHelper.queryStars(catalogData, crval1, crval2, searchRadius, magLimit=self.catalog.magLimit)
+            catalogMaster = catalog.queryStars(crval1, crval2, searchRadius, magLimit=self.catalog.magLimit)
             if len(catalogMaster) < 3:
                 return [], None
         
@@ -449,28 +457,27 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         catalogTotal = 0
         catalogCount  = 0
         
-        starNum = len(selectedStars)
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
             # 探索範囲の決定
             if not self.useExplore:
                 # 探索範囲が全天なのでランダムな緯度経度でカタログを抽出
-                ra = np.random.uniform(0, 360)          # RA は均等
+                ra     = np.random.uniform(0, 360)     # RA は均等
                 sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1
-                dec = np.degrees(np.arcsin(sinDec))    # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                catalog = CatalogHelper.queryStars(catalogData, ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
+                dec    = np.degrees(np.arcsin(sinDec)) # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
+                catalog = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
             elif self.fovDeg < self.explore.fovDeg:
                 # 画角より探索範囲が大きいので探索範囲内をランダムな緯度経度でカタログを抽出
                 fovDog = (self.explore.fovDeg - self.fovDeg)
-                raMin = self.explore.ra - fovDog / 2.0
-                raMax = self.explore.ra + fovDog / 2.0
+                raMin  = self.explore.ra - fovDog / 2.0
+                raMax  = self.explore.ra + fovDog / 2.0
                 decMin = max(-90.0, self.explore.dec - fovDog / 2.0)
                 decMax = min( 90.0, self.explore.dec + fovDog / 2.0)
-                ra = np.random.uniform(raMin, raMax) % 360.0 # RA は均等
+                ra     = np.random.uniform(raMin, raMax) % 360.0 # RA は均等
                 sinMin = np.sin(np.radians(decMin))
                 sinMax = np.sin(np.radians(decMax))
                 sinDec = np.random.uniform(sinMin, sinMax)
-                dec = np.degrees(np.arcsin(sinDec))          # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                catalog = CatalogHelper.queryStars(catalogData, ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
+                dec    = np.degrees(np.arcsin(sinDec))           # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
+                catalog = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
             else:
                 catalog = catalogMaster
             
@@ -478,8 +485,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             catalogCount += 1
             
             # 画像側で3点を選択し、形状比率を計算
-            pIndices = list(np.random.choice(starNum, 3, replace=False))
-            p0,p1,p2 = [selectedStars[i] for i in pIndices]
+            pIndices = list(np.random.choice(starCnt, 3, replace=False))
+            p0, p1, p2 = selectedStars[pIndices]
             
             # 検証に不適切な三角形をスキップする
             dp = np.hypot(nh.array([p0[0]-p1[0], p1[0]-p2[0], p2[0]-p0[0]]),  # ⊿p0,p1 ⊿p1,p2 ⊿p2,p0
@@ -492,7 +499,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # 画像側での距離比
             pBaseRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
             
-            # カタログ側で3点10000組を選択し、形状比率を一括計算
+            # カタログ側で3点10000組を選択し、形状比を一括計算
             n = len(catalog)
             if n <= 40: # 40C3 = 9880
                 # 組合せが 10000 通り未満は総組み合わせ
@@ -573,7 +580,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 ]
                 
                 # 一致した星に対し、画像内の全星について位置関係を検証
-                for i in range(len(selectedStars)):
+                for i in range(starCnt):
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
                     p0 = selectedStars[i]
                     nearIndices = sorted(range(len(currentMatched)), key=lambda x: np.hypot(p0[0]-currentMatched[x]['x'], p0[1]-currentMatched[x]['y']))
@@ -626,9 +633,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                             'ra'         : float(catalog[matchIndex, 1]),
                             'dec'        : float(catalog[matchIndex, 2]),
                             'mag'        : float(catalog[matchIndex, 3]),
-                            'x'          : float(selectedStars[i][0]),
-                            'y'          : float(selectedStars[i][1]),
-                            'brightness' : float(selectedStars[i][2]),
+                            'x'          : float(selectedStars[i, 0]),
+                            'y'          : float(selectedStars[i, 1]),
+                            'brightness' : float(selectedStars[i, 2]),
                         })
 
                         #重複チェック
@@ -670,9 +677,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             s = bestMatchedStars
             
             dist_cat = [
-                CatalogHelper.angularDistance(s[0]['ra'], s[0]['dec'], s[1]['ra'], s[1]['dec']),
-                CatalogHelper.angularDistance(s[1]['ra'], s[1]['dec'], s[2]['ra'], s[2]['dec']),
-                CatalogHelper.angularDistance(s[2]['ra'], s[2]['dec'], s[0]['ra'], s[0]['dec']),
+                Catalog.angularDistance(s[0]['ra'], s[0]['dec'], s[1]['ra'], s[1]['dec']),
+                Catalog.angularDistance(s[1]['ra'], s[1]['dec'], s[2]['ra'], s[2]['dec']),
+                Catalog.angularDistance(s[2]['ra'], s[2]['dec'], s[0]['ra'], s[0]['dec']),
             ]
             avg_dist_cat = np.mean(dist_cat)
             
@@ -698,7 +705,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             raMax = max([star['ra'] for star in bestMatchedStars])
             decMin = min([star['dec'] for star in bestMatchedStars])
             decMax = max([star['dec'] for star in bestMatchedStars])
-            debug  = f"stars:{starNum}"
+            debug  = f"stars:{starCnt}"
             debug += f" catalog:{catalogTotal//catalogCount}"
             debug += f" match:{bestMatchCount}"
             debug += f" ra:{(raMax+raMin)/2.0:0.1f}±{(raMax-raMin)/2.0:0.1f}"
@@ -789,11 +796,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         Raises:
             ValueError: 星が3点未満の場合
         """
-        from utils.catalog_helper import CatalogHelper
+        from utils.catalog_helper import Catalog
         # n点間の角距離(位置差)を計算 (n-1番目は0との差)
         # n点間の輝度差を計算 (n-1番目は0との差) ポグソンの式:m1 - m2 = -2.5 log10 (l1 - l2) 実装は m2 を0等級を基準(1)とした
         return self._calcRatio(star,
-                               lambda s0, s1: CatalogHelper.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2])**2,
+                               lambda s0, s1: Catalog.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2])**2,
                                lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))**2
                               )
     

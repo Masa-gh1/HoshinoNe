@@ -19,7 +19,7 @@ from base import FlowData
 from base import DataBlock
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
-from utils.catalog_helper import CatalogHelper
+from utils.catalog_helper import Catalog
 
 class OrientationNode(FlowNode, ConfigurableNode):
     """星リストの天体座標と画像座標から、画像の天球上の姿勢（回転角・中心赤道座標）を特定するノード"""
@@ -165,7 +165,7 @@ class OrientationNode(FlowNode, ConfigurableNode):
         meanDec = float(np.mean(catDec))
 
         # 接平面投影 (xi, eta) [rad]
-        xi, eta = CatalogHelper.gnomonicProjection(catRa, catDec, meanRa, meanDec)
+        xi, eta = Catalog.gnomonicProjection(catRa, catDec, meanRa, meanDec)
 
         # 画像中心基準座標 (u, v)
         u = imgX - cx
@@ -231,7 +231,7 @@ class OrientationNode(FlowNode, ConfigurableNode):
         # 画像中心 (u=0, v=0) の天球座標 (crval1, crval2)
         centerXiRad  = float(dXi)
         centerEtaRad = float(dEta)
-        centerRaDeg, centerDecDeg = CatalogHelper.gnomonicDeprojection(
+        centerRaDeg, centerDecDeg = Catalog.gnomonicDeprojection(
             centerXiRad, centerEtaRad, meanRa, meanDec
         )
 

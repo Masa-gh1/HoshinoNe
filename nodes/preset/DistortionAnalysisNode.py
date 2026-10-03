@@ -19,7 +19,7 @@ from base import FlowData
 from base import DataBlock
 from nodes import ConfigurableNode
 from utils import numpy_helpers as nh
-from utils.catalog_helper import CatalogHelper
+from utils.catalog_helper import Catalog
 
 class DistortionAnalysisNode(FlowNode, ConfigurableNode):
     """星リストの幾何学配置から FITS SIP (Simple Imaging Polynomial) 歪み係数を特定するノード"""
@@ -193,7 +193,7 @@ class DistortionAnalysisNode(FlowNode, ConfigurableNode):
         # 天球接平面投影
         meanRa  = float(np.mean(catRa))
         meanDec = float(np.mean(catDec))
-        xi, eta = CatalogHelper.gnomonicProjection(catRa, catDec, meanRa, meanDec)
+        xi, eta = Catalog.gnomonicProjection(catRa, catDec, meanRa, meanDec)
 
         # 線形変換行列の推定 (理想的な接平面線形位置へのフィッティング)
         # [xi, eta]^T = M * [u, v]^T + [t_xi, t_eta]^T
