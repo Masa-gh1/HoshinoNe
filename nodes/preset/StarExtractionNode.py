@@ -464,7 +464,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 ra     = np.random.uniform(0, 360)     # RA は均等
                 sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1
                 dec    = np.degrees(np.arcsin(sinDec)) # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                catalog = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
+                catalogSelect = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
             elif self.fovDeg < self.explore.fovDeg:
                 # 画角より探索範囲が大きいので探索範囲内をランダムな緯度経度でカタログを抽出
                 fovDog = (self.explore.fovDeg - self.fovDeg)
@@ -477,11 +477,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 sinMax = np.sin(np.radians(decMax))
                 sinDec = np.random.uniform(sinMin, sinMax)
                 dec    = np.degrees(np.arcsin(sinDec))           # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                catalog = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
+                catalogSelect = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
             else:
-                catalog = catalogMaster
+                catalogSelect = catalogMaster
             
-            catalogTotal += len(catalog)
+            catalogTotal += len(catalogSelect)
             catalogCount += 1
             
             # 画像側で3点を選択し、形状比率を計算
@@ -500,7 +500,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             pBaseRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
             
             # カタログ側で3点10000組を選択し、形状比を一括計算
-            n = len(catalog)
+            n = len(catalogSelect)
             if n <= 40: # 40C3 = 9880
                 # 組合せが 10000 通り未満は総組み合わせ
                 c0_2d, c1_2d = np.triu_indices(n - 2)
@@ -535,9 +535,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 c2i = c012i[:, 2]
             
             # カタログから選択
-            c0 = catalog[c0i]
-            c1 = catalog[c1i]
-            c2 = catalog[c2i]
+            c0 = catalogSelect[c0i]
+            c1 = catalogSelect[c1i]
+            c2 = catalogSelect[c2i]
             ccw = 0 < (c1[:, 0] - c0[:, 0]) * (c2[:, 1] - c0[:, 1]) - (c1[:, 1] - c0[:, 1]) * (c2[:, 0] - c0[:, 0])
             c1[ccw],c2[ccw] = c2[ccw],c1[ccw] # 時計回りに修正
             
@@ -604,9 +604,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     pRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
                     
                     # カタログ側での距離比
-                    c1 = np.broadcast_to([c1['hip'], c1['ra'], c1['dec'], c1['mag']], catalog.shape)
-                    c2 = np.broadcast_to([c2['hip'], c2['ra'], c2['dec'], c2['mag']], catalog.shape)
-                    cRatio = self._calcCatalogRatio(np.stack([catalog, c1, c2], axis=1))
+                    c1 = np.broadcast_to([c1['hip'], c1['ra'], c1['dec'], c1['mag']], catalogSelect.shape)
+                    c2 = np.broadcast_to([c2['hip'], c2['ra'], c2['dec'], c2['mag']], catalogSelect.shape)
+                    cRatio = self._calcCatalogRatio(np.stack([catalogSelect, c1, c2], axis=1))
                     
                     # 3点の距離比が近似するものを抽出
                     isClose = np.isclose(cRatio[:,:3], pRatio[:3], rtol=self.catalog.matchLimit/100.0)
@@ -629,10 +629,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                         
                         currentInliers += 1
                         currentMatched.append({
-                            'hip'        : float(catalog[matchIndex, 0]),
-                            'ra'         : float(catalog[matchIndex, 1]),
-                            'dec'        : float(catalog[matchIndex, 2]),
-                            'mag'        : float(catalog[matchIndex, 3]),
+                            'hip'        : float(catalogSelect[matchIndex, 0]),
+                            'ra'         : float(catalogSelect[matchIndex, 1]),
+                            'dec'        : float(catalogSelect[matchIndex, 2]),
+                            'mag'        : float(catalogSelect[matchIndex, 3]),
                             'x'          : float(selectedStars[i, 0]),
                             'y'          : float(selectedStars[i, 1]),
                             'brightness' : float(selectedStars[i, 2]),

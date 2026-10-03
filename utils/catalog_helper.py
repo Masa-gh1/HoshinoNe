@@ -48,9 +48,9 @@ class Catalog:
         for _ in range(100):
             import numpy as np
             r  = np.random.rand() * 10 + 0.001 # 相似比
-            r0 = r + np.random.rand()*0.0001   # ノイズ
-            r1 = r + np.random.rand()*0.0001   # ノイズ
-            r2 = r + np.random.rand()*0.0001   # ノイズ
+            n0 = np.random.rand()*0.0001       # ノイズ
+            n1 = np.random.rand()*0.0001       # ノイズ
+            n2 = np.random.rand()*0.0001       # ノイズ
             e = 0.001                          # 許容ズレ
             
             # ケース
@@ -68,7 +68,7 @@ class Catalog:
             c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
             
             # 実行
-            c = self.searchTriangle(c01d*r0, c12d*r1, c20d*r2, ex)
+            c = self.searchTriangle(c01d*(r+n0), c12d*(r+n1), c20d*(r+n2), ex)
             
             # チェック
             chk0 = (c[:, 0, 0] == cid[0])
