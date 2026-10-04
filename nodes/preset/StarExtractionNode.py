@@ -25,6 +25,7 @@ from nodes import ConfigurableNode
 
 if TYPE_CHECKING:
     import numpy as np
+    from utils.catalog_helper import Catalog
     from base.FlowData import FlowData
 
 class StarExtractionNode(FlowNode, ConfigurableNode):
@@ -408,7 +409,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         return distributedStars, gridSelectedCounts
     
-    def _matchCatalog(self, detectedStars:list, catalog, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
+    def _matchCatalog(self, detectedStars:list, catalog:Catalog, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
         """
         画像座標と天球座標の間で投影（Mapping）を行わず、
         幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
@@ -487,6 +488,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # 画像側で3点を選択し、形状比率を計算
             pIndices = list(np.random.choice(starCnt, 3, replace=False))
             p0, p1, p2 = selectedStars[pIndices]
+            p = np.stack([p0, p1, p2])
             
             # 検証に不適切な三角形をスキップする
             dp = np.hypot(nh.array([p0[0]-p1[0], p1[0]-p2[0], p2[0]-p0[0]]),  # ⊿p0,p1 ⊿p1,p2 ⊿p2,p0
@@ -519,11 +521,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 c2i += 2
             else:
                 # 組合せが 10000 通りを超えるのでランダムサンプリング
-                c = 10000
-                c = int(c * 1.6) # 重複が発生するのである程度水増しする。
-                c0i = np.random.choice(n  , c)
-                c1i = np.random.choice(n-1, c)
-                c2i = np.random.choice(n-2, c)
+                cmb = 10000
+                cmb = int(cmb * 1.6) # 重複が発生するのである程度水増しする。
+                c0i = np.random.choice(n  , cmb)
+                c1i = np.random.choice(n-1, cmb)
+                c2i = np.random.choice(n-2, cmb)
                 c1i += (c0i <= c1i)
                 c2i += (c0i <= c2i)
                 c2i += (c1i <= c2i)
@@ -538,6 +540,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             c0 = catalogSelect[c0i]
             c1 = catalogSelect[c1i]
             c2 = catalogSelect[c2i]
+            c = np.stack([c0, c1, c2], axis=1)
             ccw = 0 < (c1[:, 0] - c0[:, 0]) * (c2[:, 1] - c0[:, 1]) - (c1[:, 1] - c0[:, 1]) * (c2[:, 0] - c0[:, 0])
             c1[ccw],c2[ccw] = c2[ccw],c1[ccw] # 時計回りに修正
             
@@ -545,9 +548,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             cBaseRatio = self._calcCatalogRatio(np.stack([c0, c1, c2], axis=1))
             
             # 3点の距離比が近似するものを抽出
-            isClose = np.isclose(cBaseRatio[:,:3], pBaseRatio[:3], rtol=self.catalog.matchLimit/100.0)
-            isCloseAll = np.all(isClose, axis=1)
-            matchIndices = np.where(isCloseAll)[0]
+            r = np.linalg.norm(pBaseRatio[:3], axis=0) * self.catalog.matchLimit/100.0
+            n = np.linalg.norm(cBaseRatio[:, :3] - pBaseRatio[:3], axis=1)
+            isClose = np.abs(n) < r
+            matchIndices = np.where(isClose)[0]
             if 0 < len(matchIndices):
                 if 1== len(matchIndices):
                     # 1つしか候補がない
@@ -556,9 +560,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     # 画像側の比に近いカタログを採用する
                     pSet = pBaseRatio
                     cSet = cBaseRatio[matchIndices]
-                    matchError = np.sum(np.abs(cSet - pSet), axis=1)
+                    matchError = np.linalg.norm(cSet - cSet, axis=1)
                     errorIndex = np.argmin(matchError)
                     matchIndex = matchIndices[errorIndex]
+                c  = c[matchIndex]
+                c0 = c0[matchIndex]
+                c1 = c1[matchIndex]
+                c2 = c2[matchIndex]
                 
                 # 画像3点とカタログ3点が相似だった
                 currentInliers = 3
@@ -570,13 +578,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                       'x'          : float(p[0]),
                       'y'          : float(p[1]),
                       'brightness' : float(p[2]),
-                    } for c,p in ((c0[matchIndex],p0),(c1[matchIndex],p1),(c2[matchIndex],p2))
+                    } for c,p in ((c0,p0),(c1,p1),(c2,p2))
                 ]
 
-                currentCatalogIndices = [
-                    c0i[matchIndex],
-                    c1i[matchIndex],
-                    c2i[matchIndex],
+                currentCatalogIds = [
+                    c0[0],
+                    c1[0],
+                    c2[0],
                 ]
                 
                 # 一致した星に対し、画像内の全星について位置関係を検証
@@ -609,10 +617,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     cRatio = self._calcCatalogRatio(np.stack([catalogSelect, c1, c2], axis=1))
                     
                     # 3点の距離比が近似するものを抽出
-                    isClose = np.isclose(cRatio[:,:3], pRatio[:3], rtol=self.catalog.matchLimit/100.0)
-                    isCloseAll = np.all(isClose, axis=1)
-                    matchIndices = np.where(isCloseAll)[0]
-                    matchIndices = [i for i in matchIndices if i not in currentCatalogIndices] # 既知の点を除く
+                    r = np.linalg.norm(pRatio[:3], axis=0) * self.catalog.matchLimit/100.0
+                    n = np.linalg.norm(cRatio[:, :3] - pRatio[:3], axis=1)
+                    isClose = np.abs(n) < r
+                    matchIndices = np.where(isClose)[0]
+                    matchIndices = [i for i in matchIndices if catalogSelect[i,0] not in currentCatalogIds] # 既知の点を除く
                     if 0 < len(matchIndices):
                         if 1== len(matchIndices):
                             # 1つしか候補がない
@@ -622,7 +631,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                             pSet = pRatio
                             cSet = cRatio[matchIndices]
                             
-                            matchError = np.sum(np.abs(cSet - pSet), axis=1)
+                            matchError = np.linalg.norm(cSet - pSet, axis=1)
                             
                             errorIndex = np.argmin(matchError)
                             matchIndex = matchIndices[errorIndex]
@@ -644,17 +653,17 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                                 assert currentMatched[i]['hip'] != currentMatched[j]['hip'], "重複が発生しています。"
 
                         pIndices.append(i)
-                        currentCatalogIndices.append(matchIndex)
+                        currentCatalogIds.append(catalogSelect[matchIndex, 0])
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
                     # 誤差算出
                     currentMatched.sort(key=lambda x: x['mag']) # カタログ等級順にソート
-                    p = nh.array([[star['x'  ], star['y' ], star['brightness']             ] for star in currentMatched])
-                    c = nh.array([[star['hip'], star['ra'], star['dec'       ], star['mag']] for star in currentMatched])
+                    p = nh.array([[             star['x' ], star['y'  ], star['brightness']] for star in currentMatched])
+                    c = nh.array([[star['hip'], star['ra'], star['dec'], star['mag']       ] for star in currentMatched])
                     pr = self._calcStarRatio(p, w, h, self.fovDeg)
                     cr = self._calcCatalogRatio(c)
-                    currentError = np.mean(np.abs(pr**0.5 - cr**0.5))
+                    currentError = np.linalg.norm(cr[:len(c)] - pr[:len(p)])
                     
                     # インライア数が同じでも、誤差が小さい方が優先
                     if bestMatchCount < currentInliers or currentError < bestMatchError:
@@ -775,8 +784,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         # n点間の距離(位置差)を計算 (n-1番目は0との差)
         # n点間の輝度差を計算 (n-1番目は0との差)
         return self._calcRatio(star,
-                               lambda s0, s1: (self._calcAngDistance(s0[:, :, 0], s0[:, :, 1], s1[:, :, 0], s1[:, :, 1], w, h, fovDeg))**2,
-                               lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])**2
+                               lambda s0, s1: (self._calcAngDistance(s0[:, :, 0], s0[:, :, 1], s1[:, :, 0], s1[:, :, 1], w, h, fovDeg)),
+                               lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])
                               )
     
     def _calcCatalogRatio(self, star:np.ndarray|list) -> np.ndarray:
@@ -800,8 +809,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         # n点間の角距離(位置差)を計算 (n-1番目は0との差)
         # n点間の輝度差を計算 (n-1番目は0との差) ポグソンの式:m1 - m2 = -2.5 log10 (l1 - l2) 実装は m2 を0等級を基準(1)とした
         return self._calcRatio(star,
-                               lambda s0, s1: Catalog.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2])**2,
-                               lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))**2
+                               lambda s0, s1: Catalog.angularDistance(s0[:, :, 1], s0[:, :, 2], s1[:, :, 1], s1[:, :, 2]),
+                               lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))
                               )
     
     def _calcRatio(self, star:np.ndarray|list, func0, func1) -> np.ndarray:
