@@ -79,9 +79,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.explore.fovDeg     = 3.5                          # 探索画角 [deg]
         self.useExplore         = False                        # 探索範囲を使用するか
         
-        # 内部状態
-        self._previousTransform = None                        # 前画像で推定された変換情報
-        
         import importlib.util
         import sys
         if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
@@ -204,9 +201,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         outputFlowDatas = []
         totalImages     = len(inputStream)
         
-        # 前回の変換情報をリセット
-        self._previousTransform = None
-        
         for i, flowData in enumerate(inputStream):
             self.reportProgress(context, f"画像 {i + 1}/{totalImages} 処理中", i, totalImages)
             
@@ -218,16 +212,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             detectedStars = self._detectStars(imageArray)
 
             # カタログ照合
-            matchedStars, currentTransform = self._matchCatalog(
-                detectedStars,
-                catalog,
-                imageArray.shape,
-                flowData.headers,
-                self._previousTransform if self.usePreviousOffset else None
-            )
-
-            if self.usePreviousOffset and None != currentTransform:
-                self._previousTransform = currentTransform
+            matchedStars = self._matchCatalog(detectedStars, catalog, imageArray.shape, flowData.headers)
 
             # 出力 Table FlowData を作成
             outTable = self._createTableOutput(matchedStars, flowData.headers)
@@ -409,7 +394,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         return distributedStars, gridSelectedCounts
     
-    def _matchCatalog(self, detectedStars:list, catalog:Catalog, imageShape:tuple, headers:dict, prevTransform:dict|None = None):
+    def _matchCatalog(self, detectedStars:list, catalog:Catalog, imageShape:tuple, headers:dict):
         """
         画像座標と天球座標の間で投影（Mapping）を行わず、
         幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
@@ -432,137 +417,42 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             return [], None
         selectedStars = np.array(selectedStars)
         
-        # 探索範囲の決定
-        if prevTransform and "crval1" in prevTransform and "crval2" in prevTransform and "fovDeg" in prevTransform:
-            crval1, crval2 = prevTransform["crval1"], prevTransform["crval2"]
-            searchRadius = prevTransform["fovDeg"] / 2.0
-        elif self.useExplore:
-            crval1, crval2 = self.explore.ra, self.explore.dec
-            searchRadius = self.explore.fovDeg / 2.0
-        else:
-            crval1, crval2 = None, None
-            searchRadius = None
-        
-        # 探索範囲はのカタログを取得
-        if not crval1 or not crval2:
-            catalogMaster = None
-        else:
-            catalogMaster = catalog.queryStars(crval1, crval2, searchRadius, magLimit=self.catalog.magLimit)
-            if len(catalogMaster) < 3:
-                return [], None
-        
         # 探索結果
         bestMatchCount = 0
         bestMatchError = np.inf
         bestMatchedStars = []
         catalogTotal = 0
-        catalogCount  = 0
+        catalogCount = 0
         
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
-            # 探索範囲の決定
-            if not self.useExplore:
-                # 探索範囲が全天なのでランダムな緯度経度でカタログを抽出
-                ra     = np.random.uniform(0, 360)     # RA は均等
-                sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1
-                dec    = np.degrees(np.arcsin(sinDec)) # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                catalogSelect = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
-            elif self.fovDeg < self.explore.fovDeg:
-                # 画角より探索範囲が大きいので探索範囲内をランダムな緯度経度でカタログを抽出
-                fovDog = (self.explore.fovDeg - self.fovDeg)
-                raMin  = self.explore.ra - fovDog / 2.0
-                raMax  = self.explore.ra + fovDog / 2.0
-                decMin = max(-90.0, self.explore.dec - fovDog / 2.0)
-                decMax = min( 90.0, self.explore.dec + fovDog / 2.0)
-                ra     = np.random.uniform(raMin, raMax) % 360.0 # RA は均等
-                sinMin = np.sin(np.radians(decMin))
-                sinMax = np.sin(np.radians(decMax))
-                sinDec = np.random.uniform(sinMin, sinMax)
-                dec    = np.degrees(np.arcsin(sinDec))           # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                catalogSelect = catalog.queryStars(ra, dec, self.fovDeg / 2.0, magLimit=self.catalog.magLimit)
-            else:
-                catalogSelect = catalogMaster
-            
-            catalogTotal += len(catalogSelect)
-            catalogCount += 1
-            
             # 画像側で3点を選択し、形状比率を計算
-            pIndices = list(np.random.choice(starCnt, 3, replace=False))
-            p0, p1, p2 = selectedStars[pIndices]
-            p = np.stack([p0, p1, p2])
-            
-            # 検証に不適切な三角形をスキップする
-            dp = np.hypot(nh.array([p0[0]-p1[0], p1[0]-p2[0], p2[0]-p0[0]]),  # ⊿p0,p1 ⊿p1,p2 ⊿p2,p0
-                          nh.array([p0[1]-p1[1], p1[1]-p2[1], p2[1]-p0[1]]))
-            if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
-            
+            pidx = np.random.choice(starCnt, 3, replace=False)
+            p0, p1, p2 = selectedStars[pidx]
             if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
                 p1,p2 = p2,p1 # 時計回りに修正
+            p = np.stack([p0, p1, p2])
+            dp01 = self._calcAngDistance(p0[0], p0[1], p1[0], p1[1], w, h, self.fovDeg)
+            dp12 = self._calcAngDistance(p1[0], p1[1], p2[0], p2[1], w, h, self.fovDeg)
+            dp20 = self._calcAngDistance(p2[0], p2[1], p0[0], p0[1], w, h, self.fovDeg)
+            dp = np.stack([dp01, dp12, dp20])
+
+            # 検証に不適切な三角形をスキップする
+            if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
             # 画像側での距離比
             pBaseRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
             
-            # カタログ側で3点10000組を選択し、形状比を一括計算
-            n = len(catalogSelect)
-            if n <= 40: # 40C3 = 9880
-                # 組合せが 10000 通り未満は総組み合わせ
-                c0_2d, c1_2d = np.triu_indices(n - 2)
-                c0_2d = c0_2d.astype(np.int32)
-                c1_2d = c1_2d.astype(np.int32)
-                counts = (n - 2) - c1_2d
-                c0i = np.repeat(c0_2d, counts)
-                c1i = np.repeat(c1_2d, counts)
-                c2_start = c1i
-                c2i =(  c2_start
-                     + ( np.arange(len(c0i), dtype=np.int32)
-                       - np.repeat(np.cumsum(counts, dtype=np.int32) - counts, counts)
-                       )
-                     )
-                c1i += 1
-                c2i += 2
-            else:
-                # 組合せが 10000 通りを超えるのでランダムサンプリング
-                cmb = 10000
-                cmb = int(cmb * 1.6) # 重複が発生するのである程度水増しする。
-                c0i = np.random.choice(n  , cmb)
-                c1i = np.random.choice(n-1, cmb)
-                c2i = np.random.choice(n-2, cmb)
-                c1i += (c0i <= c1i)
-                c2i += (c0i <= c2i)
-                c2i += (c1i <= c2i)
-                c2i += (c0i == c2i)
-                c012i = np.stack([c0i, c1i, c2i], axis=1)
-                c012i = np.sort(c012i, axis=1) # 昇順に並び替え
-                c0i = c012i[:, 0]
-                c1i = c012i[:, 1]
-                c2i = c012i[:, 2]
+            # カタログから検索
+            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, 1) # 相似な三角形の内 1 つだけ取得
+            if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
+            catalogTotal += len(c)
+            catalogCount += 1
+            c0 = c[:, 0]
+            c1 = c[:, 1]
+            c2 = c[:, 2]
             
-            # カタログから選択
-            c0 = catalogSelect[c0i]
-            c1 = catalogSelect[c1i]
-            c2 = catalogSelect[c2i]
-            c = np.stack([c0, c1, c2], axis=1)
-            ccw = 0 < (c1[:, 0] - c0[:, 0]) * (c2[:, 1] - c0[:, 1]) - (c1[:, 1] - c0[:, 1]) * (c2[:, 0] - c0[:, 0])
-            c1[ccw],c2[ccw] = c2[ccw],c1[ccw] # 時計回りに修正
-            
-            # カタログ側での距離比
-            cBaseRatio = self._calcCatalogRatio(np.stack([c0, c1, c2], axis=1))
-            
-            # 3点の距離比が近似するものを抽出
-            r = np.linalg.norm(pBaseRatio[:3], axis=0) * self.catalog.matchLimit/100.0
-            n = np.linalg.norm(cBaseRatio[:, :3] - pBaseRatio[:3], axis=1)
-            isClose = np.abs(n) < r
-            matchIndices = np.where(isClose)[0]
-            if 0 < len(matchIndices):
-                if 1== len(matchIndices):
-                    # 1つしか候補がない
-                    matchIndex = matchIndices[0]
-                else:
-                    # 画像側の比に近いカタログを採用する
-                    pSet = pBaseRatio
-                    cSet = cBaseRatio[matchIndices]
-                    matchError = np.linalg.norm(cSet - cSet, axis=1)
-                    errorIndex = np.argmin(matchError)
-                    matchIndex = matchIndices[errorIndex]
+            if 0 < len(c):
+                matchIndex = np.random.randint(0, len(c))
                 c  = c[matchIndex]
                 c0 = c0[matchIndex]
                 c1 = c1[matchIndex]
@@ -580,7 +470,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                       'brightness' : float(p[2]),
                     } for c,p in ((c0,p0),(c1,p1),(c2,p2))
                 ]
-
+                
                 currentCatalogIds = [
                     c0[0],
                     c1[0],
@@ -592,68 +482,66 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
                     p0 = selectedStars[i]
                     nearIndices = sorted(range(len(currentMatched)), key=lambda x: np.hypot(p0[0]-currentMatched[x]['x'], p0[1]-currentMatched[x]['y']))
-                    p1 = currentMatched[nearIndices[0]]
-                    p2 = currentMatched[nearIndices[1]]
-                    p1 = (p1['x'], p1['y'], p1['brightness'], -1)
-                    p2 = (p2['x'], p2['y'], p2['brightness'], -1)
-                    c1 = currentMatched[nearIndices[0]]
-                    c2 = currentMatched[nearIndices[1]]
-                    
-                    # 検証に不適切な三角形をスキップする
-                    dp = np.hypot(nh.array([p0[0]-p1[0], p1[0]-p2[0], p2[0]-p0[0]]),  # ⊿p0,p1 ⊿p1,p2 ⊿p2,p0
-                                  nh.array([p0[1]-p1[1], p1[1]-p2[1], p2[1]-p0[1]]))
-                    if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
+                    near1 = currentMatched[nearIndices[0]]
+                    near2 = currentMatched[nearIndices[1]]
+                    p1 = (              near1['x' ], near1['y'  ], near1['brightness'], -1)
+                    p2 = (              near2['x' ], near2['y'  ], near2['brightness'], -1)
+                    c1 = (near1['hip'], near1['ra'], near1['dec'], near1['mag']           )
+                    c2 = (near2['hip'], near2['ra'], near2['dec'], near2['mag']           )
                     
                     if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
                         p1,p2 = p2,p1 # 時計回りに修正
                         c1,c2 = c2,c1 # 時計回りに修正
                     
-                    # 画像側での距離比
-                    pRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
+                    dp01 = self._calcAngDistance(p0[0], p0[1], p1[0], p1[1], w, h, self.fovDeg)
+                    dp12 = self._calcAngDistance(p1[0], p1[1], p2[0], p2[1], w, h, self.fovDeg)
+                    dp20 = self._calcAngDistance(p2[0], p2[1], p0[0], p0[1], w, h, self.fovDeg)
+                    dp = np.stack([dp01, dp12, dp20])
                     
-                    # カタログ側での距離比
-                    c1 = np.broadcast_to([c1['hip'], c1['ra'], c1['dec'], c1['mag']], catalogSelect.shape)
-                    c2 = np.broadcast_to([c2['hip'], c2['ra'], c2['dec'], c2['mag']], catalogSelect.shape)
-                    cRatio = self._calcCatalogRatio(np.stack([catalogSelect, c1, c2], axis=1))
+                    # 検証に不適切な三角形をスキップする
+                    if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
                     
-                    # 3点の距離比が近似するものを抽出
-                    r = np.linalg.norm(pRatio[:3], axis=0) * self.catalog.matchLimit/100.0
-                    n = np.linalg.norm(cRatio[:, :3] - pRatio[:3], axis=1)
-                    isClose = np.abs(n) < r
-                    matchIndices = np.where(isClose)[0]
-                    matchIndices = [i for i in matchIndices if catalogSelect[i,0] not in currentCatalogIds] # 既知の点を除く
-                    if 0 < len(matchIndices):
-                        if 1== len(matchIndices):
-                            # 1つしか候補がない
-                            matchIndex = matchIndices[0]
-                        else:
-                            # 画像側の比に近いカタログを採用する
-                            pSet = pRatio
-                            cSet = cRatio[matchIndices]
-                            
-                            matchError = np.linalg.norm(cSet - pSet, axis=1)
-                            
-                            errorIndex = np.argmin(matchError)
-                            matchIndex = matchIndices[errorIndex]
-                        
-                        currentInliers += 1
-                        currentMatched.append({
-                            'hip'        : float(catalogSelect[matchIndex, 0]),
-                            'ra'         : float(catalogSelect[matchIndex, 1]),
-                            'dec'        : float(catalogSelect[matchIndex, 2]),
-                            'mag'        : float(catalogSelect[matchIndex, 3]),
-                            'x'          : float(selectedStars[i, 0]),
-                            'y'          : float(selectedStars[i, 1]),
-                            'brightness' : float(selectedStars[i, 2]),
-                        })
-
-                        #重複チェック
-                        for i in range(len(currentMatched)):
-                            for j in range(i+1,len(currentMatched)):
-                                assert currentMatched[i]['hip'] != currentMatched[j]['hip'], "重複が発生しています。"
-
-                        pIndices.append(i)
-                        currentCatalogIds.append(catalogSelect[matchIndex, 0])
+                    # カタログから検索
+                    c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0)
+                    catalogTotal += len(c)
+                    catalogCount += 1
+                    c = c[c[:,1,0] == c1[0]] # 頂点1 が c1 の物だけ残す
+                    c = c[c[:,2,0] == c2[0]] # 頂点2 が c2 の物だけ残す
+                    c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
+                    if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
+                    
+                    if 1 == len(c):
+                        # 1つしか候補がない
+                        c0 = c[0][0]
+                    else:
+                        c0 = c[0][0]
+                        # 画像側の比に近いカタログを採用する
+                        #pSet = pRatio
+                        #cSet = cRatio[matchIndices]
+                        #
+                        #matchError = np.linalg.norm(cSet - pSet, axis=1)
+                        #
+                        #errorIndex = np.argmin(matchError)
+                        #matchIndex = matchIndices[errorIndex]
+                    
+                    currentInliers += 1
+                    currentMatched.append(
+                        { 'hip'        : float(c0[0]),
+                            'ra'         : float(c0[1]),
+                            'dec'        : float(c0[2]),
+                            'mag'        : float(c0[3]),
+                            'x'          : float(p0[0]),
+                            'y'          : float(p0[1]),
+                            'brightness' : float(p0[2]),
+                        }
+                    )
+                    
+                    #重複チェック
+                    for i in range(len(currentMatched)):
+                        for j in range(i+1,len(currentMatched)):
+                            assert currentMatched[i]['hip'] != currentMatched[j]['hip'], "重複が発生しています。"
+                    
+                    currentCatalogIds.append(c0[0])
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
@@ -703,29 +591,24 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             diag_px = np.hypot(w, h)
             est_fov = diag_px * pixel_to_deg_est
             
-            bestModelInfo = {
-                'crval1': est_ra, 
-                'crval2': est_dec, 
-                'fovDeg': est_fov,
-            }
-            
             from utils.Debug import Debug
+            n = int(np.log10(starCnt))+1
             raMin = min([star['ra'] for star in bestMatchedStars])
             raMax = max([star['ra'] for star in bestMatchedStars])
             decMin = min([star['dec'] for star in bestMatchedStars])
             decMax = max([star['dec'] for star in bestMatchedStars])
-            debug  = f"stars:{starCnt}"
-            debug += f" catalog:{catalogTotal//catalogCount}"
-            debug += f" match:{bestMatchCount}"
-            debug += f" ra:{(raMax+raMin)/2.0:0.1f}±{(raMax-raMin)/2.0:0.1f}"
-            debug += f" dec:{(decMax+decMin)/2.0:0.1f}±{(decMax-decMin)/2.0:0.1f}"
+            debug  = f"stars:{starCnt:0{n}d}"
+            debug += f" catalog:{catalogTotal//catalogCount:0{n}d}"
+            debug += f" match:{bestMatchCount:0{n}d}"
+            debug += f" ra:{ (raMax+raMin  )/2.0:-05.1f}±{(raMax-raMin  )/2.0:-05.1f}"
+            debug += f" dec:{(decMax+decMin)/2.0:+05.1f}±{(decMax-decMin)/2.0:+05.1f}"
             debug += f" estimated"
-            debug += f" ra:{est_ra:0.3f}"
-            debug += f" dec:{est_dec:0.3f}"
-            debug += f" fov:{est_fov:0.3f}"
+            debug += f" ra:{ est_ra :-07.3f}"
+            debug += f" dec:{est_dec:+07.3f}"
+            debug += f" fov:{est_fov:-07.3f}"
             debug += f" error:{bestMatchError:0.3f}"
             Debug.log(type(self).__name__, f"{debug}")
-            return bestMatchedStars, bestModelInfo
+            return bestMatchedStars
         else:
             from utils.Debug import Debug
             Debug.log(type(self).__name__, f"bestMatchCount: 0 match")
