@@ -47,16 +47,18 @@ class Catalog:
         # セルフテスト
         for _ in range(100):
             import numpy as np
+            roll = np.random.randint(3)        # 順序違い
             r  = np.random.rand() * 10 + 0.001 # 相似比
-            n0 = np.random.rand()*0.0001       # ノイズ
-            n1 = np.random.rand()*0.0001       # ノイズ
-            n2 = np.random.rand()*0.0001       # ノイズ
-            e = 0.001                          # 許容ズレ
+            n0 = np.random.rand()*0.000001     # ノイズ
+            n1 = np.random.rand()*0.000001     # ノイズ
+            n2 = np.random.rand()*0.000001     # ノイズ
+            e = 0.0001                         # 許容ズレ
             
             # ケース
-            ex = np.random.rand() * 0.01 + e
             cid = self._values[np.random.randint(len(self._values))]
-
+            cid = np.roll(cid, roll)
+            re = np.random.rand() * 0.01 + e
+            
             c0idx = np.searchsorted(self._catalog[:, 0], cid[0])
             c1idx = np.searchsorted(self._catalog[:, 0], cid[1])
             c2idx = np.searchsorted(self._catalog[:, 0], cid[2])
@@ -68,14 +70,14 @@ class Catalog:
             c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
             
             # 実行
-            c = self.searchTriangle(c01d*(r+n0), c12d*(r+n1), c20d*(r+n2), ex)
+            c = self.searchTriangle(c01d*(r+n0), c12d*(r+n1), c20d*(r+n2), re)
             
             # チェック
             chk0 = (c[:, 0, 0] == cid[0])
             chk1 = (c[:, 1, 0] == cid[1])
             chk2 = (c[:, 2, 0] == cid[2])
             chk = chk0 & chk1 & chk2
-            assert np.any(chk)
+            assert np.any(chk), f"Self test: Triangle search error: {str(cid)} {re:0.3f}"
     
     def loadCatalog(self, symbol, filePath):
         """
@@ -236,11 +238,12 @@ class Catalog:
                 Debug.log(self.__class__.__name__, f"Count: Mag {mag:2d} 1deg: {countS} :180deg")
             
             # 画角の中央に8等星までの星を置く
-            # 自身より明るい 5 つ以上の星が見え画角の大きさを探す
+            # 自身より明るい 6 つ以上の星が見え画角の大きさを探す
             # 自身と他の星の総組み合わせで三角比をつくる
             keys   = []
             values = []
             indices = np.where(self._catalog[:, 3] <= 8.0)[0]
+            num = 6
             starCount = len(indices)
             progress = 0
             Debug.log(self.__class__.__name__, f"Generate triangle database from {starCount} stars")
@@ -255,14 +258,14 @@ class Catalog:
                 mag = self._catalog[idx, 3]
                 radius = 2.0*(2**(8-mag)) # 画角初期値(統計的には大体この辺り)
                 selected = self.queryStars(ra, dec, radius, mag)
-                while 5 < len(selected) and 0.9 < radius: # 5 つ未満になるまで絞る
+                while num < len(selected) and 0.9 < radius: # num 未満になるまで絞る
                     radius /= 1.41421356237
                     selected = self.queryStars(ra, dec, radius, mag)
-                while len(selected) < 5 and radius < 180.0: # 5 つ以上になるまで広げる
+                while len(selected) < num and radius < 180.0: # num 以上になるまで広げる
                     radius *= 1.41421356237
                     selected = self.queryStars(ra, dec, radius, mag)
                 # 自身と他の星の総組み合わせで三角形をつくる
-                other = selected[np.where(selected[:, 0] != id)]
+                other = selected[selected[:, 0] != id]
                 x, y = self.gnomonicProjection(other[:, 1], other[:, 2], ra, dec)
                 for j in range(len(other)):
                     for k in range(j+1, len(other)):
@@ -299,23 +302,42 @@ class Catalog:
     def count(self) -> int:
         return len(self._catalog)
     
-    def searchTriangle(self, side0:float, side1:float, side2:float, relativeError:float) -> np.ndarray:
+    def searchTriangle(self, side01:float, side12:float, side20:float, relativeError:float, outputLimit:int|None=None) -> np.ndarray:
+        """
+        三角形データベースを検索し、指定された相似な三角形に一致する星の組み合わせを返す
+
+        Args:
+            side01: 辺01の長さ
+            side12: 辺12の長さ
+            side20: 辺20の長さ
+            relativeError: 相似比の相対誤差
+            outputLimit: 出力制限数
+
+        Returns:
+            np.ndarray: 星の組み合わせ [N, 3, 4] の配列 [[star0, star1, star2], ...]
+                        star0 = [id, ra, dec, mag]
+        """
         import numpy as np
-        c = []
-        for pos in range(3):
-            side0, side1, side2 = np.roll([side0, side1, side2], -pos) # 順序を回す
-            key = np.stack([side0/side1, side1/side2, side2/side0])
-            idx = self._keyTree.query_ball_point(key, r=np.max(key) * relativeError)
+        cidList = []
+        for roll in range(3):
+            s01, s12, s20 = np.roll([side01, side12, side20], roll) # 順序を回す
+            key = np.stack([s01/s12, s12/s20, s20/s01])
+            idx = self._keyTree.query_ball_point(key, r=np.linalg.norm(key)*relativeError)
             n = len(idx)
-            cids = self._values[idx]
-            cids = np.concatenate([cids[:,0], cids[:,1], cids[:,2]], axis=0)
-            cidx = np.searchsorted(self._catalog[:,0], cids)
-            c0 = self._catalog[cidx[   :n  ]]
-            c1 = self._catalog[cidx[n  :n+n]]
-            c2 = self._catalog[cidx[n+n:   ]]
-            c0, c1, c2 = np.roll([c0, c1, c2], pos, axis=1) # 元の順序に戻す
-            c.append(np.stack([c0, c1, c2], axis=1))
-        c = np.concatenate(c, axis=0)
+            cid = self._values[idx]
+            cid = np.roll(cid, -roll, axis=1) # 順序を戻す
+            cidList.append(cid)
+        cid = np.concatenate(cidList, axis=0)
+        if outputLimit and outputLimit < len(cid):
+            idx = np.random.choice(len(cid), size=outputLimit, replace=False)
+            cid = cid[idx]
+        n = len(cid)
+        cid = np.concatenate([cid[:,0], cid[:,1], cid[:,2]], axis=0)
+        cidx = np.searchsorted(self._catalog[:,0], cid)
+        c0 = self._catalog[cidx[   :n  ]]
+        c1 = self._catalog[cidx[n  :n+n]]
+        c2 = self._catalog[cidx[n+n:   ]]
+        c = np.stack([c0, c1, c2], axis=1)
         return c
     
     def queryStars(self,
