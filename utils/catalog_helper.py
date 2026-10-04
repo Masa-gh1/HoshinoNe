@@ -238,12 +238,24 @@ class Catalog:
                 Debug.log(self.__class__.__name__, f"Count: Mag {mag:2d} 1deg: {countS} :180deg")
             
             # 画角の中央に8等星までの星を置く
-            # 自身より明るい 6 つ以上の星が見え画角の大きさを探す
+            # 自身より明るい num 以上の星が見える画角の大きさを探す
             # 自身と他の星の総組み合わせで三角比のを作り kd-tree を作成する。
+            #
+            # データサイズは nC2 で増える。
+            # 8等星までの星が 38,000 位あり、
+            # num = 5 だと三角形の数は 5C2 * 38,000 = 380,000 ですが、「num 以上」なので 970,000 程度(num=7～8)になる。
+            # メモリ量は
+            # kd-tree が 970,000 * (4 + 4 + 4) = 11,640,000 これにオーバーヘッドが加わり 47,000,000 程度になる。
+            # values  が 970,000 * (4 + 4 + 4) = 11,640,000 でこれはほぼこのまま。
+            #
+            # 同様に、8等星まで num = 10 だと、10C2 * 38,000 = 1,710,000
+            # 三角形の数   4,000,000 (num=14～15)
+            # kd-tree   193,000,000
+            # values     45,000,000
             keys   = []
             values = []
             indices = np.where(self._catalog[:, 3] <= 8.0)[0]
-            num = 6
+            num = 10
             starCount = len(indices)
             progress = 0
             Debug.log(self.__class__.__name__, f"Generate triangle database from {starCount} stars")
@@ -258,10 +270,10 @@ class Catalog:
                 mag = self._catalog[idx, 3]
                 radius = 2.0*(2**(8-mag)) # 画角初期値(統計的には大体この辺り)
                 selected = self.queryStars(ra, dec, radius, mag)
-                while num < len(selected) and 0.9 < radius: # num 未満になるまで絞る
+                while (num+1) < len(selected) and 0.9 < radius: # (num+1) 未満になるまで絞る
                     radius /= 1.41421356237
                     selected = self.queryStars(ra, dec, radius, mag)
-                while len(selected) < num and radius < 180.0: # num 以上になるまで広げる
+                while len(selected) < (num+1) and radius < 180.0: # (num+1) 以上になるまで広げる
                     radius *= 1.41421356237
                     selected = self.queryStars(ra, dec, radius, mag)
                 # 自身と他の星の総組み合わせで三角形をつくる
@@ -291,8 +303,11 @@ class Catalog:
                 filepath = os.path.splitext(self._path)[0] + "_triangleKey.pkl"
                 with open(filepath, "wb") as f:
                     pickle.dump(keyTree, f, protocol=pickle.HIGHEST_PROTOCOL)
+                Debug.log(self.__class__.__name__, f"Key   file size {os.path.getsize(filepath)//1024//1024} MiB")
+
                 filepath = os.path.splitext(self._path)[0] + "_triangleVal.npy"
                 np.save(filepath, values)
+                Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(filepath)//1024//1024} MiB")
             except Exception:
                 Debug.log(self.__class__.__name__, "Warning: Save triangle database cache failed.")
             
