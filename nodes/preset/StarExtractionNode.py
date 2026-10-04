@@ -439,9 +439,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             # 検証に不適切な三角形をスキップする
             if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
-            # 画像側での距離比
-            pBaseRatio = self._calcStarRatio([p0, p1, p2], w, h, self.fovDeg)
-            
             # カタログから検索
             c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, 1) # 相似な三角形の内 1 つだけ取得
             if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
@@ -477,10 +474,16 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     c2[0],
                 ]
                 
+                otherStars = selectedStars[np.logical_not(np.isin(np.arange(starCnt), pidx))]
+                
                 # 一致した星に対し、画像内の全星について位置関係を検証
-                for i in range(starCnt):
+                for i in range(len(otherStars)):
+                    if currentInliers + len(otherStars) - i < bestMatchCount:
+                        # このあと全て inlier でも bestMatchCount に届かないので早期終了 
+                        break
+                    
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
-                    p0 = selectedStars[i]
+                    p0 = otherStars[i]
                     nearIndices = sorted(range(len(currentMatched)), key=lambda x: np.hypot(p0[0]-currentMatched[x]['x'], p0[1]-currentMatched[x]['y']))
                     near1 = currentMatched[nearIndices[0]]
                     near2 = currentMatched[nearIndices[1]]
@@ -508,7 +511,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     c = c[c[:,1,0] == c1[0]] # 頂点1 が c1 の物だけ残す
                     c = c[c[:,2,0] == c2[0]] # 頂点2 が c2 の物だけ残す
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
-                    if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
+                    if 0 == len(c):
+                        if i < 1:
+                            break # 安易に見つかるはずのタイミングで失敗したので早期終了
+                        else:
+                            continue # 相似の三角形が見つからないのでスキップ
                     
                     if 1 == len(c):
                         # 1つしか候補がない
