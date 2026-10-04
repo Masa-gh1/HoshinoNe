@@ -49,10 +49,10 @@ class Catalog:
             import numpy as np
             roll = np.random.randint(3)        # 順序違い
             r  = np.random.rand() * 10 + 0.001 # 相似比
-            n0 = np.random.rand()*0.000001     # ノイズ
-            n1 = np.random.rand()*0.000001     # ノイズ
-            n2 = np.random.rand()*0.000001     # ノイズ
-            e = 0.0001                         # 許容ズレ
+            n0 = np.random.rand()*0.001 + 1.0  # ノイズ
+            n1 = np.random.rand()*0.001 + 1.0  # ノイズ
+            n2 = np.random.rand()*0.001 + 1.0  # ノイズ
+            e = 0.002                          # 許容ズレ
             
             # ケース
             cid = self._values[np.random.randint(len(self._values))]
@@ -70,14 +70,14 @@ class Catalog:
             c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
             
             # 実行
-            c = self.searchTriangle(c01d*(r+n0), c12d*(r+n1), c20d*(r+n2), re)
+            c = self.searchTriangle(c01d*r*n0, c12d*r*n1, c20d*r*n2, re)
             
             # チェック
             chk0 = (c[:, 0, 0] == cid[0])
             chk1 = (c[:, 1, 0] == cid[1])
             chk2 = (c[:, 2, 0] == cid[2])
             chk = chk0 & chk1 & chk2
-            assert np.any(chk), f"Self test: Triangle search error: {str(cid)} {re:0.3f}"
+            assert np.any(chk), f"Self test: Triangle search error: {str(cid)} {re:0.3f} r:{r} noise:{n0} {n1} {n2}"
     
     def loadCatalog(self, symbol, filePath):
         """
@@ -239,7 +239,7 @@ class Catalog:
             
             # 画角の中央に8等星までの星を置く
             # 自身より明るい 6 つ以上の星が見え画角の大きさを探す
-            # 自身と他の星の総組み合わせで三角比をつくる
+            # 自身と他の星の総組み合わせで三角比のを作り kd-tree を作成する。
             keys   = []
             values = []
             indices = np.where(self._catalog[:, 3] <= 8.0)[0]
@@ -304,7 +304,7 @@ class Catalog:
     
     def searchTriangle(self, side01:float, side12:float, side20:float, relativeError:float, outputLimit:int|None=None) -> np.ndarray:
         """
-        三角形データベースを検索し、指定された相似な三角形に一致する星の組み合わせを返す
+        三角比データベースを検索し、指定された三角形に相似な星の組み合わせを返す
 
         Args:
             side01: 辺01の長さ
@@ -401,7 +401,7 @@ class Catalog:
     def angularDistance(ra1Deg, dec1Deg, ra2Deg, dec2Deg):
         """
         天球上の2点間の角距離 ( deg ) を計算する
-        ハヴァースィン公式を用いて、小距離における数値的安定性を確保
+        ハヴァースィン公式
         
         Args:
             ra1Deg: 点1の赤経 ( deg )
