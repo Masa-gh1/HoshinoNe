@@ -317,7 +317,7 @@ class Catalog:
     def count(self) -> int:
         return len(self._catalog)
     
-    def searchTriangle(self, side01:float, side12:float, side20:float, relativeError:float, outputLimit:int|None=None) -> np.ndarray:
+    def searchTriangle(self, side01:float, side12:float, side20:float, relativeError:float, magLimit:float|None=None, outputLimit:int|None=None) -> np.ndarray:
         """
         三角比データベースを検索し、指定された三角形に相似な星の組み合わせを返す
 
@@ -326,6 +326,7 @@ class Catalog:
             side12: 辺12の長さ
             side20: 辺20の長さ
             relativeError: 相似比の相対誤差
+            magLimit: 等級制限 ( mag )
             outputLimit: 出力制限数
 
         Returns:
@@ -343,9 +344,17 @@ class Catalog:
             cid = np.roll(cid, -roll, axis=1) # 順序を戻す
             cidList.append(cid)
         cid = np.concatenate(cidList, axis=0)
+        if not magLimit is None:
+            # 等級フィルタ
+            cidx = np.searchsorted(self._catalog[:,0], cid)
+            mask = self._catalog[cidx, 3] <= magLimit
+            mask = np.all(mask, axis=1)
+            cid = cid[mask]
         if outputLimit and outputLimit < len(cid):
+            # 出力行数制限
             idx = np.random.choice(len(cid), size=outputLimit, replace=False)
             cid = cid[idx]
+        # id からカタログへ変換
         n = len(cid)
         cid = np.concatenate([cid[:,0], cid[:,1], cid[:,2]], axis=0)
         cidx = np.searchsorted(self._catalog[:,0], cid)

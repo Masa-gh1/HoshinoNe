@@ -440,7 +440,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
             # カタログから検索
-            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, 1) # 相似な三角形の内 1 つだけ取得
+            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, 1) # 相似な三角形の内 1 つだけ取得
             if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
             catalogTotal += len(c)
             catalogCount += 1
@@ -505,7 +505,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
                     
                     # カタログから検索
-                    c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0)
+                    c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit)
                     catalogTotal += len(c)
                     catalogCount += 1
                     c = c[c[:,1,0] == c1[0]] # 頂点1 が c1 の物だけ残す
