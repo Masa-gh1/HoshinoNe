@@ -421,8 +421,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchCount = 0
         bestMatchError = np.inf
         bestMatchedStars = []
-        catalogTotal = 0
-        catalogCount = 0
         
         for _ in range(self.star.ransac.iterations): # RANSAC試行回数
             # 画像側で3点を選択し、形状比率を計算
@@ -440,10 +438,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
             
             # カタログから検索
-            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, 1) # 相似な三角形の内 1 つだけ取得
+            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, None, 1) # 相似な三角形の内 1 つだけ取得
             if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
-            catalogTotal += len(c)
-            catalogCount += 1
             c0 = c[:, 0]
             c1 = c[:, 1]
             c2 = c[:, 2]
@@ -505,11 +501,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
                     
                     # カタログから検索
-                    c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit)
-                    catalogTotal += len(c)
-                    catalogCount += 1
-                    c = c[c[:,1,0] == c1[0]] # 頂点1 が c1 の物だけ残す
-                    c = c[c[:,2,0] == c2[0]] # 頂点2 が c2 の物だけ残す
+                    c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1[0], c2[0]))
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
                     if 0 == len(c):
                         if i < 1:
@@ -604,9 +596,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             raMax = max([star['ra'] for star in bestMatchedStars])
             decMin = min([star['dec'] for star in bestMatchedStars])
             decMax = max([star['dec'] for star in bestMatchedStars])
-            debug  = f"stars:{starCnt:0{n}d}"
-            debug += f" catalog:{catalogTotal//catalogCount:0{n}d}"
-            debug += f" match:{bestMatchCount:0{n}d}"
+            debug  = f"match:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
             debug += f" ra:{ (raMax+raMin  )/2.0:-05.1f}±{(raMax-raMin  )/2.0:-05.1f}"
             debug += f" dec:{(decMax+decMin)/2.0:+05.1f}±{(decMax-decMin)/2.0:+05.1f}"
             debug += f" estimated"
