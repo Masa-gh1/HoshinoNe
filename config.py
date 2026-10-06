@@ -259,6 +259,9 @@ CATALOG_HEADERS = [
     ("Dec", "DErad"),
     ("Mag", "Hpmag"),
 ]
+# 使用容量の目安
+# CATALOG_DB_MAG = 8, CATALOG_DB_NUM =  5 の時、約  73 MB
+# CATALOG_DB_MAG = 8, CATALOG_DB_NUM = 10 の時、約 256 MB
 CATALOG_DB_MAG = 8.0
 CATALOG_DB_NUM = 10
 
