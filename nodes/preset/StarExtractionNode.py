@@ -413,7 +413,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         # 画像側のサンプリング
         selectedStars, _ = self._selectDistributedStars(detectedStars, imageShape)
         starCnt = len(selectedStars)
-        if starCnt < 3:
+        if starCnt < 4:
             return [], None
         selectedStars = np.array(selectedStars)
         
@@ -422,64 +422,104 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchError = np.inf
         bestMatchedStars = []
         
-        for _ in range(self.star.ransac.iterations): # RANSAC試行回数
-            # 画像側で3点を選択し、形状比率を計算
-            pidx = np.random.choice(starCnt, 3, replace=False)
-            p0, p1, p2 = selectedStars[pidx]
-            if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
-                p1,p2 = p2,p1 # 時計回りに修正
-            p = np.stack([p0, p1, p2])
+        COMB_TRIANGLE_PAIRS = np.array([
+            [[0, 1, 2], [0, 1, 3]],
+            [[0, 1, 3], [0, 1, 2]],
+            [[0, 2, 1], [0, 2, 3]],
+            [[0, 2, 3], [0, 2, 1]],
+            [[0, 3, 1], [0, 3, 2]],
+            [[0, 3, 2], [0, 3, 1]],
+            [[1, 2, 0], [1, 2, 3]],
+            [[1, 2, 3], [1, 2, 0]],
+            [[1, 3, 0], [1, 3, 2]],
+            [[1, 3, 2], [1, 3, 0]],
+            [[2, 3, 0], [2, 3, 1]],
+            [[2, 3, 1], [2, 3, 0]],
+        ], dtype=np.int8)
+        
+        for i in range(self.star.ransac.iterations): # RANSAC試行回数
+            # 画像側で 4 点を選択し接する時計回りの三角形 2 つを作成する
+            idx = np.random.choice(starCnt, 4, replace=False)
+            idx = idx[COMB_TRIANGLE_PAIRS]
+            star = selectedStars[idx] # 3点2組の組み合わせ
+            s0x = star[:, :, 0, 0]
+            s0y = star[:, :, 0, 1]
+            s1x = star[:, :, 1, 0]
+            s1y = star[:, :, 1, 1]
+            s2x = star[:, :, 2, 0]
+            s2y = star[:, :, 2, 1]
+            valid = np.all(((s1x - s0x) * (s2y - s0y) - (s1y - s0y) * (s2x - s0x)) < 0, axis=1) # 時計回り判定
+            sel = np.random.choice(np.where(valid)[0]) # valid==True の中から1つ選択
+            pidx = idx[sel, 0]
+            qidx = idx[sel, 1]
+            
+            # 三角形 P を作成
+            p = selectedStars[pidx]
+            p0, p1, p2 = p
             dp01 = self._calcAngDistance(p0[0], p0[1], p1[0], p1[1], w, h, self.fovDeg)
             dp12 = self._calcAngDistance(p1[0], p1[1], p2[0], p2[1], w, h, self.fovDeg)
             dp20 = self._calcAngDistance(p2[0], p2[1], p0[0], p0[1], w, h, self.fovDeg)
             dp = np.stack([dp01, dp12, dp20])
+            if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ(検証に不適切)
+            
+            # 三角形 Q を作成
+            q = selectedStars[qidx]
+            q0, q1, q2 = q
+            dq01 = self._calcAngDistance(q0[0], q0[1], q1[0], q1[1], w, h, self.fovDeg)
+            dq12 = self._calcAngDistance(q1[0], q1[1], q2[0], q2[1], w, h, self.fovDeg)
+            dq20 = self._calcAngDistance(q2[0], q2[1], q0[0], q0[1], w, h, self.fovDeg)
+            dq = np.stack([dq01, dq12, dq20])
+            if np.any(dq < 1e-7) or np.min(dq) / np.max(dq) < 0.2: continue # 極端に短い辺が在るのでスキップ(検証に不適切)
 
-            # 検証に不適切な三角形をスキップする
-            if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
-            
-            # カタログから検索
-            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, None, 1) # 相似な三角形の内 1 つだけ取得
+            # 三角形 P をカタログから検索し C とする
+            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
             if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
-            c0 = c[:, 0]
-            c1 = c[:, 1]
-            c2 = c[:, 2]
+
+            # 三角形 Q をカタログから検索し G とする
+            g = catalog.searchTriangle(dq01, dq12, dq20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
+            if 0 == len(g): continue # 相似の三角形が見つからないのでスキップ
             
-            if 0 < len(c):
-                matchIndex = np.random.randint(0, len(c))
-                c  = c[matchIndex]
-                c0 = c0[matchIndex]
-                c1 = c1[matchIndex]
-                c2 = c2[matchIndex]
+            # C G の 1,2 点目共にが同じ ID 物を抽出
+            cid01 = c[:, :2, 0]
+            gid01 = g[:, :2, 0]
+            cidx, gidx = np.where(np.all(cid01[:, np.newaxis, :] == gid01[np.newaxis, :, :], axis=2))
+
+            if 0 < len(cidx) and 0 < len(gidx):
+                idx = np.random.randint(len(cidx))
+                c = c[cidx[idx]]
+                g = g[gidx[idx]]
                 
-                # 画像3点とカタログ3点が相似だった
-                currentInliers = 3
+                # 画像 4 点とカタログ 4 点が相似だった
+                currentInliers = 4
                 currentMatched = [
-                    { 'hip'        : float(c[0]),
-                      'ra'         : float(c[1]),
-                      'dec'        : float(c[2]),
-                      'mag'        : float(c[3]),
-                      'x'          : float(p[0]),
-                      'y'          : float(p[1]),
-                      'brightness' : float(p[2]),
-                    } for c,p in ((c0,p0),(c1,p1),(c2,p2))
+                    { 'hip'        : float(cat[0]),
+                      'ra'         : float(cat[1]),
+                      'dec'        : float(cat[2]),
+                      'mag'        : float(cat[3]),
+                      'x'          : float(sta[0]),
+                      'y'          : float(sta[1]),
+                      'brightness' : float(sta[2]),
+                    } for cat,sta in ((c[0],p[0]),(c[1],p[1]),(c[2],p[2]),(g[2],q[2]))
                 ]
                 
                 currentCatalogIds = [
-                    c0[0],
-                    c1[0],
-                    c2[0],
+                    c[0,0],
+                    c[1,0],
+                    c[2,0],
+                    g[2,0],
                 ]
                 
-                otherStars = selectedStars[np.logical_not(np.isin(np.arange(starCnt), pidx))]
+                # 確定済み以外の星配列を作成
+                otherStars = selectedStars[np.logical_not(np.isin(np.arange(starCnt), pidx) | np.isin(np.arange(starCnt), qidx))]
                 
                 # 一致した星に対し、画像内の全星について位置関係を検証
-                for i in range(len(otherStars)):
-                    if currentInliers + len(otherStars) - i < bestMatchCount:
+                for j in range(len(otherStars)):
+                    if currentInliers + len(otherStars) - j < bestMatchCount:
                         # このあと全て inlier でも bestMatchCount に届かないので早期終了 
                         break
                     
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
-                    p0 = otherStars[i]
+                    p0 = otherStars[j]
                     nearIndices = sorted(range(len(currentMatched)), key=lambda x: np.hypot(p0[0]-currentMatched[x]['x'], p0[1]-currentMatched[x]['y']))
                     near1 = currentMatched[nearIndices[0]]
                     near2 = currentMatched[nearIndices[1]]
@@ -504,7 +544,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1[0], c2[0]))
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
                     if 0 == len(c):
-                        if i < 1:
+                        if j < 1:
                             break # 安易に見つかるはずのタイミングで失敗したので早期終了
                         else:
                             continue # 相似の三角形が見つからないのでスキップ
@@ -525,20 +565,20 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     
                     currentInliers += 1
                     currentMatched.append(
-                        { 'hip'        : float(c0[0]),
-                            'ra'         : float(c0[1]),
-                            'dec'        : float(c0[2]),
-                            'mag'        : float(c0[3]),
-                            'x'          : float(p0[0]),
-                            'y'          : float(p0[1]),
-                            'brightness' : float(p0[2]),
+                        {'hip'       : float(c0[0]),
+                         'ra'        : float(c0[1]),
+                         'dec'       : float(c0[2]),
+                         'mag'       : float(c0[3]),
+                         'x'         : float(p0[0]),
+                         'y'         : float(p0[1]),
+                         'brightness': float(p0[2]),
                         }
                     )
                     
                     #重複チェック
-                    for i in range(len(currentMatched)):
-                        for j in range(i+1,len(currentMatched)):
-                            assert currentMatched[i]['hip'] != currentMatched[j]['hip'], "重複が発生しています。"
+                    for j in range(len(currentMatched)):
+                        for k in range(j+1,len(currentMatched)):
+                            assert currentMatched[j]['hip'] != currentMatched[k]['hip'], "重複が発生しています。"
                     
                     currentCatalogIds.append(c0[0])
                 
@@ -557,6 +597,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                         bestMatchCount = currentInliers
                         bestMatchError = currentError
                         bestMatchedStars = currentMatched
+                
+                if np.log(1-0.9999) / np.log(1-(bestMatchCount/starCnt)**4) <= i: # 初期一致数(最小インライア数):4
+                    # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
+                    break
+        i += 1
         
         if 3 <= bestMatchCount:
             import cv2
@@ -604,6 +649,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             debug += f" dec:{est_dec:+07.3f}"
             debug += f" fov:{est_fov:-07.3f}"
             debug += f" error:{bestMatchError:0.3f}"
+            debug += f" ransac early break at {i}/{self.star.ransac.iterations}" if i < self.star.ransac.iterations else ""
             Debug.log(type(self).__name__, f"{debug}")
             return bestMatchedStars
         else:
