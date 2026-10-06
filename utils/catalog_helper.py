@@ -308,8 +308,9 @@ class Catalog:
                         c01d = self.angularDistance(c0[1], c0[2], c1[1], c1[2])
                         c12d = self.angularDistance(c1[1], c1[2], c2[1], c2[2])
                         c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
-                        keys.append((c01d/c12d, c12d/c20d, c20d/c01d))
-                        values.append((c0[0],c1[0],c2[0])) # id を保存
+                        key, cid = self.makeKey([c01d, c12d, c20d], [c0[0], c1[0], c2[0]])
+                        keys.append(key)
+                        values.append(cid)
             Debug.log(self.__class__.__name__, f"Total triangle count: {len(keys)}")
             ratioTree = KDTree(nh.array(keys))
             values    = np.array(values, dtype=np.int32)
@@ -367,45 +368,33 @@ class Catalog:
                         star0 = [id, ra, dec, mag]
         """
         import numpy as np
-        baseKey = np.array([side01 / side12, side12 / side20, side20 / side01])
-        r = np.linalg.norm(baseKey)*relativeError
+        key, orderder = self.makeKey([side01, side12, side20], [0, 1, 2])
+        invOrder = np.argsort(orderder) # 逆引き用
+        r = np.linalg.norm(key)*relativeError
         
         if not fixVertexId is None:
             # 頂点を固定する
             cid0, cid1, cid2 = fixVertexId
             assert not cid0 is None or not cid1 is None or not cid2 is None
-            cidList = []
-            for roll in range(3):
-                idx0 = self._idMap[cid0][ roll         ] if not cid0 is None else None
-                idx1 = self._idMap[cid1][(roll + 1) % 3] if not cid1 is None else None
-                idx2 = self._idMap[cid2][(roll + 2) % 3] if not cid2 is None else None
-                # 共通する idx を抽出
-                idx = idx0
-                idx = np.intersect1d(idx, idx1) if not idx is None and not idx1 is None else idx if not idx is None else idx1
-                idx = np.intersect1d(idx, idx2) if not idx is None and not idx2 is None else idx if not idx is None else idx2
-                if 0<len(idx):
-                    pass
-                # 三角比を取得
-                keyA = self._ratioTree.data[idx]
-                keyB = np.roll(baseKey, roll) # 順序を回す
-                idx = idx[np.linalg.norm(keyB - keyA, axis=1) <= r] # 検索
-                if 0<len(idx):
-                    pass
-                cid = self._values[idx]           # カタログIDを取得
-                cid = np.roll(cid, -roll, axis=1) # 順序を戻す
-                cidList.append(cid)
-            cid = np.concatenate(cidList, axis=0)
+            cidx0 = self._idMap[cid0][invOrder[0]] if not cid0 is None else None # key の順序に入れ替え
+            cidx1 = self._idMap[cid1][invOrder[1]] if not cid1 is None else None # key の順序に入れ替え
+            cidx2 = self._idMap[cid2][invOrder[2]] if not cid2 is None else None # key の順序に入れ替え
+            # 共通する idx を抽出
+            cidx = cidx0
+            cidx = np.intersect1d(cidx, cidx1) if not cidx is None and not cidx1 is None else cidx if not cidx is None else cidx1
+            cidx = np.intersect1d(cidx, cidx2) if not cidx is None and not cidx2 is None else cidx if not cidx is None else cidx2
+            # 三角比を取得
+            keyA = self._ratioTree.data[cidx]
+            cidx = cidx[np.linalg.norm(key - keyA, axis=1) <= r] # 検索
         else:
             # 頂点を固定しない
-            # 3通りの順序を試す
-            cidList = []
-            for roll in range(3):
-                key = np.roll(baseKey, roll) # 順序を回す
-                idx = self._ratioTree.query_ball_point(key, r=r)  # 検索
-                cid = self._values[idx]           # カタログIDを取得
-                cid = np.roll(cid, -roll, axis=1) # 順序を戻す
-                cidList.append(cid)
-            cid = np.concatenate(cidList, axis=0)
+            cidx = self._ratioTree.query_ball_point(key, r=r)  # 検索
+        
+        cid = self._values[cidx] # カタログIDを取得
+        cid0 = cid[:,invOrder[0]]   # 順序を戻す
+        cid1 = cid[:,invOrder[1]]   # 順序を戻す
+        cid2 = cid[:,invOrder[2]]   # 順序を戻す
+        cid = np.stack([cid0, cid1, cid2], axis=1)
         
         if not magLimit is None:
             # 等級フィルタ
@@ -415,8 +404,8 @@ class Catalog:
             cid = cid[mask]
         if outputLimit and outputLimit < len(cid):
             # 出力行数制限
-            idx = np.random.choice(len(cid), size=outputLimit, replace=False)
-            cid = cid[idx]
+            cidx = np.random.choice(len(cid), size=outputLimit, replace=False)
+            cid = cid[cidx]
         # id からカタログへ変換
         n = len(cid)
         cid = np.concatenate([cid[:,0], cid[:,1], cid[:,2]], axis=0)
@@ -426,6 +415,32 @@ class Catalog:
         c2 = self._catalog[cidx[n+n:   ]]
         c = np.stack([c0, c1, c2], axis=1)
         return c
+    
+    def makeKey(self, side:np.ndarray|list, id:np.ndarray|list) -> tuple[np.ndarray, np.ndarray]:
+        """
+        辺長の入力を受けて kd-treee 用の key を返す。
+        Args:
+            side: 辺長のリスト [side01, side12, side20, ...]
+            id: 頂点の ID のリスト [id0, id1, id2, ...]
+        Returns:
+            key: kd-tree 用の key
+            index: 対応頂点の位置
+        """
+        import numpy as np
+        from utils import numpy_helpers as nh
+        
+        side = np.asanyarray(side, dtype=nh.BDTYPE)
+        id   = np.asanyarray(id)
+        n    = len(side)
+        
+        roll = n - 1 - np.argmax(side) # 最大長の辺を配列の末尾に移動
+        side = np.roll(side, roll)
+        id   = np.roll(id  , roll)
+        
+        base = side[-1]
+        key = side[:-1] / base
+        
+        return key, id
     
     def queryStars(self,
                    centerRaDeg: float,
