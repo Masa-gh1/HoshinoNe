@@ -375,7 +375,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         distributedStars   = []
         gridSelectedCounts = []
 
-        # 各グリッドから最大n個の明るい星を選択
+        # 各グリッドから最大 n 個の明るい星を選択
         for row in range(gridRows):
             for col in range(gridCols):
                 yMin = row * cellH
@@ -422,6 +422,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchError = np.inf
         bestMatchedStars = []
         
+        # 4 点による 2 つの三角形のパターン
         COMB_TRIANGLE_PAIRS = np.array([
             [[0, 1, 2], [0, 1, 3]],
             [[0, 1, 3], [0, 1, 2]],
@@ -471,6 +472,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             dq = np.stack([dq01, dq12, dq20])
             if np.any(dq < 1e-7) or np.min(dq) / np.max(dq) < 0.2: continue # 極端に短い辺が在るのでスキップ(検証に不適切)
 
+            dp2q2 = self._calcAngDistance(p2[0], p2[1], q2[0], q2[1], w, h, self.fovDeg)
+            if np.any(dp2q2 < 1e-7) or dp2q2 / np.max(dq) < 0.2: continue # 二つの三角形が近いのでスキップ(検証に不適切)
+
             # 三角形 P をカタログから検索し C とする
             c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
             if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
@@ -480,10 +484,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             if 0 == len(g): continue # 相似の三角形が見つからないのでスキップ
             
             # C G の 1,2 点目共にが同じ ID 物を抽出
-            cid01 = c[:, :2, 0]
-            gid01 = g[:, :2, 0]
-            cidx, gidx = np.where(np.all(cid01[:, np.newaxis, :] == gid01[np.newaxis, :, :], axis=2))
-
+            cid0 = c[:, 0, 0]
+            cid1 = c[:, 1, 0]
+            gid0 = g[:, 0, 0]
+            gid1 = g[:, 1, 0]
+            cid01 = (cid0.astype(np.int64) << 32) | cid1.astype(np.int64)
+            gid01 = (gid0.astype(np.int64) << 32) | gid1.astype(np.int64)
+            _, cidx, gidx = np.intersect1d(cid01, gid01, return_indices=True)
+            
             if 0 < len(cidx) and 0 < len(gidx):
                 idx = np.random.randint(len(cidx))
                 c = c[cidx[idx]]
@@ -548,20 +556,11 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                             break # 安易に見つかるはずのタイミングで失敗したので早期終了
                         else:
                             continue # 相似の三角形が見つからないのでスキップ
-                    
-                    if 1 == len(c):
+                    elif 1 == len(c):
                         # 1つしか候補がない
-                        c0 = c[0][0]
+                        c0 = c[0,0]
                     else:
-                        c0 = c[0][0]
-                        # 画像側の比に近いカタログを採用する
-                        #pSet = pRatio
-                        #cSet = cRatio[matchIndices]
-                        #
-                        #matchError = np.linalg.norm(cSet - pSet, axis=1)
-                        #
-                        #errorIndex = np.argmin(matchError)
-                        #matchIndex = matchIndices[errorIndex]
+                        c0 = c[np.random.choice(len(c0)),0]
                     
                     currentInliers += 1
                     currentMatched.append(
@@ -598,7 +597,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                         bestMatchError = currentError
                         bestMatchedStars = currentMatched
                 
-                if np.log(1-0.9999) / np.log(1-(bestMatchCount/starCnt)**4) <= i: # 初期一致数(最小インライア数):4
+                if(   5 <= bestMatchCount
+                  and bestMatchError < self.catalog.matchLimit/100.0
+                  and np.log(1-0.9999) / np.log(1-(bestMatchCount/starCnt)**4) < i # 初期一致数(最小インライア数):4
+                  ):
                     # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
                     break
         i += 1
