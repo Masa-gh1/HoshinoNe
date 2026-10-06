@@ -408,12 +408,13 @@ class Catalog:
             cid = cid[cidx]
         # id からカタログへ変換
         n = len(cid)
-        cid = np.concatenate([cid[:,0], cid[:,1], cid[:,2]], axis=0)
+        #cid = np.concatenate([cid[:,0], cid[:,1], cid[:,2]], axis=0)
         cidx = np.searchsorted(self._catalog[:,0], cid)
-        c0 = self._catalog[cidx[   :n  ]]
-        c1 = self._catalog[cidx[n  :n+n]]
-        c2 = self._catalog[cidx[n+n:   ]]
-        c = np.stack([c0, c1, c2], axis=1)
+        #c0 = self._catalog[cidx[   :n  ]]
+        #c1 = self._catalog[cidx[n  :n+n]]
+        #c2 = self._catalog[cidx[n+n:   ]]
+        #c = np.stack([c0, c1, c2], axis=1)
+        c = self._catalog[cidx]
         return c
     
     def makeKey(self, side:np.ndarray|list, id:np.ndarray|list) -> tuple[np.ndarray, np.ndarray]:
