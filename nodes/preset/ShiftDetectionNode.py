@@ -910,9 +910,10 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
         self.title(f"{node.name}設定")
         self.geometry("450x700")
         
-        self.createWidgets()
+        self._createWidgets()
         
-    def createWidgets(self):
+    def _createWidgets(self):
+        """UI ウィジェットを生成"""
         mainFrame = tk.Frame(self)
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
@@ -970,14 +971,14 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
         self.starMaxDiameterEntry.pack(side=tk.LEFT, padx=2)
         tk.Label(starSizeFrame, text="px (検出対象の星直径)").pack(side=tk.LEFT)
         
-        # 除外する最大アスペクト比
+        # 最大アスペクト比
         aspectRatioFrame = tk.Frame(mainFrame)
         aspectRatioFrame.pack(fill=tk.X, pady=2)
-        tk.Label(aspectRatioFrame, text="    除外する最大アスペクト比:").pack(side=tk.LEFT)
+        tk.Label(aspectRatioFrame, text="    最大アスペクト比:").pack(side=tk.LEFT)
         self.aspectRatioEntry = tk.Entry(aspectRatioFrame, width=5)
         self.aspectRatioEntry.insert(0, str(self.node.star.maxAspectRatio))
         self.aspectRatioEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(aspectRatioFrame, text="(この比以上の細長い物体を除外)").pack(side=tk.LEFT)
+        tk.Label(aspectRatioFrame, text="(細長いノイズを除外)").pack(side=tk.LEFT)
         
         # グリッド設定
         gridFrame = tk.Frame(mainFrame)
@@ -996,9 +997,9 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
         starsFrame = tk.Frame(mainFrame)
         starsFrame.pack(fill=tk.X, pady=2)
         tk.Label(starsFrame, text="    グリッド当たり星数:").pack(side=tk.LEFT)
-        self.starsEntry = tk.Entry(starsFrame, width=10)
-        self.starsEntry.insert(0, str(self.node.star.grid.starsPerGrid))
-        self.starsEntry.pack(side=tk.LEFT, padx=5)
+        self.starsPerGridEntry = tk.Entry(starsFrame, width=10)
+        self.starsPerGridEntry.insert(0, str(self.node.star.grid.starsPerGrid))
+        self.starsPerGridEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(starsFrame, text="個 (各グリッドから選ぶ星数)").pack(side=tk.LEFT)
         
         # 星サンプル半径
@@ -1063,27 +1064,27 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
     
     def onApply(self):
         try:
-            self.node.star.grid.rows = max(1, int(self.gridRowsEntry.get()))
-            self.node.star.grid.cols = max(1, int(self.gridColsEntry.get()))
-            self.node.star.grid.starsPerGrid = max(1, int(self.starsEntry.get()))
-            self.node.alignmentPlane = max(0, int(self.planeEntry.get()))
-            self.node.star.threshold = max(50, min(99, int(self.thresholdEntry.get())))
-
-            self.node.phase.maxOffset = max(10, int(self.phaseOffsetEntry.get()))
+            self.node.usePreviousOffset        = self.usePrevOffsetVar.get()
+            self.node.alignmentPlane           = max(0, int(self.planeEntry.get()))
+            self.node.star.threshold           = max(50, min(99, int(self.thresholdEntry.get())))
+            self.node.star.useSaturationMask   = self.useSaturationMaskVar.get()
+            self.node.star.minDiameter         = max(1, int(self.starMinDiameterEntry.get()))
+            self.node.star.maxDiameter         = max(self.node.star.minDiameter, int(self.starMaxDiameterEntry.get()))
+            self.node.star.maxAspectRatio      = max(1.0, float(self.aspectRatioEntry.get()))
+            self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
+            self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
+            self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
             self.node.star.ransac.sampleRadius = max(10, int(self.starDistEntry.get()))
-            self.node.star.minDiameter = max(1, int(self.starMinDiameterEntry.get()))
-            self.node.star.maxDiameter = max(self.node.star.minDiameter, int(self.starMaxDiameterEntry.get()))
-            self.node.template.searchRange = max(10, int(self.templateSearchEntry.get()))
-            self.node.star.ransac.iterations = max(10, min(1000, int(self.ransacEntry.get())))
-            self.node.star.ransac.seed = max(1, int(self.ransacSeedEntry.get()))
-            self.node.usePreviousOffset = self.usePrevOffsetVar.get()
-            self.node.star.useSaturationMask = self.useSaturationMaskVar.get()
-            self.node.star.maxAspectRatio = max(1.0, float(self.aspectRatioEntry.get()))
+            self.node.star.ransac.iterations   = max(10, min(10000, int(self.ransacEntry.get())))
+            self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
+            self.node.phase.maxOffset          = max(10, int(self.phaseOffsetEntry.get()))
+            self.node.template.searchRange     = max(10, int(self.templateSearchEntry.get()))
             
             self.node.view.onNodeConfigChanged(self.node)
                 
         except ValueError:
-            messagebox.showerror("エラー", "数値の入力が正しくありません")
+            messagebox.showerror("エラー", "入力値が正しくありません")
     
     def onClose(self):
+        """ダイアログを閉じる"""
         self.destroy()
