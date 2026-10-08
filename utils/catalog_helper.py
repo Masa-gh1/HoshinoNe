@@ -232,16 +232,16 @@ class Catalog:
             Debug.log(self.__class__.__name__, f"         {pS}%")
             Debug.log(self.__class__.__name__, f"Mag: 0%: {magS} :100%")
             
-            # 等級,画角毎に見える星の数の平均
+            # 等級,画角毎に見える星の数の中央値
             magRad = []
             radius  = [1,2,4,8,16,32,64,128,180]
             radiusS = " ".join(["%5d"%(x) for x in radius])
             Debug.log(self.__class__.__name__, f"                    {radiusS}deg")
+            random = np.random.default_rng(2725) # 固定シードで再現性確保
             for mag in range(9):
                 count  = []
                 for r in radius:
                     s = []
-                    np.random.seed(0) # 固定シードで再現性確保
                     for i in range(100):
                         ra     = np.random.uniform(0, 360)     # RA は均等
                         sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1

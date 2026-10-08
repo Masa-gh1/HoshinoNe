@@ -51,7 +51,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.alignmentPlane         = 1                     # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
         self.saturationThreshold    = 95                    # 飽和閾値 [%]
         self.fovDeg                 = 3.5                   # 画角 [deg]
-        self.useHeader              = False                 # 画像ヘッダから推定する
+        self.useHeaderFovDeg        = False                 # 画像ヘッダから推定する
         
         # カタログ照合パラメータ
         self.catalog                = SimpleNamespace()
@@ -89,7 +89,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         nodeData["alignmentPlane"]      = self.alignmentPlane
         nodeData["saturationThreshold"] = self.saturationThreshold
         nodeData["fovDeg"]              = self.fovDeg
-        nodeData["useHeader"]           = self.useHeader
+        nodeData["useHeaderFovDeg"]     = self.useHeaderFovDeg
         nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
         nodeData["catalog.magLimit"]    = self.catalog.magLimit
         nodeData["starThreshold"]       = self.star.threshold
@@ -111,8 +111,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             self.saturationThreshold = nodeData["saturationThreshold"]
         if "fovDeg" in nodeData:
             self.fovDeg = nodeData["fovDeg"]
-        if "useHeader" in nodeData:
-            self.useHeader = nodeData["useHeader"]
+        if "useHeaderFovDeg" in nodeData:
+            self.useHeaderFovDeg = nodeData["useHeaderFovDeg"]
         if "catalog.matchLimit" in nodeData:
             self.catalog.matchLimit = nodeData["catalog.matchLimit"]
         if "catalog.magLimit" in nodeData:
@@ -407,7 +407,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             return [], None
         
         h, w = imageShape
-        np.random.seed(self.star.ransac.seed)
+
+        # RANSAC用固定シードを設定
+        random = np.random.default_rng(self.star.ransac.seed)
         
         # 画像側のサンプリング
         selectedStars, _ = self._selectDistributedStars(detectedStars, imageShape)
@@ -421,7 +423,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchError = np.inf
         bestMatchStars = [] # [(id, ra, dec, mag, x, y, brightness),...]
         catalogTotal = 0
-        
         
         # 4 点による 2 つの三角形のパターン
         COMB_TRIANGLE_PAIRS = np.array([
@@ -440,8 +441,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         ], dtype=np.int8)
         
         for i in range(self.star.ransac.iterations): # RANSAC試行回数
-            # 画像側で 4 点を選択し接する時計回りの三角形 2 つを作成する
-            idx = np.random.choice(starCnt, 4, replace=False)
+            # 画像側で 4 点をランダムに選択し接する時計回りの三角形 2 つを作成する
+            idx = random.choice(starCnt, 4, replace=False)
             idx = idx[COMB_TRIANGLE_PAIRS]
             star = selectedStars[idx] # 3点2組の組み合わせ
             s0x = star[:, :, 0, 0]
@@ -451,7 +452,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             s2x = star[:, :, 2, 0]
             s2y = star[:, :, 2, 1]
             valid = np.all(((s1x - s0x) * (s2y - s0y) - (s1y - s0y) * (s2x - s0x)) < 0, axis=1) # 時計回り判定
-            sel = np.random.choice(np.where(valid)[0]) # valid==True の中から1つ選択
+            sel = random.choice(np.where(valid)[0]) # valid==True の中から1つ選択
             pidx = idx[sel, 0]
             qidx = idx[sel, 1]
             
@@ -496,7 +497,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             _, cidx, gidx = np.intersect1d(cid01, gid01, return_indices=True)
             
             if 0 < len(cidx) and 0 < len(gidx):
-                idx = np.random.randint(len(cidx))
+                idx = random.choice(len(cidx)) # 複数ある場合はランダムに選択
                 c = c[cidx[idx]]
                 g = g[gidx[idx]]
                 
@@ -523,8 +524,8 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 # 確定済み以外の星配列を作成
                 otherStars = selectedStars[np.logical_not(np.isin(np.arange(starCnt), pidx) | np.isin(np.arange(starCnt), qidx))]
                 
-                # 一致した星に対し、画像内の全星について位置関係を検証
-                indices = np.random.choice(len(otherStars), len(otherStars), replace=False)
+                # 一致した星に対し、画像内の全星について位置関係をランダムに検証
+                indices = random.choice(len(otherStars), len(otherStars), replace=False)
                 for j, idx in enumerate(indices):
                     if currentInliers + len(otherStars) - j < bestMatchCount:
                         # このあと全て inlier でも bestMatchCount に届かないので早期終了 
@@ -557,7 +558,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     catalogTotal += len(c)
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
                     if 1 < len(c):
-                        c0 = c[np.random.choice(len(c0)),0] # 複数候補があるのでランダムに選択
+                        c0 = c[random.choice(len(c0)),0] # 複数候補があるのでランダムに選択
                     elif 1 == len(c):
                         c0 = c[0,0] # 1つしか候補がない
                     elif j < 1:
@@ -914,7 +915,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                  f"{self.alignmentPlane}_"
                  f"{self.saturationThreshold}_"
                  f"{self.fovDeg}_"
-                 f"{self.useHeader}_"
+                 f"{self.useHeaderFovDeg}_"
                  f"{self.catalog.matchLimit}_"
                  f"{self.catalog.magLimit}_"
                  f"{self.star.threshold}_"
@@ -966,8 +967,8 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.fovDegEntry.insert(0, str(self.node.fovDeg))
         self.fovDegEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(fovDegFrame, text="deg").pack(side=tk.LEFT)
-        self.useHeaderVar = tk.BooleanVar(value=self.node.useHeader)
-        tk.Checkbutton(fovDegFrame, text="ヘッダー情報から画角を推定", variable=self.useHeaderVar).pack(side=tk.LEFT)
+        self.useHeaderFovDegVar = tk.BooleanVar(value=self.node.useHeaderFovDeg)
+        tk.Checkbutton(fovDegFrame, text="ヘッダー情報から画角を推定", variable=self.useHeaderFovDegVar).pack(side=tk.LEFT)
         
         # カタログ照合パラメータ
         tk.Label(mainFrame, text="■ カタログ照合パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
@@ -1085,7 +1086,7 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         try:
             self.node.alignmentPlane           = max(0, int(self.planeEntry.get()))
             self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
-            self.node.useHeader                = self.useHeaderVar.get()
+            self.node.useHeaderFovDeg          = self.useHeaderFovDegVar.get()
             self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
             self.node.catalog.magLimit         = max(1, min(20, float(self.magLimitEntry.get())))
             self.node.star.threshold           = max(50, min(99, int(self.thresholdEntry.get())))
