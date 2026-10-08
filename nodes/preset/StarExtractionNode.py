@@ -547,13 +547,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 otherStars = selectedStars[np.logical_not(np.isin(np.arange(starCnt), pidx) | np.isin(np.arange(starCnt), qidx))]
                 
                 # 一致した星に対し、画像内の全星について位置関係を検証
-                for j in range(len(otherStars)):
+                indices = np.random.choice(len(otherStars), len(otherStars), replace=False)
+                for j, idx in enumerate(indices):
                     if currentInliers + len(otherStars) - j < bestMatchCount:
                         # このあと全て inlier でも bestMatchCount に届かないので早期終了 
                         break
                     
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
-                    p0 = otherStars[j]
+                    p0 = otherStars[idx]
                     nearIndices = sorted(range(len(currentMatched)), key=lambda x: np.hypot(p0[0]-currentMatched[x]['x'], p0[1]-currentMatched[x]['y']))
                     near1 = currentMatched[nearIndices[0]]
                     near2 = currentMatched[nearIndices[1]]
@@ -578,13 +579,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1[0], c2[0]))
                     catalogTotal += len(c)
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
-                    if 0 == len(c):
-                        continue # 相似の三角形が見つからないのでスキップ
+                    if 1 < len(c):
+                        c0 = c[np.random.choice(len(c0)),0] # 複数候補があるのでランダムに選択
                     elif 1 == len(c):
-                        # 1つしか候補がない
-                        c0 = c[0,0]
+                        c0 = c[0,0] # 1つしか候補がない
+                    elif j < 1:
+                        break # 安易に見つかるはずのタイミングで失敗したので早期終了
                     else:
-                        c0 = c[np.random.choice(len(c0)),0]
+                        continue # 相似の三角形が見つからないのでスキップ
                     
                     currentInliers += 1
                     currentMatched.append(
@@ -599,9 +601,9 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     )
                     
                     #重複チェック
-                    for j in range(len(currentMatched)):
-                        for k in range(j+1,len(currentMatched)):
-                            assert currentMatched[j]['hip'] != currentMatched[k]['hip'], "重複が発生しています。"
+                    x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
+                    for x1,x2 in zip(x1s,x2s):
+                        assert np.all(currentMatched[x1]['hip'] != currentMatched[x2]['hip']), "重複が発生しています。"
                     
                     currentCatalogIds.append(c0[0])
                 
