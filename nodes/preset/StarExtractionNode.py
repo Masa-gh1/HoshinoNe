@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from utils.catalog_helper import Catalog
     from base.FlowData import FlowData
 
+# 結果配列用 idx 定義
+ID, RA, DEC, MAG, X, Y, BRI = 0, 1, 2, 3, 4, 5, 6
+
 class StarExtractionNode(FlowNode, ConfigurableNode):
     """画像から星点を抽出し、カタログデータと照合して星リストを出力するノード"""
     
@@ -39,7 +42,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_AUX
-
+    
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
         
@@ -438,13 +441,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         starCnt = len(selectedStars)
         if starCnt < 4:
             return [], None
-        selectedStars = np.array(selectedStars)
+        selectedStars = nh.array(selectedStars)
         
         # 探索結果
         bestMatchCount = 0
         bestMatchError = np.inf
-        bestMatchedStars = []
+        bestMatchStars = [] # [(id, ra, dec, mag, x, y, brightness),...]
         catalogTotal = 0
+        
         
         # 4 点による 2 つの三角形のパターン
         COMB_TRIANGLE_PAIRS = np.array([
@@ -526,14 +530,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 # 画像 4 点とカタログ 4 点が相似だった
                 currentInliers = 4
                 currentMatched = [
-                    { 'hip'        : float(cat[0]),
-                      'ra'         : float(cat[1]),
-                      'dec'        : float(cat[2]),
-                      'mag'        : float(cat[3]),
-                      'x'          : float(sta[0]),
-                      'y'          : float(sta[1]),
-                      'brightness' : float(sta[2]),
-                    } for cat,sta in ((c[0],p[0]),(c[1],p[1]),(c[2],p[2]),(g[2],q[2]))
+                    (float(cat[0]), # hip
+                     float(cat[1]), # ra
+                     float(cat[2]), # dec
+                     float(cat[3]), # mag
+                     float(sta[0]), # x
+                     float(sta[1]), # y
+                     float(sta[2]), # brightness
+                    ) for cat,sta in ((c[0],p[0]),(c[1],p[1]),(c[2],p[2]),(g[2],q[2]))
                 ]
                 
                 currentCatalogIds = [
@@ -555,13 +559,13 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     
                     # 選択した p0 に近い2つを currentMatched の中から取り出す。
                     p0 = otherStars[idx]
-                    nearIndices = sorted(range(len(currentMatched)), key=lambda x: np.hypot(p0[0]-currentMatched[x]['x'], p0[1]-currentMatched[x]['y']))
+                    nearIndices = sorted(range(len(currentMatched)), key=lambda k: np.hypot(p0[0]-currentMatched[k][X], p0[1]-currentMatched[k][Y]))
                     near1 = currentMatched[nearIndices[0]]
                     near2 = currentMatched[nearIndices[1]]
-                    p1 = (              near1['x' ], near1['y'  ], near1['brightness'], -1)
-                    p2 = (              near2['x' ], near2['y'  ], near2['brightness'], -1)
-                    c1 = (near1['hip'], near1['ra'], near1['dec'], near1['mag']           )
-                    c2 = (near2['hip'], near2['ra'], near2['dec'], near2['mag']           )
+                    p1 = (           near1[X ], near1[Y  ], near1[BRI], -1)
+                    p2 = (           near2[X ], near2[Y  ], near2[BRI], -1)
+                    c1 = (near1[ID], near1[RA], near1[DEC], near1[MAG]    )
+                    c2 = (near2[ID], near2[RA], near2[DEC], near2[MAG]    )
                     
                     if 0 < (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p1[1] - p0[1]) * (p2[0] - p0[0]):
                         p1,p2 = p2,p1 # 時計回りに修正
@@ -590,30 +594,30 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     
                     currentInliers += 1
                     currentMatched.append(
-                        {'hip'       : float(c0[0]),
-                         'ra'        : float(c0[1]),
-                         'dec'       : float(c0[2]),
-                         'mag'       : float(c0[3]),
-                         'x'         : float(p0[0]),
-                         'y'         : float(p0[1]),
-                         'brightness': float(p0[2]),
-                        }
+                        (float(c0[0]), # hip
+                         float(c0[1]), # ra
+                         float(c0[2]), # dec
+                         float(c0[3]), # mag
+                         float(p0[0]), # x
+                         float(p0[1]), # y
+                         float(p0[2]), # brightness
+                        )
                     )
                     
                     #重複チェック
                     x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
                     for x1,x2 in zip(x1s,x2s):
-                        assert np.all(currentMatched[x1]['hip'] != currentMatched[x2]['hip']), "重複が発生しています。"
+                        assert np.all(currentMatched[x1][ID] != currentMatched[x2][ID]), "重複が発生しています。"
                     
                     currentCatalogIds.append(c0[0])
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    currentMatched.sort(key=lambda x: x['mag']) # カタログ等級順にソート
+                    currentMatched.sort(key=lambda x: x[MAG]) # カタログ等級順にソート
                     # 誤差算出
                     # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                    p = nh.array([[star['x' ], star['y'  ]] for star in currentMatched])
-                    c = nh.array([[star['ra'], star['dec']] for star in currentMatched])
+                    p = nh.array([[star[X ], star[Y  ]] for star in currentMatched])
+                    c = nh.array([[star[RA], star[DEC]] for star in currentMatched])
                     dp = self._calcAngDistance(  p[:, np.newaxis, 0], p[:, np.newaxis, 1], p[np.newaxis, :, 0], p[np.newaxis, :, 1], w, h, self.fovDeg)
                     dc = catalog.angularDistance(c[:, np.newaxis, 0], c[:, np.newaxis, 1], c[np.newaxis, :, 0], c[np.newaxis, :, 1])
                     # カタログ側で 2σ 以上離れた角距離を排除
@@ -647,7 +651,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     if bestMatchCount < currentInliers or currentError < bestMatchError:
                         bestMatchCount = currentInliers
                         bestMatchError = currentError
-                        bestMatchedStars = currentMatched
+                        bestMatchStars = currentMatched
                 
                 if(   5 <= bestMatchCount
                   and bestMatchError < self.catalog.matchLimit/100.0
@@ -658,36 +662,36 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         i += 1
         
         if 3 <= bestMatchCount:
+            # RANSAC 結果から向きと画角を推定する
             import cv2
-            src_pts = np.array([[star['x'], star['y']] for star in bestMatchedStars], dtype=np.float32)
-            dst_pts = np.array([[star['ra'], star['dec']] for star in bestMatchedStars], dtype=np.float32)
+            from utils import numpy_helpers as nh
+            src_pts = nh.array([[star[X ], star[Y  ]] for star in bestMatchStars])
+            dst_pts = nh.array([[star[RA], star[DEC]] for star in bestMatchStars])
             M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
             if M is not None:
-                img_center_px = np.array([w / 2.0, h / 2.0, 1.0])
-                center_coords = M @ img_center_px
-                est_ra, est_dec = center_coords[0], center_coords[1]
+                center = nh.array([w / 2.0, h / 2.0, 1.0])
+                coords = M @ center
+                est_ra, est_dec = coords[0], coords[1]
             else:
                 est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
             
-            s = bestMatchedStars
+            s = bestMatchStars
             
-            dist_cat = [
-                Catalog.angularDistance(s[0]['ra'], s[0]['dec'], s[1]['ra'], s[1]['dec']),
-                Catalog.angularDistance(s[1]['ra'], s[1]['dec'], s[2]['ra'], s[2]['dec']),
-                Catalog.angularDistance(s[2]['ra'], s[2]['dec'], s[0]['ra'], s[0]['dec']),
+            dc = [
+                Catalog.angularDistance(s[0][RA], s[0][DEC], s[1][RA], s[1][DEC]),
+                Catalog.angularDistance(s[1][RA], s[1][DEC], s[2][RA], s[2][DEC]),
+                Catalog.angularDistance(s[2][RA], s[2][DEC], s[0][RA], s[0][DEC]),
             ]
-            avg_dist_cat = np.mean(dist_cat)
+            dcMean = np.mean(dc)
             
-            dist_img_px = [
-                np.hypot(s[0]['x']-s[1]['x'], s[0]['y']-s[1]['y']),
-                np.hypot(s[1]['x']-s[2]['x'], s[1]['y']-s[2]['y']),
-                np.hypot(s[2]['x']-s[0]['x'], s[2]['y']-s[0]['y']),
+            dp = [
+                np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
+                np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
+                np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
             ]
-            avg_dist_img_px = np.mean(dist_img_px)
+            apMean = np.mean(dp)
             
-            pixel_to_deg_est = avg_dist_cat / avg_dist_img_px
-            diag_px = np.hypot(w, h)
-            est_fov = diag_px * pixel_to_deg_est
+            est_fov  = np.hypot(w, h) * (dcMean / apMean)
             
             from utils.Debug import Debug
             n = int(np.log10(starCnt))+1
@@ -700,7 +704,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             debug += f" error:{bestMatchError:0.3f}"
             debug += f" ransac_iteration: {i}"
             Debug.log(type(self).__name__, f"{debug}")
-            return bestMatchedStars
+            return bestMatchStars
         else:
             from utils.Debug import Debug
             Debug.log(type(self).__name__, f"bestMatchCount: 0 match")
@@ -838,20 +842,20 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         from base import FlowData
         
         # 等級でソート
-        matchedStars.sort(key=lambda x: x['mag'])
+        matchedStars.sort(key=lambda x: x[MAG])
         
         columns = ['ra', 'dec', 'mag', 'x', 'y', 'brightness']
-        lines   = [f"HIP{int(star['hip'])}" for star in matchedStars]
+        lines   = [f"HIP{int(star[ID])}" for star in matchedStars]
 
         tableRows = []
         for star in matchedStars:
             row = [
-                star['ra'],
-                star['dec'],
-                star['mag'],
-                star['x'],
-                star['y'],
-                star['brightness'],
+                star[RA ],
+                star[DEC],
+                star[MAG],
+                star[X  ],
+                star[Y  ],
+                star[BRI],
             ]
             tableRows.append(row)
 
