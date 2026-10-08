@@ -6,6 +6,7 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -673,12 +674,12 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
             dx, dy, rotation = self._calculateAffineTransform(inlier_matches, currentImageShape)
         
         from utils.Debug import Debug
-        degug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f} confidence:{confidence:.3f}"
-        degug += f" target_bright_count:{extra_info['target_bright_count']  }" if 'target_bright_count' in extra_info else ""
-        degug += f" aspectRatioMedian:{  extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian'   in extra_info else ""
-        degug += f" inliers:{            extra_info['inliers']              }" if 'inliers'             in extra_info else ""
-        degug += f" ransac_iteration:{   extra_info['ransac_iteration']     }" if 'ransac_iteration'    in extra_info else ""
-        Debug.log(type(self).__name__, f"{degug}")
+        debug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f} confidence:{confidence:.3f}"
+        debug += f" target_bright_count:{extra_info['target_bright_count']  }" if 'target_bright_count' in extra_info else ""
+        debug += f" aspectRatioMedian:{  extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian'   in extra_info else ""
+        debug += f" inliers:{            extra_info['inliers']              }" if 'inliers'             in extra_info else ""
+        debug += f" ransac_iteration:{   extra_info['ransac_iteration']     }" if 'ransac_iteration'    in extra_info else ""
+        Debug.log(type(self).__name__, f"{debug}")
         
         return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
     
@@ -825,7 +826,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
                 cy = float(M['m01'] / M['m00'])
                 positions.append((cx, cy))
                 
-                # その点の明度を取得
+                # 星の明度を取得
                 x, y = int(cx), int(cy)
                 if 0 <= x < subtracted.shape[1] and 0 <= y < subtracted.shape[0]:
                     brightness = float(subtracted[y, x])
@@ -841,13 +842,13 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         
         return ret
     
-    def _createSaturationMask(self, image):
+    def _createSaturationMask(self, image:np.ndarray) -> np.ndarray:
         """飽和領域のマスクを作成"""
         import numpy as np
         import cv2
-
-        max_val = np.max(image)
-        saturated = image > (max_val * self.saturationThreshold / 100)
+        
+        maxVal = np.max(image)
+        saturated = image > (maxVal * self.saturationThreshold / 100.0)
         
         # 飽和領域を膨張させて周辺も除外
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
@@ -857,7 +858,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
     
     def _selectDistributedStars(self, stars, imageShape):
         """画像全体に分散した星を選択"""
-        if len(stars) < 10:
+        if 0 == len(stars):
             return stars, []
         
         h, w = imageShape
@@ -870,7 +871,7 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         distributedStars = []
         gridSelectedCounts = []
         
-        # 各グリッドから最大n個の明るい星を選択
+        # 各グリッドから最大 n 個の明るい星を選択
         for row in range(gridRows):
             for col in range(gridCols):
                 yMin = row * cellH
@@ -893,10 +894,12 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         for star in all_bright:
             if star not in distributedStars and len(distributedStars) < maxTotalStars:
                 distributedStars.append(star)
+        distributedStars = distributedStars[:maxTotalStars]
         
-        return distributedStars[:maxTotalStars], gridSelectedCounts
+        return distributedStars, gridSelectedCounts
     
     def createSettingWindow(self):
+        """設定ダイアログを作成"""
         return ShiftDetectionSettingsDialog(self.view.editor.root, self)
     
     def getConfigHash(self):
