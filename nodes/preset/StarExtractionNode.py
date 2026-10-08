@@ -305,35 +305,54 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     aspectFiltered.append(star)
                     aspectRatios.append(aspectRatio)
         stars = aspectFiltered
-
+        
         # 星の位置と明るさを取得
+        
+        
+        
         positions    = []
         brightnesses = []
         for star in stars:
-            # 重心を計算
+            # 星の重心と輝度を計算
             M = cv2.moments(star)
             if M['m00'] <= 0:
                 positions.append(None)
                 brightnesses.append(None)
             else:
+                # 星の重心
                 cx = float(M['m10'] / M['m00'])
                 cy = float(M['m01'] / M['m00'])
                 positions.append((cx, cy))
                 
-                # 星の明度を取得
+                # 星の明度を取得(広がりの合計)
                 # 星は無限遠の点なので分散している明るさを合計する
                 # 輪郭からマスクを作成して、星像を取得
-                mask = np.zeros(subtracted.shape, dtype=np.uint8)
-                cv2.drawContours(mask, [star], -1, 255, thickness=cv2.FILLED)
-                
                 # 輪郭の少し外まで採る(直径を1.4倍)
+                n = 1.41421356237
+                x, y, w, h = cv2.boundingRect(star)
+
+                # 星の外郭を n 倍
+                _x = x - int((w * (n - 1)) / 2 + 1)
+                _y = y - int((h * (n - 1)) / 2 + 1)
+                _w = int(w * n + 2)
+                _h = int(h * n + 2)
+                w = _w - (_x if _x < 0 else 0)
+                h = _h - (_y if _y < 0 else 0)
+                x, y = max(_x, 0), max(_y, 0)
+                w = min(w, subtracted.shape[1] - x)
+                h = min(h, subtracted.shape[0] - y)
+
+                # 最小マスクを作成
+                offsetStar = star - [x, y]
+                mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.drawContours(mask, [offsetStar], -1, 255, thickness=cv2.FILLED) # 輪郭を取得
                 r = np.sqrt(np.sum(mask > 0)/np.pi)
-                k = int(np.ceil(r * (1.4 - 1))) * 2 + 1
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+                k = int(np.ceil(r * (n - 1))) * 2 + 1
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)) # 輪郭を拡張
                 mask = cv2.dilate(mask, kernel, iterations=1)
                 
-                # 元の画像をマスク
-                starAreaValues = subtracted[mask > 0]
+                # 元の画像からマスク部分を切り出し
+                starAreaValues = subtracted[y:y+h, x:x+w][mask > 0]
                 
                 # 分散している明るさを合計
                 if starAreaValues.size > 0:
@@ -350,15 +369,19 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
         return ret
 
-    def _createSaturationMask(self, image: np.ndarray) -> np.ndarray:
+    def _createSaturationMask(self, image:np.ndarray) -> np.ndarray:
         """飽和領域のマスクを作成"""
         import numpy as np
         import cv2
-        maxVal = np.max(image) if 0 < image.size else 255
-        saturated = image > (maxVal * float(self.saturationThreshold) / 100.0)
+        
+        maxVal = np.max(image)
+        saturated = image > (maxVal * self.saturationThreshold / 100.0)
+        
+        # 飽和領域を膨張させて周辺も除外
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
         mask = cv2.dilate(saturated.astype(np.uint8), kernel, iterations=2)
-        return mask == 0
+        
+        return mask == 0  # 有効領域のマスク
 
     def _selectDistributedStars(self, stars, imageShape):
         """画像全体に分散した星を選択"""
@@ -421,6 +444,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         bestMatchCount = 0
         bestMatchError = np.inf
         bestMatchedStars = []
+        catalogTotal = 0
         
         # 4 点による 2 つの三角形のパターン
         COMB_TRIANGLE_PAIRS = np.array([
@@ -477,10 +501,12 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
 
             # 三角形 P をカタログから検索し C とする
             c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
+            catalogTotal += len(c)
             if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
 
             # 三角形 Q をカタログから検索し G とする
             g = catalog.searchTriangle(dq01, dq12, dq20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
+            catalogTotal += len(g)
             if 0 == len(g): continue # 相似の三角形が見つからないのでスキップ
             
             # C G の 1,2 点目共にが同じ ID 物を抽出
@@ -550,12 +576,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                     
                     # カタログから検索
                     c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1[0], c2[0]))
+                    catalogTotal += len(c)
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
                     if 0 == len(c):
-                        if j < 1:
-                            break # 安易に見つかるはずのタイミングで失敗したので早期終了
-                        else:
-                            continue # 相似の三角形が見つからないのでスキップ
+                        continue # 相似の三角形が見つからないのでスキップ
                     elif 1 == len(c):
                         # 1つしか候補がない
                         c0 = c[0,0]
@@ -583,13 +607,39 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    # 誤差算出
                     currentMatched.sort(key=lambda x: x['mag']) # カタログ等級順にソート
-                    p = nh.array([[             star['x' ], star['y'  ], star['brightness']] for star in currentMatched])
-                    c = nh.array([[star['hip'], star['ra'], star['dec'], star['mag']       ] for star in currentMatched])
-                    pr = self._calcStarRatio(p, w, h, self.fovDeg)
-                    cr = self._calcCatalogRatio(c)
-                    currentError = np.linalg.norm(cr[:len(c)] - pr[:len(p)])
+                    # 誤差算出
+                    # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
+                    p = nh.array([[star['x' ], star['y'  ]] for star in currentMatched])
+                    c = nh.array([[star['ra'], star['dec']] for star in currentMatched])
+                    dp = self._calcAngDistance(  p[:, np.newaxis, 0], p[:, np.newaxis, 1], p[np.newaxis, :, 0], p[np.newaxis, :, 1], w, h, self.fovDeg)
+                    dc = catalog.angularDistance(c[:, np.newaxis, 0], c[:, np.newaxis, 1], c[np.newaxis, :, 0], c[np.newaxis, :, 1])
+                    # カタログ側で 2σ 以上離れた角距離を排除
+                    x1, x2 = np.triu_indices(currentInliers, k=1) # 表の右上だけ選択
+                    dch = dc[x1, x2]
+                    dch = np.sort(dch)[:currentInliers] # 簡単な図形で考えた場合、外周は短い辺となるので、短い側を採用して統計を採る
+                    mean = np.mean(dch)
+                    std = np.std(dch)
+                    valid = (0 < dc) & (dc < mean + 2.0 * std) # カタログ側で 2σ より短い接続を残す
+                    # 全点で隣接する2辺の角距離で比を計算する
+                    dpRatio = []
+                    dcRatio = []
+                    for j in range(currentInliers):
+                        xIdx = np.where(valid[j])[0]
+                        if 2 <= len(xIdx):
+                            x1, x2 = np.triu_indices(len(xIdx), k=1) # 表の右上だけ選択
+                            x1idx = xIdx[x1]
+                            x2idx = xIdx[x2]
+                            dpRatio.extend(dp[j, x1idx] / dp[j, x2idx]) # 画像側2辺の比
+                            dcRatio.extend(dc[j, x1idx] / dc[j, x2idx]) # カタログ側2辺の比
+                    if 0 == len(dpRatio) or 0 == len(dcRatio):
+                        currentError = np.inf
+                    else:
+                        dpRatio = nh.array(dpRatio)
+                        dcRatio = nh.array(dcRatio)
+                        # RMS を計算し error 値とする
+                        diff = (dpRatio - dcRatio) / dpRatio # 分母に画像側を持ってきているのはカタログ検索(catalog.searchTriangle)の仕様に合わせる為
+                        currentError = np.sqrt(np.mean(diff**2))
                     
                     # インライア数が同じでも、誤差が小さい方が優先
                     if bestMatchCount < currentInliers or currentError < bestMatchError:
@@ -639,19 +689,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             
             from utils.Debug import Debug
             n = int(np.log10(starCnt))+1
-            raMin = min([star['ra'] for star in bestMatchedStars])
-            raMax = max([star['ra'] for star in bestMatchedStars])
-            decMin = min([star['dec'] for star in bestMatchedStars])
-            decMax = max([star['dec'] for star in bestMatchedStars])
             debug  = f"match:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
-            debug += f" ra:{ (raMax+raMin  )/2.0:-05.1f}±{(raMax-raMin  )/2.0:-05.1f}"
-            debug += f" dec:{(decMax+decMin)/2.0:+05.1f}±{(decMax-decMin)/2.0:+05.1f}"
+            debug += f" catalog:{catalogTotal//i}"
             debug += f" estimated"
             debug += f" ra:{ est_ra :-07.3f}"
             debug += f" dec:{est_dec:+07.3f}"
             debug += f" fov:{est_fov:-07.3f}"
             debug += f" error:{bestMatchError:0.3f}"
-            debug += f" ransac early break at {i}/{self.star.ransac.iterations}" if i < self.star.ransac.iterations else ""
+            debug += f" ransac_iteration: {i}"
             Debug.log(type(self).__name__, f"{debug}")
             return bestMatchedStars
         else:
@@ -776,7 +821,7 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         ratio1 = diff1 / np.roll(diff1, shift=-1, axis=1)
         
         # 算出した比を結合
-        ratio = np.concatenate([ratio0, ratio1], axis=1)
+        ratio = ratio0 # np.concatenate([ratio0, ratio1], axis=1)
         
         if 2 == star.ndim:
             return ratio[0]
