@@ -51,7 +51,7 @@ class Catalog:
         for _ in range(100):
             import numpy as np
             roll = np.random.randint(3)        # 順序違い
-            r  = np.random.rand() * 10 + 0.001 # 相似比
+            s  = np.random.rand() * 10 + 0.001 # 相似比
             n0 = np.random.rand()*0.001 + 1.0  # ノイズ
             n1 = np.random.rand()*0.001 + 1.0  # ノイズ
             n2 = np.random.rand()*0.001 + 1.0  # ノイズ
@@ -72,18 +72,24 @@ class Catalog:
             c01d = self.angularDistance(c0[1], c0[2], c1[1], c1[2])
             c12d = self.angularDistance(c1[1], c1[2], c2[1], c2[2])
             c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
+
+            _c01d, _c12d, _c20d = c01d*s*n0, c12d*s*n1, c20d*s*n2
             
             # 実行
-            if   0==prm: c = self.searchTriangle(c01d*r*n0, c12d*r*n1, c20d*r*n2, re)
-            elif 1==prm: c = self.searchTriangle(c01d*r*n0, c12d*r*n1, c20d*r*n2, re, fixVertexId=(None,cid[1],None  ))
-            else       : c = self.searchTriangle(c01d*r*n0, c12d*r*n1, c20d*r*n2, re, fixVertexId=(None,cid[1],cid[2]))
+            if   0==prm: c = self.searchTriangle(_c01d, _c12d, _c20d, re)
+            elif 1==prm: c = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexId=(None,cid[1],None  ))
+            else       : c = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexId=(None,cid[1],cid[2]))
             
             # チェック
             chk0 = (c[:, 0, 0] == cid[0])
             chk1 = (c[:, 1, 0] == cid[1])
             chk2 = (c[:, 2, 0] == cid[2])
             chk = chk0 & chk1 & chk2
-            assert np.any(chk), f"Self test: Triangle search error: {str(cid)} {re:0.3f} r:{r} noise:{n0} {n1} {n2}"
+            assert np.any(chk), (f"Self test: Triangle search error: {str(cid)} {re:0.3f}"
+              + f" s:{s} noise:{n0} {n1} {n2} "
+              + f" error:{np.linalg.norm([c01d/c12d-_c01d/_c12d, c12d/c20d-_c12d/_c20d, c20d/c01d-_c20d/_c01d])}"
+              + f" r:{np.linalg.norm([_c01d, _c12d, _c20d])*re}"
+            )
     
     def loadCatalog(self, symbol, filePath):
         """
