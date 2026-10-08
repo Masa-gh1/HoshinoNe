@@ -51,7 +51,7 @@ class NodeFactory:
         ('------------------------', None                           , None             ),
         (None                      , None                           , 'A,B:plane'      ),
         ('convolution'             , '畳み込み(N:N)'                , 'A*B'            ),
-        #('deconvolution'           , '逆畳み込み(N:N)'             , 'A/B'            ), # 未公開
+       #('deconvolution'           , '逆畳み込み(N:N)'              , 'A/B'            ), # 未公開
         ('fft'                     , 'FFT(N:N)'                     , 'DFT(A)'         ),
         ('ifft'                    , '逆FFT(N:N)'                   , 'IDFT(A)'        ),
         ('dwt'                     , '離散ウェーブレット変換(N:N)'  , 'DWT(A,B)'       ),
@@ -74,9 +74,10 @@ class NodeFactory:
         ('transform'               , '変形(N:N)'                    , None             ),
         ('reposition'              , '再配置(N:N)'                  , None             ),
         ('------------------------', None                           , None             ),
-        ('star_extraction'         , '星抽出(N:1)'                  , 'テスト中'       ),
-        ('orientation'             , '向き特定(N:1)'                , 'テスト中'       ),
-        ('distortion_analysis'     , '歪み解析(N:1)'                , 'テスト中'       ),
+       #('star_extraction'         , '星抽出(N:N)'                  , 'テスト中'       ),
+        ('star_identification'     , '星識別(N:N)'                  , 'テスト中'       ),
+       #('orientation'             , '向き特定(N:1)'                , 'テスト中'       ),
+       #('distortion_analysis'     , '歪み解析(N:1)'                , 'テスト中'       ),
         ('------------------------', None                           , None             ),
         ('table'                   , '表(0:1)'                      , '[a,b,c,...]'    ),
         ('tensor'                  , '数列(0:1)'                    , '[a,a,a,...]'    ),
@@ -92,7 +93,7 @@ class NodeFactory:
         ('chroma_denoise'          , '色空間分離ノイズ除去(N:N)'    , None             ),
         ('wavelet_denoise'         , 'ウェーブレットノイズ除去(N:N)', None             ),
         ('------------------------', None                           , None             ),
-        #('category_auxiliary'      , '補正値に変換'                 , None             ), # 廃止
+       #('category_auxiliary'      , '補正値に変換'                 , None             ), # 廃止
         ('pass'                    , '通過点(何もしない)'           , None             ),
     ]    
     nodeList = None

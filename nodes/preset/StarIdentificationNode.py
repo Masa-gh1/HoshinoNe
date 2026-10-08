@@ -1,5 +1,5 @@
 '''
-StarExtractionNode - 星抽出ノード
+StarIdentificationNode - 星同定ノード
 
 画像から天体（星点）を検出し、星カタログ（HIP2等）と照合して確定した星のリストを生成するノード
 
@@ -31,14 +31,14 @@ if TYPE_CHECKING:
 # 結果配列用 idx 定義
 ID, RA, DEC, MAG, X, Y, BRI = 0, 1, 2, 3, 4, 5, 6
 
-class StarExtractionNode(FlowNode, ConfigurableNode):
-    """画像から星点を抽出し、カタログデータと照合して星リストを出力するノード"""
+class StarIdentificationNode(FlowNode, ConfigurableNode):
+    """画像から星を抽出し、カタログデータと照合して星リストを出力するノード"""
     
     # ノードタイプ
     majorType = _MAJOR_TYPE_FUNC
-    minorType = 'star_extraction'
+    minorType = 'star_identification'
     # ノード名
-    name      = '星抽出'
+    name      = '星同定'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     outputCat = _OUT_CAT_AUX
@@ -669,14 +669,15 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             
             from utils.Debug import Debug
             n = int(np.log10(starCnt))+1
-            debug  = f"match:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
-            debug += f" catalog:{catalogTotal//i}"
-            debug += f" estimated"
+            debug  = f"estimated"
             debug += f" ra:{ est_ra :-07.3f}"
             debug += f" dec:{est_dec:+07.3f}"
             debug += f" fov:{est_fov:-07.3f}"
+            debug += f" ransac:"
+            debug += f" inlier:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
+            debug += f" catalog:{catalogTotal//i}"
             debug += f" error:{bestMatchError:0.3f}"
-            debug += f" ransac_iteration: {i}"
+            debug += f" iter:{i}"
             Debug.log(type(self).__name__, f"{debug}")
             return bestMatchStars
         else:
