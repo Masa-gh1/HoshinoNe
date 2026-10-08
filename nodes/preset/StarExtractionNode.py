@@ -48,30 +48,30 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         
         # 設定パラメータ (ShiftDetectionNodeの星検出設定を完全継承)
         # 画像パラメータ
-        self.alignmentPlane      = 1                          # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
-        self.saturationThreshold = 95                         # 飽和閾値 [%]
-        self.fovDeg              = 3.5                        # 画角 [deg]
-        self.useHeader           = False                      # 画像ヘッダから推定する
+        self.alignmentPlane         = 1                     # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
+        self.saturationThreshold    = 95                    # 飽和閾値 [%]
+        self.fovDeg                 = 3.5                   # 画角 [deg]
+        self.useHeader              = False                 # 画像ヘッダから推定する
         
         # カタログ照合パラメータ
-        self.catalog            = SimpleNamespace()
-        self.catalog.matchLimit = 1                           # カタログ照合許容比 [%]
-        self.catalog.magLimit   = 8.0                         # カタログ等級上限 [mag]
+        self.catalog                = SimpleNamespace()
+        self.catalog.matchLimit     = 1                     # カタログ照合許容比 [%]
+        self.catalog.magLimit       = 8.0                   # カタログ等級上限 [mag]
         
         # 星点検出パラメータ
-        self.star                     = SimpleNamespace()
-        self.star.threshold           = 95                    # 星検出閾値 [%]
-        self.star.useSaturationMask   = False                 # 飽和マスクを使用する
-        self.star.minDiameter         = 2                     # 星最小直径 [px]
-        self.star.maxDiameter         = 16                    # 星最大直径 [px]
-        self.star.maxAspectRatio      = 2.0                   # 星の最大アスペクト比
-        self.star.grid                = SimpleNamespace()
-        self.star.grid.rows           = 1                     # グリッド行数
-        self.star.grid.cols           = 1                     # グリッド列数
-        self.star.grid.starsPerGrid   = 8                     # グリッド当たりの選択星数
-        self.star.ransac              = SimpleNamespace()
-        self.star.ransac.iterations   = 100                   # RANSAC試行回数
-        self.star.ransac.seed         = 2725                  # RANSAC乱数シード
+        self.star                   = SimpleNamespace()
+        self.star.threshold         = 95                    # 星検出閾値 [%]
+        self.star.useSaturationMask = False                 # 飽和マスクを使用する
+        self.star.minDiameter       = 2                     # 星最小直径 [px]
+        self.star.maxDiameter       = 16                    # 星最大直径 [px]
+        self.star.maxAspectRatio    = 2.0                   # 星の最大アスペクト比
+        self.star.grid              = SimpleNamespace()
+        self.star.grid.rows         = 1                     # グリッド行数
+        self.star.grid.cols         = 1                     # グリッド列数
+        self.star.grid.starsPerGrid = 8                     # グリッド当たりの選択星数
+        self.star.ransac            = SimpleNamespace()
+        self.star.ransac.iterations = 100                   # RANSAC試行回数
+        self.star.ransac.seed       = 2725                  # RANSAC乱数シード
         
         import importlib.util
         import sys
