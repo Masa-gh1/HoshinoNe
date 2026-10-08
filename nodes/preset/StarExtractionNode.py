@@ -47,8 +47,16 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         super().__init__(canvas, editor, x, y, **kwargs)
         
         # 設定パラメータ (ShiftDetectionNodeの星検出設定を完全継承)
+        # 画像パラメータ
         self.alignmentPlane      = 1                          # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
         self.saturationThreshold = 95                         # 飽和閾値 [%]
+        self.fovDeg              = 3.5                        # 画角 [deg]
+        self.useHeader           = False                      # 画像ヘッダから推定する
+        
+        # カタログ照合パラメータ
+        self.catalog            = SimpleNamespace()
+        self.catalog.matchLimit = 1                           # カタログ照合許容比 [%]
+        self.catalog.magLimit   = 8.0                         # カタログ等級上限 [mag]
         
         # 星点検出パラメータ
         self.star                     = SimpleNamespace()
@@ -65,15 +73,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         self.star.ransac.iterations   = 100                   # RANSAC試行回数
         self.star.ransac.seed         = 2725                  # RANSAC乱数シード
         
-        # 画像パラメータ
-        self.fovDeg            = 3.5                          # 画角 [deg]
-        self.useHeader         = False                        # 画像ヘッダから推定する
-        
-        # カタログ照合パラメータ
-        self.catalog            = SimpleNamespace()
-        self.catalog.matchLimit = 1                            # カタログ照合許容比 [%]
-        self.catalog.magLimit   = 8.0                          # カタログ等級上限 [mag]
-        
         import importlib.util
         import sys
         if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
@@ -89,6 +88,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         """ノード設定を辞書に保存"""
         nodeData["alignmentPlane"]      = self.alignmentPlane
         nodeData["saturationThreshold"] = self.saturationThreshold
+        nodeData["fovDeg"]              = self.fovDeg
+        nodeData["useHeader"]           = self.useHeader
+        nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
+        nodeData["catalog.magLimit"]    = self.catalog.magLimit
         nodeData["starThreshold"]       = self.star.threshold
         nodeData["useSaturationMask"]   = self.star.useSaturationMask
         nodeData["starMinDiameter"]     = self.star.minDiameter
@@ -99,10 +102,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
         nodeData["starsPerGrid"]        = self.star.grid.starsPerGrid
         nodeData["ransacIterations"]    = self.star.ransac.iterations
         nodeData["ransacSeed"]          = self.star.ransac.seed
-        nodeData["fovDeg"]              = self.fovDeg
-        nodeData["useHeader"]           = self.useHeader
-        nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
-        nodeData["catalog.magLimit"]    = self.catalog.magLimit
 
     def restore(self, nodeData):
         """辞書からノード設定を復元"""
@@ -110,6 +109,14 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             self.alignmentPlane = nodeData["alignmentPlane"]
         if "saturationThreshold" in nodeData:
             self.saturationThreshold = nodeData["saturationThreshold"]
+        if "fovDeg" in nodeData:
+            self.fovDeg = nodeData["fovDeg"]
+        if "useHeader" in nodeData:
+            self.useHeader = nodeData["useHeader"]
+        if "catalog.matchLimit" in nodeData:
+            self.catalog.matchLimit = nodeData["catalog.matchLimit"]
+        if "catalog.magLimit" in nodeData:
+            self.catalog.magLimit = nodeData["catalog.magLimit"]
         if "starThreshold" in nodeData:
             self.star.threshold = nodeData["starThreshold"]
         if "useSaturationMask" in nodeData:
@@ -130,14 +137,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
             self.star.ransac.iterations = nodeData["ransacIterations"]
         if "ransacSeed" in nodeData:
             self.star.ransac.seed = nodeData["ransacSeed"]
-        if "fovDeg" in nodeData:
-            self.fovDeg = nodeData["fovDeg"]
-        if "useHeader" in nodeData:
-            self.useHeader = nodeData["useHeader"]
-        if "catalog.matchLimit" in nodeData:
-            self.catalog.matchLimit = nodeData["catalog.matchLimit"]
-        if "catalog.magLimit" in nodeData:
-            self.catalog.magLimit = nodeData["catalog.magLimit"]
 
     def preprocessStreams(self, inputStreams):
         """入力データの前処理：primary/auxiliaryで分類"""
@@ -914,6 +913,10 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                  f"{self._outputCat}_"
                  f"{self.alignmentPlane}_"
                  f"{self.saturationThreshold}_"
+                 f"{self.fovDeg}_"
+                 f"{self.useHeader}_"
+                 f"{self.catalog.matchLimit}_"
+                 f"{self.catalog.magLimit}_"
                  f"{self.star.threshold}_"
                  f"{self.star.useSaturationMask}_"
                  f"{self.star.minDiameter}_"
@@ -924,10 +927,6 @@ class StarExtractionNode(FlowNode, ConfigurableNode):
                  f"{self.star.grid.starsPerGrid}_"
                  f"{self.star.ransac.iterations}_"
                  f"{self.star.ransac.seed}_"
-                 f"{self.fovDeg}_"
-                 f"{self.useHeader}_"
-                 f"{self.catalog.matchLimit}_"
-                 f"{self.catalog.magLimit}_"
                 )
         return hashlib.md5(config.encode()).hexdigest()
 
@@ -947,6 +946,9 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         mainFrame = tk.Frame(self)
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
+        # 画像パラメータ
+        tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
+        
         # 位置合わせ用プレーン
         planeFrame = tk.Frame(mainFrame)
         planeFrame.pack(fill=tk.X, pady=2)
@@ -956,7 +958,39 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.planeEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(planeFrame, text="(0:R, 1:G, 2:B, ... 位置検出用)").pack(side=tk.LEFT)
         
-        # 星点検出設定セクション
+        # 画角
+        fovDegFrame = tk.Frame(mainFrame)
+        fovDegFrame.pack(fill=tk.X, pady=2)
+        tk.Label(fovDegFrame, text="  画角:").pack(side=tk.LEFT)
+        self.fovDegEntry = tk.Entry(fovDegFrame, width=6)
+        self.fovDegEntry.insert(0, str(self.node.fovDeg))
+        self.fovDegEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(fovDegFrame, text="deg").pack(side=tk.LEFT)
+        self.useHeaderVar = tk.BooleanVar(value=self.node.useHeader)
+        tk.Checkbutton(fovDegFrame, text="ヘッダー情報から画角を推定", variable=self.useHeaderVar).pack(side=tk.LEFT)
+        
+        # カタログ照合パラメータ
+        tk.Label(mainFrame, text="■ カタログ照合パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
+        
+        # 許容半径
+        radFrame = tk.Frame(mainFrame)
+        radFrame.pack(fill=tk.X, pady=2)
+        tk.Label(radFrame, text="  照合許容半径:").pack(side=tk.LEFT)
+        self.catalogMatchLimitEntry = tk.Entry(radFrame, width=6)
+        self.catalogMatchLimitEntry.insert(0, str(self.node.catalog.matchLimit))
+        self.catalogMatchLimitEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(radFrame, text="% (カタログとのズレ許容比)").pack(side=tk.LEFT)
+        
+        # 等級上限
+        magFrame = tk.Frame(mainFrame)
+        magFrame.pack(fill=tk.X, pady=2)
+        tk.Label(magFrame, text="  等級上限:").pack(side=tk.LEFT)
+        self.magLimitEntry = tk.Entry(magFrame, width=6)
+        self.magLimitEntry.insert(0, str(self.node.catalog.magLimit))
+        self.magLimitEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(magFrame, text="mag (カタログの暗い星を除外)").pack(side=tk.LEFT)
+        
+        # 星点検出パラメータ
         tk.Label(mainFrame, text="■ 星点検出パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(8, 2))
         
         # 星検出閾値
@@ -1037,45 +1071,6 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         self.ransacSeedEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(seedFrame, text="(1以上、結果が悪い場合は変更)").pack(side=tk.LEFT)
         
-        # 画像パラメータセクション
-        tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
-        
-        # 画角
-        fovDegFrame = tk.Frame(mainFrame)
-        fovDegFrame.pack(fill=tk.X, pady=2)
-        tk.Label(fovDegFrame, text="  画角:").pack(side=tk.LEFT)
-        self.fovDegEntry = tk.Entry(fovDegFrame, width=6)
-        self.fovDegEntry.insert(0, str(self.node.fovDeg))
-        self.fovDegEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(fovDegFrame, text="deg").pack(side=tk.LEFT)
-        
-        # ヘッダー情報から推定
-        useHdrFrame = tk.Frame(mainFrame)
-        useHdrFrame.pack(fill=tk.X, pady=2)
-        self.useHeaderVar = tk.BooleanVar(value=self.node.useHeader)
-        tk.Checkbutton(useHdrFrame, text="ヘッダー情報から画角を推定", variable=self.useHeaderVar).pack(side=tk.LEFT)
-        
-        # カタログ照合セクション
-        tk.Label(mainFrame, text="■ カタログ照合パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
-        
-        # 許容半径
-        radFrame = tk.Frame(mainFrame)
-        radFrame.pack(fill=tk.X, pady=2)
-        tk.Label(radFrame, text="  照合許容半径:").pack(side=tk.LEFT)
-        self.catalogMatchLimitEntry = tk.Entry(radFrame, width=6)
-        self.catalogMatchLimitEntry.insert(0, str(self.node.catalog.matchLimit))
-        self.catalogMatchLimitEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(radFrame, text="% (カタログとのズレ許容比)").pack(side=tk.LEFT)
-        
-        # 等級上限
-        magFrame = tk.Frame(mainFrame)
-        magFrame.pack(fill=tk.X, pady=2)
-        tk.Label(magFrame, text="  等級上限:").pack(side=tk.LEFT)
-        self.magLimitEntry = tk.Entry(magFrame, width=6)
-        self.magLimitEntry.insert(0, str(self.node.catalog.magLimit))
-        self.magLimitEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(magFrame, text="mag (カタログの暗い星を除外)").pack(side=tk.LEFT)
-        
         # ボタンフレーム
         btnFrame = tk.Frame(self)
         btnFrame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
@@ -1089,6 +1084,10 @@ class StarExtractionSettingsDialog(tk.Toplevel):
         """適用ボタンクリックハンドラ"""
         try:
             self.node.alignmentPlane           = max(0, int(self.planeEntry.get()))
+            self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
+            self.node.useHeader                = self.useHeaderVar.get()
+            self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
+            self.node.catalog.magLimit         = max(1, min(20, float(self.magLimitEntry.get())))
             self.node.star.threshold           = max(50, min(99, int(self.thresholdEntry.get())))
             self.node.star.useSaturationMask   = self.useSaturationMaskVar.get()
             self.node.star.minDiameter         = max(1, int(self.starMinDiameterEntry.get()))
@@ -1099,10 +1098,6 @@ class StarExtractionSettingsDialog(tk.Toplevel):
             self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
             self.node.star.ransac.iterations   = max(10, min(10000, int(self.ransacEntry.get())))
             self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
-            self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
-            self.node.useHeader                = self.useHeaderVar.get()
-            self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
-            self.node.catalog.magLimit         = max(1, min(20, float(self.magLimitEntry.get())))
             
             self.node.view.onNodeConfigChanged(self.node)
         except ValueError:
