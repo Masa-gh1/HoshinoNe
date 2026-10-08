@@ -50,9 +50,8 @@ class ShiftDetectionNode(FlowNode, ConfigurableNode):
         super().__init__(canvas, editor, x, y, **kwargs)
         
         # 設定パラメータ
-        # 基準画像選択（auxiliaryでマークされた画像を使用）
+        # 画像パラメータ
         self.usePreviousOffset = True  # 前の画像のズレを考慮する
-        # オフセット計算
         self.alignmentPlane = 1  # 位置合わせ用プレーン（0:R, 1:G, 2:B ...）
         self.saturationThreshold = 95  # 飽和閾値（%）
         # オフセット計算 優先順位1: 星点検出法
@@ -917,18 +916,16 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
         mainFrame = tk.Frame(self)
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # 基準画像選択
-        tk.Label(mainFrame, text="■ 基準画像", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(5,2))
+        # 画像パラメータ
+        tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(5,2))
         
-        # 前回ズレ考慮機能
+        # 前の画像を参照
         prevOffsetFrame = tk.Frame(mainFrame)
         prevOffsetFrame.pack(fill=tk.X, pady=2)
+        tk.Label(prevOffsetFrame, text="前の画像を参照:").pack(side=tk.LEFT)
+        prevOffsetFrame.pack(fill=tk.X, pady=2)
         self.usePrevOffsetVar = tk.BooleanVar(value=self.node.usePreviousOffset)
-        tk.Checkbutton(prevOffsetFrame, text="前の画像のズレを考慮する", variable=self.usePrevOffsetVar).pack(side=tk.LEFT)
-        tk.Label(prevOffsetFrame, text="(検索範囲の中央を前回位置に設定)").pack(side=tk.LEFT, padx=5)
-        
-        # オフセット計算
-        tk.Label(mainFrame, text="■ オフセット計算", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
+        tk.Checkbutton(prevOffsetFrame, text="前の画像のズレを検索範囲の中央に設定", variable=self.usePrevOffsetVar).pack(side=tk.LEFT)
         
         # 位置合わせ用プレーン
         planeFrame = tk.Frame(mainFrame)
@@ -938,6 +935,9 @@ class ShiftDetectionSettingsDialog(tk.Toplevel):
         self.planeEntry.insert(0, str(self.node.alignmentPlane))
         self.planeEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(planeFrame, text="(0:R, 1:G, 2:B, ... 位置検出用)").pack(side=tk.LEFT)
+        
+        # オフセット計算
+        tk.Label(mainFrame, text="■ オフセット計算", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
         
         # 優先順位1: 星点検出法
         tk.Label(mainFrame, text="  □ 優先順位1: 星点検出法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
