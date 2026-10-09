@@ -646,7 +646,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         i += 1
         
         if 3 <= bestMatchCount:
-            # RANSAC 結果から向きと画角を推定する
+            # RANSAC 結果から向きと画角を推定する(デバッグ用)
             import cv2
             from utils import numpy_helpers as nh
             src_pts = nh.array([[star[X ], star[Y  ]] for star in bestMatchStars])
@@ -692,7 +692,13 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             return bestMatchStars
         else:
             from utils.Debug import Debug
-            Debug.log(type(self).__name__, f"bestMatchCount: 0 match")
+            n = int(np.log10(starCnt))+1
+            debug  = f"failed ransac:"
+            debug += f" inlier:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
+            debug += f" catalog:{catalogTotal//i}"
+            debug += f" error:{bestMatchError:0.3f}"
+            debug += f" iter:{i}"
+            Debug.log(type(self).__name__, f"{debug}")
             return [], None
     
     def _calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
