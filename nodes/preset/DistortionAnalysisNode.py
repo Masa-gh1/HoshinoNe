@@ -3,7 +3,7 @@ DistortionAnalysisNode - 歪み解析ノード
 
 星リストの幾何学的配置のズレから、FITS SIP 規約に基づく光学系の歪み多項式係数を算出するノード
 
-Copyright (c) 2026 Masakazu Inoue
+Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
 
 @author: Masakazu Inoue

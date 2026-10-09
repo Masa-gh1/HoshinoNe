@@ -3,7 +3,7 @@ OrientationNode - 向き特定ノード
 
 抽出された星リストから画像の方位（回転角）、中心天球座標、ピクセルスケールを算出するノード
 
-Copyright (c) 2026 Masakazu Inoue
+Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
 
 @author: Masakazu Inoue

@@ -1,7 +1,7 @@
 '''
 catalog_helper - 星カタログ読み込みおよび天球幾何計算ユーティリティ
 
-Copyright (c) 2026 Masakazu Inoue
+Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
 
 @author: Masakazu Inoue
@@ -14,6 +14,9 @@ import os
 
 if TYPE_CHECKING:
     import numpy as np
+
+# カタログ配列の index 定義
+ID, RA, DEC, MAG = 0, 1, 2, 3
 
 class Catalog:
     """星カタログのパース、キャッシュ管理、および幾何計算を行うユーティリティ"""
@@ -63,15 +66,15 @@ class Catalog:
             cid = np.roll(cid, roll)
             re = np.random.rand() * 0.01 + e
             
-            c0idx = np.searchsorted(self._catalog[:, 0], cid[0])
-            c1idx = np.searchsorted(self._catalog[:, 0], cid[1])
-            c2idx = np.searchsorted(self._catalog[:, 0], cid[2])
+            c0idx = np.searchsorted(self._catalog[:, ID], cid[0])
+            c1idx = np.searchsorted(self._catalog[:, ID], cid[1])
+            c2idx = np.searchsorted(self._catalog[:, ID], cid[2])
             c0 = self._catalog[c0idx]
             c1 = self._catalog[c1idx]
             c2 = self._catalog[c2idx]
-            c01d = self.angularDistance(c0[1], c0[2], c1[1], c1[2])
-            c12d = self.angularDistance(c1[1], c1[2], c2[1], c2[2])
-            c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
+            c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
+            c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
+            c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
 
             _c01d, _c12d, _c20d = c01d*s*n0, c12d*s*n1, c20d*s*n2
             
@@ -81,9 +84,9 @@ class Catalog:
             else       : c = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexId=(None,cid[1],cid[2]))
             
             # チェック
-            chk0 = (c[:, 0, 0] == cid[0])
-            chk1 = (c[:, 1, 0] == cid[1])
-            chk2 = (c[:, 2, 0] == cid[2])
+            chk0 = (c[:, 0, ID] == cid[0])
+            chk1 = (c[:, 1, ID] == cid[1])
+            chk2 = (c[:, 2, ID] == cid[2])
             chk = chk0 & chk1 & chk2
             assert np.any(chk), (f"Self test: Triangle search error: {str(cid)} {re:0.3f}"
               + f" s:{s} noise:{n0} {n1} {n2} "
@@ -287,10 +290,10 @@ class Catalog:
                 if progress % (starCount//10+1) == 0:
                     Debug.log(self.__class__.__name__, f"Progress: {progress}/{starCount} {progress*100//starCount}%  triangles: {len(keys)}")
                 
-                cid  = self._catalog[idx, 0]
-                ra  = self._catalog[idx, 1]
-                dec = self._catalog[idx, 2]
-                mag = self._catalog[idx, 3]
+                cid  = self._catalog[idx, ID]
+                ra   = self._catalog[idx, RA]
+                dec  = self._catalog[idx, DEC]
+                mag  = self._catalog[idx, MAG]
                 # CATALOG_DB_NUM 以上になる radius
                 rn = magRad[max(0, min(len(magRad)-1, int(mag)))]
                 radius = list(filter(lambda x: x[1] < CATALOG_DB_NUM, rn))[-1][0]
@@ -313,10 +316,10 @@ class Catalog:
                         x2, y2 = x[k], y[k]
                         if 0 < ((x1 - 0) * (y2 - 0)) - ((y1 - 0) * (x2 - 0)):
                             c1,c2 = c2,c1 # 時計回りに修正
-                        c01d = self.angularDistance(c0[1], c0[2], c1[1], c1[2])
-                        c12d = self.angularDistance(c1[1], c1[2], c2[1], c2[2])
-                        c20d = self.angularDistance(c2[1], c2[2], c0[1], c0[2])
-                        key, cid = self.makeKey([c01d, c12d, c20d], [c0[0], c1[0], c2[0]])
+                        c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
+                        c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
+                        c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
+                        key, cid = self._makeKey([c01d, c12d, c20d], [c0[ID], c1[ID], c2[ID]])
                         keys.append(key)
                         values.append(cid)
             Debug.log(self.__class__.__name__, f"Total triangle count: {len(keys)}")
@@ -376,7 +379,7 @@ class Catalog:
                         star0 = [id, ra, dec, mag]
         """
         import numpy as np
-        key, orderder = self.makeKey([side01, side12, side20], [0, 1, 2])
+        key, orderder = self._makeKey([side01, side12, side20], [0, 1, 2])
         invOrder = np.argsort(orderder) # 逆引き用
         r = np.linalg.norm(key)*relativeError
         
@@ -420,7 +423,7 @@ class Catalog:
         c = self._catalog[cidx]
         return c
     
-    def makeKey(self, side:np.ndarray|list, id:np.ndarray|list) -> tuple[np.ndarray, np.ndarray]:
+    def _makeKey(self, side:np.ndarray|list, id:np.ndarray|list) -> tuple[np.ndarray, np.ndarray]:
         """
         辺長の入力を受けて kd-treee 用の key を返す。
         Args:
@@ -499,38 +502,38 @@ class Catalog:
             return nh.zeros((0, 4), dtype=nh.BDTYPE)
         else:
             # 正確な角距離を計算
-            dists = self.angularDistance(filtered[:, 1], filtered[:, 2], centerRaDeg, centerDecDeg)
+            dists = self.angularDistance(filtered[:, RA:DEC+1], [centerRaDeg, centerDecDeg])
             distMask = dists <= radiusDeg
             return filtered[distMask]
     
     @staticmethod
-    def angularDistance(ra1Deg, dec1Deg, ra2Deg, dec2Deg):
+    def angularDistance(p0:np.ndarray|list, p1:np.ndarray|list):
         """
         天球上の2点間の角距離 ( deg ) を計算する
         ハヴァースィン公式
         
         Args:
-            ra1Deg: 点1の赤経 ( deg )
-            dec1Deg: 点1の赤緯 ( deg )
-            ra2Deg: 点2の赤経 ( deg )
-            dec2Deg: 点2の赤緯 ( deg )
-            
+            p0: 点0 の緯度経度 [[raDeg,decDeg],...]
+            p1: 点1 の緯度経度 [[raDeg,decDeg],...]
         Returns:
             角距離 ( deg )
         """
         import numpy as np
         
-        r1 = np.asanyarray(np.radians(ra1Deg))
-        d1 = np.asanyarray(np.radians(dec1Deg))
-        r2 = np.asanyarray(np.radians(ra2Deg))
-        d2 = np.asanyarray(np.radians(dec2Deg))
-
-        deltaR = r2 - r1
-        deltaD = d2 - d1
-
+        p0 = np.radians(np.asanyarray(p0))
+        p1 = np.radians(np.asanyarray(p1))
+        
+        p0r = p0[..., 0]
+        p0d = p0[..., 1]
+        p1r = p1[..., 0]
+        p1d = p1[..., 1]
+        
+        deltaR = p1r - p0r
+        deltaD = p1d - p0d
+        
         # haversine formula: 
         # a = sin^2(Δdec/2) + cos(dec1) * cos(dec2) * sin^2(Δra/2)
-        a = np.sin(deltaD / 2)**2 + np.cos(d1) * np.cos(d2) * np.sin(deltaR / 2)**2
+        a = np.sin(deltaD / 2)**2 + np.cos(p0d) * np.cos(p1d) * np.sin(deltaR / 2)**2
         
         # 数値誤差により a が 1.0 を超えないようクリップ
         a = np.clip(a, 0.0, 1.0)
