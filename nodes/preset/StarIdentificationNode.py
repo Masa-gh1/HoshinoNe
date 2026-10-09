@@ -496,13 +496,13 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             if 0 == len(g): continue # 相似の三角形が見つからないのでスキップ
             
             # C G の 1,2 点目共にが同じ ID 物を抽出
-            cid0 = c[:, 0, 0]
-            cid1 = c[:, 1, 0]
-            gid0 = g[:, 0, 0]
-            gid1 = g[:, 1, 0]
-            cid01 = (cid0.astype(np.int64) << 32) | cid1.astype(np.int64)
-            gid01 = (gid0.astype(np.int64) << 32) | gid1.astype(np.int64)
-            _, cidx, gidx = np.intersect1d(cid01, gid01, return_indices=True)
+            cid0 = c[:, 0, ID].astype(np.uint64)
+            cid1 = c[:, 1, ID].astype(np.uint64)
+            gid0 = g[:, 0, ID].astype(np.uint64)
+            gid1 = g[:, 1, ID].astype(np.uint64)
+            cid01Hash = cid0 * 0x9E3779B97F4A7C15 + cid1 # 2^64 / φ
+            gid01Hash = gid0 * 0x9E3779B97F4A7C15 + gid1 # 2^64 / φ
+            _, cidx, gidx = np.intersect1d(cid01Hash, gid01Hash, return_indices=True)
             
             if 0 < len(cidx) and 0 < len(gidx):
                 idx = random.choice(len(cidx)) # 複数ある場合はランダムに選択
@@ -543,11 +543,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         # このあと全て inlier でも bestMatchCount に届かないので早期終了 
                         break
                     
-                    # 選択した p0 に近い2つを currentMatched の中から取り出す。
                     p0 = otherStars[idx]
-                    nearIndices = sorted(range(len(currentMatched)), key=lambda k: np.hypot(p0[0]-currentMatched[k][X], p0[1]-currentMatched[k][Y]))
-                    n1 = currentMatched[nearIndices[0]]
-                    n2 = currentMatched[nearIndices[1]]
+                    idx = random.choice(len(currentMatched), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
+                    n1 = currentMatched[idx[0]]
+                    n2 = currentMatched[idx[1]]
                     
                     if 0 < (n1[X] - p0[X]) * (n2[Y] - p0[Y]) - (n1[Y] - p0[Y]) * (n2[X] - p0[X]):
                         n1,n2 = n2,n1 # 時計回りに修正
