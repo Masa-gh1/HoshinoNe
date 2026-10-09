@@ -106,7 +106,7 @@ class Catalog:
             return self._cachedCatalog
         
         if not os.path.exists(filePath):
-            return None
+            raise FileNotFoundError(f"Catalog file not found: {filePath}")
         
         # キャッシュパス
         cachePath = os.path.splitext(filePath)[0] + ".npy"

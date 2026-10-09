@@ -243,11 +243,11 @@ HEADERS_EXIF = [
 ]
 
 ###############################################################################
-# StarExtractionNode 用
+# StarIdentificationNode 用
 # CATALOG_PATH    星カタログファイルの識別子とパス
 # CATALOG_HEADERS 星カタログヘッダの読み込み対象とする情報
 # CATALOG_DB_MAG  カタログ索引に入れる恒星の等級制限
-# CATALOG_DB_NUM  カタログ索引に入れる恒星 1 つ辺りに居れる位置関係データの数
+# CATALOG_DB_NUM  カタログ索引に入れる恒星 1 つ当たりの位置関係データの数
 #
 # 下記は VizieR から得た Hipparcos カタログ I/311/hip2 のTSVファイルでの例
 # https://vizier.unistra.fr/

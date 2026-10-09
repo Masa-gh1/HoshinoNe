@@ -283,9 +283,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         stars = aspectFiltered
         
         # 星の位置と明るさを取得
-        
-        
-        
         positions    = []
         brightnesses = []
         for star in stars:
@@ -558,7 +555,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     catalogTotal += len(c)
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
                     if 1 < len(c):
-                        c0 = c[random.choice(len(c0)),0] # 複数候補があるのでランダムに選択
+                        c0 = c[random.choice(len(c)),0] # 複数候補があるのでランダムに選択
                     elif 1 == len(c):
                         c0 = c[0,0] # 1つしか候補がない
                     elif j < 1:
