@@ -671,7 +671,7 @@ class CacheManagerImpl:
             i = page * BLOCK_CACHE_PAGE_SIZE + (index << scale)
             bit = (1<<(1<<scale)) - 1
             bit = bit << i
-            self._memCach似合ってますeBitmap &= ~bit
+            self._memCacheBitmap &= ~bit
 
 class CacheManager:
     """キャッシュ管理クラス"""
