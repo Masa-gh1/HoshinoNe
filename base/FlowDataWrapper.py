@@ -70,8 +70,8 @@ class FlowDataWrapper(FlowData):
     def getMinValue(self) -> float|None:
         return self.orgFlowData.getMinValue()
     
-    def getModeValue(self) -> float:
-        return self.orgFlowData.getModeValue()
+    def getModeValue(self, planeIndex:int|None=None) -> float:
+        return self.orgFlowData.getModeValue(planeIndex)
 
     def getQuantile(self, per:float, planeIndex:int|None=None) -> float:
         return self.orgFlowData.getQuantile(per, planeIndex)
