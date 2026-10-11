@@ -1,5 +1,5 @@
 '''
-CorrelationNode - 相関ノード
+ConvolutionNode - 畳み込みノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -12,7 +12,7 @@ from nodes import NNPlaneOperationNode
 
 class ConvolutionNode(NNPlaneOperationNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_NEIBR
     minorType = 'convolution'
     # ノード名
     name      = '畳み込み'
@@ -21,7 +21,7 @@ class ConvolutionNode(NNPlaneOperationNode):
     #outputCat = スーパークラスを継承
     
     def planeOperation(self, flowDatas, planeIndex):
-        """相関処理"""
+        """畳み込み処理"""
         import numpy as np
         from config import BLOCK_SIZE
         from base import DataBlock

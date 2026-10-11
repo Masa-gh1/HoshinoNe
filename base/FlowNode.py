@@ -26,6 +26,7 @@ _MAJOR_TYPE_FUNC  = 'func'             # 関数系
 _MAJOR_TYPE_U_OP  = 'unary operation'  # 単項演算系
 _MAJOR_TYPE_B_OP  = 'binary operation' # 二項演算系
 _MAJOR_TYPE_AGG   = 'aggregate'        # 集計系
+_MAJOR_TYPE_NEIBR = 'neighborhood'     # 近傍演算系
 _MAJOR_TYPE_IO    = 'in/out'           # 入出系
 _MAJOR_TYPE_CONST = 'constant'         # 定数系
 _MAJOR_TYPE_UTIL  = 'utility'          # ユーティリティ
@@ -277,6 +278,9 @@ class FlowNodeView():
         elif _MAJOR_TYPE_B_OP == self.majorType and _IO_TYPE_NN == self.ioType:
             # 正方形
             return [(-20, -20), (20, -20), (20, 20), (-20, 20)]
+        elif _MAJOR_TYPE_NEIBR == self.majorType and _IO_TYPE_NN == self.ioType:
+            # 八角形
+            return [(-30, -20), (-40,-10), (-40, 10), (-30, 20), (30, 20), (40,10), (40, -10), (30, -20)]
         elif _MAJOR_TYPE_AGG == self.majorType and _IO_TYPE_N1 == self.ioType:
             # 六角形
             return [(-30, -20), (-40, 0), (-30, 20), (30, 20), (40, 0), (30, -20)]
@@ -305,10 +309,11 @@ class FlowNodeView():
             _MAJOR_TYPE_U_OP : 'lightgrey'  , # 単項演算系 grey
             _MAJOR_TYPE_B_OP : 'pink'       , # 二項演算系 red
             _MAJOR_TYPE_AGG  : 'pink'       , # 集計系 red
+            _MAJOR_TYPE_NEIBR: 'lightcoral' , # 近傍演算系 red
             _MAJOR_TYPE_IO   : 'lightyellow', # 入出系 yellow
                              # 'lightgreen'   # 予約 green
-            _MAJOR_TYPE_CONST: 'lightcyan'  , # 定数系 blue
-                             # 'lightblue'    # 予約 cyan
+            _MAJOR_TYPE_CONST: 'lightcyan'  , # 定数系 cyan
+                             # 'lightblue'    # 予約 blue
             _MAJOR_TYPE_UTIL : 'lightgrey'  , # ユーティリティ grey
         }
         return colorMap.get(self.majorType, 'lightgreen')

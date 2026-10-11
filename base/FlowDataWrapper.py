@@ -74,7 +74,7 @@ class FlowDataWrapper(FlowData):
         return self.orgFlowData.getModeValue()
 
     def getQuantile(self, per:float, planeIndex:int|None=None) -> float:
-        return self.orgFlowData.getQuantile(per,planeIndex)
+        return self.orgFlowData.getQuantile(per, planeIndex)
     
     def getHistogram(self, bins:int=256, log_scale:bool=False) -> dict:
         return self.orgFlowData.getHistogram(bins, log_scale)

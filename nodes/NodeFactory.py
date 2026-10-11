@@ -50,8 +50,9 @@ class NodeFactory:
         ('minimum'                 , '最小(N:1)'                    , 'min(S)'         ),
         ('------------------------', None                           , None             ),
         (None                      , None                           , 'A,B:plane'      ),
-        ('convolution'             , '畳み込み(N:N)'                , 'A*B'            ),
+        ('convolution'             , '畳み込み(N:N)'                , 'A*B    ΣAB'    ),
        #('deconvolution'           , '逆畳み込み(N:N)'              , 'A/B'            ), # 未公開
+        ('quantile_filter'         , '分位数濾過'                   , 'Q(AB)'          ),
         ('fft'                     , 'FFT(N:N)'                     , 'DFT(A)'         ),
         ('ifft'                    , '逆FFT(N:N)'                   , 'IDFT(A)'        ),
         ('dwt'                     , '離散ウェーブレット変換(N:N)'  , 'DWT(A,B)'       ),

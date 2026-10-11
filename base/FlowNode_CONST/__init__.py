@@ -11,6 +11,7 @@ from ..FlowNode import _MAJOR_TYPE_FUNC
 from ..FlowNode import _MAJOR_TYPE_U_OP
 from ..FlowNode import _MAJOR_TYPE_B_OP
 from ..FlowNode import _MAJOR_TYPE_AGG
+from ..FlowNode import _MAJOR_TYPE_NEIBR
 from ..FlowNode import _MAJOR_TYPE_IO
 from ..FlowNode import _MAJOR_TYPE_CONST
 from ..FlowNode import _MAJOR_TYPE_UTIL
@@ -29,6 +30,7 @@ __all__ = [
     '_MAJOR_TYPE_U_OP',
     '_MAJOR_TYPE_B_OP',
     '_MAJOR_TYPE_AGG',
+    '_MAJOR_TYPE_NEIBR',
     '_MAJOR_TYPE_IO',
     '_MAJOR_TYPE_CONST',
     '_MAJOR_TYPE_UTIL',
