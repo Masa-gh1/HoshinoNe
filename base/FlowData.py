@@ -349,8 +349,8 @@ class FlowData:
         self._highResHistCache[bins] = planeHistograms
         return planeHistograms
     
-    def getModeValue(self) -> float:
-        """最頻値を取得（全プレーン統合）"""
+    def getModeValue(self, planeIndex:int|None=None) -> float:
+        """最頻値を取得"""
         import numpy as np
         
         planeHistograms = self._getHighResHistograms()
@@ -358,11 +358,11 @@ class FlowData:
         if not planeHistograms or not any(hist is not None for hist in planeHistograms):
             return 0.0
         
-        # 全プレーンで最大カウントのビンを探す
+        # 最大カウントのビンを探す
         max_count = 0
         mode_value = 0.0
         
-        for hist_data in planeHistograms:
+        for hist_data in [planeHistograms[planeIndex]] if not planeIndex is None else planeHistograms:
             if(   not hist_data is None
               and 0 < hist_data['bin_counts'].size
               ):

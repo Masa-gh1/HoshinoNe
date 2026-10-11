@@ -517,7 +517,7 @@ class ResultWindow(tk.Toplevel):
         displayLevelMin = displayLevels["min"]
         displayLevelEnd = displayLevels["exclusive_upper"]
         
-        modeValue = flowData.getModeValue() # 最頻値
+        modeValue = [flowData.getModeValue(planeIndex) for planeIndex in range(planeCount)] # 最頻値
         
         # パーセンタイルベースの適応的スケーリング
         adpLevelMin = flowData.getQuantile(0.01)
@@ -535,11 +535,11 @@ class ResultWindow(tk.Toplevel):
         try:
             text += "\n"
             text += f"Mode: {mode}\n"
-            text += f"Planes: {', '.join(planes)}\n"
+            text += f"Planes: {", ".join(planes)}\n"
             text += f"Display Levels: {displayLevelMin:.3f} - {displayLevelEnd:.3f}\n"
             text += f"Adaptive Levels (1-99%): {adpLevelMin:.3f} - {adpLevelEnd:.3f}\n"
             text += f"All levels: {minValue:.3f} - {endValue:.3f}\n"
-            text += f"Mode (Peak): {modeValue:.3f}\n"
+            text += f"Mode (Peak): {", ".join(f"{v:.3f}" for v in modeValue)}\n"
             
             if 'reference_image_movement' in headers:
                 movement = headers['reference_image_movement']
