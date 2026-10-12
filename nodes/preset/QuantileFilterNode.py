@@ -54,7 +54,7 @@ class QuantileFilterNode(NNPlaneOperationNode):
         pram = auxName.lower().split(" ")
         idx = pram.index("quantile") if "quantile" in pram else pram.index("q") if "q" in pram else -1
         q = float(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 0.5
-        idx = pram.index("approximation") if "approximation" in pram else pram.index("approx") if "approx" in pram else 0
+        idx = pram.index("approximation") if "approximation" in pram else pram.index("approx") if "approx" in pram else -1
         approx = int(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 1
         for block in auxData.iterateBlocks(auxPlaneIdx):
             x = block.x
@@ -73,11 +73,10 @@ class QuantileFilterNode(NNPlaneOperationNode):
             import cv2
             # 中央値 概算 なので、uint8 にスケールして cv2.medianBlur で概算
             k      = np.max(auxPlane.shape)
-            offset = np.min(planeData)
-            endV   = np.max(planeData) + nh.epsilon
+            offset = np.nanmin(planeData)
+            endV   = np.nanmax(planeData) + nh.epsilon
             scale  = (256.0 / (endV - offset))
             cnt    = approx
-            shift  = max(1, int(1.0/cnt/scale))
             # 作業用メモリを確保
             tmp        = nh.empty((height, width))
             planeUByte = np.empty((height, width), dtype=np.uint8)
@@ -85,8 +84,9 @@ class QuantileFilterNode(NNPlaneOperationNode):
             result     = nh.zeros((height, width))
             # NaN を 0 で補完
             np.nan_to_num(planeData, nan=0, copy=False)
-            for a in range(-cnt//2*shift, cnt//2*shift, shift):
+            for i in range(cnt):
                 # 少しづつズラして中央値を得て誤差を分散させる
+                a = (i - (cnt - 1) / 2.0) / cnt / scale
                 np.add(planeData, -(offset + a), out=tmp)
                 tmp *= scale
                 planeUByte[:] = tmp # キャスト
