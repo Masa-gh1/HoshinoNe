@@ -51,9 +51,10 @@ class QuantileFilterNode(NNPlaneOperationNode):
         
         auxPlaneIdx = 0 if 1 == auxPlanCnt else planeIndex # 補正データが 1 プレーンだけの場合、全プレーンに同じ補正データを適用する
         auxName = auxData.headers["planes"][auxPlaneIdx]
-        auxName = auxName.lower().split(" ")
-        q = float(auxName[1]) if "quantile" == auxName[0] else 0.5
-        approx = True if "quantile" == auxName[0] and ("approximation" in auxName or "approx" in auxName) else False
+        pram = auxName.lower().split(" ")
+        idx = pram.index("quantile") if "quantile" in pram else pram.index("q") if "q" in pram else -1
+        q = float(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 0.5
+        isApprox = True if 0 <= idx and ("approximation" in pram or "approx" in pram) else False
         for block in auxData.iterateBlocks(auxPlaneIdx):
             x = block.x
             y = block.y
@@ -65,24 +66,28 @@ class QuantileFilterNode(NNPlaneOperationNode):
         
         if np.uint8 == planeData.dtype:
             import cv2
-            result = cv2.medianBlur(planeData, auxPlane.shape[0]) # 分位数濾過
-        elif 0.5 == q and approx:
+            k = np.max(auxPlane.shape)
+            result = cv2.medianBlur(planeData, k) # 分位数濾過
+        elif 0.5 == q and isApprox:
             import cv2
-            # uint8 にスケールして概算
+            # 中央値 概算 なので、uint8 にスケールして cv2.medianBlur で概算
+            k      = np.max(auxPlane.shape)
             offset = np.min(planeData)
             endV   = np.max(planeData) + nh.epsilon
             scale  = (256.0 / (endV - offset))
             shift  = max(1, int(0.1/scale))
             cnt    = 16
+            # 作業用メモリを確保
             tmp        = nh.empty((height, width))
             planeUByte = np.empty((height, width), dtype=np.uint8)
             resUByte   = np.empty((height, width), dtype=np.uint8)
             result     = nh.zeros((height, width))
-            for a in range(0, cnt*shift, shift): # 少しづつズラして中央値を得て誤差を分散させる
+            for a in range(0, cnt*shift, shift):
+                # 少しづつズラして中央値を得て誤差を分散させる
                 np.add(planeData, -(offset + a), out=tmp)
                 tmp *= scale
                 planeUByte[:] = tmp # キャスト
-                cv2.medianBlur(planeUByte, auxPlane.shape[0], dst=resUByte) # 分位数濾過
+                cv2.medianBlur(planeUByte, k, dst=resUByte) # 分位数濾過
                 tmp[:] = resUByte # キャスト
                 tmp /= cnt * scale
                 tmp += (offset + a) / cnt
@@ -91,23 +96,25 @@ class QuantileFilterNode(NNPlaneOperationNode):
             # cv2.medianBlur を使って float32 を計算する。
             import cv2
             planeUlong = planeData.view(np.uint32).reshape((height, width))
-            mask        = (0 == planeUlong & 0x80000000)
-            planeUlong[ mask] ^= 0x80000000 # 符号ビットを反転
-            planeUlong[~mask] ^= 0xFFFFFFFF # 符号ビットを反転
+            maskB        = (0 == planeUlong & 0x80000000)
+            planeUlong[ maskB] ^= 0x80000000 # 符号ビットを反転
+            planeUlong[~maskB] ^= 0xFFFFFFFF # 符号ビットを反転
             planeUbyte = (planeUlong >> 24).astype(np.uint8)
             resultUbyte = cv2.medianBlur(planeUbyte, auxPlane.shape[0]) # 分位数濾過
             resultUlong = resultUbyte.astype(np.uint32) << 24
-            mask         = (0 == resultUlong & 0x80000000)
-            resultUlong[ mask] ^= 0xFFFFFFFF # 符号ビットを反転
-            resultUlong[~mask] ^= 0x80000000 # 符号ビットを反転
+            maskB         = (0 == resultUlong & 0x80000000)
+            resultUlong[ maskB] ^= 0xFFFFFFFF # 符号ビットを反転
+            resultUlong[~maskB] ^= 0x80000000 # 符号ビットを反転
             result = resultUlong.view(np.float32).reshape((height, width))
         else:
             kh, kw = auxPlane.shape
+            kCount = int(np.sum(~np.isnan(auxPlane))) # カーネルの nan 以外の数
             result = nh.nans((height, width))
             size = int(np.floor(np.sqrt(8*1024*1204 // MAX_WORKERS // (planeData.itemsize * kh * kw))))
             if 0 == size: size = 1
-            tmpA = nh.empty((size+(kh-1), size+(kw-1)))
-            tmpB = nh.empty((size,size,kh*kw))
+            tmpA  = nh.empty((size+(kh-1), size+(kw-1)))
+            tmpB  = nh.empty((size, size, kh,  kw))
+            maskB = np.empty((size, size, kh * kw), dtype=np.bool)
             
             for y in range(0, height, size):
                 for x in range(0, width, size):
@@ -124,25 +131,26 @@ class QuantileFilterNode(NNPlaneOperationNode):
                     else:
                         tmpA[:] = nh.nan
                         tmpA[by-ay:by-ay+bh, bx-ax:bx-ax+bw] = planeData[by:by+bh, bx:bx+bw]
-                    window = np.lib.stride_tricks.sliding_window_view(tmpA, window_shape=(kh, kw), axis=(0,1))
-                    window = window.reshape(*window.shape[:-2], kh * kw)
-                    tmpB[:h,:w, :] = window[:h,:w, :]
-                    window = tmpB[:h,:w, :]
-                    if np.any(np.isnan(tmpA)):
-                        mask = np.isnan(tmpA)
-                        mask = np.lib.stride_tricks.sliding_window_view(mask, window_shape=(kh, kw), axis=(0,1))
-                        mask = mask.reshape(*mask.shape[:-2], kh * kw)
-                        mask = mask[:h,:w, :]
-                        validCnt = (kh * kw) - np.sum(mask, axis=-1)
-                        idx = np.maximum(0, (validCnt - 1) // 2)
-                        window[mask] = nh.inf
-                        window.sort(axis=-1)
-                        qua = np.take_along_axis(window, idx[..., np.newaxis], axis=-1).squeeze(-1) # 分位数濾過
+                    maskA = np.isnan(tmpA)
+                    tmpAV = np.lib.stride_tricks.sliding_window_view(tmpA, window_shape=(kh, kw), axis=(0,1))
+                    tmpB[:] = tmpAV[:] * auxPlane[np.newaxis, np.newaxis, :, :]
+                    tmpBV = tmpB.reshape(*tmpB.shape[:-2], kh * kw)
+                    tmpBV = tmpBV[:h,:w, :]
+                    if np.any(maskA):
+                        maskBV = maskB[:h,:w, :]
+                        np.isnan(tmpBV, out=maskBV)
+                        tmpBV[maskBV] = nh.inf
+                        validCnt = (kh * kw) - np.sum(maskBV, axis=-1)
+                        idx = np.maximum(0, np.round(q * (validCnt - 1)).astype(np.uint16))
+                        tmpBV.sort(axis=-1)
+                        qua = np.take_along_axis(tmpBV, idx[..., np.newaxis], axis=-1).squeeze(-1) # 分位数濾過
                         qua[validCnt == 0] = np.nan
                     else:
-                        idx = int(0.5 * (kh * kw - 1))
-                        window.partition(idx, axis=-1) # ソートの代わりに idx 位置でパーティション
-                        qua = window[..., idx] # 分位数濾過
+                        if kCount < kh * kw:
+                            tmpBV[np.isnan(tmpBV)] = nh.inf
+                        idx = int(np.round(q * (kCount - 1)))
+                        tmpBV.partition(idx, axis=-1) # ソートの代わりに idx 位置でパーティション
+                        qua = tmpBV[..., idx] # 分位数濾過
                     result[y:y+h, x:x+w] = qua[:h, :w]
         
         blocks = []
