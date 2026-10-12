@@ -1,0 +1,141 @@
+{
+  "version": "0.3.20260918",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 19,
+      "type": "table",
+      "text": "表",
+      "x": 209.0,
+      "y": 148.0,
+      "planes": [
+        "quantile 0.5"
+      ],
+      "columns": 51,
+      "lines": 51,
+      "table": 0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 15,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 41.0,
+      "y": 151.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 2,
+      "yOrder": 2,
+      "coefficients": {
+        "0,0,0": -600.0,
+        "0,1,0": 50.0,
+        "0,2,0": -1.0,
+        "0,0,1": 50.0,
+        "0,0,2": -1.0
+      },
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 13,
+      "type": "offset",
+      "text": "加算",
+      "x": 124.0,
+      "y": 149.0,
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 17,
+      "type": "sign",
+      "text": "符号",
+      "x": 187.0,
+      "y": 98.0,
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 11,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 40.0,
+      "y": 98.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": 0.1
+      },
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 9,
+      "type": "upper_pass",
+      "text": "上値通",
+      "x": 125.0,
+      "y": 98.0,
+      "category": "auxiliary",
+      "connections": [
+        7
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 7,
+      "type": "pass",
+      "text": "通点",
+      "x": 44.0,
+      "y": 43.0,
+      "connections": [
+        7
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 3,
+      "type": "quantile_filter",
+      "text": "分位数濾過",
+      "x": 127.0,
+      "y": 43.0,
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 5,
+      "type": "pass",
+      "text": "通点",
+      "x": 209.0,
+      "y": 40.0,
+      "connections": []
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 126.0,
+      "y": 87.0,
+      "width": 190,
+      "height": 191,
+      "title": "中央値フィルター"
+    }
+  ]
+}
