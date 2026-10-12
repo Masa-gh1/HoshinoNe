@@ -53,9 +53,9 @@ class QuantileFilterNode(NNPlaneOperationNode):
         auxName = auxData.headers["planes"][auxPlaneIdx]
         pram = auxName.lower().split(" ")
         idx = pram.index("quantile") if "quantile" in pram else pram.index("q") if "q" in pram else -1
-        q = float(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 0.5
+        q = 0.5 if idx < 0 or len(pram) <= idx+1 else float(pram[idx+1])
         idx = pram.index("approximation") if "approximation" in pram else pram.index("approx") if "approx" in pram else -1
-        approx = int(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 1
+        approx = 0 if idx < 0 else 1 if len(pram) <= idx+1 else int(pram[idx+1])
         for block in auxData.iterateBlocks(auxPlaneIdx):
             x = block.x
             y = block.y
