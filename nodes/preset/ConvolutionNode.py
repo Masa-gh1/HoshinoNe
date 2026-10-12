@@ -58,7 +58,7 @@ class ConvolutionNode(NNPlaneOperationNode):
             endY = block.y + blockHeight
             auxPlane[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
         
-        # NaN を補完
+        # NaN を 0 で補完
         np.nan_to_num(planeData, nan=0, copy=False)
         
         #result = scipy.signal.convolve(planeData, auxiliaryTable, mode='same') # 畳み込み

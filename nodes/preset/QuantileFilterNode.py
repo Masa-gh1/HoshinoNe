@@ -54,7 +54,8 @@ class QuantileFilterNode(NNPlaneOperationNode):
         pram = auxName.lower().split(" ")
         idx = pram.index("quantile") if "quantile" in pram else pram.index("q") if "q" in pram else -1
         q = float(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 0.5
-        isApprox = True if 0 <= idx and ("approximation" in pram or "approx" in pram) else False
+        idx = pram.index("approximation") if "approximation" in pram else pram.index("approx") if "approx" in pram else 0
+        approx = int(pram[idx+1]) if 0 <= idx and idx+1 < len(pram) else 1
         for block in auxData.iterateBlocks(auxPlaneIdx):
             x = block.x
             y = block.y
@@ -68,21 +69,23 @@ class QuantileFilterNode(NNPlaneOperationNode):
             import cv2
             k = np.max(auxPlane.shape)
             result = cv2.medianBlur(planeData, k) # 分位数濾過
-        elif 0.5 == q and isApprox:
+        elif 0.5 == q and 0 < approx:
             import cv2
             # 中央値 概算 なので、uint8 にスケールして cv2.medianBlur で概算
             k      = np.max(auxPlane.shape)
             offset = np.min(planeData)
             endV   = np.max(planeData) + nh.epsilon
             scale  = (256.0 / (endV - offset))
-            shift  = max(1, int(0.1/scale))
-            cnt    = 16
+            cnt    = approx
+            shift  = max(1, int(1.0/cnt/scale))
             # 作業用メモリを確保
             tmp        = nh.empty((height, width))
             planeUByte = np.empty((height, width), dtype=np.uint8)
             resUByte   = np.empty((height, width), dtype=np.uint8)
             result     = nh.zeros((height, width))
-            for a in range(0, cnt*shift, shift):
+            # NaN を 0 で補完
+            np.nan_to_num(planeData, nan=0, copy=False)
+            for a in range(-cnt//2*shift, cnt//2*shift, shift):
                 # 少しづつズラして中央値を得て誤差を分散させる
                 np.add(planeData, -(offset + a), out=tmp)
                 tmp *= scale
