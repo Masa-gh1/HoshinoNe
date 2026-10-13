@@ -71,6 +71,7 @@ class NodeFactory:
         ('lab_converter'           , 'Lab変換(正規化なし)(N:N)'     , 'RGB→Lab'       ),
         ('rgb_converter'           , 'RGB変換(正規化なし)(N:N)'     , 'Lab→RGB'       ),
         ('------------------------', None                           , None             ),
+        ('points_extraction'       , '点像抽出(N:N)'                , None             ),
         ('shift_detection'         , 'ズレ検出(N:1)'                , None             ),
         ('transform'               , '変形(N:N)'                    , None             ),
         ('reposition'              , '再配置(N:N)'                  , None             ),

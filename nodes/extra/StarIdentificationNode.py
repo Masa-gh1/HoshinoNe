@@ -46,7 +46,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
         
-        # 設定パラメータ (ShiftDetectionNodeの星検出設定を完全継承)
+        # 設定パラメータ
         # 画像パラメータ
         self.alignmentPlane         = 1                     # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
         self.saturationThreshold    = 95                    # 飽和閾値 [%]
@@ -938,7 +938,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
     
     def createSettingWindow(self):
         """設定ダイアログを作成"""
-        return StarExtractionSettingsDialog(self.view.editor.root, self)
+        return StarIdentificationSettingsDialog(self.view.editor.root, self)
     
     def getConfigHash(self):
         config =(f"{self.minorType}_"
@@ -962,8 +962,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 )
         return hashlib.md5(config.encode()).hexdigest()
 
-class StarExtractionSettingsDialog(tk.Toplevel):
-    """StarExtractionNode 用設定ダイアログ"""
+class StarIdentificationSettingsDialog(tk.Toplevel):
+    """StarIdentificationNode 用設定ダイアログ"""
     
     def __init__(self, parent, node:StarExtractionNode):
         super().__init__(parent)
