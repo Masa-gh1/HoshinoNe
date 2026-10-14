@@ -1,0 +1,159 @@
+{
+  "version": "0.3.20260918",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 17,
+      "type": "table",
+      "text": "表",
+      "x": 35.700000000000045,
+      "y": 148.0,
+      "category": "auxiliary",
+      "planes": [
+        "quantile 0.5 approx"
+      ],
+      "columns": 51,
+      "lines": 51,
+      "table": 0,
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 15,
+      "type": "fill_1",
+      "text": "1 埋め",
+      "x": 125.70000000000005,
+      "y": 150.0,
+      "category": "auxiliary",
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 7,
+      "type": "pass",
+      "text": "通点",
+      "x": 31.30000000000001,
+      "y": 89.0,
+      "connections": [
+        3,
+        6
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 19,
+      "type": "quantile_filter",
+      "text": "分位数濾過",
+      "x": 205.70000000000005,
+      "y": 149.0,
+      "connections": [
+        4
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 21,
+      "type": "negate",
+      "text": "符号反転",
+      "x": 293.70000000000005,
+      "y": 149.0,
+      "connections": [
+        7
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 9,
+      "type": "table",
+      "text": "表",
+      "x": 178.29999999999995,
+      "y": 40.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "columns": [
+        "A",
+        "B",
+        "C"
+      ],
+      "lines": [
+        "1",
+        "2",
+        "3"
+      ],
+      "table": {
+        "0,0,0": 0.0625,
+        "0,1,0": 0.125,
+        "0,2,0": 0.0625,
+        "0,0,1": 0.125,
+        "0,1,1": 0.25,
+        "0,2,1": 0.125,
+        "0,0,2": 0.0625,
+        "0,1,2": 0.125,
+        "0,2,2": 0.0625
+      },
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 5,
+      "type": "convolution",
+      "text": "畳み込み",
+      "x": 121.29999999999995,
+      "y": 89.0,
+      "connections": [
+        7
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 11,
+      "type": "offset",
+      "text": "加算",
+      "x": 203.70000000000005,
+      "y": 87.0,
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 13,
+      "type": "points_extraction",
+      "text": "点像抽出",
+      "x": 288.0,
+      "y": 86.625,
+      "targetPlane": 1,
+      "threshold": 95,
+      "minDiameter": 2,
+      "maxDiameter": 16,
+      "maxAspectRatio": 2.0,
+      "connections": []
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 3,
+      "x": 104,
+      "y": 78.625,
+      "width": 141,
+      "height": 80,
+      "title": "ぼかし"
+    },
+    {
+      "zOrder": 1,
+      "x": 173,
+      "y": 93.625,
+      "width": 306,
+      "height": 176,
+      "title": "星抽出"
+    }
+  ]
+}
