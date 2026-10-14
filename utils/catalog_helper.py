@@ -27,7 +27,7 @@ class Catalog:
     _cachedIdMap     = None
     _cachedValues    = None
 
-    def __init__(self, catalog:np.ndarray=None):
+    def __init__(self, catalog:np.ndarray|None=None):
         self._symbol    = None
         self._path      = None
         self._catalog   = None
@@ -36,8 +36,13 @@ class Catalog:
         self._values    = None
 
         if not catalog is None:
-            self._symbol  = ""
-            self._catalog = catalog
+            self._symbol    = ""
+            self._path      = None
+            self._catalog   = catalog
+            self.generateTriangleDatabase()
+            self._ratioTree = self._cachedRatioTree
+            self._idMap     = self._cachedIdMap
+            self._values    = self._cachedValues
         else:
             from config import CATALOG_PATH
             symbol, filePath = CATALOG_PATH
@@ -90,11 +95,12 @@ class Catalog:
             chk = chk0 & chk1 & chk2
             assert np.any(chk), (f"Self test: Triangle search error: {str(cid)} {re:0.3f}"
               + f" s:{s} noise:{n0} {n1} {n2} "
-              + f" error:{np.linalg.norm([c01d/c12d-_c01d/_c12d, c12d/c20d-_c12d/_c20d, c20d/c01d-_c20d/_c01d])}"
-              + f" r:{np.linalg.norm([_c01d, _c12d, _c20d])*re}"
+              + f" error:{np.linalg.norm(self._makeKey([ c01d,  c12d,  c20d], [0, 1, 2])[0]
+                                        -self._makeKey([_c01d, _c12d, _c20d], [0, 1, 2])[0])}"
+              + f" r:{np.linalg.norm(self._makeKey([_c01d, _c12d, _c20d], [0, 1, 2])[0]) * re}"
             )
     
-    def loadCatalog(self, symbol, filePath):
+    def loadCatalog(self, symbol:str, filePath:str):
         """
         カタログファイルを読み込み、numpy 配列を返す
         
@@ -198,12 +204,17 @@ class Catalog:
             return
 
         # キャッシュパス
-        ratioCachePath = os.path.splitext(self._path)[0] + "_ratioIndex.pkl"
-        idCachePath    = os.path.splitext(self._path)[0] + "_idIndex.pkl"
-        valueCachePath = os.path.splitext(self._path)[0] + "_triangleVal.npy"
+        ratioCachePath = (os.path.splitext(self._path)[0] + "_ratioIndex.pkl" ) if self._path else None
+        idCachePath    = (os.path.splitext(self._path)[0] + "_idIndex.pkl"    ) if self._path else None
+        valueCachePath = (os.path.splitext(self._path)[0] + "_triangleVal.npy") if self._path else None
         if(     not self._cachedRatioTree is None
             and not self._cachedIdMap     is None
             and not self._cachedValues    is None
+            and self._path
+            and ratioCachePath
+            and idCachePath   
+            and valueCachePath
+            and os.path.exists(self._path)
             and os.path.exists(ratioCachePath)
             and os.path.exists(idCachePath   )
             and os.path.exists(valueCachePath)
@@ -211,8 +222,14 @@ class Catalog:
             and os.path.getmtime(self._path) <= os.path.getmtime(idCachePath   )
             and os.path.getmtime(self._path) <= os.path.getmtime(valueCachePath)
           ):
+            # ロード済みが最新なので何もしない
             pass
-        elif(   os.path.exists(ratioCachePath)
+        elif(   self._path
+            and ratioCachePath
+            and idCachePath   
+            and valueCachePath
+            and os.path.exists(self._path)
+            and os.path.exists(ratioCachePath)
             and os.path.exists(idCachePath   )
             and os.path.exists(valueCachePath)
             and os.path.getmtime(self._path) <= os.path.getmtime(ratioCachePath)
@@ -226,6 +243,7 @@ class Catalog:
             with open(idCachePath   , "rb") as f: self._cachedIdMap = pickle.load(f)
             self._cachedValues = np.load(valueCachePath)
         else:
+            # キャッシュ無いもしくは古いので三角形データベースを構築する
             # 統計情報の生成
             import numpy as np
             from scipy.spatial import KDTree
@@ -339,25 +357,32 @@ class Catalog:
                 idMap[cid][2] = np.array(idMap[cid][2], dtype=np.int32)
             
             # 次回高速化のためにキャッシュ保存
-            try:
-                import pickle
-                with open(ratioCachePath, "wb") as f: pickle.dump(ratioTree, f, protocol=pickle.HIGHEST_PROTOCOL)
-                Debug.log(self.__class__.__name__, f"Key   file size {os.path.getsize(ratioCachePath)//1024//1024} MiB")
-                
-                with open(idCachePath   , "wb") as f: pickle.dump(idMap    , f, protocol=pickle.HIGHEST_PROTOCOL)
-                Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(idCachePath   )//1024//1024} MiB")
-                
-                np.save(valueCachePath, values)
-                Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(valueCachePath)//1024//1024} MiB")
-            except Exception:
-                Debug.log(self.__class__.__name__, "Warning: Save triangle database cache failed.")
+            if(    ratioCachePath
+               and idCachePath   
+               and valueCachePath
+               ):
+                try:
+                    import pickle
+                    with open(ratioCachePath, "wb") as f: pickle.dump(ratioTree, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    Debug.log(self.__class__.__name__, f"Key   file size {os.path.getsize(ratioCachePath)//1024//1024} MiB")
+                    
+                    with open(idCachePath   , "wb") as f: pickle.dump(idMap    , f, protocol=pickle.HIGHEST_PROTOCOL)
+                    Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(idCachePath   )//1024//1024} MiB")
+                    
+                    np.save(valueCachePath, values)
+                    Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(valueCachePath)//1024//1024} MiB")
+                except Exception:
+                    Debug.log(self.__class__.__name__, "Warning: Save triangle database cache failed.")
             
             self._cachedRatioTree = ratioTree
             self._cachedIdMap     = idMap
             self._cachedValues    = values
     
     def count(self) -> int:
-        return len(self._catalog)
+        if self._catalog is None:
+            return 0
+        else:
+            return len(self._catalog)
     
     def searchTriangle(self, side01:float, side12:float, side20:float, relativeError:float,
                              magLimit:float|None=None, fixVertexId:tuple|list|None=None,
@@ -379,29 +404,36 @@ class Catalog:
                         star0 = [id, ra, dec, mag]
         """
         import numpy as np
+        
+        assert(   not self._catalog   is None
+              and not self._ratioTree is None
+              and not self._idMap     is None
+              and not self._values    is None), "Catalog is not loaded or database is not generated."
+        
         key, orderder = self._makeKey([side01, side12, side20], [0, 1, 2])
         invOrder = np.argsort(orderder) # 逆引き用
-        r = np.linalg.norm(key)*relativeError
+        r = np.linalg.norm(key) * relativeError
         
         if not fixVertexId is None:
             # 頂点を固定する
             cid0, cid1, cid2 = fixVertexId
             assert not cid0 is None or not cid1 is None or not cid2 is None
-            cidx0 = self._idMap[cid0][invOrder[0]] if not cid0 is None else None # key の順序に入れ替え
-            cidx1 = self._idMap[cid1][invOrder[1]] if not cid1 is None else None # key の順序に入れ替え
-            cidx2 = self._idMap[cid2][invOrder[2]] if not cid2 is None else None # key の順序に入れ替え
+            tidx0 = self._idMap[cid0][invOrder[0]] if not cid0 is None else None # key の順序に入れ替え
+            tidx1 = self._idMap[cid1][invOrder[1]] if not cid1 is None else None # key の順序に入れ替え
+            tidx2 = self._idMap[cid2][invOrder[2]] if not cid2 is None else None # key の順序に入れ替え
             # 共通する idx を抽出
-            cidx = cidx0
-            cidx = np.intersect1d(cidx, cidx1) if not cidx is None and not cidx1 is None else cidx if not cidx is None else cidx1
-            cidx = np.intersect1d(cidx, cidx2) if not cidx is None and not cidx2 is None else cidx if not cidx is None else cidx2
+            tidx = tidx0
+            tidx = np.intersect1d(tidx, tidx1) if not tidx is None and not tidx1 is None else tidx if not tidx is None else tidx1
+            tidx = np.intersect1d(tidx, tidx2) if not tidx is None and not tidx2 is None else tidx if not tidx is None else tidx2
             # 三角比を取得
-            keyA = self._ratioTree.data[cidx]
-            cidx = cidx[np.linalg.norm(key - keyA, axis=1) <= r] # 検索
+            assert not tidx is None
+            keyA = self._ratioTree.data[tidx]
+            tidx = tidx[np.linalg.norm(key - keyA, axis=1) <= r] # 検索
         else:
             # 頂点を固定しない
-            cidx = self._ratioTree.query_ball_point(key, r=r)  # 検索
+            tidx = self._ratioTree.query_ball_point(key, r=r)  # 検索
         
-        cid = self._values[cidx] # カタログIDを取得
+        cid = self._values[tidx] # カタログIDを取得
         cid0 = cid[:,invOrder[0]]   # 順序を戻す
         cid1 = cid[:,invOrder[1]]   # 順序を戻す
         cid2 = cid[:,invOrder[2]]   # 順序を戻す
@@ -421,6 +453,7 @@ class Catalog:
         n = len(cid)
         cidx = np.searchsorted(self._catalog[:,0], cid)
         c = self._catalog[cidx]
+        
         return c
     
     def _makeKey(self, side:np.ndarray|list, id:np.ndarray|list) -> tuple[np.ndarray, np.ndarray]:
@@ -449,11 +482,7 @@ class Catalog:
         
         return key, id
     
-    def queryStars(self,
-                   centerRaDeg: float,
-                   centerDecDeg: float,
-                   radiusDeg: float,
-                   magLimit: float = 99.0) -> np.ndarray:
+    def queryStars(self, centerRaDeg: float, centerDecDeg: float, radiusDeg: float, magLimit: float = 99.0) -> np.ndarray:
         """
         指定された中心座標と半径の範囲内にある星を抽出する
         
@@ -468,6 +497,8 @@ class Catalog:
         """
         import numpy as np
         from utils import numpy_helpers as nh
+        
+        assert not self._catalog is None, "Catalog is not loaded."
         
         if 0 == len(self._catalog):
             return nh.zeros((0, 4), dtype=nh.BDTYPE)
