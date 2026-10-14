@@ -18,10 +18,12 @@ def dispS(value:list[float], representative:float|None = None) -> list[str]:...
 
 def dispS(value, representative = None):
     """数値を表示に適した長さで文字列化(短)する"""
-    if isinstance(value,(list,tuple)):
+    if not isinstance(value,(list,tuple)):
+        values = [value]
+    elif 0 < len(value):
         values = value
     else:
-        values = [value]
+        return []
     
     if representative:
         abss   = [abs(representative)]
@@ -57,10 +59,12 @@ def dispL(value:list[float], representative:float|None = None) -> list[str]:...
 
 def dispL(value, representative = None):
     """数値を表示に適した長さで文字列化(長)する"""
-    if isinstance(value,(list,tuple)):
+    if not isinstance(value,(list,tuple)):
+        values = [value]
+    elif 0 < len(value):
         values = value
     else:
-        values = [value]
+        return []
     
     if representative:
         rep = abs(representative)

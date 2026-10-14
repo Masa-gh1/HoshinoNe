@@ -343,7 +343,7 @@ class ResultWindow(tk.Toplevel):
                     if displayCols < width and displayCols//2 == x:
                         content += "\t..."
                     content += "\t"
-                    content += f"x:{x}".ljust(max([len(t) for t in cols[x]]))
+                    content += f"x:{x}".ljust(max([0]+[len(t) for t in cols[x]]))
                 content += "\n"
             
             # データ行
@@ -413,7 +413,7 @@ class ResultWindow(tk.Toplevel):
                 content += "\t"*((length-5)//8)
                 for x, column in enumerate(columns):
                     content += "\t"
-                    content += column.ljust(max([len(t) for t in cols[x]]))
+                    content += column.ljust(max([0]+[len(t) for t in cols[x]]))
                 content += "\n"
             
             # データ行
@@ -486,7 +486,7 @@ class ResultWindow(tk.Toplevel):
                     content += "\t..."
                 content += "\t"
                 column = columns[x] if x < len(columns) else f"col_{x}"
-                content += column.ljust(max([len(t) for t in cols[x]]))
+                content += column.ljust(max([0]+[len(t) for t in cols[x]]))
             content += "\n"
             
             # データ行
