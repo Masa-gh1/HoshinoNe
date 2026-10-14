@@ -58,17 +58,16 @@ class Catalog:
         # セルフテスト
         for _ in range(100):
             import numpy as np
-            roll = np.random.randint(3)        # 順序違い
-            s  = np.random.rand() * 10 + 0.001 # 相似比
-            n0 = np.random.rand()*0.001 + 1.0  # ノイズ
-            n1 = np.random.rand()*0.001 + 1.0  # ノイズ
-            n2 = np.random.rand()*0.001 + 1.0  # ノイズ
-            e = 0.002                          # 許容ズレ
+            s  = np.random.rand() * 10 + 0.001  # 相似比
+            n0 = np.random.rand() * 0.001 + 1.0 # ノイズ
+            n1 = np.random.rand() * 0.001 + 1.0 # ノイズ
+            n2 = np.random.rand() * 0.001 + 1.0 # ノイズ
+            e = 0.002                           # 許容ズレ
             
             # ケース
             prm = np.random.randint(3)
             cid = self._values[np.random.randint(len(self._values))]
-            cid = np.roll(cid, roll)
+            cid = np.roll(cid, np.random.randint(3))
             re = np.random.rand() * 0.01 + e
             
             c0idx = np.searchsorted(self._catalog[:, ID], cid[0])
@@ -80,8 +79,12 @@ class Catalog:
             c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
             c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
             c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
-
-            _c01d, _c12d, _c20d = c01d*s*n0, c12d*s*n1, c20d*s*n2
+            
+            if np.abs(1 - c01d/c12d) < 0.01: continue # 2辺の差がノイズより小さいのでパス
+            if np.abs(1 - c12d/c20d) < 0.01: continue # 2辺の差がノイズより小さいのでパス
+            if np.abs(1 - c20d/c01d) < 0.01: continue # 2辺の差がノイズより小さいのでパス
+            
+            _c01d, _c12d, _c20d = c01d*s*n0, c12d*s*n1, c20d*s*n2 # 外乱を混入
             
             # 実行
             if   0==prm: c = self.searchTriangle(_c01d, _c12d, _c20d, re)
@@ -94,7 +97,9 @@ class Catalog:
             chk2 = (c[:, 2, ID] == cid[2])
             chk = chk0 & chk1 & chk2
             assert np.any(chk), (f"Self test: Triangle search error: {str(cid)} {re:0.3f}"
-              + f" s:{s} noise:{n0} {n1} {n2} "
+              +  " |"
+              + f" d:{_c01d}, {_c12d}, {_c20d}"
+              + f" s:{s} noise:{n0} {n1} {n2}"
               + f" error:{np.linalg.norm(self._makeKey([ c01d,  c12d,  c20d], [0, 1, 2])[0]
                                         -self._makeKey([_c01d, _c12d, _c20d], [0, 1, 2])[0])}"
               + f" r:{np.linalg.norm(self._makeKey([_c01d, _c12d, _c20d], [0, 1, 2])[0]) * re}"
