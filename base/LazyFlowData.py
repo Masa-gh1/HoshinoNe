@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .DataBlock import DataBlock
 
 class LazyFlowData(FlowData):
-    """遅延評価FlowData"""
+    """遅延評価 FlowData"""
     __slots__ = ('cachePolicy'    ,
                  'sourceFlowDatas',
                  'headers'        ,
@@ -36,7 +36,7 @@ class LazyFlowData(FlowData):
         
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
         self.sourceFlowDatas = sourceFlowDatas
-        self.headers         = LazyHeadersDict(self, headers, *args, **kwargs)
+        self.headers         = headers
         self.args            = args
         self.kwargs          = kwargs
         
@@ -98,50 +98,3 @@ class LazyFlowData(FlowData):
             return blocks[0]
         else:
             return blocks
-    
-    def getLazyHeaderkeys(self) -> list[str]:
-        """遅延評価対象の header キーを取得"""
-        return []
-    
-    def headerOperation(self, lazyFlowData:LazyFlowData, key:str, *args, **kwargs) -> dict:
-        """headers 遅延評価"""
-        return {}
-
-class LazyHeadersDict(UserDict[str,Any]):
-    """遅延評価対応のheaders辞書"""
-    __slots__ = ('lazyFlowData' ,
-                 'sourceHeaders',
-                 'args'         ,
-                 'kwargs'       ,
-                )
-    def __init__(self, lazyFlowData:LazyFlowData, headers:dict[str,Any], *args, **kwargs):
-        super().__init__()
-        
-        self.lazyFlowData = lazyFlowData
-        self.sourceHeaders = headers
-        self.args          = args
-        self.kwargs        = kwargs
-
-        for key in self.sourceHeaders.keys():
-            self.data[key]= "<sourceHeaders>"
-    
-        for key in self.lazyFlowData.getLazyHeaderkeys():
-            self.data[key]= "<LazyHeaderOperation>"
-    
-    def __getitem__(self, key:str) -> Any:
-        if not key in self.data:
-            return None
-        else:
-            value = self.data[key]
-            if isinstance(value, str) and "<LazyHeaderOperation>" == value:
-                lazyResult = self.lazyFlowData.headerOperation(self.lazyFlowData, key, *self.args, **self.kwargs)
-                self.data.update(lazyResult)
-                value = self.data[key]
-            elif isinstance(value, str) and "<sourceHeaders>" == value:
-                value = self.sourceHeaders[key]
-            return value
-    
-    def copy(self) -> LazyHeadersDict:
-        o = LazyHeadersDict(self.lazyFlowData, self.sourceHeaders, *self.args, **self.kwargs)
-        o.data.update(self.data)
-        return o

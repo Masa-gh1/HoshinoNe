@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from config import BLOCK_SIZE
-from base.LazyFlowData import LazyHeadersDict
+from base import LazyHeaders
 from utils import string_helper as sh
 from utils import numpy_helpers as nh
 from utils.interval_helper import createHalfOpenEnd
@@ -277,7 +277,7 @@ class ResultWindow(tk.Toplevel):
                 def default( self, obj):
                     if isinstance( obj, np.floating):
                         return float(obj)
-                    elif isinstance( obj, LazyHeadersDict):
+                    elif isinstance( obj, LazyHeaders):
                         return dict(obj)
                     elif isinstance( obj, Fraction):
                         return str(obj)

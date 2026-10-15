@@ -7,8 +7,12 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
+from base.FlowData import FlowData
 from base.FlowNode_CONST import *
-from base import DataBlock, LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode
 
 class BayerUnpackDenseNode(LazyNNOperationNode):
@@ -32,11 +36,20 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
         lazyFlowData.setDimensions(width // 2, height // 2)
         return lazyFlowData
 
-class BayerUnpackDenseLazyFlowData(LazyFlowData):
+class BayerUnpackDenseLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ('sourceHeaders',)
+    
+    def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+        from base import LazyHeaders
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.sourceHeaders = headers
+        self.headers       = LazyHeaders(self, headers)
+        
     def operation(self, flowData, planeIndex, x, y):
         """ベイヤー分離操作（4プレーン、縦横半分）"""
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
+        from base import DataBlock
 
         # 出力座標から入力座標を計算
         inputX = x * 2
@@ -87,11 +100,18 @@ class BayerUnpackDenseLazyFlowData(LazyFlowData):
         
         return DataBlock(result, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
-        return ['mode', 'planes', 'width', 'height']
+    def getLazyHeaderkeys(self) -> Iterable[str]:
+        return ['mode', 'planes', 'transformation']
 
-    def headerOperation(self, lazyFlowData, key):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
+        from utils import numpy_helpers as nh
+        transformation = self.sourceHeaders['transformation']
+        transformation = nh.array([[0.5, 0  , 0],
+                                   [0  , 0.5, 0],
+                                   [0  , 0  , 1]]) @ nh.array(transformation)
+        transformation = transformation.tolist()
         return {
-            'mode'  : 'RGBG',
-            'planes': ['R', 'G1', 'B', 'G2'],
+            'mode'          : 'RGBG',
+            'transformation': transformation,
+            'planes'        : ['R', 'G1', 'B', 'G2'],
         }

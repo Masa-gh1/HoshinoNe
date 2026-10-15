@@ -187,16 +187,18 @@ class FitsReaderNode(BaseReaderNode):
                             continue
                 
                 headers = {
-                    'category'      : self.getOutputCategory(),
-                    'type'          : 'image',
-                    'mode'          : mode,
-                    'width'         : width,
-                    'height'        : height,
-                    'planes'        : plane_names,
-                    'datetime'      : date_obs,
-                    'display_levels': display_levels,
-                    'source_file'   : self.getRelativePath(filePath),
-                    'context_index' : hduIndex,
+                    'category'           : self.getOutputCategory(),
+                    'type'               : 'image',
+                    'mode'               : mode,
+                    'origial_center'     : [width//2, height//2],
+                    'origial_resolution' : [hduHeader.get('XPIXSZ' , None), hduHeader.get('YPIXSZ' , None)],
+                    'origial_FocalLength': hduHeader.get('FOCALLEN', None),
+                    'transformation'     : [[1,0,0],[0,1,0],[0,0,1]],
+                    'planes'             : plane_names,
+                    'datetime'           : date_obs,
+                    'display_levels'     : display_levels,
+                    'source_file'        : self.getRelativePath(filePath),
+                    'context_index'      : hduIndex,
                 }
 
                 # bayer 情報を追加

@@ -7,10 +7,12 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 from base.FlowNode_CONST import *
-from base import LazyFlowData
-from base import PolynomialOperationMixin
-from base import TensorOperationMixin
+from base import LazyFlowData, LazyHeadersMixin
+from base import PolynomialOperationMixin, TensorOperationMixin
 from nodes import LazyNNOperationNode
 
 class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
@@ -27,7 +29,12 @@ class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
         """LazyFlowDataを作成"""
         return RGBConverterLazyFlowData(headers, inputData)
     
-class RGBConverterLazyFlowData(LazyFlowData):
+class RGBConverterLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+        from base import LazyHeaders
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.headers = LazyHeaders(self, headers)
+    
     def operation(self, flowData, planeIndex, x, y):
         """RGB 変換 (正規化なし)"""
         from base import DataBlock
@@ -86,10 +93,10 @@ class RGBConverterLazyFlowData(LazyFlowData):
                 _B  = flowData.getBlock( 2, x, y).data # B
                 return DataBlock(_B, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> Iterable[str]:
         return ['mode', 'planes']
 
-    def headerOperation(self, lazyFlowData, key):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
         # Lab 変換では mode plane が変わる
         return {
             'mode': 'RGB',

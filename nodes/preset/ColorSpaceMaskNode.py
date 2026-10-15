@@ -7,12 +7,15 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 import hashlib
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 
 from base.FlowNode_CONST import *
-from base import LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode, ConfigurableNode
 
 class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
@@ -69,7 +72,15 @@ class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
         config = f"{self.minorType}_{self._outputCat}_{self.colorSpace}_{self.mask3dPoints}"
         return hashlib.sha256(config.encode()).hexdigest()
 
-class ColorSpaceMaskLazyFlowData(LazyFlowData):
+class ColorSpaceMaskLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ('sourceHeaders',)
+    
+    def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+        from base import LazyHeaders
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.sourceHeaders = headers
+        self.headers       = LazyHeaders(self, headers)
+    
     def operation(self, flowData, planeIndex, x, y, colorSpace, mask3dPoints):
         from base import DataBlock
         from config import BLOCK_SIZE
@@ -183,14 +194,14 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
         
         return DataBlock(mask, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> Iterable[str]:
         return ['type', 'mode', 'planes', 'display_levels']
     
-    def headerOperation(self, lazyFlowData, key, *args, **kwargs):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
         return {
             'type': 'image',
             'mode': 'L',
-            'planes': ['Mask'] * len(self.headers.sourceHeaders['planes']),
+            'planes': ['Mask'] * len(self.sourceHeaders['planes']),
             'display_levels': {'min': 0.0, 'exclusive_upper': 1.0}
         }
 

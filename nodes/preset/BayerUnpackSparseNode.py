@@ -7,8 +7,11 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 from base.FlowNode_CONST import *
-from base import DataBlock, LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode
 
 class BayerUnpackSparseNode(LazyNNOperationNode):
@@ -29,11 +32,17 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
         """LazyFlowDataを作成"""
         return BayerUnpackSparseLazyFlowData(headers, inputData)
     
-class BayerUnpackSparseLazyFlowData(LazyFlowData):
+class BayerUnpackSparseLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+        from base import LazyHeaders
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.headers = LazyHeaders(self, headers)
+    
     def operation(self, flowData, planeIndex, x, y):
         """ベイヤー分離操作（3プレーン、元サイズ、NaN埋め）"""
         import numpy as np
         from utils import numpy_helpers as nh
+        from base import DataBlock
         
         block = flowData.getBlock(0, x, y)
         if not block or block.data is None:
@@ -69,10 +78,10 @@ class BayerUnpackSparseLazyFlowData(LazyFlowData):
         
         return DataBlock(result, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> Iterable[str]:
         return ['mode', 'planes']
 
-    def headerOperation(self, lazyFlowData, key):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
         return {
             'mode': 'RGB',
             'planes': ['R', 'G', 'B']

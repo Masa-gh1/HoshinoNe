@@ -12,6 +12,8 @@ from .DataBlock import DataBlock
 from .FlowData import FlowData
 from .FlowDataWrapper import FlowDataWrapper
 from .LazyFlowData import LazyFlowData
+from .LazyHeaders import LazyHeaders
+from .LazyHeaders import LazyHeadersMixin
 from .BroadcastMixin import BroadcastMixin
 from .TensorOperationMixin import TensorOperationMixin
 from .PolynomialOperationMixin import PolynomialOperationMixin
@@ -25,6 +27,8 @@ __all__ = [
     'FlowData',
     'FlowDataWrapper',
     'LazyFlowData',
+    'LazyHeaders',
+    'LazyHeadersMixin',
     'BroadcastMixin',
     'TensorOperationMixin',
     'PolynomialOperationMixin',
