@@ -45,7 +45,7 @@ class PointsExtractionNode(FlowNode, ConfigurableNode):
         self.targetPlane    = 1                     # 抽出対象プレーン (0:R, 1:G, 2:B ...)
         
         # 点像抽出パラメータ
-        self.threshold      = 95                    # 抽出閾値 [%]
+        self.threshold      = 95.0                  # 抽出閾値 [%]
         self.minDiameter    = 2                     # 最小直径 [px]
         self.maxDiameter    = 16                    # 最大直径 [px]
         self.maxAspectRatio = 2.0                   # 最大アスペクト比
@@ -411,7 +411,7 @@ class PointsExtractionSettingsDialog(tk.Toplevel):
         """適用ボタンクリックハンドラ"""
         try:
             self.node.targetPlane       = max(0, int(self.planeEntry.get()))
-            self.node.threshold         = max(50, min(99, int(self.thresholdEntry.get())))
+            self.node.threshold         = max(0.0, min(100.0, float(self.thresholdEntry.get())))
             self.node.minDiameter       = max(1, int(self.minDiameterEntry.get()))
             self.node.maxDiameter       = max(self.node.minDiameter, int(self.maxDiameterEntry.get()))
             self.node.maxAspectRatio    = max(1.0, float(self.aspectRatioEntry.get()))
