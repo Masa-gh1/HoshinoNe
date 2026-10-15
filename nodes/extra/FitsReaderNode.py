@@ -242,7 +242,7 @@ class FitsReaderNode(BaseReaderNode):
                     'LensMake'                 : str(                hduHeader['ORIGIN'  ]            ) if 'ORIGIN'   in hduHeader else None, # 42035 A433h レンズのメーカ名
                     'LensModel'                : str(                hduHeader['CAMERA'  ]            ) if 'CAMERA'   in hduHeader else None, # 42036 A434h レンズのモデル名
                 }
-                headers['exif'] = exif#{ k:v for k, v in exif.items() if v is not None }
+                headers['exif'] = { k:v for k, v in exif.items() if v is not None }
                 
                 flowData = FlowData(headers)
                 flowData.setDimensions(width, height)
