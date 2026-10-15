@@ -48,8 +48,12 @@
 - `columns`: 列名リスト (['dx', 'dy', 'rotation', 'scale'] 順不同)
 - `lines`: 行名リスト (ファイル名)
 
-#### StarExtractionNode の出力 Table 固有ヘッダー
-- `columns`: 列名リスト (['hip_id', 'x', 'y', 'brightness', 'catalog_ra', 'catalog_dec'])
+#### PointsExtractionNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['x', 'y', 'brightness', 'center_brightness', 'area', 'aspect_raito'])
+- `lines`: 行名リスト (行番号)
+
+#### StarIdentificationNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['hip_id', 'ra', 'dec', 'mag', 'x', 'y', 'brightness'])
 - `lines`: 行名リスト (星識別子)
 
 #### OrientationNode の出力 Table 固有ヘッダー

@@ -48,23 +48,16 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         # 設定パラメータ
         # 画像パラメータ
-        self.alignmentPlane         = 1                     # 位置合わせ用プレーン (0:R, 1:G, 2:B ...)
-        self.saturationThreshold    = 95                    # 飽和閾値 [%]
         self.fovDeg                 = 3.5                   # 画角 [deg]
         self.useHeaderFovDeg        = False                 # 画像ヘッダから推定する
         
         # カタログ照合パラメータ
         self.catalog                = SimpleNamespace()
-        self.catalog.matchLimit     = 1                     # カタログ照合許容比 [%]
+        self.catalog.matchLimit     = 1.0                   # カタログ照合許容比 [%]
         self.catalog.magLimit       = 8.0                   # カタログ等級上限 [mag]
         
-        # 星点検出パラメータ
+        # 星像選択パラメータ
         self.star                   = SimpleNamespace()
-        self.star.threshold         = 95                    # 星検出閾値 [%]
-        self.star.useSaturationMask = False                 # 飽和マスクを使用する
-        self.star.minDiameter       = 2                     # 星最小直径 [px]
-        self.star.maxDiameter       = 16                    # 星最大直径 [px]
-        self.star.maxAspectRatio    = 2.0                   # 星の最大アスペクト比
         self.star.grid              = SimpleNamespace()
         self.star.grid.rows         = 1                     # グリッド行数
         self.star.grid.cols         = 1                     # グリッド列数
@@ -81,22 +74,15 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 
     def getText(self):
         """ノードのテキストを取得"""
-        displayText = f"{self.name}\nThr:{self.star.threshold}% Match:{self.catalog.matchLimit} %"
+        displayText = f"{self.name}\nMatch:{self.catalog.matchLimit} %"
         return displayText
 
     def store(self, nodeData):
         """ノード設定を辞書に保存"""
-        nodeData["alignmentPlane"]      = self.alignmentPlane
-        nodeData["saturationThreshold"] = self.saturationThreshold
         nodeData["fovDeg"]              = self.fovDeg
         nodeData["useHeaderFovDeg"]     = self.useHeaderFovDeg
         nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
         nodeData["catalog.magLimit"]    = self.catalog.magLimit
-        nodeData["starThreshold"]       = self.star.threshold
-        nodeData["useSaturationMask"]   = self.star.useSaturationMask
-        nodeData["starMinDiameter"]     = self.star.minDiameter
-        nodeData["starMaxDiameter"]     = self.star.maxDiameter
-        nodeData["maxAspectRatio"]      = self.star.maxAspectRatio
         nodeData["gridRows"]            = self.star.grid.rows
         nodeData["gridCols"]            = self.star.grid.cols
         nodeData["starsPerGrid"]        = self.star.grid.starsPerGrid
@@ -105,10 +91,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 
     def restore(self, nodeData):
         """辞書からノード設定を復元"""
-        if "alignmentPlane" in nodeData:
-            self.alignmentPlane = nodeData["alignmentPlane"]
-        if "saturationThreshold" in nodeData:
-            self.saturationThreshold = nodeData["saturationThreshold"]
         if "fovDeg" in nodeData:
             self.fovDeg = nodeData["fovDeg"]
         if "useHeaderFovDeg" in nodeData:
@@ -117,16 +99,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             self.catalog.matchLimit = nodeData["catalog.matchLimit"]
         if "catalog.magLimit" in nodeData:
             self.catalog.magLimit = nodeData["catalog.magLimit"]
-        if "starThreshold" in nodeData:
-            self.star.threshold = nodeData["starThreshold"]
-        if "useSaturationMask" in nodeData:
-            self.star.useSaturationMask = nodeData["useSaturationMask"]
-        if "starMinDiameter" in nodeData:
-            self.star.minDiameter = nodeData["starMinDiameter"]
-        if "starMaxDiameter" in nodeData:
-            self.star.maxDiameter = nodeData["starMaxDiameter"]
-        if "maxAspectRatio" in nodeData:
-            self.star.maxAspectRatio = nodeData["maxAspectRatio"]
         if "gridRows" in nodeData:
             self.star.grid.rows = nodeData["gridRows"]
         if "gridCols" in nodeData:
@@ -180,33 +152,27 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         for i, flowData in enumerate(inputStream):
             self.reportProgress(context, f"画像 {i + 1}/{totalImages} 処理中", i, totalImages)
             
-            # 画像プレーンを numpy 配列として取得
-            planeIndex = min(self.alignmentPlane, flowData.getPlaneCount() - 1)
-            imageArray = self._flowDataToImage(flowData, planeIndex=planeIndex, normalizeForDetection=True)
-            
-            # 星点を検出
-            detectedStars = self._detectStars(imageArray)
-
             # カタログ照合
-            matchedStars = self._matchCatalog(detectedStars, catalog, imageArray.shape, flowData.headers)
+            matchedStars = self.matchCatalog(flowData, catalog)
 
             # 出力 Table FlowData を作成
-            outTable = self._createTableOutput(matchedStars, flowData.headers)
-            outputFlowDatas.append(outTable)
+            flowData = self.createFlowData(flowData, matchedStars)
+            outputFlowDatas.append(flowData)
 
         self.flowDatas = outputFlowDatas
         self.reportProgress(context, "完了")
 
-    def _getCatalog(self) -> np.ndarray:
+    def _getCatalog(self) -> Catalog:
         """カタログデータを取得（入力ストリームまたはファイルから）"""
+        from utils import numpy_helpers as nh
         from utils.catalog_helper import Catalog
         if self._catalogStream and self._catalogStream[0]:
-            tableFlowData = self._catalogStream[0]
-            width, height = tableFlowData.getDimensions()
+            flowData = self._catalogStream[0]
+            width, height = flowData.getDimensions()
 
             # Table FlowData から配列化
             table = nh.nans((height, width))
-            for block in flowData.iterateBlocks(planeIndex):
+            for block in flowData.iterateBlocks():
                 if block:
                     x, y = block.x, block.y
                     h, w = block.data.shape
@@ -215,146 +181,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             
         # ファイルから読み込み
         return Catalog()
-
-    def _detectStars(self, image:np.ndarray):
-        """
-        画像から星を検出
-        
-        Args:
-            image: 検出用グレースケール画像 (uint8)
-            
-        Returns:
-            list[tuple[float, float, float, float]]: (cx, cy, brightness, aspectRatio) のリスト
-        """
-        import numpy as np
-        import cv2
-
-        # ガウシアンブラーでノイズ除去
-        blurred = cv2.GaussianBlur(image, (3, 3), 0)
-
-        # メディアンフィルタでバックグラウンドを推定
-        background = cv2.medianBlur(blurred, 51)
-
-        # バックグラウンドを減算
-        subtracted = cv2.subtract(blurred, background)
-
-        if self.star.useSaturationMask:
-            # 飽和領域マスク
-            saturationMask = self._createSaturationMask(subtracted)
-            maskedSubtracted = np.where(saturationMask, subtracted, 0)
-            subtracted = maskedSubtracted
-            
-        # 閾値処理
-        threshold = np.nanpercentile(subtracted[subtracted > 0], self.star.threshold)
-        _, binary = cv2.threshold(subtracted, threshold, 255, cv2.THRESH_BINARY)
-
-        # 連結成分で星点を検出
-        try:
-            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        except (cv2.error, SystemError):
-            # OpenCV 4.5.5以降のバグ対応
-            from utils.Debug import Debug
-            Debug.log(type(self).__name__,"Retry cv2.findContours")
-            try:
-                contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            except (cv2.error, SystemError):
-                contours, _ = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        stars = contours
-
-        # 面積フィルタ
-        minArea = np.pi * (self.star.minDiameter / 2.0) ** 2
-        maxArea = np.pi * (self.star.maxDiameter / 2.0) ** 2
-        areaFiltered = [c for c in stars if minArea <= cv2.contourArea(c) <= maxArea]
-        stars = areaFiltered
-
-        # アスペクト比フィルタ
-        aspectFiltered = []
-        aspectRatios   = []
-        for star in stars:
-            # 最小外接矩形（回転考慮）
-            (center), (width, height), angle = cv2.minAreaRect(star)
-            
-            # アスペクト比計算
-            if 0 < width and 0 < height:
-                aspectRatio = max(width, height) / min(width, height)
-                if aspectRatio <= self.star.maxAspectRatio:
-                    aspectFiltered.append(star)
-                    aspectRatios.append(aspectRatio)
-        stars = aspectFiltered
-        
-        # 星の位置と明るさを取得
-        positions    = []
-        brightnesses = []
-        for star in stars:
-            # 星の重心と輝度を計算
-            M = cv2.moments(star)
-            if M['m00'] <= 0:
-                positions.append(None)
-                brightnesses.append(None)
-            else:
-                # 星の重心
-                cx = float(M['m10'] / M['m00'])
-                cy = float(M['m01'] / M['m00'])
-                positions.append((cx, cy))
-                
-                # 星の明度を取得(広がりの合計)
-                # 星は無限遠の点なので分散している明るさを合計する
-                # 輪郭からマスクを作成して、星像を取得
-                # 輪郭の少し外まで採る(直径を1.4倍)
-                n = 1.41421356237
-                x, y, w, h = cv2.boundingRect(star)
-
-                # 星の外郭を n 倍
-                _x = x - int((w * (n - 1)) / 2 + 1)
-                _y = y - int((h * (n - 1)) / 2 + 1)
-                _w = int(w * n + 2)
-                _h = int(h * n + 2)
-                w = _w - (_x if _x < 0 else 0)
-                h = _h - (_y if _y < 0 else 0)
-                x, y = max(_x, 0), max(_y, 0)
-                w = min(w, subtracted.shape[1] - x)
-                h = min(h, subtracted.shape[0] - y)
-
-                # 最小マスクを作成
-                offsetStar = star - [x, y]
-                mask = np.zeros((h, w), dtype=np.uint8)
-                cv2.drawContours(mask, [offsetStar], -1, 255, thickness=cv2.FILLED) # 輪郭を取得
-                r = np.sqrt(np.sum(mask > 0)/np.pi)
-                k = int(np.ceil(r * (n - 1))) * 2 + 1
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)) # 輪郭を拡張
-                mask = cv2.dilate(mask, kernel, iterations=1)
-                
-                # 元の画像からマスク部分を切り出し
-                starAreaValues = subtracted[y:y+h, x:x+w][mask > 0]
-                
-                # 分散している明るさを合計
-                if starAreaValues.size > 0:
-                    brightness = float(np.sum(starAreaValues))
-                    brightnesses.append(brightness)
-                else:
-                    brightnesses.append(None)
-
-        ret = []
-        for pos, brightness, aspectRatio in zip(positions, brightnesses, aspectRatios):
-            if pos:
-                cx, cy = pos
-                ret.append((cx, cy, brightness, aspectRatio))
-
-        return ret
-
-    def _createSaturationMask(self, image:np.ndarray) -> np.ndarray:
-        """飽和領域のマスクを作成"""
-        import numpy as np
-        import cv2
-        
-        maxVal = np.max(image)
-        saturated = image > (maxVal * self.saturationThreshold / 100.0)
-        
-        # 飽和領域を膨張させて周辺も除外
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
-        mask = cv2.dilate(saturated.astype(np.uint8), kernel, iterations=2)
-        
-        return mask == 0  # 有効領域のマスク
 
     def _selectDistributedStars(self, stars, imageShape):
         """画像全体に分散した星を選択"""
@@ -390,7 +216,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         return distributedStars, gridSelectedCounts
     
-    def _matchCatalog(self, stars:list, catalog:Catalog, imageShape:tuple, headers:dict):
+    def matchCatalog(self, flowData:FlowData, catalog:Catalog):
         """
         画像座標と天球座標の間で投影（Mapping）を行わず、
         幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
@@ -399,26 +225,45 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         import numpy as np
         from utils import numpy_helpers as nh
         from utils.catalog_helper import Catalog
-        
-        if len(stars) < 3 or catalog.count() < 3:
-            return [], None
-        
-        h, w = imageShape
 
+        columnCnt, rowCnt = flowData.getDimensions()
+        
+        if rowCnt < 4 or catalog.count() < 4:
+            raise ValueError("少なくとも星数が 4 つ必要です。")
+        
         # RANSAC用固定シードを設定
         random = np.random.default_rng(self.star.ransac.seed)
+
+        # 画像側の点像を読み込み
+        data = nh.nans((rowCnt, columnCnt))
+        for block in flowData.iterateBlocks():
+            if block:
+                x, y = block.x, block.y
+                h, w = block.data.shape
+                data[y:y+h, x:x+w] = block.data
+        
+        stars = []
+        columns = flowData.headers["columns"]
+        for name in ["x", "y", "brightness", "aspect_raito"]:
+            idx = columns.index(name)
+            stars.append(data[:,idx])
+        stars = np.stack(stars, axis=1)
+        
+        # 元画像の大きさが分からないので大体のサイズを設定
+        # 星均等に写っていると想定し、周囲の余白は同じであるとする。
+        width, height = np.min(stars[:, 0:2], axis=0) + np.max(stars[:, 0:2], axis=0)
         
         # 画像側のサンプリング
-        stars, _ = self._selectDistributedStars(stars, imageShape)
+        stars, _ = self._selectDistributedStars(stars, (height, width))
         starCnt = len(stars)
         if starCnt < 4:
-            return [], None
+            return []
         stars = nh.array(stars)
         
         # 星の座標をレンズ中心からの単位 vector に変換
-        starsX = stars[:, 0] - (w / 2) # 中心を原点に
-        starsY = stars[:, 1] - (h / 2) # 中心を原点に
-        f = (w * w + h * h) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算
+        starsX = stars[:, 0] - (width / 2) # 中心を原点に
+        starsY = stars[:, 1] - (height / 2) # 中心を原点に
+        f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算
         f = np.broadcast_to(f, starsX.shape)
         starsV = np.stack([starsX, starsY, f]).T
         starsV = starsV / np.linalg.norm(starsV, axis=1, keepdims=True) # 
@@ -653,7 +498,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             dst_pts = nh.array([[star[RA], star[DEC]] for star in bestMatchStars])
             M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
             if M is not None:
-                center = nh.array([w / 2.0, h / 2.0, 1.0])
+                center = nh.array([width / 2.0, height / 2.0, 1.0])
                 coords = M @ center
                 est_ra, est_dec = coords[0], coords[1]
             else:
@@ -675,7 +520,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             ]
             apMean = np.mean(dp)
             
-            est_fov  = np.hypot(w, h) * (dcMean / apMean)
+            est_fov  = np.hypot(width, height) * (dcMean / apMean)
             
             from utils.Debug import Debug
             n = int(np.log10(starCnt))+1
@@ -699,7 +544,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             debug += f" error:{bestMatchError:0.3f}"
             debug += f" iter:{i}"
             Debug.log(type(self).__name__, f"{debug}")
-            return [], None
+            return []
     
     def _calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
@@ -839,7 +684,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         else:
             return ratio
     
-    def _createTableOutput(self, matchedStars: list, parentHeaders: dict) -> FlowData:
+    def createFlowData(self, inputData:FlowData, matchedStars:list) -> FlowData:
         """星リストから Table 型 FlowData を作成"""
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
@@ -869,21 +714,17 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         else:
             tableArray = nh.zeros((0, len(columns)), dtype=nh.BDTYPE)
 
-        # ヘッダー情報の構築
-        headers = {
+        # headers を生成
+        headers = inputData.headers.copy()
+        headers.update({
             'category': self.getOutputCategory(),
             'type'    : 'table',
             'mode'    : '2D',
             'columns' : columns,
             'lines'   : lines,
             'planes'  : ['star_extraction'],
-        }
-
-        # 元画像のメタデータを継承
-        for key in ['source_file', 'datetime', 'exif', 'width', 'height']:
-            if key in parentHeaders:
-                headers[key] = parentHeaders[key]
-
+        })
+        
         flowData = FlowData(headers)
         rows, cols = tableArray.shape
         flowData.setDimensions(cols, rows)
@@ -943,17 +784,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
     def getConfigHash(self):
         config =(f"{self.minorType}_"
                  f"{self._outputCat}_"
-                 f"{self.alignmentPlane}_"
-                 f"{self.saturationThreshold}_"
                  f"{self.fovDeg}_"
                  f"{self.useHeaderFovDeg}_"
                  f"{self.catalog.matchLimit}_"
                  f"{self.catalog.magLimit}_"
-                 f"{self.star.threshold}_"
-                 f"{self.star.useSaturationMask}_"
-                 f"{self.star.minDiameter}_"
-                 f"{self.star.maxDiameter}_"
-                 f"{self.star.maxAspectRatio}_"
                  f"{self.star.grid.rows}_"
                  f"{self.star.grid.cols}_"
                  f"{self.star.grid.starsPerGrid}_"
@@ -969,7 +803,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.name} 設定")
-        self.geometry("450x700")
+        self.geometry("450x350")
         
         self._createWidgets()
     
@@ -980,15 +814,6 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         
         # 画像パラメータ
         tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
-        
-        # 位置合わせ用プレーン
-        planeFrame = tk.Frame(mainFrame)
-        planeFrame.pack(fill=tk.X, pady=2)
-        tk.Label(planeFrame, text="位置合わせプレーン:").pack(side=tk.LEFT)
-        self.planeEntry = tk.Entry(planeFrame, width=5)
-        self.planeEntry.insert(0, str(self.node.alignmentPlane))
-        self.planeEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(planeFrame, text="(0:R, 1:G, 2:B, ... 位置検出用)").pack(side=tk.LEFT)
         
         # 画角
         fovDegFrame = tk.Frame(mainFrame)
@@ -1022,46 +847,8 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.magLimitEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(magFrame, text="mag (カタログの暗い星を除外)").pack(side=tk.LEFT)
         
-        # 星点検出パラメータ
-        tk.Label(mainFrame, text="■ 星点検出パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(8, 2))
-        
-        # 星検出閾値
-        thresholdFrame = tk.Frame(mainFrame)
-        thresholdFrame.pack(fill=tk.X, pady=2)
-        tk.Label(thresholdFrame, text="  星検出閾値:").pack(side=tk.LEFT)
-        self.thresholdEntry = tk.Entry(thresholdFrame, width=5)
-        self.thresholdEntry.insert(0, str(self.node.star.threshold))
-        self.thresholdEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(thresholdFrame, text="% (上位%の明るい星を選択)").pack(side=tk.LEFT)
-        
-        # 飽和マスクを使用
-        useSaturationMaskFrame = tk.Frame(mainFrame)
-        useSaturationMaskFrame.pack(fill=tk.X, pady=2)
-        tk.Label(useSaturationMaskFrame, text="  飽和マスクを使用する:").pack(side=tk.LEFT)
-        self.useSaturationMaskVar = tk.BooleanVar(value=self.node.star.useSaturationMask)
-        tk.Checkbutton(useSaturationMaskFrame, text="飽和領域を除いて星検出閾値を適用", variable=self.useSaturationMaskVar).pack(side=tk.LEFT)
-        
-        # 星直径閾値
-        starSizeFrame = tk.Frame(mainFrame)
-        starSizeFrame.pack(fill=tk.X, pady=2)
-        tk.Label(starSizeFrame, text="  星直径閾値:").pack(side=tk.LEFT)
-        self.starMinDiameterEntry = tk.Entry(starSizeFrame, width=5)
-        self.starMinDiameterEntry.insert(0, str(self.node.star.minDiameter))
-        self.starMinDiameterEntry.pack(side=tk.LEFT, padx=2)
-        tk.Label(starSizeFrame, text="~").pack(side=tk.LEFT)
-        self.starMaxDiameterEntry = tk.Entry(starSizeFrame, width=5)
-        self.starMaxDiameterEntry.insert(0, str(self.node.star.maxDiameter))
-        self.starMaxDiameterEntry.pack(side=tk.LEFT, padx=2)
-        tk.Label(starSizeFrame, text="px (検出対象の星直径)").pack(side=tk.LEFT)
-        
-        # 最大アスペクト比
-        aspectRatioFrame = tk.Frame(mainFrame)
-        aspectRatioFrame.pack(fill=tk.X, pady=2)
-        tk.Label(aspectRatioFrame, text="  最大アスペクト比:").pack(side=tk.LEFT)
-        self.aspectRatioEntry = tk.Entry(aspectRatioFrame, width=5)
-        self.aspectRatioEntry.insert(0, str(self.node.star.maxAspectRatio))
-        self.aspectRatioEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(aspectRatioFrame, text="(細長いノイズを除外)").pack(side=tk.LEFT)
+        # 星像選択パラメータ
+        tk.Label(mainFrame, text="■ 星像選択パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(8, 2))
         
         # グリッド設定
         gridFrame = tk.Frame(mainFrame)
@@ -1074,7 +861,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.gridColsEntry = tk.Entry(gridFrame, width=5)
         self.gridColsEntry.insert(0, str(self.node.star.grid.cols))
         self.gridColsEntry.pack(side=tk.LEFT, padx=2)
-        tk.Label(gridFrame, text="(星選択用分割数)").pack(side=tk.LEFT)
+        tk.Label(gridFrame, text="(星像選択用分割数)").pack(side=tk.LEFT)
         
         # グリッド当たりの選択星数
         starsFrame = tk.Frame(mainFrame)
@@ -1115,16 +902,10 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
     def onApply(self):
         """適用ボタンクリックハンドラ"""
         try:
-            self.node.alignmentPlane           = max(0, int(self.planeEntry.get()))
             self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
             self.node.useHeaderFovDeg          = self.useHeaderFovDegVar.get()
             self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
             self.node.catalog.magLimit         = max(1, min(20, float(self.magLimitEntry.get())))
-            self.node.star.threshold           = max(50, min(99, int(self.thresholdEntry.get())))
-            self.node.star.useSaturationMask   = self.useSaturationMaskVar.get()
-            self.node.star.minDiameter         = max(1, int(self.starMinDiameterEntry.get()))
-            self.node.star.maxDiameter         = max(self.node.star.minDiameter, int(self.starMaxDiameterEntry.get()))
-            self.node.star.maxAspectRatio      = max(1.0, float(self.aspectRatioEntry.get()))
             self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
             self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
