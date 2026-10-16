@@ -26,6 +26,8 @@ class MinNode(LazyNNOperationNode):
         return MinLazyFlowData(headers, inputDatas)
     
 class MinLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

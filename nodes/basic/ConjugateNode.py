@@ -26,6 +26,8 @@ class ConjugateNode(LazyNNOperationNode):
         return ConjugateLazyFlowData(headers, inputData)
 
 class ConjugateLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

@@ -26,6 +26,8 @@ class Fill1Node(LazyNNOperationNode):
         return AbsoluteLazyFlowData(headers, inputData)
 
 class AbsoluteLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from utils import numpy_helpers as nh

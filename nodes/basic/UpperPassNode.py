@@ -26,6 +26,8 @@ class UpperPassNode(LazyNNOperationNode):
         return UpperPassLazyFlowData(headers, inputDatas)
 
 class UpperPassLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from utils import numpy_helpers as nh

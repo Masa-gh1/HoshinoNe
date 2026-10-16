@@ -26,6 +26,8 @@ class OffsetNode(LazyNNOperationNode):
         return OffsetLazyFlowData(headers, inputDatas)
 
 class OffsetLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

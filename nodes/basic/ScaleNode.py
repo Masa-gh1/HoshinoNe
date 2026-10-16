@@ -26,6 +26,8 @@ class ScaleNode(LazyNNOperationNode):
         return ScaleLazyFlowData(headers, inputDatas)
 
 class ScaleLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

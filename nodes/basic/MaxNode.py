@@ -26,6 +26,8 @@ class MaxNode(LazyNNOperationNode):
         return MaxLazyFlowData(headers, inputDatas)
     
 class MaxLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

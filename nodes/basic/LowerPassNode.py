@@ -26,6 +26,8 @@ class LowerPassNode(LazyNNOperationNode):
         return LowerPassLazyFlowData(headers, inputDatas)
 
 class LowerPassLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from utils import numpy_helpers as nh

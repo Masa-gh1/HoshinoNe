@@ -26,6 +26,8 @@ class SignNode(LazyNNOperationNode):
         return SignLazyFlowData(headers, inputData)
 
 class SignLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

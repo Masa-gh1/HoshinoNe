@@ -125,6 +125,8 @@ class RepositionNode(LazyNNOperationNode):
         return (shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
 
 class RepositionLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def __init__(self, headers, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
         super().__init__(headers, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
         

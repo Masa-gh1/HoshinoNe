@@ -30,6 +30,8 @@ class RGBConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
         return RGBConverterLazyFlowData(headers, inputData)
     
 class RGBConverterLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ()
+    
     def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
         from base import LazyHeaders
         super().__init__(headers, sourceFlowDatas, *args, **kwargs)

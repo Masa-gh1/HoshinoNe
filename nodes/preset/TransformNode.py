@@ -197,6 +197,8 @@ class TransformNode(LazyNNOperationNode):
         return( dx, dy, rotation, scale, left, top, width, height)
 
 class TransformLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def __init__(self, headers, flowData, dx, dy, rotation, scale, new_width, new_height):
         super().__init__(headers, flowData, dx, dy, rotation, scale, new_width, new_height)
         self.setDimensions(new_width, new_height)
