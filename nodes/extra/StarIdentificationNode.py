@@ -48,8 +48,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         # 設定パラメータ
         # 画像パラメータ
-        self.fovDeg                 = 3.5                   # 画角 [deg]
-        self.useHeaderFovDeg        = False                 # 画像ヘッダから推定する
+        self.fovDeg                 = 2.0                   # 画角 [deg]
+        self.useHeaderFovDeg        = True                  # 画像ヘッダから推定する
         
         # カタログ照合パラメータ
         self.catalog                = SimpleNamespace()
@@ -261,12 +261,28 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         stars = nh.array(stars)
         
         # 星の座標をレンズ中心からの単位 vector に変換
-        starsX = stars[:, 0] - (width / 2) # 中心を原点に
-        starsY = stars[:, 1] - (height / 2) # 中心を原点に
-        f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算
-        f = np.broadcast_to(f, starsX.shape)
+        if self.useHeaderFovDeg:
+            # 画像のヘッダからレンズ中心と焦点距離を得て計算
+            from utils import exif_helper as eh
+            
+            focalCenter_px   = eh.getFocalCenter(flowData.headers) # [px]
+            focalLength_mm   = eh.getFocalLength(flowData.headers) # [mm]
+            resolution_pxpmm = eh.getResolution(flowData.headers)  # [px/mm]
+            if focalLength_mm is None or resolution_pxpmm is None:
+                raise ValueError("画像のヘッダに焦点情報が設定されていません。")
+            
+            starsX = (stars[:, 0] - focalCenter_px[0]) / resolution_pxpmm[0] # 中心を原点に [mm]
+            starsY = (stars[:, 1] - focalCenter_px[1]) / resolution_pxpmm[1] # 中心を原点に [mm]
+            f = float(focalLength_mm)                                        # 焦点距離 [mm]
+            f = np.broadcast_to(f, starsX.shape)
+        else:
+            # 設定値の画角から計算
+            starsX = stars[:, 0] - (width  / 2) # 中心を原点に [px]
+            starsY = stars[:, 1] - (height / 2) # 中心を原点に [px]
+            f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算 [px]
+            f = np.broadcast_to(f, starsX.shape)
         starsV = np.stack([starsX, starsY, f]).T
-        starsV = starsV / np.linalg.norm(starsV, axis=1, keepdims=True) # 
+        starsV = starsV / np.linalg.norm(starsV, axis=1, keepdims=True) # 単位ベクトルに変換
         
         # 結果配列の構造に変換
         stars = np.concatenate([nh.nans((stars.shape[0],4)), stars, starsV], axis=1) # id, ra, dec, mag, x, y, brightness, aspectRatio, u, v, w
@@ -799,7 +815,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 class StarIdentificationSettingsDialog(tk.Toplevel):
     """StarIdentificationNode 用設定ダイアログ"""
     
-    def __init__(self, parent, node:StarExtractionNode):
+    def __init__(self, parent, node:StarIdentificationNode):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.name} 設定")
