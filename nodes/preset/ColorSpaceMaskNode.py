@@ -18,6 +18,9 @@ from base.FlowNode_CONST import *
 from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode, ConfigurableNode
 
+if TYPE_CHECKING:
+    from base import FlowData
+
 class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
     # ノードタイプ
     majorType = _MAJOR_TYPE_FUNC
@@ -75,8 +78,9 @@ class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
 class ColorSpaceMaskLazyFlowData(LazyFlowData, LazyHeadersMixin):
     __slots__ = ('sourceHeaders',)
     
-    def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args:Any, **kwargs:Any):
         from base import LazyHeaders
+        
         super().__init__(headers, sourceFlowDatas, *args, **kwargs)
         self.sourceHeaders = headers
         self.headers       = LazyHeaders(self, headers)

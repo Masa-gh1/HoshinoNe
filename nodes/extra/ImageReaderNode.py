@@ -93,22 +93,21 @@ class ImageReaderNode(BaseReaderNode):
         elif 'I' == img.mode              : display_levels = {'min': 0,   'exclusive_upper': 2147483648}  # 32bit int
         else                              : display_levels = {'min': 0,   'exclusive_upper':        256}  # デフォルト
         
-        # EXIF情報を取得
-        norm, exif_info = exif.getExif(filePath)
-        
+        # headers 作成
         headers = {
-            'category'      : self.getOutputCategory(),
-            'type'          : 'image',
-            'mode'          : img.mode,
-            'width'         : width,
-            'height'        : height,
-            'planes'        : plane_names,
-            'datetime'      : norm['datetime'] if 'datetime' in norm else None,
-            'display_levels': display_levels,
+            'category'      : self.getOutputCategory()      ,
+            'type'          : 'image'                       ,
+            'mode'          : img.mode                      ,
+            'transformation': [[1,0,0],[0,1,0],[0,0,1]]     ,
+            'planes'        : plane_names                   ,
+            'display_levels': display_levels                ,
             'source_file'   : self.getRelativePath(filePath),
         }
 
-        # EXIF 追加
+        # EXIF情報を追加
+        info, exif_info = exif.getExif(filePath)
+        if info:
+            headers.update(info)
         if exif_info:
             headers['exif'] = exif_info
         
@@ -136,15 +135,15 @@ class ImageReaderNode(BaseReaderNode):
         """画像ファイルの情報を取得（生データ）"""
         from utils import exif_helper as exif
         
-        norm, _ = exif.getExif(filePath)
+        info, _ = exif.getExif(filePath)
         return {
             'filePath': filePath,
-            'datetime': norm.get('datetime'     , None) if norm else None,
-            'width'   : norm.get('width'        , None) if norm else None,
-            'height'  : norm.get('height'       , None) if norm else None,
-            'exposure': norm.get('exposure_time', None) if norm else None,
-            'fnumber' : norm.get('f_number'     , None) if norm else None,
-            'iso'     : norm.get('iso_speed'    , None) if norm else None,
+            'datetime': info.get('datetime'     , None) if info else None,
+            'width'   : info.get('width'        , None) if info else None,
+            'height'  : info.get('height'       , None) if info else None,
+            'exposure': info.get('exposure_time', None) if info else None,
+            'fnumber' : info.get('f_number'     , None) if info else None,
+            'iso'     : info.get('iso_speed'    , None) if info else None,
         }
     
     def getConfigHash(self):

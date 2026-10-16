@@ -10,10 +10,12 @@ All rights reserved.
 from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable, Any
 
-from base.FlowData import FlowData
 from base.FlowNode_CONST import *
 from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class BayerUnpackDenseNode(LazyNNOperationNode):
     # ノードタイプ
@@ -39,8 +41,9 @@ class BayerUnpackDenseNode(LazyNNOperationNode):
 class BayerUnpackDenseLazyFlowData(LazyFlowData, LazyHeadersMixin):
     __slots__ = ('sourceHeaders',)
     
-    def __init__(self, headers: dict[str, Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args:Any, **kwargs:Any):
         from base import LazyHeaders
+        
         super().__init__(headers, sourceFlowDatas, *args, **kwargs)
         self.sourceHeaders = headers
         self.headers       = LazyHeaders(self, headers)

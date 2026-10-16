@@ -77,24 +77,40 @@ def getIsoSpeed(exif):
     
     return result
 
+def getFocalPlaneResolutionUnit(exif):
+    result = None
+    if "FocalPlaneResolutionUnit" in exif:
+        result = exif["FocalPlaneResolutionUnit"]
+        if   1 == result: result = None
+        elif 2 == result: result = "inch"
+        elif 3 == result: result = "cm"
+        elif 4 == result: result = "mm"
+        elif 5 == result: result = "um"
+        else:
+            raise ValueError(f"Unsupported FocalPlaneResolutionUnit {result}")
+    else:
+        result = None
+    return result
+    
+
 # 画像読み書きノードで使用するヘッダに含める項目
 # HEADERS は天体写真加工に欲しい情報
 # HEADERS_EXIF は EXIF の読み書き対象とする情報
 HEADERS = [
-    # name                          Exif tag                       Exif id     名称
-    ("width"                      , "ImageWidth"              ), #   256 0100h 画像の幅
-    ("width"                      , "PixelXDimension"         ), # 40962 0100h 画像の幅
-    ("height"                     , "ImageLength"             ), #   257 0101h 画像の高さ
-    ("height"                     , "PixelYDimension"         ), # 40963 0101h 画像の高さ
-    ("bits_per_sample"            , "BitsPerSample"           ), #   258 0102h 画像のビットの深さ
-    ("datetime"                   , getDatetime               ), # ----- ----- 観測時刻
-    ("exposure_time"              , "ExposureTime"            ), # 33434 829Ah 露出時間
-    ("f_number"                   , "FNumber"                 ), # 33437 829Dh F ナンバー
-    ("iso_speed"                  , getIsoSpeed               ), # ----- ----- 撮影感度
-    ("focal_length"               , "FocalLength"             ), # 37386 920Ah レンズ焦点距離
-    ("focal_plane_x_resolution"   , "FocalPlaneXResolution"   ), # 41486 A20Eh 焦点面の幅の解像度
-    ("focal_plane_y_resolution"   , "FocalPlaneYResolution"   ), # 41487 A20Fh 焦点面の高さの解像度
-    ("focal_plane_resolution_unit", "FocalPlaneResolutionUnit"), # 41488 A210h 焦点面解像度単位
+    # name                          Exif tag                        Exif id     名称
+    ("width"                      , "ImageWidth"               ), #   256 0100h 画像の幅
+    ("width"                      , "PixelXDimension"          ), # 40962 0100h 画像の幅
+    ("height"                     , "ImageLength"              ), #   257 0101h 画像の高さ
+    ("height"                     , "PixelYDimension"          ), # 40963 0101h 画像の高さ
+    ("bits_per_sample"            , "BitsPerSample"            ), #   258 0102h 画像のビットの深さ
+    ("datetime"                   , getDatetime                ), # ----- ----- 観測時刻
+    ("exposure_time"              , "ExposureTime"             ), # 33434 829Ah 露出時間
+    ("f_number"                   , "FNumber"                  ), # 33437 829Dh F ナンバー
+    ("iso_speed"                  , getIsoSpeed                ), # ----- ----- 撮影感度
+    ("focal_length"               , "FocalLength"              ), # 37386 920Ah レンズ焦点距離
+    ("focal_plane_x_resolution"   , "FocalPlaneXResolution"    ), # 41486 A20Eh 焦点面の幅の解像度
+    ("focal_plane_y_resolution"   , "FocalPlaneYResolution"    ), # 41487 A20Fh 焦点面の高さの解像度
+    ("focal_plane_resolution_unit", getFocalPlaneResolutionUnit), # 41488 A210h 焦点面解像度単位
 ]
 HEADERS_EXIF = [
     #############################################################

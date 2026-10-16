@@ -229,6 +229,7 @@ class RawReaderNode(BaseReaderNode):
                 height, width = rawData.shape
                 planeCount = 1
                 mode = 'BAYER'
+                transformation = [[1,0,0],[0,1,0],[0,0,1]]
                 plane_names = ['Bayer']
             elif self.demosaicAlgorithm == "bayer crop":
                 # ベイヤー配列のまま1プレーンで取得(クロップ)
@@ -236,37 +237,40 @@ class RawReaderNode(BaseReaderNode):
                 height, width = rawData.shape
                 planeCount = 1
                 mode = 'BAYER'
+                transformation = [[1,0,0],[0,1,0],[0,0,1]]
                 plane_names = ['Bayer']
             else:
-                # RAW 後処理
+                # RAW の後処理を実行
                 rawData = raw.postprocess(params)
                 height, width, planeCount = rawData.shape
                 bayer_pattern = None
                 
-                # mode と plane_names を動的に設定
                 if self.demosaicAlgorithm == "unpack" and planeCount == 4:
                     mode = 'RGBG'
+                    transformation = [[0.5,0,0],[0,0.5,0],[0,0,1]]
                     plane_names = ['R', 'G1', 'B', 'G2']
-                else:
+                elif self.demosaicAlgorithm == "raw" and planeCount == 3:
                     mode = 'RGB'
+                    transformation = [[0.5,0,0],[0,0.5,0],[0,0,1]]
+                    plane_names = ['R', 'G', 'B'][:planeCount]
+                else:
+                    # デモザイクの場合
+                    mode = 'RGB'
+                    transformation = [[1,0,0],[0,1,0],[0,0,1]]
                     plane_names = ['R', 'G', 'B'][:planeCount]
             
-            # EXIF情報を取得
-            info, exif_info = exif.getExif(filePath)
-            
+            # headers 作成
             headers = {
-                'category'      : self.getOutputCategory(),
-                'type'          : 'image',
-                'mode'          : mode,
-                'width'         : width,
-                'height'        : height,
-                'planes'        : plane_names,
-                'datetime'      : info['datetime'],
-                'display_levels': display_levels,
+                'category'      : self.getOutputCategory()      ,
+                'type'          : 'image'                       ,
+                'mode'          : mode                          ,
+                'transformation': transformation                ,
+                'planes'        : plane_names                   ,
+                'display_levels': display_levels                ,
                 'source_file'   : self.getRelativePath(filePath),
-                'demosaic'      : self.demosaicAlgorithm,
-                'colorspace'    : self.outputColorspace,
-                'white_balance' : self.whiteBalance,
+                'demosaic'      : self.demosaicAlgorithm        ,
+                'colorspace'    : self.outputColorspace         ,
+                'white_balance' : self.whiteBalance             ,
             }
             
             # bayer 情報を追加
@@ -277,7 +281,10 @@ class RawReaderNode(BaseReaderNode):
             # raw 情報追加
             headers['raw'] = raw_headers
             
-            # EXIF 追加
+            # EXIF情報を追加
+            info, exif_info = exif.getExif(filePath)
+            if info:
+                headers.update(info)
             if exif_info:
                 headers['exif'] = exif_info
             
@@ -324,15 +331,15 @@ class RawReaderNode(BaseReaderNode):
         """RAWファイルの情報を取得（生データ）"""
         from utils import exif_helper as exif
 
-        norm, _ = exif.getExif(filePath)
+        info, _ = exif.getExif(filePath)
         return {
             'filePath': filePath,
-            'datetime': norm.get('datetime'     , None) if norm else None,
-            'width'   : norm.get('width'        , None) if norm else None,
-            'height'  : norm.get('height'       , None) if norm else None,
-            'exposure': norm.get('exposure_time', None) if norm else None,
-            'fnumber' : norm.get('f_number'     , None) if norm else None,
-            'iso'     : norm.get('iso_speed'    , None) if norm else None,
+            'datetime': info.get('datetime'     , None) if info else None,
+            'width'   : info.get('width'        , None) if info else None,
+            'height'  : info.get('height'       , None) if info else None,
+            'exposure': info.get('exposure_time', None) if info else None,
+            'fnumber' : info.get('f_number'     , None) if info else None,
+            'iso'     : info.get('iso_speed'    , None) if info else None,
         }
     
     def getConfigHash(self):

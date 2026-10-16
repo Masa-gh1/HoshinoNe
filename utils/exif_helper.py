@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any
+
 from  fractions import Fraction
 import datetime
 import os
@@ -35,7 +38,7 @@ def getExif(filepath):
     """EXIF情報を取得（キャッシュ付き）"""
     if filepath in _exif_cache:
         result = _exif_cache[filepath]
-        return _normalize(result), result
+        return normalize(result), result
     
     attr = {}
     
@@ -65,7 +68,7 @@ def getExif(filepath):
     missingTags = [id for id in expectedTags if id not in attr]
     
     result = {tagMap[id]:value for id, value in attr.items()} if attr else None
-    norm = _normalize(result)
+    norm = normalize(result)
 
     if Debug.LEVEL_NONE < Debug.LEVEL and None in norm.values():
         # デバッグ出力
@@ -149,7 +152,7 @@ def _getExifread(filepath):
     
     return result, allExif
 
-def _normalize(exif):
+def normalize(exif):
     """EXIF から画像処理に必要な情報を取り出す"""
     result = {}
 
@@ -214,3 +217,76 @@ def toExifDatetime(dt):
         return "    :  :     :  :  "
     else:
         return dt.strftime("%Y:%m:%d %H:%M:%S")
+
+def getFocalCenter(info:dict[str,Any]) -> list[float]:
+    """EXIF から焦点位置を取得"""
+    from utils import numpy_helpers as nh
+    
+    trans  = info["transformation"]
+    width  = info["width"]
+    height = info["height"]
+    
+    center = ((trans @ nh.array([[width / 2.0], [height / 2.0], [1.0]])).ravel()[:2]).tolist()
+    return center
+
+def getFocalLength(info:dict[str,Any]) -> float|None:
+    """EXIF から焦点距離を取得"""
+    focalLength = info["focal_length"] if "focal_length" in info else None
+    return focalLength
+
+def getResolution(info:dict[str,Any]) -> tuple[float,float]|None:
+    """EXIF から解像度を取得"""
+    from utils import numpy_helpers as nh
+    
+    trans   = info["transformation"]
+    xRes    = info["focal_plane_x_resolution"]    if "focal_plane_x_resolution"    in info else None
+    yRes    = info["focal_plane_y_resolution"]    if "focal_plane_y_resolution"    in info else None
+    resUnit = info["focal_plane_resolution_unit"] if "focal_plane_resolution_unit" in info else None
+    
+    if   xRes is None or yRes is None or resUnit is None: # 未指定
+        pass
+    elif "inch" == resUnit: # inch
+        xRes = xRes / 25.4
+        yRes = yRes / 25.4
+    elif "cm" == resUnit: # cm
+        xRes = xRes / 10.0
+        yRes = yRes / 10.0
+    elif "mm" == resUnit: # mm
+        xRes = xRes / 1.0
+        yRes = yRes / 1.0
+    elif "um" == resUnit: # um
+        xRes = xRes / 0.001
+        yRes = yRes / 0.001
+    else:
+        raise ValueError(f"Unsupported FocalPlaneResolutionUnit {resUnit}")
+    
+    resolution = (trans @ nh.array([[1.0, 0.0],
+                                    [0.0, 1.0],
+                                    [0.0, 0.0]]))
+    resolution = (xRes * float(resolution[0,0]), yRes * float(resolution[1,1])) if xRes and yRes else None
+    return resolution
+
+
+def getFov(info:dict[str,Any], width, height) -> float|None:
+    """EXIF から画角を取得"""
+    import numpy as np
+    from utils import numpy_helpers as nh
+    
+    center      = getFocalCenter(info)
+    focalLength = getFocalLength(info)
+    resolution  = getResolution(info)
+    
+    if resolution is None or focalLength is None:
+        fov = None
+    else:
+        # center が中央でない場合を考慮した対角画角を計算
+        v = nh.array([
+            [(    0 - center[0]) / resolution[0], (     0 - center[1]) / resolution[1], focalLength], # 左上
+            [(width - center[0]) / resolution[0], (     0 - center[1]) / resolution[1], focalLength], # 右上
+            [(    0 - center[0]) / resolution[0], (height - center[1]) / resolution[1], focalLength], # 左下
+            [(width - center[0]) / resolution[0], (height - center[1]) / resolution[1], focalLength], # 右下
+        ])
+        v = v / np.linalg.norm(v, axis=1, keepdims=True)
+        cosTheta = v @ v.T
+        fov = np.degrees(np.max(np.arccos(np.clip(cosTheta, -1, 1))))
+    return fov

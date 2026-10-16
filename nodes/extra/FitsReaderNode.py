@@ -74,6 +74,7 @@ class FitsReaderNode(BaseReaderNode):
         from config import BLOCK_SIZE
         from utils.interval_helper import createHalfOpenEnd
         from utils.ThreadPool import ParallelExecutor
+        from utils import exif_helper as exif
         from base import FlowData
         
         resultFlowDatas = []
@@ -187,16 +188,15 @@ class FitsReaderNode(BaseReaderNode):
                             continue
                 
                 headers = {
-                    'category'      : self.getOutputCategory(),
-                    'type'          : 'image',
-                    'mode'          : mode,
-                    'width'         : width,
-                    'height'        : height,
-                    'planes'        : plane_names,
-                    'datetime'      : date_obs,
-                    'display_levels': display_levels,
+                    'category'      : self.getOutputCategory()      ,
+                    'type'          : 'image'                       ,
+                    'mode'          : mode                          ,
+                    'transformation': [[1,0,0],[0,1,0],[0,0,1]]     ,
+                    'planes'        : plane_names                   ,
+                    'datetime'      : date_obs                      ,
+                    'display_levels': display_levels                ,
                     'source_file'   : self.getRelativePath(filePath),
-                    'context_index' : hduIndex,
+                    'context_index' : hduIndex                      ,
                 }
 
                 # bayer 情報を追加
@@ -207,8 +207,8 @@ class FitsReaderNode(BaseReaderNode):
                 # FITS 情報追加
                 headers['fits'] = fits_header
 
-                # EXIF 追加
-                exif = {
+                # EXIF 作成
+                exif_info = {
                     'ImageWidth'               : int(                hduHeader['NAXIS1'  ]            ) if 'NAXIS1'   in hduHeader else None, #   256 0100h 画像の幅
                     'ImageLength'              : int(                hduHeader['NAXIS2'  ]            ) if 'NAXIS2'   in hduHeader else None, #   257 0101h 画像の高さ
                     'BitsPerSample'            : int(                hduHeader['BITPIX'  ]            ) if 'BITPIX'   in hduHeader else None, #   258 0102h 画像のビットの深さ
@@ -242,7 +242,9 @@ class FitsReaderNode(BaseReaderNode):
                     'LensMake'                 : str(                hduHeader['ORIGIN'  ]            ) if 'ORIGIN'   in hduHeader else None, # 42035 A433h レンズのメーカ名
                     'LensModel'                : str(                hduHeader['CAMERA'  ]            ) if 'CAMERA'   in hduHeader else None, # 42036 A434h レンズのモデル名
                 }
-                headers['exif'] = { k:v for k, v in exif.items() if v is not None }
+                info = exif.normalize(exif_info)
+                headers.update(info)
+                headers['exif'] = { k:v for k, v in exif_info.items() if v is not None }
                 
                 flowData = FlowData(headers)
                 flowData.setDimensions(width, height)

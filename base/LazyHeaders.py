@@ -1,5 +1,5 @@
 '''
-LazyHeaders - 遅延評価 header
+LazyHeaders - 遅延評価 headers
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -15,7 +15,8 @@ from abc import ABC as AbstractBaseClass, abstractmethod
 from collections import UserDict
 
 class LazyHeadersMixin(AbstractBaseClass):
-    """遅延評価FlowData"""
+    """遅延評価 headers"""
+    __slots__ = ()
     
     @abstractmethod
     def getLazyHeaderkeys(self) -> Iterable[str]:
@@ -74,6 +75,9 @@ class LazyHeaders(UserDict[str,Any]):
                 value = self.data[key]
             elif isinstance(value, str) and "<sourceHeaders>" == value:
                 value = self.source[key]
+                self.data[key] = value
+            else:
+                pass
             return value
     
     def copy(self) -> LazyHeaders:
