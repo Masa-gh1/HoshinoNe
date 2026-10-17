@@ -254,13 +254,13 @@ class BaseWriterSettingsDialog(tk.Toplevel):
         if filepath:
             self.pathVar.set(filepath)
     
-    def createCustomSettings(self, parent:tk.Widget) -> tk.Frame:
+    def createCustomSettings(self, parent:tk.Widget) -> tk.Frame|None:
         """カスタム設定項目を作成（サブクラスでオーバーライド）
         
         Returns:
             作成したフレーム、またはNone
         """
-        assert False, f"Please override `createCustomSettings` in the {self.__class__.__name__}."
+        return None
     
     def customOnApply(self):
         """カスタム設定の適用（サブクラスでオーバーライド）"""

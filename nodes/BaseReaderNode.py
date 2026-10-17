@@ -268,7 +268,8 @@ class BaseReaderSettingsDialog(tk.Toplevel):
             
             # カスタムフレームを再作成して右フレームに配置
             customFrame = self.createCustomSettings(rightFrame)
-            customFrame.pack(fill=tk.BOTH, expand=True)
+            if customFrame:
+                customFrame.pack(fill=tk.BOTH, expand=True)
         
         # ボタン
         bottomButtonFrame = tk.Frame(self)
@@ -341,13 +342,13 @@ class BaseReaderSettingsDialog(tk.Toplevel):
         """
         return None
     
-    def createCustomSettings(self, parent:tk.Widget) -> tk.Frame:
-        """カスタム設定項目を作成（サブクラスでオーバーライド）
+    def createCustomSettings(self, parent:tk.Widget) -> tk.Frame|None:
+        """カスタム設定項目を作成（サブクラスでオーバーライド可能）
         
         Returns:
             作成したフレーム、または None
         """
-        assert False, f"Please override `createCustomSettings` in the {self.__class__.__name__}."
+        return None
     
     def customOnApply(self):
         """カスタム設定の適用（サブクラスでオーバーライド）"""
