@@ -74,7 +74,7 @@ class QuantileFilterNode(NNPlaneOperationNode):
             # 中央値 概算 なので、uint8 にスケールして cv2.medianBlur で概算
             k      = np.max(auxPlane.shape)
             offset = np.nanmin(planeData)
-            endV   = np.nanmax(planeData) + nh.epsilon
+            endV   = np.nanmax(planeData) * (1.0 + nh.epsilon)
             scale  = (256.0 / (endV - offset))
             cnt    = approx
             # 作業用メモリを確保
@@ -89,7 +89,7 @@ class QuantileFilterNode(NNPlaneOperationNode):
                 a = (i - (cnt - 1) / 2.0) / cnt / scale
                 np.add(planeData, -(offset + a), out=tmp)
                 tmp *= scale
-                planeUByte[:] = tmp # キャスト
+                planeUByte[:] = tmp.astype(np.uint8) # キャスト
                 cv2.medianBlur(planeUByte, k, dst=resUByte) # 分位数濾過
                 tmp[:] = resUByte # キャスト
                 tmp /= cnt * scale
