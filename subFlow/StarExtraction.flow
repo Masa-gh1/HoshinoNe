@@ -3,7 +3,19 @@
   "nodes": [
     {
       "index": 0,
-      "zOrder": 17,
+      "zOrder": 7,
+      "type": "pass",
+      "text": "通点",
+      "x": 31.30000000000001,
+      "y": 89.0,
+      "connections": [
+        2,
+        5
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 9,
       "type": "table",
       "text": "表",
       "x": 35.700000000000045,
@@ -14,64 +26,40 @@
       ],
       "columns": 51,
       "lines": 51,
-      "table": 0,
+      "table": 1.0,
       "connections": [
-        1
+        2
       ]
     },
     {
-      "index": 1,
-      "zOrder": 15,
-      "type": "fill_1",
-      "text": "1 埋め",
-      "x": 125.70000000000005,
-      "y": 150.0,
-      "category": "auxiliary",
+      "index": 2,
+      "zOrder": 11,
+      "type": "quantile_filter",
+      "text": "分位数濾過",
+      "x": 148.70000000000005,
+      "y": 149.0,
       "connections": [
         3
       ]
     },
     {
-      "index": 2,
-      "zOrder": 7,
-      "type": "pass",
-      "text": "通点",
-      "x": 31.30000000000001,
-      "y": 89.0,
+      "index": 3,
+      "zOrder": 17,
+      "type": "negate",
+      "text": "符号反転",
+      "x": 231.70000000000005,
+      "y": 148.0,
       "connections": [
-        3,
         6
       ]
     },
     {
-      "index": 3,
-      "zOrder": 19,
-      "type": "quantile_filter",
-      "text": "分位数濾過",
-      "x": 205.70000000000005,
-      "y": 149.0,
-      "connections": [
-        4
-      ]
-    },
-    {
       "index": 4,
-      "zOrder": 21,
-      "type": "negate",
-      "text": "符号反転",
-      "x": 293.70000000000005,
-      "y": 149.0,
-      "connections": [
-        7
-      ]
-    },
-    {
-      "index": 5,
-      "zOrder": 9,
+      "zOrder": 19,
       "type": "table",
       "text": "表",
-      "x": 178.29999999999995,
-      "y": 40.0,
+      "x": 150.29999999999995,
+      "y": 37.0,
       "category": "auxiliary",
       "planes": [
         "Plane 0"
@@ -98,38 +86,38 @@
         "0,2,2": 0.0625
       },
       "connections": [
-        6
+        5
       ]
     },
     {
-      "index": 6,
+      "index": 5,
       "zOrder": 5,
       "type": "convolution",
       "text": "畳み込み",
       "x": 121.29999999999995,
       "y": 89.0,
       "connections": [
+        6
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 13,
+      "type": "offset",
+      "text": "加算",
+      "x": 198.70000000000005,
+      "y": 86.0,
+      "connections": [
         7
       ]
     },
     {
       "index": 7,
-      "zOrder": 11,
-      "type": "offset",
-      "text": "加算",
-      "x": 203.70000000000005,
-      "y": 87.0,
-      "connections": [
-        8
-      ]
-    },
-    {
-      "index": 8,
-      "zOrder": 13,
+      "zOrder": 15,
       "type": "points_extraction",
       "text": "点像抽出",
-      "x": 288.0,
-      "y": 86.625,
+      "x": 284.0,
+      "y": 84.625,
       "targetPlane": 1,
       "threshold": 95,
       "minDiameter": 2,
@@ -149,9 +137,9 @@
     },
     {
       "zOrder": 1,
-      "x": 173,
-      "y": 93.625,
-      "width": 306,
+      "x": 159,
+      "y": 93,
+      "width": 278,
       "height": 176,
       "title": "星抽出"
     }

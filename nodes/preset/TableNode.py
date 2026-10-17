@@ -40,8 +40,8 @@ class TableNode(FlowNode,ConfigurableNode):
         
         constVal = ""
         count = 0
-        if isinstance(self.columns,int) and isinstance(self.lines,int):
-            displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.columns}x{self.lines}\nall 0"
+        if isinstance(self.columns, int) and isinstance(self.lines, int) and isinstance(self.table, (int, float)):
+            displayText = f"{self.name}\nP:{len(self.planes)} xy:{self.columns}x{self.lines}\nall {self.table}"
         else:
             for x in range(len(self.columns)):
                 for y in range(len(self.lines)):
@@ -125,7 +125,7 @@ class TableNode(FlowNode,ConfigurableNode):
         
         # 各プレーンに表を設定
         for planeIndex in range(planeCount):
-            if isinstance(self.table, int):
+            if isinstance(self.table, (int, float)):
                 result = nh.full((BLOCK_SIZE, BLOCK_SIZE), self.table)
                 for y in range(0, height, BLOCK_SIZE):
                     for x in range(0, width, BLOCK_SIZE):
@@ -173,7 +173,7 @@ class TensorSettingsDialog(tk.Toplevel):
         else:
             self.lineCnt = len(node.lines)
             self.lines   = node.lines.copy()
-        if isinstance(node.table, int):
+        if isinstance(node.table, (int, float)):
             self.table   = node.table
         else:
             self.table   = node.table.copy()
@@ -252,7 +252,7 @@ class TensorSettingsDialog(tk.Toplevel):
         if planeCount <= 0 or xOrder <= 0 or yOrder <= 0:
             return
         elif 100 < planeCount*xOrder*yOrder:
-            # セルが多いので初期値 0 に固定
+            # セルが多いので初期値を一意に固定
             self.columnCnt = xOrder
             self.lineCnt   = yOrder
             
@@ -266,8 +266,12 @@ class TensorSettingsDialog(tk.Toplevel):
                 entry.insert(0, self.planes[planeIndex])
                 entry.grid(row=row, column=0, columnspan=4, sticky="w", pady=5, padx=5)
                 self.planeEntries.append(entry)
-                entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=f"{self.columnCnt}x{self.lineCnt} all 0")
+                entry = tk.Label(self.scrollableFrame, font=("Arial", 10, "bold"), width=8, text=f"{self.columnCnt}x{self.lineCnt} all ")
                 entry.grid(row=row, column=6, padx=5, pady=2)
+                entry = tk.Entry(self.scrollableFrame, width=8)
+                entry.insert(0, str(self.table if isinstance(self.table, (int, float)) else 0.0))
+                entry.grid(row=row, column=7, padx=5, pady=2)
+                self.tableEntries["all"] = entry
                 row += 1
         else:
             # セルが少ないので格子状の入力項目を生成
@@ -322,7 +326,7 @@ class TensorSettingsDialog(tk.Toplevel):
                     for i in range(xOrder):
                         entry = tk.Entry(self.scrollableFrame, width=8)
                         key = f"{planeIndex},{i},{j}"
-                        if isinstance(self.table, int):
+                        if isinstance(self.table, (int, float)):
                             entry.insert(0, str(self.table))
                         elif key in self.table:
                             entry.insert(0, str(self.table[key]))
@@ -338,10 +342,10 @@ class TensorSettingsDialog(tk.Toplevel):
                 row += 1
     
     def onApply(self):
-        if not self.columnEntries and not self.lineEntries and not self.tableEntries:
+        if not self.columnEntries and not self.lineEntries:
             planes = [entry.get() for entry in self.planeEntries]
             self.planes = planes
-            self.table  = 0
+            self.table  = float(self.tableEntries["all"].get())
             self.node.applySettings(planes, self.columnCnt, self.lineCnt, self.table)
         else:
             planes  = [entry.get() for entry in self.planeEntries]
