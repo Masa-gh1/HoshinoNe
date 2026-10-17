@@ -263,7 +263,7 @@ HEADERS_EXIF = [
 # CATALOG_PATH    星カタログファイルの識別子とパス
 # CATALOG_HEADERS 星カタログヘッダの読み込み対象とする情報
 # CATALOG_DB_MAG  カタログ索引に入れる恒星の等級制限
-# CATALOG_DB_NUM  カタログ索引に入れる恒星 1 つ当たりの位置関係データの数
+# CATALOG_DB_NUM  カタログ索引に入れる恒星 1 つ当たり関係させる星の数、データ量は nC2 で増加する。
 #
 # 下記は VizieR から得た Hipparcos カタログ I/311/hip2 のTSVファイルでの例
 # https://vizier.unistra.fr/
@@ -276,8 +276,8 @@ CATALOG_HEADERS = [
     ("Mag", "Hpmag"),
 ]
 # 使用容量の目安
-# CATALOG_DB_MAG = 8, CATALOG_DB_NUM =  5 の時、約  73 MB
-# CATALOG_DB_MAG = 8, CATALOG_DB_NUM = 10 の時、約 256 MB
+# CATALOG_DB_MAG = 8, CATALOG_DB_NUM =  5 の時、約  68 MB
+# CATALOG_DB_MAG = 8, CATALOG_DB_NUM = 10 の時、約 259 MB
 CATALOG_DB_MAG = 8.0
 CATALOG_DB_NUM = 10
 

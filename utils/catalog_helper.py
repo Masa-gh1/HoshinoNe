@@ -8,12 +8,13 @@ All rights reserved.
 '''
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import os
 
 if TYPE_CHECKING:
     import numpy as np
+    from scipy.spatial import KDTree
 
 # カタログ配列の index 定義
 ID, RA, DEC, MAG = 0, 1, 2, 3
@@ -32,13 +33,6 @@ class Catalog:
             from config import CATALOG_PATH
             symbol, filePath = CATALOG_PATH
             self.loadCatalog(symbol, filePath)
-            self._symbol    = self._cachedSymbol
-            self._path      = self._cachedPath
-            self._catalog   = self._cachedCatalog
-            self.generateTriangleDatabase()
-            self._ratioTree = self._cachedRatioTree
-            self._idMap     = self._cachedIdMap
-            self._values    = self._cachedValues
             assert not self._symbol    is None
             assert not self._path      is None
             assert not self._catalog   is None
@@ -47,13 +41,13 @@ class Catalog:
             assert not self._values    is None
         else:
             assert not symbol is None and not catalog is None, "symbol and catalog must be specified together."
-            self._symbol    = symbol
-            self._path      = None
-            self._catalog   = catalog
-            self.generateTriangleDatabase()
-            self._ratioTree = self._cachedRatioTree
-            self._idMap     = self._cachedIdMap
-            self._values    = self._cachedValues
+            self._symbol  = symbol
+            self._path    = None
+            self._catalog = catalog
+            ratioTree, idMap, values = self.generateTriangleDatabase(symbol, catalog)
+            self._ratioTree = ratioTree
+            self._idMap     = idMap
+            self._values    = values
             assert not self._ratioTree is None
             assert not self._idMap     is None
             assert not self._values    is None
@@ -126,23 +120,40 @@ class Catalog:
             raise FileNotFoundError(f"Catalog file not found: {filePath}")
         
         # キャッシュパス
-        cachePath = os.path.splitext(filePath)[0] + ".npy"
+        cachePath = os.path.splitext(filePath)[0] + ".npz"
         
         if(   self._cachedSymbol == symbol
-          and self._cachedPath == cachePath
-          and self._cachedCatalog is not None
+          and self._cachedPath   == cachePath
+          and self._cachedCatalog   is not None
+          and self._cachedRatioTree is not None
+          and self._cachedIdMap     is not None
+          and self._cachedValues    is not None
           and os.path.exists(cachePath)
           and os.path.getmtime(filePath) < os.path.getmtime(cachePath)
           ):
-            pass
+            self._symbol  = self._cachedSymbol
+            self._path    = self._cachedPath
+            self._catalog = self._cachedCatalog
+            self._ratioTree = self._cachedRatioTree
+            self._idMap     = self._cachedIdMap
+            self._values    = self._cachedValues
         elif(   os.path.exists(cachePath)
             and os.path.getmtime(filePath) <= os.path.getmtime(cachePath)
             ):
             # キャッシュが存在し元ファイルより新しいので、キャッシュからロード
-            catalog = np.load(cachePath)
-            self._cachedSymbol  = symbol
-            self._cachedPath    = filePath
-            self._cachedCatalog = catalog
+            cacheFile = np.load(cachePath, allow_pickle=True)
+            self._cachedSymbol    = symbol
+            self._cachedPath      = filePath
+            self._cachedCatalog   = cacheFile["catalog"]
+            self._cachedRatioTree = cacheFile["ratioTreee"].item()
+            self._cachedIdMap     = cacheFile["idMap"].item()
+            self._cachedValues    = cacheFile["values"]
+            self._symbol  = self._cachedSymbol
+            self._path    = self._cachedPath
+            self._catalog = self._cachedCatalog
+            self._ratioTree = self._cachedRatioTree
+            self._idMap     = self._cachedIdMap
+            self._values    = self._cachedValues
         else:
             # 元ファイル(TSV)からパース
             rows = []
@@ -190,201 +201,150 @@ class Catalog:
             # id 順にソート
             catalog = catalog[np.argsort(catalog[:, 0])]
             
-            # 次回高速化のためにキャッシュ保存
-            try:
-                np.save(cachePath, catalog)
-            except Exception:
-                from utils.Debug import Debug
-                Debug.log(self.__class__.__name__, "Warning: Save catalog cache failed.")
-            
             self._cachedSymbol  = symbol
             self._cachedPath    = filePath
             self._cachedCatalog = catalog
+            self._symbol  = self._cachedSymbol
+            self._path    = self._cachedPath
+            self._catalog = self._cachedCatalog
+            
+            # 検索辞書作成
+            ratioTreee, idMap, values = self.generateTriangleDatabase(symbol, catalog)
+            
+            self._cachedRatioTree = ratioTreee
+            self._cachedIdMap     = idMap
+            self._cachedValues    = values
+            self._ratioTree = self._cachedRatioTree
+            self._idMap     = self._cachedIdMap
+            self._values    = self._cachedValues
+            
+            # 次回高速化のためにキャッシュ保存
+            try:
+                np.savez(cachePath, catalog=catalog, ratioTreee=ratioTreee, idMap=idMap, values=values, allow_pickle=True)
+            except Exception:
+                from utils.Debug import Debug
+                Debug.log(self.__class__.__name__, "Warning: Save catalog cache failed.")
     
-    def generateTriangleDatabase(self):
+    def generateTriangleDatabase(self, symbol:str, catalog:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
         """三角形データベースの生成"""
         from config import CATALOG_DB_MAG, CATALOG_DB_NUM
         
-        if self._catalog is None or 0 == len(self._catalog):
-            self._ratioTree = None
-            self._idMap     = None
-            self._values    = None
-            return
+        if catalog is None or 0 == len(catalog):
+            return (None,None,None)
 
-        # キャッシュパス
-        ratioCachePath = (os.path.splitext(self._path)[0] + "_ratioIndex.pkl" ) if self._path else None
-        idCachePath    = (os.path.splitext(self._path)[0] + "_idIndex.pkl"    ) if self._path else None
-        valueCachePath = (os.path.splitext(self._path)[0] + "_triangleVal.npy") if self._path else None
-        if(     not self._cachedRatioTree is None
-            and not self._cachedIdMap     is None
-            and not self._cachedValues    is None
-            and self._path
-            and ratioCachePath
-            and idCachePath   
-            and valueCachePath
-            and os.path.exists(self._path)
-            and os.path.exists(ratioCachePath)
-            and os.path.exists(idCachePath   )
-            and os.path.exists(valueCachePath)
-            and os.path.getmtime(self._path) <= os.path.getmtime(ratioCachePath)
-            and os.path.getmtime(self._path) <= os.path.getmtime(idCachePath   )
-            and os.path.getmtime(self._path) <= os.path.getmtime(valueCachePath)
-          ):
-            # ロード済みが最新なので何もしない
-            pass
-        elif(   self._path
-            and ratioCachePath
-            and idCachePath   
-            and valueCachePath
-            and os.path.exists(self._path)
-            and os.path.exists(ratioCachePath)
-            and os.path.exists(idCachePath   )
-            and os.path.exists(valueCachePath)
-            and os.path.getmtime(self._path) <= os.path.getmtime(ratioCachePath)
-            and os.path.getmtime(self._path) <= os.path.getmtime(idCachePath   )
-            and os.path.getmtime(self._path) <= os.path.getmtime(valueCachePath)
-            ):
-            # キャッシュが存在し元ファイルより新しいので、キャッシュからロード
-            import numpy as np
-            import pickle
-            with open(ratioCachePath, "rb") as f: self._cachedRatioTree = pickle.load(f)
-            with open(idCachePath   , "rb") as f: self._cachedIdMap = pickle.load(f)
-            self._cachedValues = np.load(valueCachePath)
-        else:
-            # キャッシュ無いもしくは古いので三角形データベースを構築する
-            # 統計情報の生成
-            import numpy as np
-            from scipy.spatial import KDTree
-            from utils import numpy_helpers as nh
-            from utils.Debug import Debug
-            Debug.log(self.__class__.__name__, f" {self._symbol} [{len(self._catalog)} stars]")
-            
-            # 等級の10%毎のパーセンタイル
-            p  = list(range(0, 101, 10))
-            pS = " ".join(["%4d" % x for x in p])
-            mag  = np.percentile(self._catalog[:, 3], p)
-            magS = " ".join(["%4.1f" % x for x in mag])
-            Debug.log(self.__class__.__name__, f"         {pS}%")
-            Debug.log(self.__class__.__name__, f"Mag: 0%: {magS} :100%")
-            
-            # 等級,画角毎に見える星の数の中央値
-            magRad = []
-            radius  = [1,2,4,8,16,32,64,128,180]
-            radiusS = " ".join(["%5d"%(x) for x in radius])
-            Debug.log(self.__class__.__name__, f"                    {radiusS}deg")
-            random = np.random.default_rng(2725) # 固定シードで再現性確保
-            for mag in range(9):
-                count  = []
-                for r in radius:
-                    s = []
-                    for i in range(100):
-                        ra     = np.random.uniform(0, 360)     # RA は均等
-                        sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1
-                        dec    = np.degrees(np.arcsin(sinDec)) # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
-                        s.append(len(self.queryStars( ra, dec, r, mag)))
-                    count.append(np.median(s))
-                magRad.append([(r, n) for r, n in zip(radius, count)])
+        # 統計情報の生成
+        import numpy as np
+        from scipy.spatial import KDTree
+        from utils import numpy_helpers as nh
+        from utils.Debug import Debug
+        Debug.log(self.__class__.__name__, f" {symbol} [{len(catalog)} stars]")
+        
+        # 等級の10%毎のパーセンタイル
+        p  = list(range(0, 101, 10))
+        pS = " ".join(["%4d" % x for x in p])
+        mag  = np.percentile(catalog[:, 3], p)
+        magS = " ".join(["%4.1f" % x for x in mag])
+        Debug.log(self.__class__.__name__, f"         {pS}%")
+        Debug.log(self.__class__.__name__, f"Mag: 0%: {magS} :100%")
+        
+        # 等級,画角毎に見える星の数の中央値
+        magRad = []
+        radius  = [1,2,4,8,16,32,64,128,180]
+        radiusS = " ".join(["%5d"%(x) for x in radius])
+        Debug.log(self.__class__.__name__, f"                    {radiusS}deg")
+        random = np.random.default_rng(2725) # 固定シードで再現性確保
+        for mag in range(9):
+            count  = []
+            for r in radius:
+                s = []
+                for i in range(100):
+                    ra     = np.random.uniform(0, 360)     # RA は均等
+                    sinDec = np.random.uniform(-1.0, 1.0)  # sin(-90°)=-1, sin(90°)=1
+                    dec    = np.degrees(np.arcsin(sinDec)) # Dec は sin(Dec) 空間で一様分布させてから arcsin で戻す
+                    s.append(len(self.queryStars( ra, dec, r, mag)))
+                count.append(np.median(s))
+            magRad.append([(r, n) for r, n in zip(radius, count)])
 
-                countS = " ".join(["%5d"%(x) for x in count])
-                Debug.log(self.__class__.__name__, f"Count: Mag {mag:2d} 1deg: {countS} :180deg")
+            countS = " ".join(["%5d"%(x) for x in count])
+            Debug.log(self.__class__.__name__, f"Count: Mag {mag:2d} 1deg: {countS} :180deg")
+        
+        # 画角の中央に8等星までの星を置く
+        # 自身より明るい CATALOG_DB_NUM 以上の星が見える画角の大きさを探す
+        # 自身と他の星の総組み合わせで三角比のを作り kd-tree を作成する。
+        #
+        # データサイズは CATALOG_DB_NUM に対し nC2 で増え、
+        # 8等星(CATALOG_DB_MAG = 8.0)までの星が 38,000 程度ある。
+        # CATALOG_DB_NUM = 5 だと三角形の数は 5C2 * 38,000 = 380,000 ですが、「CATALOG_DB_NUM 以上」なので 970,000 程度(num=7～8)になる。
+        # メモリ量は
+        # kd-tree が 970,000 * (4 + 4)     =  7,764,000 これにオーバーヘッドが加わり 47 MB 程度になる。
+        # id map  が 970,000 * (4 + 4 + 4) = 11,640,000 これにオーバーヘッドが加わり 14 MB 程度になる。
+        # values  が 970,000 * (4 + 4 + 4) = 11,640,000 でこれはほぼこのまま。
+        #
+        # 同様に、8等星まで CATALOG_DB_NUM = 10 だと、10C2 * 38,000 = 1,710,000
+        # 三角形の数   4,000,000 (num=14～15)
+        # kd-tree   162 MB
+        # ID map     49 MB
+        # values     45 MB
+        keys   = []
+        values = []
+        indices = np.where(catalog[:, 3] <= CATALOG_DB_MAG)[0]
+        starCount = len(indices)
+        progress = 0
+        Debug.log(self.__class__.__name__, f"Generate triangle database from {starCount} stars")
+        for idx in indices:
+            progress += 1
+            if progress % (starCount//10+1) == 0:
+                Debug.log(self.__class__.__name__, f"Progress: {progress}/{starCount} {progress*100//starCount}%  triangles: {len(keys)}")
             
-            # 画角の中央に8等星までの星を置く
-            # 自身より明るい CATALOG_DB_NUM 以上の星が見える画角の大きさを探す
-            # 自身と他の星の総組み合わせで三角比のを作り kd-tree を作成する。
-            #
-            # データサイズは CATALOG_DB_NUM に対し nC2 で増え、
-            # 8等星(CATALOG_DB_MAG = 8.0)までの星が 38,000 程度ある。
-            # CATALOG_DB_NUM = 5 だと三角形の数は 5C2 * 38,000 = 380,000 ですが、「CATALOG_DB_NUM 以上」なので 970,000 程度(num=7～8)になる。
-            # メモリ量は
-            # kd-tree が 970,000 * (4 + 4)     =  7,764,000 これにオーバーヘッドが加わり 47 MB 程度になる。
-            # id map  が 970,000 * (4 + 4 + 4) = 11,640,000 これにオーバーヘッドが加わり 14 MB 程度になる。
-            # values  が 970,000 * (4 + 4 + 4) = 11,640,000 でこれはほぼこのまま。
-            #
-            # 同様に、8等星まで CATALOG_DB_NUM = 10 だと、10C2 * 38,000 = 1,710,000
-            # 三角形の数   4,000,000 (num=14～15)
-            # kd-tree   162 MB
-            # ID map     49 MB
-            # values     45 MB
-            keys   = []
-            values = []
-            indices = np.where(self._catalog[:, 3] <= CATALOG_DB_MAG)[0]
-            starCount = len(indices)
-            progress = 0
-            Debug.log(self.__class__.__name__, f"Generate triangle database from {starCount} stars")
-            for idx in indices:
-                progress += 1
-                if progress % (starCount//10+1) == 0:
-                    Debug.log(self.__class__.__name__, f"Progress: {progress}/{starCount} {progress*100//starCount}%  triangles: {len(keys)}")
-                
-                cid  = self._catalog[idx, ID]
-                ra   = self._catalog[idx, RA]
-                dec  = self._catalog[idx, DEC]
-                mag  = self._catalog[idx, MAG]
-                # CATALOG_DB_NUM 以上になる radius
-                rn = magRad[max(0, min(len(magRad)-1, int(mag)))]
-                radius = list(filter(lambda x: x[1] < CATALOG_DB_NUM, rn))[-1][0]
+            cid  = catalog[idx, ID]
+            ra   = catalog[idx, RA]
+            dec  = catalog[idx, DEC]
+            mag  = catalog[idx, MAG]
+            # CATALOG_DB_NUM 以上になる radius
+            rn = magRad[max(0, min(len(magRad)-1, int(mag)))]
+            radius = list(filter(lambda x: x[1] < CATALOG_DB_NUM, rn))[-1][0]
+            selected = self.queryStars(ra, dec, radius, mag)
+            while (CATALOG_DB_NUM+1) < len(selected) and 0.9 < radius: # (CATALOG_DB_NUM+1) 未満になるまで絞る
+                radius /= 1.41421356237
                 selected = self.queryStars(ra, dec, radius, mag)
-                while (CATALOG_DB_NUM+1) < len(selected) and 0.9 < radius: # (CATALOG_DB_NUM+1) 未満になるまで絞る
-                    radius /= 1.41421356237
-                    selected = self.queryStars(ra, dec, radius, mag)
-                while len(selected) < (CATALOG_DB_NUM+1) and radius < 180.0: # (CATALOG_DB_NUM+1) 以上になるまで広げる
-                    radius *= 1.41421356237
-                    selected = self.queryStars(ra, dec, radius, mag)
-                # 自身と他の星の総組み合わせで三角形をつくる
-                other = selected[selected[:, 0] != cid]
-                x, y = self.gnomonicProjection(other[:, 1], other[:, 2], ra, dec)
-                for j in range(len(other)):
-                    for k in range(j+1, len(other)):
-                        c0 = self._catalog[idx]
-                        c1 = other[j]
-                        c2 = other[k]
-                        x1, y1 = x[j], y[j]
-                        x2, y2 = x[k], y[k]
-                        if 0 < ((x1 - 0) * (y2 - 0)) - ((y1 - 0) * (x2 - 0)):
-                            c1,c2 = c2,c1 # 時計回りに修正
-                        c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
-                        c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
-                        c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
-                        key, cid = self._makeKey([c01d, c12d, c20d], [c0[ID], c1[ID], c2[ID]])
-                        keys.append(key)
-                        values.append(cid)
-            Debug.log(self.__class__.__name__, f"Total triangle count: {len(keys)}")
-            ratioTree = KDTree(nh.array(keys))
-            values    = np.array(values, dtype=np.int32)
+            while len(selected) < (CATALOG_DB_NUM+1) and radius < 180.0: # (CATALOG_DB_NUM+1) 以上になるまで広げる
+                radius *= 1.41421356237
+                selected = self.queryStars(ra, dec, radius, mag)
+            # 自身と他の星の総組み合わせで三角形をつくる
+            other = selected[selected[:, 0] != cid]
+            x, y = self.gnomonicProjection(other[:, 1], other[:, 2], ra, dec)
+            for j in range(len(other)):
+                for k in range(j+1, len(other)):
+                    c0 = catalog[idx]
+                    c1 = other[j]
+                    c2 = other[k]
+                    x1, y1 = x[j], y[j]
+                    x2, y2 = x[k], y[k]
+                    if 0 < ((x1 - 0) * (y2 - 0)) - ((y1 - 0) * (x2 - 0)):
+                        c1,c2 = c2,c1 # 時計回りに修正
+                    c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
+                    c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
+                    c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
+                    key, cid = self._makeKey([c01d, c12d, c20d], [c0[ID], c1[ID], c2[ID]])
+                    keys.append(key)
+                    values.append(cid)
+        Debug.log(self.__class__.__name__, f"Total triangle count: {len(keys)}")
+        ratioTree = KDTree(nh.array(keys))
+        values    = np.array(values, dtype=np.int32)
 
-            # id map 作成
-            # id で values を引く
-            idMap = {}
-            for idx, (cid0, cid1, cid2) in enumerate(values):
-                idMap.setdefault(cid0, [[], [], []])[0].append(idx)
-                idMap.setdefault(cid1, [[], [], []])[1].append(idx)
-                idMap.setdefault(cid2, [[], [], []])[2].append(idx)
-            for cid in idMap: 
-                idMap[cid][0] = np.array(idMap[cid][0], dtype=np.int32)
-                idMap[cid][1] = np.array(idMap[cid][1], dtype=np.int32)
-                idMap[cid][2] = np.array(idMap[cid][2], dtype=np.int32)
-            
-            # 次回高速化のためにキャッシュ保存
-            if(    ratioCachePath
-               and idCachePath   
-               and valueCachePath
-               ):
-                try:
-                    import pickle
-                    with open(ratioCachePath, "wb") as f: pickle.dump(ratioTree, f, protocol=pickle.HIGHEST_PROTOCOL)
-                    Debug.log(self.__class__.__name__, f"Key   file size {os.path.getsize(ratioCachePath)//1024//1024} MiB")
-                    
-                    with open(idCachePath   , "wb") as f: pickle.dump(idMap    , f, protocol=pickle.HIGHEST_PROTOCOL)
-                    Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(idCachePath   )//1024//1024} MiB")
-                    
-                    np.save(valueCachePath, values)
-                    Debug.log(self.__class__.__name__, f"Value file size {os.path.getsize(valueCachePath)//1024//1024} MiB")
-                except Exception:
-                    Debug.log(self.__class__.__name__, "Warning: Save triangle database cache failed.")
-            
-            self._cachedRatioTree = ratioTree
-            self._cachedIdMap     = idMap
-            self._cachedValues    = values
+        # id map 作成
+        # id で values を引く
+        idMap = {}
+        for idx, (cid0, cid1, cid2) in enumerate(values):
+            idMap.setdefault(cid0, [[], [], []])[0].append(idx)
+            idMap.setdefault(cid1, [[], [], []])[1].append(idx)
+            idMap.setdefault(cid2, [[], [], []])[2].append(idx)
+        for cid in idMap: 
+            idMap[cid][0] = np.array(idMap[cid][0], dtype=np.int32)
+            idMap[cid][1] = np.array(idMap[cid][1], dtype=np.int32)
+            idMap[cid][2] = np.array(idMap[cid][2], dtype=np.int32)
+        
+        return (ratioTree, idMap, values)
     
     def getSymbol(self) -> str:
         """カタログシンボルを取得"""

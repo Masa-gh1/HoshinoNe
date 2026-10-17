@@ -68,7 +68,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
     def getText(self):
         """ノードのテキストを取得"""
-        displayText = f"{self.name}\nMatch:{self.catalog.matchLimit} %"
+        displayText = f"{self.name}\nMatch:{self.catalog.matchLimit}% Mag:{self.catalog.magLimit}"
         return displayText
 
     def store(self, nodeData):
