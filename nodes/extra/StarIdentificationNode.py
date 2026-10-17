@@ -66,12 +66,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         self.star.ransac.iterations = 100                   # RANSAC試行回数
         self.star.ransac.seed       = 2725                  # RANSAC乱数シード
         
-        import importlib.util
-        import sys
-        if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("cv2"):
-            messagebox.showerror(f"{self.name} エラー", "ライブラリ OpenCV がインストールされていません。\npip install opencv-python でインストールしてください。")
-            return
-
     def getText(self):
         """ノードのテキストを取得"""
         displayText = f"{self.name}\nMatch:{self.catalog.matchLimit} %"
@@ -156,7 +150,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             matchedStars = self.matchCatalog(flowData, catalog)
 
             # 出力 Table FlowData を作成
-            flowData = self.createFlowData(flowData, matchedStars)
+            flowData = self.createFlowData(flowData, catalog, matchedStars)
             outputFlowDatas.append(flowData)
 
         self.flowDatas = outputFlowDatas
@@ -182,17 +176,16 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         # ファイルから読み込み
         return Catalog()
 
-    def _selectDistributedStars(self, stars, imageShape):
+    def _selectDistributedStars(self, stars, width, height):
         """画像全体に分散した星を選択"""
         if 0 == len(stars):
             return stars, []
 
-        h, w = imageShape
         gridRows, gridCols = self.star.grid.rows, self.star.grid.cols
         
         # 各グリッド領域のサイズ
-        cellH = h // gridRows
-        cellW = w // gridCols
+        cellH = height // gridRows
+        cellW = width  // gridCols
         
         distributedStars   = []
         gridSelectedCounts = []
@@ -201,9 +194,9 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         for row in range(gridRows):
             for col in range(gridCols):
                 yMin = row * cellH
-                yEnd = (row + 1) * cellH if row < gridRows - 1 else h
+                yEnd = (row + 1) * cellH if row < gridRows - 1 else height
                 xMin = col * cellW
-                xEnd = (col + 1) * cellW if col < gridCols - 1 else w
+                xEnd = (col + 1) * cellW if col < gridCols - 1 else width
 
                 # このグリッド内の星を抽出
                 gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
@@ -244,7 +237,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         stars = []
         columns = flowData.headers["columns"]
-        for name in ["x", "y", "brightness", "aspect_raito"]:
+        for name in ["x", "y", "brightness", "aspect_ratio"]:
             idx = columns.index(name)
             stars.append(data[:,idx])
         stars = np.stack(stars, axis=1)
@@ -254,7 +247,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         width, height = np.min(stars[:, 0:2], axis=0) + np.max(stars[:, 0:2], axis=0)
         
         # 画像側のサンプリング
-        stars, _ = self._selectDistributedStars(stars, (height, width))
+        stars, _ = self._selectDistributedStars(stars, width, height)
         starCnt = len(stars)
         if starCnt < 4:
             return []
@@ -308,7 +301,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             [[2, 3, 0], [2, 3, 1]],
             [[2, 3, 1], [2, 3, 0]],
         ], dtype=np.int8)
-        
+
+        i = 0
         for i in range(self.star.ransac.iterations): # RANSAC試行回数
             # 画像側で 4 点をランダムに選択し接する時計回りの三角形 2 つを作成する
             idx = random.choice(starCnt, 4, replace=False)
@@ -328,22 +322,22 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             # 三角形 P を作成
             p = stars[pidx]
             p0, p1, p2 = p
-            dp01 = self._calcAngDistance(p0[U:W+1], p1[U:W+1])
-            dp12 = self._calcAngDistance(p1[U:W+1], p2[U:W+1])
-            dp20 = self._calcAngDistance(p2[U:W+1], p0[U:W+1])
+            dp01 = self.calcAngDistance(p0[U:W+1], p1[U:W+1])
+            dp12 = self.calcAngDistance(p1[U:W+1], p2[U:W+1])
+            dp20 = self.calcAngDistance(p2[U:W+1], p0[U:W+1])
             dp = np.stack([dp01, dp12, dp20])
             if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ(検証に不適切)
             
             # 三角形 Q を作成
             q = stars[qidx]
             q0, q1, q2 = q
-            dq01 = self._calcAngDistance(q0[U:W+1], q1[U:W+1])
-            dq12 = self._calcAngDistance(q1[U:W+1], q2[U:W+1])
-            dq20 = self._calcAngDistance(q2[U:W+1], q0[U:W+1])
+            dq01 = self.calcAngDistance(q0[U:W+1], q1[U:W+1])
+            dq12 = self.calcAngDistance(q1[U:W+1], q2[U:W+1])
+            dq20 = self.calcAngDistance(q2[U:W+1], q0[U:W+1])
             dq = np.stack([dq01, dq12, dq20])
             if np.any(dq < 1e-7) or np.min(dq) / np.max(dq) < 0.2: continue # 極端に短い辺が在るのでスキップ(検証に不適切)
 
-            dp2q2 = self._calcAngDistance(p2[U:W+1], q2[U:W+1])
+            dp2q2 = self.calcAngDistance(p2[U:W+1], q2[U:W+1])
             if np.any(dp2q2 < 1e-7) or dp2q2 / np.max(dq) < 0.2: continue # 二つの三角形が近いのでスキップ(検証に不適切)
 
             # 三角形 P をカタログから検索し C とする
@@ -412,9 +406,9 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     if 0 < (n1[X] - p0[X]) * (n2[Y] - p0[Y]) - (n1[Y] - p0[Y]) * (n2[X] - p0[X]):
                         n1,n2 = n2,n1 # 時計回りに修正
                     
-                    dp01 = self._calcAngDistance(p0[U:W+1], n1[U:W+1])
-                    dp12 = self._calcAngDistance(n1[U:W+1], n2[U:W+1])
-                    dp20 = self._calcAngDistance(n2[U:W+1], p0[U:W+1])
+                    dp01 = self.calcAngDistance(p0[U:W+1], n1[U:W+1])
+                    dp12 = self.calcAngDistance(n1[U:W+1], n2[U:W+1])
+                    dp20 = self.calcAngDistance(n2[U:W+1], p0[U:W+1])
                     dp = np.stack([dp01, dp12, dp20])
                     
                     # 検証に不適切な三角形をスキップする
@@ -424,10 +418,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, n1[ID], n2[ID]))
                     catalogTotal += len(c)
                     c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
-                    if 1 < len(c):
-                        c0 = c[random.choice(len(c)),0] # 複数候補があるのでランダムに選択
-                    elif 1 == len(c):
-                        c0 = c[0,0] # 1つしか候補がない
+                    if 0 < len(c):
+                        c0 = c[random.choice(len(c)),0] # 複数候補からランダムに選択
                     elif j < 1:
                         break # 安易に見つかるはずのタイミングで失敗したので早期終了
                     else:
@@ -461,36 +453,12 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     currentMatched.sort(key=lambda x: x[MAG]) # カタログ等級順にソート
                     # 誤差算出
                     # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                    p = nh.array([star for star in currentMatched])
-                    c = nh.array([star for star in currentMatched])
-                    dp = self._calcAngDistance(  p[:, np.newaxis, U:W+1   ], p[np.newaxis, :, U:W+1   ])
-                    dc = catalog.angularDistance(c[:, np.newaxis, RA:DEC+1], c[np.newaxis, :, RA:DEC+1])
-                    # カタログ側で 2σ 以上離れた角距離を排除
-                    x1, x2 = np.triu_indices(currentInliers, k=1) # 表の右上だけ選択
-                    dch = dc[x1, x2]
-                    dch = np.sort(dch)[:currentInliers] # 簡単な図形で考えた場合、外周は短い辺となるので、短い側を採用して統計を採る
-                    mean = np.mean(dch)
-                    std = np.std(dch)
-                    valid = (0 < dc) & (dc < mean + 2.0 * std) # カタログ側で 2σ より短い接続を残す
-                    # 全点で隣接する2辺の角距離で比を計算する
-                    dpRatio = []
-                    dcRatio = []
-                    for j in range(currentInliers):
-                        xIdx = np.where(valid[j])[0]
-                        if 2 <= len(xIdx):
-                            x1, x2 = np.triu_indices(len(xIdx), k=1) # 表の右上だけ選択
-                            x1idx = xIdx[x1]
-                            x2idx = xIdx[x2]
-                            dpRatio.extend(dp[j, x1idx] / dp[j, x2idx]) # 画像側2辺の比
-                            dcRatio.extend(dc[j, x1idx] / dc[j, x2idx]) # カタログ側2辺の比
-                    if 0 == len(dpRatio) or 0 == len(dcRatio):
-                        currentError = np.inf
-                    else:
-                        dpRatio = nh.array(dpRatio)
-                        dcRatio = nh.array(dcRatio)
-                        # RMS を計算し error 値とする
-                        diff = (dpRatio - dcRatio) / dpRatio # 分母に画像側を持ってきているのはカタログ検索(catalog.searchTriangle)の仕様に合わせる為
-                        currentError = np.sqrt(np.mean(diff**2))
+                    p = nh.array([star[U :W+1  ] for star in currentMatched])
+                    c = nh.array([star[RA:DEC+1] for star in currentMatched])
+                    dp = self.calcAngDistance(  p[:, np.newaxis, :], p[np.newaxis, :, :])
+                    dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
+                    assert isinstance(dc, np.ndarray), "this should be a numpy array"
+                    currentError = self.calcError( dp, dc)
                     
                     # インライア数が同じでも、誤差が小さい方が優先
                     if bestMatchCount < currentInliers or currentError < bestMatchError:
@@ -508,48 +476,49 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         if 3 <= bestMatchCount:
             # RANSAC 結果から向きと画角を推定する(デバッグ用)
-            import cv2
-            from utils import numpy_helpers as nh
-            src_pts = nh.array([[star[X ], star[Y  ]] for star in bestMatchStars])
-            dst_pts = nh.array([[star[RA], star[DEC]] for star in bestMatchStars])
-            M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
-            if M is not None:
-                center = nh.array([width / 2.0, height / 2.0, 1.0])
-                coords = M @ center
-                est_ra, est_dec = coords[0], coords[1]
-            else:
-                est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
-            
-            s = bestMatchStars
-            
-            dc = [
-                Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
-                Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
-                Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
-            ]
-            dcMean = np.mean(dc)
-            
-            dp = [
-                np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
-                np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
-                np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
-            ]
-            apMean = np.mean(dp)
-            
-            est_fov  = np.hypot(width, height) * (dcMean / apMean)
-            
             from utils.Debug import Debug
-            n = int(np.log10(starCnt))+1
-            debug  = f"estimated"
-            debug += f" ra:{ est_ra :-07.3f}"
-            debug += f" dec:{est_dec:+07.3f}"
-            debug += f" fov:{est_fov:-07.3f}"
-            debug += f" ransac:"
-            debug += f" inlier:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
-            debug += f" catalog:{catalogTotal//i}"
-            debug += f" error:{bestMatchError:0.3f}"
-            debug += f" iter:{i}"
-            Debug.log(type(self).__name__, f"{debug}")
+            if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
+                import cv2
+                from utils import numpy_helpers as nh
+                src_pts = nh.array([[star[X ], star[Y  ]] for star in bestMatchStars])
+                dst_pts = nh.array([[star[RA], star[DEC]] for star in bestMatchStars])
+                M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
+                if M is not None:
+                    center = nh.array([width / 2.0, height / 2.0, 1.0])
+                    coords = M @ center
+                    est_ra, est_dec = coords[0], coords[1]
+                else:
+                    est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
+                
+                s = bestMatchStars
+                
+                dc = [
+                    Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
+                    Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
+                    Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
+                ]
+                dcMean = np.mean(dc)
+                
+                dp = [
+                    np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
+                    np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
+                    np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
+                ]
+                apMean = np.mean(dp)
+                
+                est_fov  = np.hypot(width, height) * (dcMean / apMean)
+                
+                n = int(np.log10(starCnt))+1
+                debug  = f"estimated"
+                debug += f" ra:{ est_ra :-07.3f}"
+                debug += f" dec:{est_dec:+07.3f}"
+                debug += f" fov:{est_fov:-07.3f}"
+                debug += f" ransac:"
+                debug += f" inlier:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
+                debug += f" catalog:{catalogTotal//i}"
+                debug += f" error:{bestMatchError:0.3f}"
+                debug += f" iter:{i}"
+                Debug.log(type(self).__name__, f"{debug}")
             return bestMatchStars
         else:
             from utils.Debug import Debug
@@ -562,7 +531,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             Debug.log(type(self).__name__, f"{debug}")
             return []
     
-    def _calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
+    def calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
         Args:
             vector0: 1つ目の単位 vector [[x,y,z],...]
@@ -571,136 +540,56 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             2点間の角距離 (度)
         """
         import numpy as np
-        from utils.catalog_helper import Catalog
-        cosTheta = np.vecdot(vector0, vector1, axis=-1)     # ベクトルの内積 x1*x2 + y1*y2 + z1*z2
+        cosTheta = np.vecdot(vector0, vector1)  # ベクトルの内積 x1*x2 + y1*y2 + z1*z2
         cosTheta = np.clip(cosTheta, -1.0, 1.0) # 浮動小数点誤差により -1.0 未満や 1.0 を超えることがあるのでクリップ
         return np.degrees(np.arccos(cosTheta))
-
-    def __calcAngDistance(self, x1:np.ndarray|float, y1:np.ndarray|float, x2:np.ndarray|float, y2:np.ndarray|float, w:int, h:int, fovDeg:float) -> np.ndarray|float:
-        """画像上の2点から角距離を求める（中心投影レンズを前提）
-        
-        Args:
-            x1: 点1のx
-            y1: 点1のy
-            x2: 点2のx
-            y2: 点2のy
-            w: 画像幅
-            h: 画像高さ
-            fovDeg: 対角画角 (度)
-        Returns:
-            2点間の角距離 (度)
-        """
-        import numpy as np
-        cx, cy = w / 2.0, h / 2.0                           # 画像の中心座標
-        diagonalPx = np.sqrt(w**2 + h**2)                   # 画像の対角線サイズ [px]
-        fovRd = np.radians(fovDeg)
-        fPx = diagonalPx / (2.0 * np.tan(fovRd / 2.0))      # 焦点距離 f [px] レンズから投影面までの距離
-        v1_x, v1_y = x1 - cx, y1 - cy                       # 中央からのベクトル1
-        v2_x, v2_y = x2 - cx, y2 - cy                       # 中央からのベクトル2
-        dot_product = v1_x * v2_x + v1_y * v2_y + fPx * fPx # ベクトルの内積 x1*x2 + y1*y2 + z1*z2
-        norm_v1 = np.sqrt(v1_x**2 + v1_y**2 + fPx**2)       # レンズから投影点までの距離
-        norm_v2 = np.sqrt(v2_x**2 + v2_y**2 + fPx**2)       # レンズから投影点までの距離
-        cosTheta = dot_product / (norm_v1 * norm_v2)        # レンズから見た2点のコサイン値
-        cosTheta = np.clip(cosTheta, -1.0, 1.0)             # 浮動小数点誤差による 1.0 超え/ -1.0 未満をクリップ
-        rad = np.arccos(cosTheta)                           # レンズから見た2点の角度
-        return np.degrees(rad)
-
-    def _calcStarRatio(self, star:np.ndarray|list, w:int, h:int, fovDeg:float) -> np.ndarray:
-        """星の配置からレートを計算する
-        star に列方向に組になる星を入れ、行方向は任意で無くてもよい。
-        例: 3点の組み合わせが3組ある場合
-           [[p00, p01, p02],     [[ratio001, ratio012, ratio020]
-            [p10, p11, p12],  ->  [ratio101, ratio112, ratio120]
-            [p20, p21, p22]]      [ratio201, ratio212, ratio220]]
-        例: 3点の組み合わせが1組しかない場合、以下でもよい
-            [p00, p01, p02]   ->  [ratio001, ratio012, ratio020]
-        
-        Args:
-            star: 星の座標と明るさ [[[x, y, brightness],...],...]
-            w: 画像幅
-            h: 画像高さ
-            fovDeg: 対角画角 (度)
-        Returns:
-            ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
-        Raises:
-            ValueError: 星が3点未満の場合
-        """
-        import numpy as np
-        # n点間の距離(位置差)を計算 (n-1番目は0との差)
-        # n点間の輝度差を計算 (n-1番目は0との差)
-        return self._calcRatio(star,
-                               lambda s0, s1: (self._calcAngDistance(s0[:, :, 0], s0[:, :, 1], s1[:, :, 0], s1[:, :, 1], w, h, fovDeg)),
-                               lambda s0, s1: (s0[:, :, 2] - s1[:, :, 2])
-                              )
     
-    def _calcCatalogRatio(self, star:np.ndarray|list) -> np.ndarray:
-        """星の配置からレートを計算する
-        star に列方向に組になる星を入れ、行方向は任意で無くてもよい。
-        例: 3点の組み合わせが3組ある場合
-           [[p00, p01, p02],     [[ratio001, ratio012, ratio020]
-            [p10, p11, p12],  ->  [ratio101, ratio112, ratio120]
-            [p20, p21, p22]]      [ratio201, ratio212, ratio220]]
-        例: 3点の組み合わせが1組しかない場合、以下でもよい
-            [p00, p01, p02]   ->  [ratio001, ratio012, ratio020]
+    def calcError(self, d0:np.ndarray, d1:np.ndarray) -> float:
+        """星の配置から誤差を計算する
         
         Args:
-            star: 星の座標と明るさ [[[id, ra, deg, mag],...],...]
+            d0: 星が作る形の辺長
+            d1: 星が作る形の辺長
         Returns:
-            ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
-        Raises:
-            ValueError: 星が3点未満の場合
-        """
-        from utils.catalog_helper import Catalog
-        # n点間の角距離(位置差)を計算 (n-1番目は0との差)
-        # n点間の輝度差を計算 (n-1番目は0との差) ポグソンの式:m1 - m2 = -2.5 log10 (l1 - l2) 実装は m2 を0等級を基準(1)とした
-        return self._calcRatio(star,
-                               lambda s0, s1: Catalog.angularDistance(s0[:, :, RA:DEC+1], s1[:, :, RA:DEC+1]),
-                               lambda s0, s1: (10.0**(s0[:, :, 3] / -2.5) - (10.0**(s1[:, :, 3] / -2.5)))
-                              )
-    
-    def _calcRatio(self, star:np.ndarray|list, func0, func1) -> np.ndarray:
-        """星の配置からレートを計算する
-        計算式をテンプレートパターンで外部から得る
-        Args:
-            star: 星の情報
-            func0: 距離計算関数
-            func1: 等級計算関数
-        Returns:
-            ratio配列 [[ratio01, ratio12, ratio2x, ratioxy,...],...]
-        Raises:
-            ValueError: 星が3点未満の場合
+            誤差
         """
         import numpy as np
+        from utils import numpy_helpers as nh
         
-        star = np.asanyarray(star)
-        if 2 == star.ndim:
-            _star = star[np.newaxis, ...]
+        assert len(d0) == len(d1), "Arrays must be of the same length"
+        
+        # カタログ側で 2σ 以上離れた角距離を排除
+        x1, x2 = np.triu_indices(len(d1), k=1) # 表の右上だけ選択
+        d1h = d1[x1, x2]
+        d1h = np.sort(d1h)[:len(d1)] # 簡単な図形で考えた場合、外周は短い辺となるので、短い側を採用して統計を採る
+        mean = np.mean(d1h)
+        std = np.std(d1h)
+        valid = (0 < d1) & (d1 < mean + 2.0 * std) # カタログ側で 2σ より短い接続を残す
+        # 全点で隣接する2辺の角距離で比を計算する
+        d0Ratio = []
+        d1Ratio = []
+        
+        for j in range(len(d1)):
+            xIdx = np.where(valid[j])[0]
+            if 2 <= len(xIdx):
+                x1, x2 = np.triu_indices(len(xIdx), k=1) # 表の右上だけ選択
+                x1idx = xIdx[x1]
+                x2idx = xIdx[x2]
+                d0Ratio.extend(d0[j, x1idx] / d0[j, x2idx]) # 画像側2辺の比
+                d1Ratio.extend(d1[j, x1idx] / d1[j, x2idx]) # カタログ側2辺の比
+        
+        if 0 == len(d0Ratio) or 0 == len(d1Ratio):
+            error = np.inf
         else:
-            _star = star
+            d0Ratio = nh.array(d0Ratio)
+            d1Ratio = nh.array(d1Ratio)
+            # RMS を計算し error 値とする
+            diff = (d0Ratio - d1Ratio) / d0Ratio # 分母に画像側を持ってきているのはカタログ検索(catalog.searchTriangle)の仕様に合わせる為
+            error = np.sqrt(np.mean(diff**2))
         
-        if _star.shape[1] < 3:
-            raise ValueError("入力には少なくとも3点の星が必要です。")
-        
-        # n点間の差を計算 (n-1番目は0との差)
-        # (原点の影響を消す)
-        _starN = np.roll(_star, shift=-1, axis=1)
-        diff0 = func0(_star, _starN)
-        diff1 = func1(_star, _starN)
-        
-        # n点間の比を計算 (n-1番目は0との比)
-        # (単位の影響を消す)
-        ratio0 = diff0 / np.roll(diff0, shift=-1, axis=1)
-        ratio1 = diff1 / np.roll(diff1, shift=-1, axis=1)
-        
-        # 算出した比を結合
-        ratio = ratio0 # np.concatenate([ratio0, ratio1], axis=1)
-        
-        if 2 == star.ndim:
-            return ratio[0]
-        else:
-            return ratio
+        return error
     
-    def createFlowData(self, inputData:FlowData, matchedStars:list) -> FlowData:
+    def createFlowData(self, inputData:FlowData, catalog:Catalog, matchedStars:list) -> FlowData:
         """星リストから Table 型 FlowData を作成"""
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
@@ -709,9 +598,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         # 等級でソート
         matchedStars.sort(key=lambda x: x[MAG])
-        
+
+        symbol = catalog.getSymbol()
         columns = ['ra', 'dec', 'mag', 'x', 'y', 'brightness']
-        lines   = [f"HIP{int(star[ID])}" for star in matchedStars]
+        lines   = [f"{symbol}{int(star[ID])}" for star in matchedStars]
 
         tableRows = []
         for star in matchedStars:
@@ -751,47 +641,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             flowData.setBlock(DataBlock(blockData, 0, 0, y))
 
         return flowData
-    
-    def _flowDataToImage(self, flowData:FlowData, planeIndex:int|None = None, normalizeForDetection:bool = False) -> np.ndarray:
-        """FlowDataから画像配列を構築"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-
-        width, height = flowData.getDimensions()
-        
-        if planeIndex is None:
-            # 全プレーンを使用（従来の動作）
-            image   = nh.zeros((height, width))
-            invalid = np.ones((height, width), dtype=bool)
-            for block in flowData.iterateBlocks():
-                if block:
-                    x, y = block.x, block.y
-                    h, w = block.data.shape
-                    image[y:y+h, x:x+w] += block.data
-                    invalid[y:y+h, x:x+w] &= np.isnan(block.data)
-            image[invalid] = nh.nan
-        else:
-            # 特定プレーンのみを使用
-            image = nh.nans((height, width))
-            for block in flowData.iterateBlocks(planeIndex):
-                if block:
-                    x, y = block.x, block.y
-                    h, w = block.data.shape
-                    image[y:y+h, x:x+w] = block.data
-        
-        # 星検出用の正規化処理（統計的手法）
-        if normalizeForDetection:
-            mean_val = np.nanmean(image)
-            std_val  = np.nanstd(image)
-            if std_val > 0:
-                image = (image - mean_val) / std_val
-                image = np.clip((image + 3) / 6 * 255, 0, 255)
-                np.nan_to_num(image, nan=127, copy=False)
-                image = image.astype(np.uint8)
-            else:
-                image = np.zeros((height, width), dtype=np.uint8)
-        
-        return image
     
     def createSettingWindow(self):
         """設定ダイアログを作成"""

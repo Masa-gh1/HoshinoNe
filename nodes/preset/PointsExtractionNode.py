@@ -276,7 +276,7 @@ class PointsExtractionNode(FlowNode, ConfigurableNode):
         # 原点距離でソート
         points.sort(key=lambda p: p[0]**2 + p[1]**2)
         
-        columns = ['x', 'y', 'brightness', 'center_brightness', 'area', 'aspect_raito']
+        columns = ['x', 'y', 'brightness', 'center_brightness', 'area', 'aspect_ratio']
         lines   = [f"{y}" for y in range(len(points))]
 
         tableRows = []

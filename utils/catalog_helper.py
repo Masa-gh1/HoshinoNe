@@ -27,23 +27,8 @@ class Catalog:
     _cachedIdMap     = None
     _cachedValues    = None
 
-    def __init__(self, catalog:np.ndarray|None=None):
-        self._symbol    = None
-        self._path      = None
-        self._catalog   = None
-        self._ratioTree = None
-        self._idMap     = None
-        self._values    = None
-
-        if not catalog is None:
-            self._symbol    = ""
-            self._path      = None
-            self._catalog   = catalog
-            self.generateTriangleDatabase()
-            self._ratioTree = self._cachedRatioTree
-            self._idMap     = self._cachedIdMap
-            self._values    = self._cachedValues
-        else:
+    def __init__(self, symbol:str|None=None, catalog:np.ndarray|None=None):
+        if symbol is None and catalog is None:
             from config import CATALOG_PATH
             symbol, filePath = CATALOG_PATH
             self.loadCatalog(symbol, filePath)
@@ -54,6 +39,24 @@ class Catalog:
             self._ratioTree = self._cachedRatioTree
             self._idMap     = self._cachedIdMap
             self._values    = self._cachedValues
+            assert not self._symbol    is None
+            assert not self._path      is None
+            assert not self._catalog   is None
+            assert not self._ratioTree is None
+            assert not self._idMap     is None
+            assert not self._values    is None
+        else:
+            assert not symbol is None and not catalog is None, "symbol and catalog must be specified together."
+            self._symbol    = symbol
+            self._path      = None
+            self._catalog   = catalog
+            self.generateTriangleDatabase()
+            self._ratioTree = self._cachedRatioTree
+            self._idMap     = self._cachedIdMap
+            self._values    = self._cachedValues
+            assert not self._ratioTree is None
+            assert not self._idMap     is None
+            assert not self._values    is None
         
         # セルフテスト
         for _ in range(100):
@@ -383,13 +386,18 @@ class Catalog:
             self._cachedIdMap     = idMap
             self._cachedValues    = values
     
+    def getSymbol(self) -> str:
+        """カタログシンボルを取得"""
+        assert not self._symbol is None, "Catalog symbol is not set."
+        return self._symbol
+    
     def count(self) -> int:
         if self._catalog is None:
             return 0
         else:
             return len(self._catalog)
     
-    def searchTriangle(self, side01:float, side12:float, side20:float, relativeError:float,
+    def searchTriangle(self, side01:np.ndarray|float, side12:np.ndarray|float, side20:np.ndarray|float, relativeError:float,
                              magLimit:float|None=None, fixVertexId:tuple|list|None=None,
                              outputLimit:int|None=None) -> np.ndarray:
         """
@@ -543,7 +551,7 @@ class Catalog:
             return filtered[distMask]
     
     @staticmethod
-    def angularDistance(p0:np.ndarray|list, p1:np.ndarray|list):
+    def angularDistance(p0:np.ndarray|list, p1:np.ndarray|list) -> np.ndarray|float:
         """
         天球上の2点間の角距離 ( deg ) を計算する
         ハヴァースィン公式
