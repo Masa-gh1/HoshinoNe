@@ -628,7 +628,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             'mode'    : '2D',
             'columns' : columns,
             'lines'   : lines,
-            'planes'  : ['star_extraction'],
+            'planes'  : ['star_identification'],
         })
         
         flowData = FlowData(headers)
