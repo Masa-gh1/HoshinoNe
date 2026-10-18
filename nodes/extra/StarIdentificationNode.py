@@ -62,10 +62,11 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         self.star.grid.rows         = 1                     # グリッド行数
         self.star.grid.cols         = 1                     # グリッド列数
         self.star.grid.starsPerGrid = 8                     # グリッド当たりの選択星数
+        self.star.minMatchedStars   = 5                     # 少なくとも同定したい星の数
         self.star.ransac            = SimpleNamespace()
         self.star.ransac.iterations = 100                   # RANSAC試行回数
         self.star.ransac.seed       = 2725                  # RANSAC乱数シード
-        
+    
     def getText(self):
         """ノードのテキストを取得"""
         displayText = f"{self.name}\nMatch:{self.catalog.matchLimit}% Mag:{self.catalog.magLimit}"
@@ -80,6 +81,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         nodeData["gridRows"]            = self.star.grid.rows
         nodeData["gridCols"]            = self.star.grid.cols
         nodeData["starsPerGrid"]        = self.star.grid.starsPerGrid
+        nodeData["minMatchedStars"]     = self.star.minMatchedStars
         nodeData["ransacIterations"]    = self.star.ransac.iterations
         nodeData["ransacSeed"]          = self.star.ransac.seed
 
@@ -99,6 +101,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             self.star.grid.cols = nodeData["gridCols"]
         if "starsPerGrid" in nodeData:
             self.star.grid.starsPerGrid = nodeData["starsPerGrid"]
+        if "minMatchedStars" in nodeData:
+            self.star.minMatchedStars = nodeData["minMatchedStars"]
         if "ransacIterations" in nodeData:
             self.star.ransac.iterations = nodeData["ransacIterations"]
         if "ransacSeed" in nodeData:
@@ -467,6 +471,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         bestMatchStars = currentMatched
                 
                 if(   5 <= bestMatchCount
+                  and self.star.minMatchedStars <= bestMatchCount
                   and bestMatchError < self.catalog.matchLimit/100.0
                   and np.log(1-0.9999) / np.log(1-(bestMatchCount/starCnt)**4) < i # 初期一致数(最小インライア数):4
                   ):
@@ -656,6 +661,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                  f"{self.star.grid.rows}_"
                  f"{self.star.grid.cols}_"
                  f"{self.star.grid.starsPerGrid}_"
+                 f"{self.star.minMatchedStars}"
                  f"{self.star.ransac.iterations}_"
                  f"{self.star.ransac.seed}_"
                 )
@@ -668,7 +674,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.name} 設定")
-        self.geometry("450x350")
+        self.geometry("450x400")
         
         self._createWidgets()
     
@@ -732,10 +738,19 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         starsFrame = tk.Frame(mainFrame)
         starsFrame.pack(fill=tk.X, pady=2)
         tk.Label(starsFrame, text="  グリッド当たり星数:").pack(side=tk.LEFT)
-        self.starsPerGridEntry = tk.Entry(starsFrame, width=10)
+        self.starsPerGridEntry = tk.Entry(starsFrame, width=5)
         self.starsPerGridEntry.insert(0, str(self.node.star.grid.starsPerGrid))
         self.starsPerGridEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(starsFrame, text="個 (各グリッドから選ぶ星数)").pack(side=tk.LEFT)
+        
+        # 少なくとも同定したい星の数
+        minMatchedStarsFrame = tk.Frame(mainFrame)
+        minMatchedStarsFrame.pack(fill=tk.X, pady=2)
+        tk.Label(minMatchedStarsFrame, text="  少なくとも同定したい星の数:").pack(side=tk.LEFT)
+        self.minMatchedStarsEntry = tk.Entry(minMatchedStarsFrame, width=5)
+        self.minMatchedStarsEntry.insert(0, str(self.node.star.minMatchedStars))
+        self.minMatchedStarsEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(minMatchedStarsFrame, text="個 (検索の終了を許可する数)").pack(side=tk.LEFT)
         
         # RANSAC試行回数
         ransacFrame = tk.Frame(mainFrame)
@@ -754,7 +769,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.ransacSeedEntry.insert(0, str(self.node.star.ransac.seed))
         self.ransacSeedEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(seedFrame, text="(1以上、結果が悪い場合は変更)").pack(side=tk.LEFT)
-        
+
         # ボタンフレーム
         btnFrame = tk.Frame(self)
         btnFrame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
@@ -774,6 +789,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
             self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
             self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
+            self.node.star.minMatchedStars     = max(4, min(100, int(self.minMatchedStarsEntry.get())))
             self.node.star.ransac.iterations   = max(10, min(10000, int(self.ransacEntry.get())))
             self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
             
