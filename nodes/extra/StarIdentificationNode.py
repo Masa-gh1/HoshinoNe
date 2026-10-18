@@ -46,17 +46,17 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
         
-        # 設定パラメータ
-        # 画像パラメータ
+        # 設定パラメーター
+        # 画像パラメーター
         self.fovDeg                 = 2.0                   # 画角 [deg]
         self.useHeaderFovDeg        = True                  # 画像ヘッダから推定する
         
-        # カタログ照合パラメータ
+        # カタログ照合パラメーター
         self.catalog                = SimpleNamespace()
         self.catalog.matchLimit     = 1.0                   # カタログ照合許容比 [%]
         self.catalog.magLimit       = 8.0                   # カタログ等級上限 [mag]
         
-        # 星像選択パラメータ
+        # 星像選択パラメーター
         self.star                   = SimpleNamespace()
         self.star.grid              = SimpleNamespace()
         self.star.grid.rows         = 1                     # グリッド行数
@@ -677,8 +677,8 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         mainFrame = tk.Frame(self)
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # 画像パラメータ
-        tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
+        # 画像パラメーター
+        tk.Label(mainFrame, text="■ 画像パラメーター", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
         
         # 画角
         fovDegFrame = tk.Frame(mainFrame)
@@ -691,8 +691,8 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.useHeaderFovDegVar = tk.BooleanVar(value=self.node.useHeaderFovDeg)
         tk.Checkbutton(fovDegFrame, text="ヘッダー情報から画角を推定", variable=self.useHeaderFovDegVar).pack(side=tk.LEFT)
         
-        # カタログ照合パラメータ
-        tk.Label(mainFrame, text="■ カタログ照合パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
+        # カタログ照合パラメーター
+        tk.Label(mainFrame, text="■ カタログ照合パラメーター", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10, 2))
         
         # 許容半径
         radFrame = tk.Frame(mainFrame)
@@ -712,8 +712,8 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.magLimitEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(magFrame, text="mag (カタログの暗い星を除外)").pack(side=tk.LEFT)
         
-        # 星像選択パラメータ
-        tk.Label(mainFrame, text="■ 星像選択パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(8, 2))
+        # 星像選択パラメーター
+        tk.Label(mainFrame, text="■ 星像選択パラメーター", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(8, 2))
         
         # グリッド設定
         gridFrame = tk.Frame(mainFrame)
@@ -740,7 +740,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         # RANSAC試行回数
         ransacFrame = tk.Frame(mainFrame)
         ransacFrame.pack(fill=tk.X, pady=2)
-        tk.Label(ransacFrame, text="    RANSAC試行回数:").pack(side=tk.LEFT)
+        tk.Label(ransacFrame, text="  RANSAC試行回数:").pack(side=tk.LEFT)
         self.ransacEntry = tk.Entry(ransacFrame, width=5)
         self.ransacEntry.insert(0, str(self.node.star.ransac.iterations))
         self.ransacEntry.pack(side=tk.LEFT, padx=5)
@@ -749,7 +749,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         # RANSAC乱数シード
         seedFrame = tk.Frame(mainFrame)
         seedFrame.pack(fill=tk.X, pady=2)
-        tk.Label(seedFrame, text="    RANSAC乱数シード:").pack(side=tk.LEFT)
+        tk.Label(seedFrame, text="  RANSAC乱数シード:").pack(side=tk.LEFT)
         self.ransacSeedEntry = tk.Entry(seedFrame, width=5)
         self.ransacSeedEntry.insert(0, str(self.node.star.ransac.seed))
         self.ransacSeedEntry.pack(side=tk.LEFT, padx=5)
