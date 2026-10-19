@@ -118,6 +118,7 @@
       "text": "点像抽出",
       "x": 284.0,
       "y": 84.625,
+      "category": "auxiliary",
       "targetPlane": 1,
       "threshold": 95,
       "minDiameter": 2,
