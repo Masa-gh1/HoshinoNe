@@ -155,10 +155,10 @@ def _getExifread(filepath):
 def normalize(exif):
     """EXIF から画像処理に必要な情報を取り出す"""
     result = {}
-
+    
     if not exif:
         return result
-
+    
     for name, tag in HEADERS:
         if name in result and result[name]:
             pass

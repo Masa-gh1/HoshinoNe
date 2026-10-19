@@ -7,11 +7,17 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 import hashlib
 
 from base.FlowNode_CONST import *
-from base import LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class TransformNode(LazyNNOperationNode):
     # ノードタイプ
@@ -196,11 +202,15 @@ class TransformNode(LazyNNOperationNode):
         
         return( dx, dy, rotation, scale, left, top, width, height)
 
-class TransformLazyFlowData(LazyFlowData):
-    __slots__ = ()
+class TransformLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ('sourceHeaders',)
     
     def __init__(self, headers, flowData, dx, dy, rotation, scale, new_width, new_height):
+        from base import LazyHeaders
+        
         super().__init__(headers, flowData, dx, dy, rotation, scale, new_width, new_height)
+        self.sourceHeaders = headers
+        self.headers       = LazyHeaders(self, headers, flowData, dx, dy, rotation, scale, new_width, new_height)
         self.setDimensions(new_width, new_height)
     
     def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, scale, new_width, new_height):
@@ -363,6 +373,23 @@ class TransformLazyFlowData(LazyFlowData):
             result = transformed_data[0:output_height, 0:output_width]
             
             return DataBlock(result, planeIndex, x, y)
+    
+    def getLazyHeaderkeys(self) -> Iterable[str]:
+        return ['transformation']
+
+    def headerOperation(self, key:str, sourceflowData, dx, dy, rotation, scale, new_width, new_height, *args:Any, **kwargs:Any) -> dict[str,Any]:
+        import numpy as np
+        from utils import numpy_helpers as nh
+        # 画像の中心を原点に変換してアフィン行列を作成
+        orgW, orgH = sourceflowData.getDimensions()
+        M = TransformLazyFlowData.createAffine( orgW, orgH, 0, 0, dx, dy, rotation, scale)
+        M = np.concatenate([M, [[0, 0, 1]]], axis=0) # 2x3 -> 3x3
+        transformation = self.sourceHeaders['transformation']
+        transformation = M @ nh.array(transformation)
+        transformation = transformation.tolist()
+        return {
+            'transformation': transformation,
+        }
     
     @staticmethod
     def createAffine(worldW, worldH, objectX, objectY, dx, dy, rotation, scale):
