@@ -107,22 +107,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             self.star.ransac.iterations = nodeData["ransacIterations"]
         if "ransacSeed" in nodeData:
             self.star.ransac.seed = nodeData["ransacSeed"]
-
-    def preprocessStreams(self, inputStreams):
-        """入力データの前処理：primary/auxiliaryで分類"""
-        primaryStreams = []
-        auxiliaryStreams = []
-        
-        for stream in inputStreams:
-            category = stream[0].headers.get('category', _OUT_CAT_PRI)
-            if _OUT_CAT_AUX == category:
-                auxiliaryStreams.append(stream)
-            else:
-                primaryStreams.append(stream)
-
-        self._catalogStream = auxiliaryStreams[0] if 0 < len(auxiliaryStreams) else None
-        return primaryStreams
-
+    
     def process(self, context=None):
         """星抽出処理のメイン実行"""
         self.reportProgress(context, "開始")
@@ -160,6 +145,21 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         self.flowDatas = outputFlowDatas
         self.reportProgress(context, "完了")
 
+    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
+        """入力データの前処理：primary/auxiliaryで分類"""
+        primaryStreams = []
+        auxiliaryStreams = []
+        
+        for stream in inputStreams:
+            category = stream[0].headers.get('category', _OUT_CAT_PRI)
+            if _OUT_CAT_AUX == category:
+                auxiliaryStreams.append(stream)
+            else:
+                primaryStreams.append(stream)
+
+        self._catalogStream = auxiliaryStreams[0] if 0 < len(auxiliaryStreams) else None
+        return primaryStreams
+    
     def _getCatalog(self) -> Catalog:
         """カタログデータを取得（入力ストリームまたはファイルから）"""
         from utils import numpy_helpers as nh
@@ -167,21 +167,47 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         if self._catalogStream and self._catalogStream[0]:
             flowData = self._catalogStream[0]
             width, height = flowData.getDimensions()
-
+            
+            planes  = flowData.headers["planes"]
+            columns = flowData.headers["columns"]
+            lines   = flowData.headers["lines"]
+            raIdx   = columns.index("ra")
+            decIdx  = columns.index("dec")
+            magIdx  = columns.index("mag")
+            
             # Table FlowData から配列化
-            table = nh.nans((height, width))
+            table = nh.nans((len(planes), height, width))
             for block in flowData.iterateBlocks():
                 if block:
+                    planeIndex = block.planeIndex
                     x, y = block.x, block.y
                     h, w = block.data.shape
-                    table[y:y+h, x:x+w] = block.data
-            return Catalog(table)
+                    table[planeIndex, y:y+h, x:x+w] = block.data
+            
+            symbol = planes[0]
+            table = table.reshape((planes * height, width)) # plaen を縦に並べ替え
+            table = table[:, [raIdx, decIdx, magIdx]] # RA, DEC, MAG の順に並べ替え
+            
+            return Catalog( symbol, table)
             
         # ファイルから読み込み
         return Catalog()
 
-    def _selectDistributedStars(self, stars, width, height):
-        """画像全体に分散した星を選択"""
+    def _selectDistributedStars(self, stars:np.ndarray, width:int, height:int) -> tuple[np.ndarray, list[int]]:
+        """
+        画像全体に分散した星を選択
+        
+        Args:
+            stars: 星の座標と明度の配列 (x, y, brightness, area)
+            width: 画像の幅
+            height: 画像の高さ
+        
+        Returns:
+            distributedStars: 分散した星の配列 (x, y, brightness, area)
+            gridSelectedCounts: 各グリッドから選択された星の数のリスト
+        """
+        import numpy as np
+        
         if 0 == len(stars):
             return stars, []
 
@@ -201,7 +227,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 yEnd = (row + 1) * cellH if row < gridRows - 1 else height
                 xMin = col * cellW
                 xEnd = (col + 1) * cellW if col < gridCols - 1 else width
-
+                
                 # このグリッド内の星を抽出
                 gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
                 
@@ -210,6 +236,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 selected = gridStars[:self.star.grid.starsPerGrid]
                 distributedStars.extend(selected)
                 gridSelectedCounts.append(len(selected))
+        
+        distributedStars = np.array(distributedStars)
         
         return distributedStars, gridSelectedCounts
     
@@ -255,7 +283,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         starCnt = len(stars)
         if starCnt < 4:
             return []
-        stars = nh.array(stars)
         
         # 星の座標をレンズ中心からの単位 vector に変換
         if self.useHeaderFovDeg:
