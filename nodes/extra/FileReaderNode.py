@@ -55,9 +55,9 @@ class FileReaderNode(BaseReaderNode):
             planeNames = []
             planeData = []
             dataType = 'table'
-            headers = []
             
             fileData = []
+            colHeaders = []
             rowHeaders = []
 
             for row in reader:
@@ -83,9 +83,9 @@ class FileReaderNode(BaseReaderNode):
                         # 数値の場合はデータ行として処理
                     except ValueError:
                         # 数値でない場合はヘッダー行
-                        if not headers:  # 最初のヘッダーのみ保存
+                        if not colHeaders:  # 最初のヘッダーのみ保存
                             dataType = row[0] if row[0] else 'table'
-                            headers = row[1:]
+                            colHeaders = row[1:]
                         continue
                 
                 # データ行を処理
@@ -105,19 +105,19 @@ class FileReaderNode(BaseReaderNode):
                 planeData.append(fileData)
             
             # FlowDataを作成してブロック単位で保存
-            flowHeaders = {
+            headers = {
                 'category'   : self.getOutputCategory(),
                 'type'       : dataType,
                 'mode'       : '2D',
-                'columns'    : headers,
+                'columns'    : colHeaders,
                 'lines'      : rowHeaders,
                 'source_file': self.getRelativePath(filePath),
             }
             if planeNames:
-                flowHeaders['planes'] = planeNames
+                headers['planes'] = planeNames
             else:
-                flowHeaders['planes'] = [dataType]
-            flowData = FlowData(flowHeaders)
+                headers['planes'] = [dataType]
+            flowData = FlowData(headers)
             
             if planeData:
                 # 複数プレーンの場合
