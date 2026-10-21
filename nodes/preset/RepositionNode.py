@@ -321,7 +321,7 @@ class RepositionLazyFlowData(LazyFlowData):
                 # 画像範囲外チェック
                 if bx >= srcW or by >= srcH:
                     continue
-                    
+                
                 block = flowData.getBlock(planeIndex, bx, by)
                 if block and block.data is not None:
                     # バッファ内の位置
