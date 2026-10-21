@@ -134,10 +134,66 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         for i, flowData in enumerate(inputStream):
             self.reportProgress(context, f"画像 {i + 1}/{totalImages} 処理中", i, totalImages)
+
+            # 星配列作成
+            stars = self.getSatrs(flowData)
             
             # カタログ照合
-            matchedStars = self.matchCatalog(flowData, catalog)
+            matchedStars, ransac = self.matchCatalog(stars, catalog)
 
+            # デバッグ出力
+            from utils.Debug import Debug
+            if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
+                import numpy as np
+                from utils.catalog_helper import Catalog
+                
+                # RANSAC 結果から向きと画角を推定する(デバッグ用)
+                import cv2
+                from utils import numpy_helpers as nh
+                from utils import exif_helper as eh
+                
+                width, height = eh.getImageSize(flowData.headers)
+                
+                src_pts = nh.array([[star[X ], star[Y  ]] for star in matchedStars])
+                dst_pts = nh.array([[star[RA], star[DEC]] for star in matchedStars])
+                M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
+                if M is not None:
+                    center = nh.array([width / 2.0, height / 2.0, 1.0])
+                    coords = M @ center
+                    est_ra, est_dec = coords[0], coords[1]
+                else:
+                    est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
+                
+                s = matchedStars
+                
+                dc = [
+                    Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
+                    Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
+                    Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
+                ]
+                dcMean = np.mean(dc)
+                
+                dp = [
+                    np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
+                    np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
+                    np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
+                ]
+                apMean = np.mean(dp)
+                
+                est_fov  = np.hypot(width, height) * (dcMean / apMean)
+                
+                n = int(np.log10(ransac["stars"]))+1
+                debug  = f"estimated"
+                debug += f" ra:{ est_ra :-07.3f}"
+                debug += f" dec:{est_dec:+07.3f}"
+                debug += f" fov:{est_fov:-07.3f}"
+                debug += f" ransac:"
+                debug += f" inlier:{len(matchedStars):0{n}d}/{ransac["stars"]:0{n}d}"
+                debug += f" catalog:{ransac["read_catalog"]//ransac["iterations"]}"
+                debug += f" error:{ransac["error"]:0.3f}"
+                debug += f" iter:{ransac["iterations"]}"
+                Debug.log(type(self).__name__, f"{debug}")
+            
             # 出力 Table FlowData を作成
             flowData = self.createFlowData(flowData, catalog, matchedStars)
             outputFlowDatas.append(flowData)
@@ -193,6 +249,69 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         # ファイルから読み込み
         return Catalog()
 
+    def getSatrs(self, flowData:FlowData) -> np.ndarray:
+        """
+        星の配列を作成
+        
+        Args:
+            flowData: 入力 FlowData
+            
+        Returns:
+            stars: 星の配列 (x, y, brightness, area, u, v, w)
+        """
+        import numpy as np
+        from utils import numpy_helpers as nh
+        from utils import exif_helper as eh
+        
+        columnCnt, rowCnt = flowData.getDimensions()
+        width, height = eh.getImageSize(flowData.headers)
+        
+        # 画像側の点像を読み込み
+        data = nh.nans((rowCnt, columnCnt))
+        for block in flowData.iterateBlocks():
+            if block:
+                x, y = block.x, block.y
+                h, w = block.data.shape
+                data[y:y+h, x:x+w] = block.data
+                
+        stars = []
+        columns = flowData.headers["columns"]
+        for name in ["x", "y", "brightness", "aspect_ratio"]:
+            idx = columns.index(name)
+            stars.append(data[:,idx])
+        stars = np.stack(stars, axis=1) # x, y, brightness, aspectRatio
+        
+        # 点像を絞り込み
+        stars, _  = self._selectDistributedStars(stars, width, height)
+        
+        # レンズ中心からの単位 vector を追加
+        if self.useHeaderFovDeg:
+            # 画像のヘッダからレンズ中心と焦点距離を得て計算
+            from utils import exif_helper as eh
+            
+            focalCenter_px   = eh.getFocalCenter(flowData.headers) # [px]
+            focalLength_mm   = eh.getFocalLength(flowData.headers) # [mm]
+            resolution_pxpmm = eh.getResolution(flowData.headers)  # [px/mm]
+            if focalLength_mm is None or resolution_pxpmm is None:
+                raise ValueError("画像のヘッダに焦点情報が設定されていません。")
+            
+            starsX = (stars[:, 0] - focalCenter_px[0]) / resolution_pxpmm[0] # 中心を原点に [mm]
+            starsY = (stars[:, 1] - focalCenter_px[1]) / resolution_pxpmm[1] # 中心を原点に [mm]
+            f = float(focalLength_mm)                                        # 焦点距離 [mm]
+            f = np.broadcast_to(f, starsX.shape)
+        else:
+            # 設定値の画角から計算
+            starsX = stars[:, 0] - (width  / 2) # 中心を原点に [px]
+            starsY = stars[:, 1] - (height / 2) # 中心を原点に [px]
+            f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算 [px]
+            f = np.broadcast_to(f, starsX.shape)
+        starsV = np.stack([starsX, starsY, f]).T
+        starsV = starsV / np.linalg.norm(starsV, axis=1, keepdims=True) # 単位ベクトルに変換
+        
+        # 結合
+        stars = np.concatenate([stars, starsV], axis=1) # x, y, brightness, aspectRatio, u, v, w
+        return stars
+        
     def _selectDistributedStars(self, stars:np.ndarray, width:int, height:int) -> tuple[np.ndarray, list[int]]:
         """
         画像全体に分散した星を選択
@@ -241,75 +360,36 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         return distributedStars, gridSelectedCounts
     
-    def matchCatalog(self, flowData:FlowData, catalog:Catalog):
+    def matchCatalog(self, stars:np.ndarray, catalog:Catalog) -> tuple[np.ndarray, dict]:
         """
-        画像座標と天球座標の間で投影（Mapping）を行わず、
+        画像座標と天球座標の間で投影を行わず、
         幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
         これにより、レンズ歪みの影響を最小化する。
+        
+        Args:
+            stars: 星の座標と明度の配列 (x, y, brightness, area)
+            catalog: 星のカタログ情報
+            
+        Returns:
+            stars: 同定された星の配列 (id, ra, dec, mag, x, y, brightness, aspectRatio, u, v, w)
+            ransac: RANSAC状況
         """
         import numpy as np
         from utils import numpy_helpers as nh
         from utils.catalog_helper import Catalog
 
-        columnCnt, rowCnt = flowData.getDimensions()
+        if catalog.count() < 4:
+            raise ValueError("少なくともカタログに 4 つ以上の星が必要です。")
         
-        if rowCnt < 4 or catalog.count() < 4:
-            raise ValueError("少なくとも星数が 4 つ必要です。")
+        starCnt = len(stars)
+        if starCnt < 4:
+            raise ValueError("少なくとも 4 つ以上の星が必要です。")
         
         # RANSAC用固定シードを設定
         random = np.random.default_rng(self.star.ransac.seed)
-
-        # 画像側の点像を読み込み
-        data = nh.nans((rowCnt, columnCnt))
-        for block in flowData.iterateBlocks():
-            if block:
-                x, y = block.x, block.y
-                h, w = block.data.shape
-                data[y:y+h, x:x+w] = block.data
-        
-        stars = []
-        columns = flowData.headers["columns"]
-        for name in ["x", "y", "brightness", "aspect_ratio"]:
-            idx = columns.index(name)
-            stars.append(data[:,idx])
-        stars = np.stack(stars, axis=1)
-        
-        # 元画像の大きさが分からないので大体のサイズを設定
-        # 星均等に写っていると想定し、周囲の余白は同じであるとする。
-        width, height = np.min(stars[:, 0:2], axis=0) + np.max(stars[:, 0:2], axis=0)
-        
-        # 画像側のサンプリング
-        stars, _ = self._selectDistributedStars(stars, width, height)
-        starCnt = len(stars)
-        if starCnt < 4:
-            return []
-        
-        # 星の座標をレンズ中心からの単位 vector に変換
-        if self.useHeaderFovDeg:
-            # 画像のヘッダからレンズ中心と焦点距離を得て計算
-            from utils import exif_helper as eh
-            
-            focalCenter_px   = eh.getFocalCenter(flowData.headers) # [px]
-            focalLength_mm   = eh.getFocalLength(flowData.headers) # [mm]
-            resolution_pxpmm = eh.getResolution(flowData.headers)  # [px/mm]
-            if focalLength_mm is None or resolution_pxpmm is None:
-                raise ValueError("画像のヘッダに焦点情報が設定されていません。")
-            
-            starsX = (stars[:, 0] - focalCenter_px[0]) / resolution_pxpmm[0] # 中心を原点に [mm]
-            starsY = (stars[:, 1] - focalCenter_px[1]) / resolution_pxpmm[1] # 中心を原点に [mm]
-            f = float(focalLength_mm)                                        # 焦点距離 [mm]
-            f = np.broadcast_to(f, starsX.shape)
-        else:
-            # 設定値の画角から計算
-            starsX = stars[:, 0] - (width  / 2) # 中心を原点に [px]
-            starsY = stars[:, 1] - (height / 2) # 中心を原点に [px]
-            f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算 [px]
-            f = np.broadcast_to(f, starsX.shape)
-        starsV = np.stack([starsX, starsY, f]).T
-        starsV = starsV / np.linalg.norm(starsV, axis=1, keepdims=True) # 単位ベクトルに変換
         
         # 結果配列の構造に変換
-        stars = np.concatenate([nh.nans((stars.shape[0],4)), stars, starsV], axis=1) # id, ra, dec, mag, x, y, brightness, aspectRatio, u, v, w
+        stars = np.concatenate([nh.nans((stars.shape[0],4)), stars], axis=1) # id, ra, dec, mag, x, y, brightness, aspectRatio, u, v, w
         
         # 探索結果
         bestMatchCount = 0
@@ -504,64 +584,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                   ):
                     # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
                     break
-        i += 1
         
-        if 3 <= bestMatchCount:
-            # RANSAC 結果から向きと画角を推定する(デバッグ用)
-            from utils.Debug import Debug
-            if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
-                import cv2
-                from utils import numpy_helpers as nh
-                src_pts = nh.array([[star[X ], star[Y  ]] for star in bestMatchStars])
-                dst_pts = nh.array([[star[RA], star[DEC]] for star in bestMatchStars])
-                M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
-                if M is not None:
-                    center = nh.array([width / 2.0, height / 2.0, 1.0])
-                    coords = M @ center
-                    est_ra, est_dec = coords[0], coords[1]
-                else:
-                    est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
-                
-                s = bestMatchStars
-                
-                dc = [
-                    Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
-                    Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
-                    Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
-                ]
-                dcMean = np.mean(dc)
-                
-                dp = [
-                    np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
-                    np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
-                    np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
-                ]
-                apMean = np.mean(dp)
-                
-                est_fov  = np.hypot(width, height) * (dcMean / apMean)
-                
-                n = int(np.log10(starCnt))+1
-                debug  = f"estimated"
-                debug += f" ra:{ est_ra :-07.3f}"
-                debug += f" dec:{est_dec:+07.3f}"
-                debug += f" fov:{est_fov:-07.3f}"
-                debug += f" ransac:"
-                debug += f" inlier:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
-                debug += f" catalog:{catalogTotal//i}"
-                debug += f" error:{bestMatchError:0.3f}"
-                debug += f" iter:{i}"
-                Debug.log(type(self).__name__, f"{debug}")
-            return bestMatchStars
-        else:
-            from utils.Debug import Debug
-            n = int(np.log10(starCnt))+1
-            debug  = f"failed ransac:"
-            debug += f" inlier:{bestMatchCount:0{n}d}/{starCnt:0{n}d}"
-            debug += f" catalog:{catalogTotal//i}"
-            debug += f" error:{bestMatchError:0.3f}"
-            debug += f" iter:{i}"
-            Debug.log(type(self).__name__, f"{debug}")
-            return []
+        return bestMatchStars, {"stars": starCnt, "iterations": i+1, "read_catalog": catalogTotal, "error": bestMatchError}
     
     def calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
