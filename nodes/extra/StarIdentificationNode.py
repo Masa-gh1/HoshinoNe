@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from base.FlowData import FlowData
 
 # 結果配列 index 定義
-ID, RA, DEC, MAG, X, Y, BRI, AR, U, V, W = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+ID, RA, DEC, MAG, X, Y, BRI, U, V, W = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 
 class StarIdentificationNode(FlowNode, ConfigurableNode):
     """画像から星を抽出し、カタログデータと照合して星リストを出力するノード"""
@@ -276,7 +276,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 
         stars = []
         columns = flowData.headers["columns"]
-        for name in ["x", "y", "brightness", "aspect_ratio"]:
+        for name in ["x", "y", "brightness"]:
             idx = columns.index(name)
             stars.append(data[:,idx])
         stars = np.stack(stars, axis=1) # x, y, brightness, aspectRatio
@@ -348,7 +348,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 xEnd = (col + 1) * cellW if col < gridCols - 1 else width
                 
                 # このグリッド内の星を抽出
-                gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
+                gridStars = [(x, y, br) for x, y, br in stars if xMin <= x < xEnd and yMin <= y < yEnd]
                 
                 # 明度順でソートして上位指定数を選択
                 gridStars.sort(key=lambda x: x[2], reverse=True)
@@ -485,7 +485,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                               float(sta[X  ]),
                               float(sta[Y  ]),
                               float(sta[BRI]),
-                              float(sta[AR ]),
                               float(sta[U  ]),
                               float(sta[V  ]),
                               float(sta[W  ]),
@@ -545,7 +544,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                                   float(p0[X  ]),
                                   float(p0[Y  ]),
                                   float(p0[BRI]),
-                                  float(p0[AR ]),
                                   float(p0[U  ]),
                                   float(p0[V  ]),
                                   float(p0[W  ]),
