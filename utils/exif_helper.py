@@ -239,16 +239,36 @@ def toExifDatetime(dt):
     else:
         return dt.strftime("%Y:%m:%d %H:%M:%S")
 
-def getFocalCenter(info:dict[str,Any]) -> list[float]:
-    """EXIF から焦点位置を取得"""
+def getImageSize(info:dict[str,Any]) -> tuple[int,int]:
+    """EXIF から画像サイズを取得"""
+    import numpy as np
     from utils import numpy_helpers as nh
     
     trans  = info["transformation"]
     width  = info["width"]
     height = info["height"]
     
-    center = ((trans @ nh.array([[width / 2.0], [height / 2.0], [1.0]])).ravel()[:2]).tolist()
-    return center
+    size = trans @ nh.array([[0, width, 0     , width ],
+                             [0, 0    , height, height],
+                             [1, 1    , 1     , 1     ]])
+    
+    width  = int(np.ceil(np.max(size[0])))
+    height = int(np.ceil(np.max(size[1])))
+    
+    return (width, height)
+
+def getFocalCenter(info:dict[str,Any]) -> tuple[float,float]:
+    """EXIF から焦点位置を取得"""
+    from utils import numpy_helpers as nh
+    
+    trans  = info["transformation"]
+    width  = info["width"]
+    height = info["height"]
+
+    p = trans @ nh.array([[width / 2.0], [height / 2.0], [1.0]])
+    x = p[0]
+    y = p[1]
+    return (x, y)
 
 def getFocalLength(info:dict[str,Any]) -> float|None:
     """EXIF から焦点距離を取得"""
