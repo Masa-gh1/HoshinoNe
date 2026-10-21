@@ -68,13 +68,17 @@ def getExif(filepath):
     missingTags = [id for id in expectedTags if id not in attr]
     
     result = {tagMap[id]:value for id, value in attr.items()} if attr else None
-    norm = normalize(result)
+    if result is None or 0 == len(result):
+        result = {}
+        norm = _getImageMeta(filepath)
+    else:
+        norm = normalize(result)
+        _exif_cache[filepath] = result
 
     if Debug.LEVEL_NONE < Debug.LEVEL and None in norm.values():
         # デバッグ出力
         _debugMissingTags(filepath, missingTags, pil_exif, exifread_tags)
     
-    _exif_cache[filepath] = result
     return norm, result
 
 def _getPilExif(filepath):
@@ -151,6 +155,23 @@ def _getExifread(filepath):
         Debug.log(__name__, f"exifread error for {filepath}", e)
     
     return result, allExif
+
+def _getImageMeta(filepath):
+    """EXIF が無い場合に、画像本体から分かる情報を取得する"""
+    result = {}
+    
+    if not PIL_AVAILABLE:
+        return result
+    
+    try:
+        with Image.open(filepath) as img:
+            width, height = img.size
+            result['width'   ] = width
+            result['height'  ] = height
+            result['datetime'] = toExifDatetime(datetime.datetime.fromtimestamp(os.path.getmtime(filepath)))
+    except Exception as e:
+        Debug.log(__name__, f"Error reading image metadata for {filepath}", e)
+    return result
 
 def normalize(exif):
     """EXIF から画像処理に必要な情報を取り出す"""
