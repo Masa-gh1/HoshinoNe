@@ -267,12 +267,12 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         画像全体に分散した星を選択
         
         Args:
-            stars: 星の座標と明度の配列 (x, y, brightness, area)
+            stars: 星の座標と明度の配列 SHAPE=(N,4) [[x, y, brightness, area],...]
             width: 画像の幅
             height: 画像の高さ
         
         Returns:
-            distributedStars: 分散した星の配列 (x, y, brightness, area)
+            distributedStars: 分散した星の配列 SHAPE=(N,4) [[x, y, brightness, area],...]
             gridSelectedCounts: 各グリッドから選択された星の数のリスト
         """
         import numpy as np
@@ -317,11 +317,11 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         これにより、レンズ歪みの影響を最小化する。
         
         Args:
-            stars: 星の座標と明度の配列 (x, y, brightness, area)
+            stars: 星の座標と明度の配列 SHAPE=(N,4) [[x, y, brightness, area],...]
             catalog: 星のカタログ情報
             
         Returns:
-            stars: 同定された星の配列 (id, ra, dec, mag, x, y, brightness, aspectRatio, u, v, w)
+            stars: 同定された星の配列 SHAPE=(N,11) [[id, ra, dec, mag, x, y, brightness, aspectRatio, u, v, w],...]
             ransac: RANSAC状況
         """
         import numpy as np
@@ -428,16 +428,16 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 # 画像 4 点とカタログ 4 点が相似だった
                 currentInliers = 4
                 currentMatched = [
-                    nh.array([float(cat[IDX]),
-                              float(cat[RA ]),
-                              float(cat[DEC]),
-                              float(cat[MAG]),
-                              float(sta[X  ]),
-                              float(sta[Y  ]),
-                              float(sta[BRI]),
-                              float(sta[U  ]),
-                              float(sta[V  ]),
-                              float(sta[W  ]),
+                    nh.array([cat[IDX],
+                              cat[RA ],
+                              cat[DEC],
+                              cat[MAG],
+                              sta[X  ],
+                              sta[Y  ],
+                              sta[BRI],
+                              sta[U  ],
+                              sta[V  ],
+                              sta[W  ],
                     ]) for cat,sta in ((c[0],p[0]),(c[1],p[1]),(c[2],p[2]),(g[2],q[2]))
                 ]
                 
@@ -487,16 +487,16 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     
                     currentInliers += 1
                     currentMatched.append(
-                        nh.array([float(c0[IDX]),
-                                  float(c0[RA ]),
-                                  float(c0[DEC]),
-                                  float(c0[MAG]),
-                                  float(p0[X  ]),
-                                  float(p0[Y  ]),
-                                  float(p0[BRI]),
-                                  float(p0[U  ]),
-                                  float(p0[V  ]),
-                                  float(p0[W  ]),
+                        nh.array([c0[IDX],
+                                  c0[RA ],
+                                  c0[DEC],
+                                  c0[MAG],
+                                  p0[X  ],
+                                  p0[Y  ],
+                                  p0[BRI],
+                                  p0[U  ],
+                                  p0[V  ],
+                                  p0[W  ],
                         ])
                     )
                     
