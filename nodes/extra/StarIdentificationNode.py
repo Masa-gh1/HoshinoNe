@@ -29,11 +29,10 @@ if TYPE_CHECKING:
     from base.FlowData import FlowData
 
 # 配列 index 定義
-CIDX, RA, DEC, MAG, PIDX, U, V, W = 0, 1, 2, 3, 4, 5, 6, 7
-X, Y, BRI    = 4, 5, 6
-#RA, DEC, MAG = 0, 1, 2
-#X, Y, BIR    = 0, 1, 2
-#U, V, W      = 0, 1, 2
+RA, DEC, MAG = 0, 1, 2 # カタログ配列
+X, Y, BRI    = 0, 1, 2 # 星配列
+U, V, W      = 0, 1, 2 # 単位ベクトル配列
+CIDX, PIDX   = 0, 1    # 同定配列
 
 class StarIdentificationNode(FlowNode, ConfigurableNode):
     """画像から星を抽出し、カタログデータと照合して星リストを出力するノード"""
@@ -145,13 +144,14 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             
             # カタログ照合
             matchedStars, ransac = self.matchCatalog(starsV, catalog)
-
-            matchedStars = np.concatenate([matchedStars[:,:4],stars[np.uint32(matchedStars[:,PIDX])]], axis=1)
+            matchedCatalog = catalog.getCatalog(matchedStars[:,CIDX])
+            matchedSarts   = stars[np.uint32(matchedStars[:,PIDX])]
+            
             # デバッグ出力
-            self.debug(flowData, matchedStars, ransac)
+            self.debug(flowData, matchedCatalog, matchedSarts, ransac)
             
             # 出力 Table FlowData を作成
-            flowData = self.createFlowData(flowData, catalog, matchedStars)
+            flowData = self.createFlowData(flowData, catalog, matchedStars[:,CIDX], matchedCatalog, matchedSarts)
             outputFlowDatas.append(flowData)
 
         self.flowDatas = outputFlowDatas
@@ -207,7 +207,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 
     def getSatrs(self, flowData:FlowData) -> tuple[np.ndarray,np.ndarray]:
         """
-        星の配列を作成
+        星の配列を読み出し
         
         Args:
             flowData: 入力 FlowData
@@ -278,7 +278,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             height: 画像の高さ
         
         Returns:
-            distributedStars: 分散した星の配列 indx SHAPE=(N) [pidx,...]
+            distributedStars: 分散した星の indx 配列 SHAPE=(N) [pidx,...]
             gridSelectedCounts: 各グリッドから選択された星の数のリスト
         """
         import numpy as np
@@ -327,7 +327,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             catalog: 星のカタログ情報
             
         Returns:
-            stars: 同定された星の配列 SHAPE=(N,8) [[cidx, ra, dec, mag, pidx, u, v, w],...]
+            match: 同定された星の配列 SHAPE=(N,2) [[cidx, pidx],...]
             ransac: RANSAC状況
         """
         import numpy as np
@@ -343,13 +343,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         # RANSAC用固定シードを設定
         random = np.random.default_rng(self.star.ransac.seed)
         
-        # 結果配列の構造に変換
-        stars = np.concatenate([nh.nans((starsV.shape[0],5)), starsV], axis=1) # SHAPE=(N,8) [[cidx, ra, dec, mag, pidx, u, v, w],...]
-        
         # 探索結果
         bestMatchCount = 0
         bestMatchError = np.inf
-        bestMatchStars = [] # [(id, ra, dec, mag, x, y, brightness, u, v, w),...]
+        bestMatchStars = [] # [(cidx, pidx),...]
         catalogTotal = 0
         
         # 4 点による 2 つの三角形のパターン
@@ -373,7 +370,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             # 画像側で 4 点をランダムに選択し接する時計回りの三角形 P と Q を作成する
             pqidx = random.choice(starCnt, 4, replace=False)
             pqidx = pqidx[COMB_TRIANGLE_PAIRS]
-            pq = stars[pqidx] # 3点2組の組み合わせ
+            pq = starsV[pqidx] # 3点2組の組み合わせ
             pq0x = pq[:, :, 0, U]
             pq0y = pq[:, :, 0, V]
             pq1x = pq[:, :, 1, U]
@@ -386,7 +383,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             qidx = pqidx[sel, 1]
             
             # 三角形 P を作成
-            p = stars[pidx]
+            p = starsV[pidx]
             p0, p1, p2 = p
             dp01 = self.calcAngDistance(p0[U:W+1], p1[U:W+1])
             dp12 = self.calcAngDistance(p1[U:W+1], p2[U:W+1])
@@ -395,7 +392,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ(検証に不適切)
             
             # 三角形 Q を作成
-            q = stars[qidx]
+            q = starsV[qidx]
             q0, q1, q2 = q
             dq01 = self.calcAngDistance(q0[U:W+1], q1[U:W+1])
             dq12 = self.calcAngDistance(q1[U:W+1], q2[U:W+1])
@@ -435,24 +432,11 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 
                 # 画像 4 点とカタログ 4 点が相似だった
                 currentInliers = 4
-                currentMatched = [
-                    nh.array([cidx,
-                              cat[RA -1],
-                              cat[DEC-1],
-                              cat[MAG-1],
-                              sidx,
-                              sta[U  ],
-                              sta[V  ],
-                              sta[W  ],
-                    ]) for cidx,cat,sidx,sta in ((cidx[0],c[0],pidx[0],p[0]),(cidx[1],c[1],pidx[1],p[1]),(cidx[2],c[2],pidx[2],p[2]),(gidx[2],g[2],qidx[2],q[2]))
-                ]
-                
-                currentCatalogIds = [
-                    c[0,0],
-                    c[1,0],
-                    c[2,0],
-                    g[2,0],
-                ]
+                currentMatched = [np.array([cidx[0],pidx[0]], dtype=np.uint32),
+                                  np.array([cidx[1],pidx[1]], dtype=np.uint32),
+                                  np.array([cidx[2],pidx[2]], dtype=np.uint32),
+                                  np.array([gidx[2],qidx[2]], dtype=np.uint32)]
+                currentMatchedNp = np.array(currentMatched, dtype=np.uint32)
                 
                 # 確定済み以外の星配列を作成
                 otherIdx = np.where(np.logical_not(np.isin(np.arange(starCnt), pidx) | np.isin(np.arange(starCnt), qidx)))[0]
@@ -464,26 +448,32 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         # このあと全て inlier でも bestMatchCount に届かないので早期終了 
                         break
                     
-                    p0 = stars[p0idx]
-                    midx = random.choice(len(currentMatched), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
-                    m1 = currentMatched[midx[0]]
-                    m2 = currentMatched[midx[1]]
+                    p0 = starsV[p0idx]
+                    m1idx, m2idx = random.choice(len(currentMatchedNp), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
+                    c1idx = currentMatchedNp[m1idx, CIDX]
+                    c2idx = currentMatchedNp[m2idx, CIDX]
+                    p1idx = currentMatchedNp[m1idx, PIDX]
+                    p2idx = currentMatchedNp[m2idx, PIDX]
+                    p1 = starsV[p1idx]
+                    p2 = starsV[p2idx]
                     
-                    if 0 < (m1[U] - p0[U]) * (m2[V] - p0[V]) - (m1[V] - p0[V]) * (m2[U] - p0[U]):
-                        m1,m2 = m2,m1 # 時計回りに修正
+                    if 0 < (p1[U] - p0[U]) * (p2[V] - p0[V]) - (p1[V] - p0[V]) * (p2[U] - p0[U]):
+                        p1   ,p2    = p2   ,p1 # 時計回りに修正
+                        p1idx,p2idx = p2idx,p1idx # インデックスも入れ替え
+                        c1idx,c2idx = c2idx,c1idx # カタログ側も入れ替え
                     
-                    dp01 = self.calcAngDistance(p0[U:W+1], m1[U:W+1])
-                    dp12 = self.calcAngDistance(m1[U:W+1], m2[U:W+1])
-                    dp20 = self.calcAngDistance(m2[U:W+1], p0[U:W+1])
+                    dp01 = self.calcAngDistance(p0[U:W+1], p1[U:W+1])
+                    dp12 = self.calcAngDistance(p1[U:W+1], p2[U:W+1])
+                    dp20 = self.calcAngDistance(p2[U:W+1], p0[U:W+1])
                     dp = np.stack([dp01, dp12, dp20])
                     
                     # 検証に不適切な三角形をスキップする
                     if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
                     
                     # カタログから検索
-                    cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, m1[CIDX], m2[CIDX]))
+                    cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1idx, c2idx))
                     catalogTotal += len(cidx)
-                    cidx = cidx[np.all(cidx[:,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
+                    cidx = cidx[np.all(cidx[:,0,np.newaxis] != currentMatchedNp[np.newaxis, :, CIDX], axis=1)] # 既知の点を除く
                     if 0 < len(cidx):
                         cidx = random.choice(cidx) # 複数候補からランダムに選択
                         c0idx = cidx[0]
@@ -494,33 +484,22 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         continue # 相似の三角形が見つからないのでスキップ
                     
                     currentInliers += 1
-                    currentMatched.append(
-                        nh.array([c0idx,
-                                  c0[RA -1],
-                                  c0[DEC-1],
-                                  c0[MAG-1],
-                                  p0idx,
-                                  p0[U  ],
-                                  p0[V  ],
-                                  p0[W  ],
-                        ])
-                    )
+                    currentMatched.append(np.array([c0idx,p0idx], dtype=np.uint32))
+                    currentMatchedNp = np.array(currentMatched, dtype=np.uint32)
                     
                     #重複チェック
-                    x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
+                    x1s, x2s = np.triu_indices(len(currentMatchedNp), k=1) # 表の右上だけ選択
                     for x1,x2 in zip(x1s,x2s):
-                        assert np.all(currentMatched[x1][CIDX] != currentMatched[x2][CIDX]), "重複が発生しています。"
-                    
-                    currentCatalogIds.append(c0[CIDX])
+                        assert np.all(currentMatchedNp[x1,CIDX] != currentMatchedNp[x2,CIDX]), "重複が発生しています。"
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    currentMatched.sort(key=lambda x: x[MAG]) # カタログ等級順にソート
+                    currentMatched.sort(key=lambda x: catalog.getCatalog(x[PIDX])[MAG]) # カタログ等級順にソート
                     # 誤差算出
                     # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                    p = nh.array([star[U :W+1  ] for star in currentMatched])
-                    c = nh.array([star[RA:DEC+1] for star in currentMatched])
-                    dp = self.calcAngDistance(  p[:, np.newaxis, :], p[np.newaxis, :, :])
+                    p = nh.array([starsV[pidx, U:W+1]                for cidx,pidx in currentMatched])
+                    c = nh.array([catalog.getCatalog(cidx)[RA:DEC+1] for cidx,pidx in currentMatched])
+                    dp = self.calcAngDistance(   p[:, np.newaxis, :], p[np.newaxis, :, :])
                     dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
                     assert isinstance(dc, np.ndarray), "this should be a numpy array"
                     currentError = self.calcError( dp, dc)
@@ -539,7 +518,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
                     break
         
-        return nh.array(bestMatchStars), {"stars": starCnt, "iterations": i+1, "read_catalog": catalogTotal, "error": bestMatchError}
+        return np.array(bestMatchStars, dtype=np.uint32), {"stars": starCnt, "iterations": i+1, "read_catalog": catalogTotal, "error": bestMatchError}
     
     def calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
@@ -599,7 +578,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         return error
     
-    def createFlowData(self, inputData:FlowData, catalog:Catalog, matchedStars:np.ndarray) -> FlowData:
+    def createFlowData(self, inputData:FlowData, catalog:Catalog, matchedIdxs:np.ndarray, matchedCatalog:np.ndarray, matchedStars:np.ndarray) -> FlowData:
         """星リストから Table 型 FlowData を作成"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -608,21 +587,24 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         from base import FlowData
         
         # 等級でソート
-        matchedStars = matchedStars[np.argsort(matchedStars[:,MAG])]
+        sortedIdx = np.argsort(matchedCatalog[:,MAG])
+        matchedIdxs    = matchedIdxs[sortedIdx]
+        matchedCatalog = matchedCatalog[sortedIdx]
+        matchedStars   = matchedStars[sortedIdx]
 
         symbol = catalog.getSymbol()
         columns = ['ra', 'dec', 'mag', 'x', 'y', 'brightness']
-        lines   = [f"{symbol}{int(star[CIDX])}" for star in matchedStars]
+        lines   = [f"{symbol}{idx}" for idx in matchedIdxs]
 
         tableRows = []
-        for star in matchedStars:
+        for cat, str in zip(matchedCatalog, matchedStars):
             row = [
-                star[RA ],
-                star[DEC],
-                star[MAG],
-                star[X  ],
-                star[Y  ],
-                star[BRI],
+                cat[RA ],
+                cat[DEC],
+                cat[MAG],
+                str[X  ],
+                str[Y  ],
+                str[BRI],
             ]
             tableRows.append(row)
 
@@ -653,7 +635,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 
         return flowData
 
-    def debug(self, flowData:FlowData, matchedStars:np.ndarray, ransac:dict):
+    def debug(self, flowData:FlowData, matchedCatalog:np.ndarray, matchedStars:np.ndarray, ransac:dict):
         from utils.Debug import Debug
         if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
             import numpy as np
@@ -667,7 +649,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             width, height = eh.getImageSize(flowData.headers)
             
             src_pts = nh.array([[star[X ], star[Y  ]] for star in matchedStars])
-            dst_pts = nh.array([[star[RA], star[DEC]] for star in matchedStars])
+            dst_pts = nh.array([[star[RA], star[DEC]] for star in matchedCatalog])
             M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
             if M is not None:
                 center = nh.array([width / 2.0, height / 2.0, 1.0])
@@ -676,19 +658,20 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             else:
                 est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
             
-            s = matchedStars
+            p = matchedStars
+            c = matchedCatalog
             
             dc = [
-                Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
-                Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
-                Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
+                Catalog.angularDistance(c[0][RA:DEC+1], c[1][RA:DEC+1]),
+                Catalog.angularDistance(c[1][RA:DEC+1], c[2][RA:DEC+1]),
+                Catalog.angularDistance(c[2][RA:DEC+1], c[0][RA:DEC+1]),
             ]
             dcMean = np.mean(dc)
             
             dp = [
-                np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
-                np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
-                np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
+                np.hypot(p[0][X]-p[1][X], p[0][Y]-p[1][Y]),
+                np.hypot(p[1][X]-p[2][X], p[1][Y]-p[2][Y]),
+                np.hypot(p[2][X]-p[0][X], p[2][Y]-p[0][Y]),
             ]
             apMean = np.mean(dp)
             
