@@ -142,57 +142,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             matchedStars, ransac = self.matchCatalog(stars, catalog)
 
             # デバッグ出力
-            from utils.Debug import Debug
-            if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
-                import numpy as np
-                from utils.catalog_helper import Catalog
-                
-                # RANSAC 結果から向きと画角を推定する(デバッグ用)
-                import cv2
-                from utils import numpy_helpers as nh
-                from utils import exif_helper as eh
-                
-                width, height = eh.getImageSize(flowData.headers)
-                
-                src_pts = nh.array([[star[X ], star[Y  ]] for star in matchedStars])
-                dst_pts = nh.array([[star[RA], star[DEC]] for star in matchedStars])
-                M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
-                if M is not None:
-                    center = nh.array([width / 2.0, height / 2.0, 1.0])
-                    coords = M @ center
-                    est_ra, est_dec = coords[0], coords[1]
-                else:
-                    est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
-                
-                s = matchedStars
-                
-                dc = [
-                    Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
-                    Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
-                    Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
-                ]
-                dcMean = np.mean(dc)
-                
-                dp = [
-                    np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
-                    np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
-                    np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
-                ]
-                apMean = np.mean(dp)
-                
-                est_fov  = np.hypot(width, height) * (dcMean / apMean)
-                
-                n = int(np.log10(ransac["stars"]))+1
-                debug  = f"estimated"
-                debug += f" ra:{ est_ra :-07.3f}"
-                debug += f" dec:{est_dec:+07.3f}"
-                debug += f" fov:{est_fov:-07.3f}"
-                debug += f" ransac:"
-                debug += f" inlier:{len(matchedStars):0{n}d}/{ransac["stars"]:0{n}d}"
-                debug += f" catalog:{ransac["read_catalog"]//ransac["iterations"]}"
-                debug += f" error:{ransac["error"]:0.3f}"
-                debug += f" iter:{ransac["iterations"]}"
-                Debug.log(type(self).__name__, f"{debug}")
+            self.debug(flowData, matchedStars, ransac)
             
             # 出力 Table FlowData を作成
             flowData = self.createFlowData(flowData, catalog, matchedStars)
@@ -376,8 +326,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         """
         import numpy as np
         from utils import numpy_helpers as nh
-        from utils.catalog_helper import Catalog
-
+        
         if catalog.count() < 4:
             raise ValueError("少なくともカタログに 4 つ以上の星が必要です。")
         
@@ -696,6 +645,59 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             flowData.setBlock(DataBlock(blockData, 0, 0, y))
 
         return flowData
+
+    def debug(self, flowData:FlowData, matchedStars:list, ransac:dict):
+        from utils.Debug import Debug
+        if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:
+            import numpy as np
+            from utils.catalog_helper import Catalog
+            
+            # RANSAC 結果から向きと画角を推定する(デバッグ用)
+            import cv2
+            from utils import numpy_helpers as nh
+            from utils import exif_helper as eh
+            
+            width, height = eh.getImageSize(flowData.headers)
+            
+            src_pts = nh.array([[star[X ], star[Y  ]] for star in matchedStars])
+            dst_pts = nh.array([[star[RA], star[DEC]] for star in matchedStars])
+            M, inliers_mask = cv2.estimateAffine2D(src_pts, dst_pts)
+            if M is not None:
+                center = nh.array([width / 2.0, height / 2.0, 1.0])
+                coords = M @ center
+                est_ra, est_dec = coords[0], coords[1]
+            else:
+                est_ra, est_dec = np.mean(dst_pts[:, 0]), np.mean(dst_pts[:, 1])
+            
+            s = matchedStars
+            
+            dc = [
+                Catalog.angularDistance(s[0][RA:DEC+1], s[1][RA:DEC+1]),
+                Catalog.angularDistance(s[1][RA:DEC+1], s[2][RA:DEC+1]),
+                Catalog.angularDistance(s[2][RA:DEC+1], s[0][RA:DEC+1]),
+            ]
+            dcMean = np.mean(dc)
+            
+            dp = [
+                np.hypot(s[0][X]-s[1][X], s[0][Y]-s[1][Y]),
+                np.hypot(s[1][X]-s[2][X], s[1][Y]-s[2][Y]),
+                np.hypot(s[2][X]-s[0][X], s[2][Y]-s[0][Y]),
+            ]
+            apMean = np.mean(dp)
+            
+            est_fov  = np.hypot(width, height) * (dcMean / apMean)
+            
+            n = int(np.log10(ransac["stars"]))+1
+            debug  = f"estimated"
+            debug += f" ra:{ est_ra :-07.3f}"
+            debug += f" dec:{est_dec:+07.3f}"
+            debug += f" fov:{est_fov:-07.3f}"
+            debug += f" ransac:"
+            debug += f" inlier:{len(matchedStars):0{n}d}/{ransac["stars"]:0{n}d}"
+            debug += f" catalog:{ransac["read_catalog"]//ransac["iterations"]}"
+            debug += f" error:{ransac["error"]:0.3f}"
+            debug += f" iter:{ransac["iterations"]}"
+            Debug.log(type(self).__name__, f"{debug}")
     
     def createSettingWindow(self):
         """設定ダイアログを作成"""
