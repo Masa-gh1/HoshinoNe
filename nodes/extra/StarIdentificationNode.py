@@ -144,9 +144,9 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             
             # カタログ照合
             matchedStars, ransac = self.matchCatalog(starsV, catalog)
-            matchedIds     = catalog.getId(matchedStars[:, CIDX])
-            matchedCatalog = catalog.getCatalog(matchedStars[:,CIDX])
-            matchedSarts   = stars[np.uint32(matchedStars[:,PIDX])]
+            matchedIds     = catalog.getId(     matchedStars[:, CIDX])
+            matchedCatalog = catalog.getCatalog(matchedStars[:, CIDX])
+            matchedSarts   = stars[             matchedStars[:, PIDX]]
             
             # デバッグ出力
             self.debug(flowData, matchedCatalog, matchedSarts, ransac)
@@ -347,7 +347,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         # 探索結果
         bestMatchCount = 0
         bestMatchError = np.inf
-        bestMatchStars = [] # [(cidx, pidx),...]
+        bestMatchStars = np.array((0,2), dtype=np.uint32) # [(cidx, pidx),...]
         catalogTotal = 0
         
         # 4 点による 2 つの三角形のパターン
@@ -495,11 +495,11 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    currentMatched.sort(key=lambda x: catalog.getCatalog(x[PIDX])[MAG]) # カタログ等級順にソート
+                    currentMatchedNp = currentMatchedNp[np.argsort(catalog.getCatalog(currentMatchedNp[:,PIDX])[:, MAG])] # カタログ等級順にソート
                     # 誤差算出
                     # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                    p = nh.array([starsV[pidx, U:W+1]                for cidx,pidx in currentMatched])
-                    c = nh.array([catalog.getCatalog(cidx)[RA:DEC+1] for cidx,pidx in currentMatched])
+                    p = starsV[currentMatchedNp[:,PIDX], U:W+1]
+                    c = catalog.getCatalog(currentMatchedNp[:,CIDX])[:, RA:DEC+1]
                     dp = self.calcAngDistance(   p[:, np.newaxis, :], p[np.newaxis, :, :])
                     dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
                     assert isinstance(dc, np.ndarray), "this should be a numpy array"
@@ -509,7 +509,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     if bestMatchCount < currentInliers or currentError < bestMatchError:
                         bestMatchCount = currentInliers
                         bestMatchError = currentError
-                        bestMatchStars = currentMatched
+                        bestMatchStars = currentMatchedNp
                 
                 if(   5 <= bestMatchCount
                   and self.star.minMatchedStars <= bestMatchCount
@@ -519,7 +519,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
                     break
         
-        return np.array(bestMatchStars, dtype=np.uint32), {"stars": starCnt, "iterations": i+1, "read_catalog": catalogTotal, "error": bestMatchError}
+        return bestMatchStars, {"stars": starCnt, "iterations": i+1, "read_catalog": catalogTotal, "error": bestMatchError}
     
     def calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
