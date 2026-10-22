@@ -401,44 +401,46 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             if np.any(dp2q2 < 1e-7) or dp2q2 / np.max(dq) < 0.2: continue # 二つの三角形が近いのでスキップ(検証に不適切)
 
             # 三角形 P をカタログから検索し C とする
-            c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
-            catalogTotal += len(c)
-            if 0 == len(c): continue # 相似の三角形が見つからないのでスキップ
+            cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
+            catalogTotal += len(cidx)
+            if 0 == len(cidx): continue # 相似の三角形が見つからないのでスキップ
 
             # 三角形 Q をカタログから検索し G とする
-            g = catalog.searchTriangle(dq01, dq12, dq20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
-            catalogTotal += len(g)
-            if 0 == len(g): continue # 相似の三角形が見つからないのでスキップ
+            gidx = catalog.searchTriangle(dq01, dq12, dq20, self.catalog.matchLimit/100.0, self.catalog.magLimit) # 相似な三角形を取得
+            catalogTotal += len(gidx)
+            if 0 == len(gidx): continue # 相似の三角形が見つからないのでスキップ
             
             # C G の 1,2 点目共にが同じ ID 物を抽出
-            cid0 = c[:, 0, IDX].astype(np.uint64)
-            cid1 = c[:, 1, IDX].astype(np.uint64)
-            gid0 = g[:, 0, IDX].astype(np.uint64)
-            gid1 = g[:, 1, IDX].astype(np.uint64)
-            cid01Hash = cid0 * 0x9E3779B97F4A7C15 + cid1 # 2^64 / φ
-            gid01Hash = gid0 * 0x9E3779B97F4A7C15 + gid1 # 2^64 / φ
-            _, cidx, gidx = np.intersect1d(cid01Hash, gid01Hash, return_indices=True)
+            c0idx = cidx[:, 0].astype(np.uint64)
+            c1idx = cidx[:, 1].astype(np.uint64)
+            g0idx = gidx[:, 0].astype(np.uint64)
+            g1idx = gidx[:, 1].astype(np.uint64)
+            c01Hash = c0idx * 0x9E3779B97F4A7C15 + c1idx # 2^64 / φ
+            g01Hash = g0idx * 0x9E3779B97F4A7C15 + g1idx # 2^64 / φ
+            _, cHashIdx, gHashIdx = np.intersect1d(c01Hash, g01Hash, return_indices=True)
             
-            if 0 < len(cidx) and 0 < len(gidx):
-                cidx = random.choice(cidx) # 複数ある場合はランダムに選択
-                gidx = random.choice(gidx) # 複数ある場合はランダムに選択
-                c = c[cidx]
-                g = g[gidx]
+            if 0 < len(cHashIdx) and 0 < len(gHashIdx):
+                cHashIdx = random.choice(cHashIdx) # 複数ある場合はランダムに選択
+                gHashIdx = random.choice(gHashIdx) # 複数ある場合はランダムに選択
+                cidx = cidx[cHashIdx]
+                gidx = gidx[gHashIdx]
+                c = catalog.getCatalog(cidx)
+                g = catalog.getCatalog(gidx)
                 
                 # 画像 4 点とカタログ 4 点が相似だった
                 currentInliers = 4
                 currentMatched = [
-                    nh.array([cat[IDX],
-                              cat[RA ],
-                              cat[DEC],
-                              cat[MAG],
+                    nh.array([cidx,
+                              cat[RA -1],
+                              cat[DEC-1],
+                              cat[MAG-1],
                               sta[X  ],
                               sta[Y  ],
                               sta[BRI],
                               sta[U  ],
                               sta[V  ],
                               sta[W  ],
-                    ]) for cat,sta in ((c[0],p[0]),(c[1],p[1]),(c[2],p[2]),(g[2],q[2]))
+                    ]) for cidx,cat,sta in ((cidx[0],c[0],p[0]),(cidx[1],c[1],p[1]),(cidx[2],c[2],p[2]),(gidx[2],g[2],q[2]))
                 ]
                 
                 currentCatalogIds = [
@@ -475,11 +477,13 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
                     
                     # カタログから検索
-                    c = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, m1[IDX], m2[IDX]))
-                    catalogTotal += len(c)
-                    c = c[np.all(c[:,0,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
-                    if 0 < len(c):
-                        c0 = c[random.choice(len(c)),0] # 複数候補からランダムに選択
+                    cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, m1[IDX], m2[IDX]))
+                    catalogTotal += len(cidx)
+                    cidx = cidx[np.all(cidx[:,0,np.newaxis] != nh.array([currentCatalogIds]), axis=1)] # 既知の点を除く
+                    if 0 < len(cidx):
+                        cidx = random.choice(cidx) # 複数候補からランダムに選択
+                        c0idx = cidx[0]
+                        c0 = catalog.getCatalog(c0idx)
                     elif j < 1:
                         break # 安易に見つかるはずのタイミングで失敗したので早期終了
                     else:
@@ -487,10 +491,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     
                     currentInliers += 1
                     currentMatched.append(
-                        nh.array([c0[IDX],
-                                  c0[RA ],
-                                  c0[DEC],
-                                  c0[MAG],
+                        nh.array([c0idx,
+                                  c0[RA -1],
+                                  c0[DEC-1],
+                                  c0[MAG-1],
                                   p0[X  ],
                                   p0[Y  ],
                                   p0[BRI],

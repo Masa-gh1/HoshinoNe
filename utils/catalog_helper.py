@@ -90,14 +90,14 @@ class Catalog:
             _c01d, _c12d, _c20d = c01d*s*n0, c12d*s*n1, c20d*s*n2 # 外乱を混入
             
             # 実行
-            if   0==prm: c = self.searchTriangle(_c01d, _c12d, _c20d, re)
-            elif 1==prm: c = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexIdx=(None,c1idx,None ))
-            else       : c = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexIdx=(None,c1idx,c2idx))
+            if   0==prm: _cidx = self.searchTriangle(_c01d, _c12d, _c20d, re)
+            elif 1==prm: _cidx = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexIdx=(None,c1idx,None ))
+            else       : _cidx = self.searchTriangle(_c01d, _c12d, _c20d, re, fixVertexIdx=(None,c1idx,c2idx))
             
             # チェック
-            chk0 = (c[:, 0, IDX] == c0idx)
-            chk1 = (c[:, 1, IDX] == c1idx)
-            chk2 = (c[:, 2, IDX] == c2idx)
+            chk0 = (_cidx[:, 0] == c0idx)
+            chk1 = (_cidx[:, 1] == c1idx)
+            chk2 = (_cidx[:, 2] == c2idx)
             chk = chk0 & chk1 & chk2
             if not np.any(chk):
                 errCnt += 1
@@ -396,9 +396,29 @@ class Catalog:
         else:
             return len(self._catalog)
     
+    def getCatalog(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
+        """
+        カタログを取得
+        
+        Args:
+            cidx: カタログの idx または idx の配列
+        
+        Returns:
+            np.ndarray: カタログの配列 shape=(3) [raDeg, decDeg, mag] or shape=(N, 3) [[raDeg, decDeg, mag],...]
+        """
+        import numpy as np
+        
+        assert not self._catalog is None, "Catalog is not loaded."
+        
+        if isinstance(cidx, int):
+            return self._catalog[cidx]
+        else:
+            cidx = np.asanyarray(cidx, dtype=np.uint32)
+            return self._catalog[cidx]
+    
     def searchTriangle(self, side01:np.ndarray|float, side12:np.ndarray|float, side20:np.ndarray|float, relativeError:float,
-                             magLimit:float|None=None, fixVertexIdx:tuple|list|None=None,
-                             outputLimit:int|None=None) -> np.ndarray:
+                             magLimit:float|None=None, fixVertexIdx:tuple|list|None=None
+                      ) -> np.ndarray:
         """
         三角比データベースを検索し、指定された三角形に相似な星の組み合わせを返す
 
@@ -408,11 +428,10 @@ class Catalog:
             side20: 辺20の長さ
             relativeError: 相似比の相対誤差
             magLimit: 等級制限 ( mag )
-            fixVertexIdx: 頂点の ID を固定 (idx0,idx1,idx2) or (None,idx1,idx2) or ...
-            outputLimit: 出力制限数
-
+            fixVertexIdx: 頂点を固定 (cidx0,cidx1,cidx2) or (None,cidx1,cidx2) or ...
+        
         Returns:
-            np.ndarray: 星の組み合わせ配列 shape=(N, 3, 4) [[[idx, ra, dec, mag], [idx, ra, dec, mag], [idx, ra, dec, mag]],...]
+            np.ndarray: 星の組み合わせ配列 shape=(N, 3) [[cidx0, cidx1, cidx2],...]
         """
         import numpy as np
         from utils import numpy_helpers as nh
@@ -456,15 +475,11 @@ class Catalog:
             mask = self._catalog[cidx, MAG-1] <= magLimit
             mask = np.all(mask, axis=1)
             cidx = cidx[mask]
-        if outputLimit and outputLimit < len(cidx):
-            # 出力行数制限
-            cidx = np.random.choice(cidx, size=outputLimit, replace=False)
         
         if 0 == len(cidx):
-            return nh.zeros((0, 3, 4), dtype=nh.BDTYPE)
+            return nh.zeros((0, 3), dtype=nh.BDTYPE)
         
-        # idx からカタログへ変換
-        return np.concatenate([[[[c0idx],[c1idx],[c2idx]] for c0idx,c1idx,c2idx in cidx], self._catalog[cidx]], axis=2)
+        return cidx
     
     def _makeKey(self, side:np.ndarray|list, idx:np.ndarray|list) -> tuple[np.ndarray, np.ndarray]:
         """
