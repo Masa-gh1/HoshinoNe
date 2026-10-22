@@ -422,8 +422,8 @@ class Catalog:
               and not self._idxMap    is None
               and not self._values    is None), "Catalog is not loaded or database is not generated."
         
-        key, orderder = self._makeKey([side01, side12, side20], [0, 1, 2])
-        invOrder = np.argsort(orderder) # 逆引き用
+        key, order = self._makeKey([side01, side12, side20], [0, 1, 2])
+        invOrder = np.argsort(order) # 逆引き用
         r = np.linalg.norm(key) * relativeError
         
         if not fixVertexIdx is None:
