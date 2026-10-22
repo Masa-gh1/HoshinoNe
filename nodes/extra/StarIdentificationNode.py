@@ -433,11 +433,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 
                 # 画像 4 点とカタログ 4 点が相似だった
                 currentInliers = 4
-                currentMatched = [np.array([cidx[0],pidx[0]], dtype=np.uint32),
-                                  np.array([cidx[1],pidx[1]], dtype=np.uint32),
-                                  np.array([cidx[2],pidx[2]], dtype=np.uint32),
-                                  np.array([gidx[2],qidx[2]], dtype=np.uint32)]
-                currentMatchedNp = np.array(currentMatched, dtype=np.uint32)
+                currentMatched = np.array([[cidx[0],pidx[0]],
+                                           [cidx[1],pidx[1]],
+                                           [cidx[2],pidx[2]],
+                                           [gidx[2],qidx[2]]], dtype=np.uint32)
                 
                 # 確定済み以外の星配列を作成
                 otherIdx = np.where(np.logical_not(np.isin(np.arange(starCnt), pidx) | np.isin(np.arange(starCnt), qidx)))[0]
@@ -450,11 +449,11 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         break
                     
                     p0 = starsV[p0idx]
-                    m1idx, m2idx = random.choice(len(currentMatchedNp), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
-                    c1idx = currentMatchedNp[m1idx, CIDX]
-                    c2idx = currentMatchedNp[m2idx, CIDX]
-                    p1idx = currentMatchedNp[m1idx, PIDX]
-                    p2idx = currentMatchedNp[m2idx, PIDX]
+                    m1idx, m2idx = random.choice(len(currentMatched), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
+                    c1idx = currentMatched[m1idx, CIDX]
+                    c2idx = currentMatched[m2idx, CIDX]
+                    p1idx = currentMatched[m1idx, PIDX]
+                    p2idx = currentMatched[m2idx, PIDX]
                     p1 = starsV[p1idx]
                     p2 = starsV[p2idx]
                     
@@ -474,7 +473,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     # カタログから検索
                     cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1idx, c2idx))
                     catalogTotal += len(cidx)
-                    cidx = cidx[np.all(cidx[:,0,np.newaxis] != currentMatchedNp[np.newaxis, :, CIDX], axis=1)] # 既知の点を除く
+                    cidx = cidx[np.all(cidx[:,0,np.newaxis] != currentMatched[np.newaxis, :, CIDX], axis=1)] # 既知の点を除く
                     if 0 < len(cidx):
                         cidx = random.choice(cidx) # 複数候補からランダムに選択
                         c0idx = cidx[0]
@@ -485,21 +484,20 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         continue # 相似の三角形が見つからないのでスキップ
                     
                     currentInliers += 1
-                    currentMatched.append(np.array([c0idx,p0idx], dtype=np.uint32))
-                    currentMatchedNp = np.array(currentMatched, dtype=np.uint32)
+                    currentMatched = np.concatenate([currentMatched, np.array([[c0idx,p0idx]], dtype=np.uint32)], axis=0)
                     
                     #重複チェック
-                    x1s, x2s = np.triu_indices(len(currentMatchedNp), k=1) # 表の右上だけ選択
+                    x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
                     for x1,x2 in zip(x1s,x2s):
-                        assert np.all(currentMatchedNp[x1,CIDX] != currentMatchedNp[x2,CIDX]), "重複が発生しています。"
+                        assert np.all(currentMatched[x1,CIDX] != currentMatched[x2,CIDX]), "重複が発生しています。"
                 
                 # インライア数が閾値を超えた場合、モデル情報を更新
                 if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    currentMatchedNp = currentMatchedNp[np.argsort(catalog.getCatalog(currentMatchedNp[:,PIDX])[:, MAG])] # カタログ等級順にソート
+                    currentMatched = currentMatched[np.argsort(catalog.getCatalog(currentMatched[:,PIDX])[:, MAG])] # カタログ等級順にソート
                     # 誤差算出
                     # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                    p = starsV[currentMatchedNp[:,PIDX], U:W+1]
-                    c = catalog.getCatalog(currentMatchedNp[:,CIDX])[:, RA:DEC+1]
+                    p = starsV[currentMatched[:,PIDX], U:W+1]
+                    c = catalog.getCatalog(currentMatched[:,CIDX])[:, RA:DEC+1]
                     dp = self.calcAngDistance(   p[:, np.newaxis, :], p[np.newaxis, :, :])
                     dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
                     assert isinstance(dc, np.ndarray), "this should be a numpy array"
@@ -509,7 +507,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                     if bestMatchCount < currentInliers or currentError < bestMatchError:
                         bestMatchCount = currentInliers
                         bestMatchError = currentError
-                        bestMatchStars = currentMatchedNp
+                        bestMatchStars = currentMatched
                 
                 if(   5 <= bestMatchCount
                   and self.star.minMatchedStars <= bestMatchCount
