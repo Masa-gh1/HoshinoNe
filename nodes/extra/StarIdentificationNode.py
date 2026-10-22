@@ -144,6 +144,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             
             # カタログ照合
             matchedStars, ransac = self.matchCatalog(starsV, catalog)
+            matchedIds     = catalog.getId(matchedStars[:, CIDX])
             matchedCatalog = catalog.getCatalog(matchedStars[:,CIDX])
             matchedSarts   = stars[np.uint32(matchedStars[:,PIDX])]
             
@@ -151,7 +152,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             self.debug(flowData, matchedCatalog, matchedSarts, ransac)
             
             # 出力 Table FlowData を作成
-            flowData = self.createFlowData(flowData, catalog, matchedStars[:,CIDX], matchedCatalog, matchedSarts)
+            flowData = self.createFlowData(flowData, catalog, matchedIds, matchedCatalog, matchedSarts)
             outputFlowDatas.append(flowData)
 
         self.flowDatas = outputFlowDatas
@@ -578,7 +579,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         return error
     
-    def createFlowData(self, inputData:FlowData, catalog:Catalog, matchedIdxs:np.ndarray, matchedCatalog:np.ndarray, matchedStars:np.ndarray) -> FlowData:
+    def createFlowData(self, inputData:FlowData, catalog:Catalog, matchedIds:np.ndarray, matchedCatalog:np.ndarray, matchedStars:np.ndarray) -> FlowData:
         """星リストから Table 型 FlowData を作成"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -588,13 +589,13 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         # 等級でソート
         sortedIdx = np.argsort(matchedCatalog[:,MAG])
-        matchedIdxs    = matchedIdxs[sortedIdx]
+        matchedIds     = matchedIds[sortedIdx]
         matchedCatalog = matchedCatalog[sortedIdx]
         matchedStars   = matchedStars[sortedIdx]
 
         symbol = catalog.getSymbol()
         columns = ['ra', 'dec', 'mag', 'x', 'y', 'brightness']
-        lines   = [f"{symbol}{idx}" for idx in matchedIdxs]
+        lines   = [f"{id}" for id in matchedIds]
 
         tableRows = []
         for cat, str in zip(matchedCatalog, matchedStars):

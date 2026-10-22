@@ -395,6 +395,26 @@ class Catalog:
             return 0
         else:
             return len(self._catalog)
+
+    def getId(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
+        """
+        星識別子を取得
+        
+        Args:
+            cidx: カタログの idx または idx の配列
+        
+        Returns:
+            np.ndarray: ID の配列 shape=(N) [ID,...]
+        """
+        import numpy as np
+        
+        assert not self._ids is None, "Catalog IDs are not loaded."
+        
+        if isinstance(cidx, int):
+            return self._ids[cidx]
+        else:
+            cidx = np.asanyarray(cidx, dtype=np.uint32)
+            return self._ids[cidx]
     
     def getCatalog(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
         """
