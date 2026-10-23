@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from scipy.spatial import KDTree
 
 # カタログ配列の index 定義
-IDX, RA, DEC, MAG = 0, 1, 2, 3
+RA, DEC, MAG = 0, 1, 2
 
 class Catalog:
     """星カタログのパース、キャッシュ管理、および幾何計算を行うユーティリティ"""
@@ -79,9 +79,9 @@ class Catalog:
             c0 = self._catalog[c0idx]
             c1 = self._catalog[c1idx]
             c2 = self._catalog[c2idx]
-            c01d = self.angularDistance(c0[RA-1:DEC], c1[RA-1:DEC])
-            c12d = self.angularDistance(c1[RA-1:DEC], c2[RA-1:DEC])
-            c20d = self.angularDistance(c2[RA-1:DEC], c0[RA-1:DEC])
+            c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
+            c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
+            c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
             
             if np.abs(1 - c01d/c12d) < 0.01: continue # 2辺の差がノイズより小さいのでパス
             if np.abs(1 - c12d/c20d) < 0.01: continue # 2辺の差がノイズより小さいのでパス
@@ -246,7 +246,7 @@ class Catalog:
           or self._cachedValues    is None
           ):
             # 検索辞書作成
-            ratioTreee, idxMap, values = self.generateTriangleDatabase(symbol, self._cachedCatalog)
+            ratioTreee, idxMap, values = self.generateTriangleDatabase(symbol, self._cachedCatalog, self._cachedIds)
             
             self._cachedRatioTree = ratioTreee
             self._cachedIdMap     = idxMap
@@ -262,7 +262,7 @@ class Catalog:
                 from utils.Debug import Debug
                 Debug.log(self.__class__.__name__, "Warning: Save catalog cache failed.")
     
-    def generateTriangleDatabase(self, symbol:str, catalog:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
+    def generateTriangleDatabase(self, symbol:str, catalog:np.ndarray, ids:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
         """三角形データベースの生成"""
         from config import CATALOG_DB_MAG, CATALOG_DB_NUM
         
@@ -279,7 +279,7 @@ class Catalog:
         # 等級の10%毎のパーセンタイル
         p  = list(range(0, 101, 10))
         pS = " ".join(["%4d" % x for x in p])
-        mag  = np.percentile(catalog[:, MAG-1], p)
+        mag  = np.percentile(catalog[:, MAG], p)
         magS = " ".join(["%4.1f" % x for x in mag])
         Debug.log(self.__class__.__name__, f"         {pS}%")
         Debug.log(self.__class__.__name__, f"Mag: 0%: {magS} :100%")
@@ -324,7 +324,7 @@ class Catalog:
         # values     45 MB
         keys   = []
         values = []
-        indices = np.where(catalog[:, MAG-1] <= CATALOG_DB_MAG)[0]
+        indices = np.where(catalog[:, MAG] <= CATALOG_DB_MAG)[0]
         starCount = len(indices)
         progress = 0
         Debug.log(self.__class__.__name__, f"Generate triangle database from {starCount} stars")
@@ -333,26 +333,30 @@ class Catalog:
             if progress % (starCount//10+1) == 0:
                 Debug.log(self.__class__.__name__, f"Progress: {progress}/{starCount} {progress*100//starCount}%  triangles: {len(keys)}")
             
-            ra   = catalog[c0idx, RA-1]
-            dec  = catalog[c0idx, DEC-1]
-            mag  = catalog[c0idx, MAG-1]
+            ra   = catalog[c0idx, RA]
+            dec  = catalog[c0idx, DEC]
+            mag  = catalog[c0idx, MAG]
             # CATALOG_DB_NUM 以上になる radius
             rn = magRad[max(0, min(len(magRad)-1, int(mag)))]
             radius = list(filter(lambda x: x[1] < CATALOG_DB_NUM, rn))[-1][0]
-            selected = self.queryStars(ra, dec, radius, mag)
-            while (CATALOG_DB_NUM+1) < len(selected) and 0.9 < radius: # (CATALOG_DB_NUM+1) 未満になるまで絞る
+            idx = self.queryStars(ra, dec, radius, mag)
+            idx = idx[np.unique(ids[idx], return_index=True)[1]] # ID の重複を除く
+            while (CATALOG_DB_NUM+1) < len(idx) and 0.9 < radius: # (CATALOG_DB_NUM+1) 未満になるまで絞る
                 radius /= 1.41421356237
-                selected = self.queryStars(ra, dec, radius, mag)
-            while len(selected) < (CATALOG_DB_NUM+1) and radius < 180.0: # (CATALOG_DB_NUM+1) 以上になるまで広げる
+                idx = self.queryStars(ra, dec, radius, mag)
+                idx = idx[np.unique(ids[idx], return_index=True)[1]] # ID の重複を除く
+            while len(idx) < (CATALOG_DB_NUM+1) and radius < 180.0: # (CATALOG_DB_NUM+1) 以上になるまで広げる
                 radius *= 1.41421356237
-                selected = self.queryStars(ra, dec, radius, mag)
+                idx = self.queryStars(ra, dec, radius, mag)
+                idx = idx[np.unique(ids[idx], return_index=True)[1]] # ID の重複を除く
             # 自身と他の星の総組み合わせで三角形をつくる
-            other = selected[selected[:, IDX] != c0idx]
-            x, y = self.gnomonicProjection(other[:, 1], other[:, 2], ra, dec)
-            for j in range(len(other)):
-                for k in range(j+1, len(other)):
-                    c1idx = int(other[j,IDX])
-                    c2idx = int(other[k,IDX])
+            oidx = idx[idx != c0idx]
+            other = catalog[oidx]
+            x, y = self.gnomonicProjection(other[:, RA], other[:, DEC], ra, dec)
+            for j in range(len(oidx)):
+                for k in range(j+1, len(oidx)):
+                    c1idx = oidx[j]
+                    c2idx = oidx[k]
                     c0 = catalog[c0idx]
                     c1 = catalog[c1idx]
                     c2 = catalog[c2idx]
@@ -361,9 +365,11 @@ class Catalog:
                     if 0 < ((x1 - 0) * (y2 - 0)) - ((y1 - 0) * (x2 - 0)):
                         c1   , c2    = c2   , c1    # 時計回りに修正
                         c1idx, c2idx = c2idx, c1idx # 時計回りに修正
-                    c01d = self.angularDistance(c0[RA-1:DEC], c1[RA-1:DEC])
-                    c12d = self.angularDistance(c1[RA-1:DEC], c2[RA-1:DEC])
-                    c20d = self.angularDistance(c2[RA-1:DEC], c0[RA-1:DEC])
+                    c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
+                    c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
+                    c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
+                    if c01d <= 0 or c12d <= 0 or c20d <= 0: continue # 距離が 0 なので、スキップ
+                    
                     key, cidx = self._makeKey([c01d, c12d, c20d], [c0idx, c1idx, c2idx])
                     keys.append(key)
                     values.append(cidx)
@@ -492,7 +498,7 @@ class Catalog:
         
         if not magLimit is None:
             # 等級フィルタ
-            mask = self._catalog[cidx, MAG-1] <= magLimit
+            mask = self._catalog[cidx, MAG] <= magLimit
             mask = np.all(mask, axis=1)
             cidx = cidx[mask]
         
@@ -527,7 +533,7 @@ class Catalog:
         
         return key, idx
     
-    def queryStars(self, centerRaDeg: float, centerDecDeg: float, radiusDeg: float, magLimit: float = 99.0) -> np.ndarray:
+    def queryStars(self, centerRaDeg:float, centerDecDeg:float, radiusDeg:float, magLimit:float=99.0) -> np.ndarray:
         """
         指定された中心座標と半径の範囲内にある星を抽出する
         
@@ -549,7 +555,7 @@ class Catalog:
             return nh.zeros((0, 4), dtype=nh.BDTYPE)
         
         # 等級フィルタ
-        indices = np.where(self._catalog[:, MAG-1] <= magLimit)[0]
+        indices = np.where(self._catalog[:, MAG] <= magLimit)[0]
         if 0 == len(indices):
             return nh.zeros((0, 4), dtype=nh.BDTYPE)
         catalog = self._catalog[indices]
@@ -557,7 +563,7 @@ class Catalog:
         # 赤緯の粗い矩形フィルタ
         decMin = max(-90.0, centerDecDeg - radiusDeg)
         decMax = min( 90.0, centerDecDeg + radiusDeg)
-        decMask = (decMin <= catalog[:, DEC-1]) & (catalog[:, DEC-1] <= decMax)
+        decMask = (decMin <= catalog[:, DEC]) & (catalog[:, DEC] <= decMax)
         if not np.any(decMask):
             return nh.zeros((0, 4), dtype=nh.BDTYPE)
         indices = indices[decMask]
@@ -570,24 +576,23 @@ class Catalog:
             raMin = (centerRaDeg - raDelta) % 360.0
             raMax = (centerRaDeg + raDelta) % 360.0
             if raMin <= raMax:
-                raMask = (raMin <= catalog[:, RA-1]) & (catalog[:, RA-1] <= raMax)
+                raMask = (raMin <= catalog[:, RA]) & (catalog[:, RA] <= raMax)
             else:
-                raMask = (catalog[:, RA-1] >= raMin) | (catalog[:, RA-1] <= raMax)
+                raMask = (catalog[:, RA] >= raMin) | (catalog[:, RA] <= raMax)
             if not np.any(raMask):
                 return nh.zeros((0, 4), dtype=nh.BDTYPE)
             indices = indices[raMask]
             catalog = self._catalog[indices]
         
         # 正確な角距離を計算
-        dists = self.angularDistance(catalog[:, RA-1:DEC], [centerRaDeg, centerDecDeg])
+        dists = self.angularDistance(catalog[:, RA:DEC+1], [centerRaDeg, centerDecDeg])
         distMask = dists <= radiusDeg
         if not np.any(distMask):
             return nh.zeros((0, 4), dtype=nh.BDTYPE)
         indices = indices[distMask]
         catalog = self._catalog[indices]
         
-        # idx からカタログへ変換
-        return np.concatenate([[[idx] for idx in indices], catalog], axis=1)
+        return indices
     
     @staticmethod
     def angularDistance(p0:np.ndarray|list, p1:np.ndarray|list) -> np.ndarray|float:
