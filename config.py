@@ -267,14 +267,18 @@ HEADERS_EXIF = [
 #
 # 下記は VizieR から得た Hipparcos カタログ I/311/hip2 のTSVファイルでの例
 # https://vizier.unistra.fr/
-#CATALOG_PATH = ("HIP", "./sample/catalog/I_311_HIS2.tsv")
-#CATALOG_HEADERS = [
-#    # name  catalog  型
-#    ("ID" , "HIP"  , str  ),
-#    ("RA" , "RArad", float),
-#    ("Dec", "DErad", float),
-#    ("Mag", "Hpmag", float),
-#]
+#CATALOG = {
+#    "HIP":{
+#        "PATH":"./sample/catalog/I_311_HIS2.tsv",
+#        "HEADER":[
+#            # name  catalog  型
+#            ("ID" , "HIP"  , str  ),
+#            ("RA" , "RArad", float),
+#            ("Dec", "DErad", float),
+#            ("Mag", "Hpmag", float),
+#        ]
+#    }
+#}
 CATALOG = {
     "HIP":{
         "PATH":"./sample/catalog/I_311_hip2+IV_27A_table3.tsv",
