@@ -10,7 +10,6 @@ All rights reserved.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-import math
 from fractions import Fraction
 import json
 import io
@@ -295,33 +294,40 @@ class ResultWindow(tk.Toplevel):
         headers = flowData.headers
         content = "\n"
         
-        planes = headers.get('planes', [])
+        planes  = headers.get('planes', [])
+        lines   = headers.get('lines', [])
+        columns = headers.get('columns', [])
         
         width, height = flowData.getDimensions()
-        displayRows = min(height, 100)  # 最初と最後の50行のみ表示
-        displayCols = min(width ,  10)  # 最初と最後の5列のみ表示
+        rowLimit = 100 # 最初と最後の50行のみ表示
+        colLimit =  10 # 最初と最後の5列のみ表示
+        displayRowLen = min(height, rowLimit)
+        displayColLen = min(width , colLimit)
+        rowSepPos = displayRowLen//2 if displayRowLen < height else height
+        colSepPos = displayColLen//2 if displayColLen < width  else width
         
         for planeIndex, planeName in enumerate(planes):
-            content += f"\n[plane: {planeName}]\n"
-            
-            median = flowData.getQuantile(0.5)
-            
             block = None
             blockX = 0
             blockY = 0
             blockW = 0
             blockH = 0
-            cols = []
-            for x in range(displayCols):
-                if displayCols < width and displayCols//2 <= x:
-                    x += width - displayCols
+            linLabel = []
+            colLabal = []
+            vals = []
+            
+            # displayCols, displayRows サイズに間引き
+            for x in range(displayColLen):
+                x += 0 if x < colSepPos else width - displayColLen
+                colLabal.append(columns[x] if x < len(columns) else x)
                 cells = []
-                for y in range(displayRows):
-                    if displayRows < height and displayRows//2 <= y:
-                        y += height - displayRows
+                for y in range(displayRowLen):
+                    y += 0 if y < rowSepPos else height - displayRowLen
+                    if 0 == x:
+                        linLabel.append(lines[y] if y < len(lines) else y)
                     if(  x < blockX or blockX + blockW <= x
-                    or y < blockY or blockY + blockH <= y
-                    ):
+                      or y < blockY or blockY + blockH <= y
+                      ):
                         block = flowData.getBlock(planeIndex, x//BLOCK_SIZE*BLOCK_SIZE, y//BLOCK_SIZE*BLOCK_SIZE)
                         if block and not block.data is None:
                             blockX = x//BLOCK_SIZE*BLOCK_SIZE
@@ -332,32 +338,42 @@ class ResultWindow(tk.Toplevel):
                             blockY = 0
                             blockW = 0
                             blockH = 0
-                    value = block.data[y-blockY][x-blockX]
-                    cells.append(value)
-                cols.append(sh.dispL(cells, representative=median))
+                    if block and not block.data is None:
+                        cells.append(block.data[y-blockY][x-blockX])
+                    else:
+                        cells.append(nh.nan)
+                vals.append(cells)
+            
+            # 表示桁数調整
+            median = float(np.nanmedian(vals))
+            for x in range(len(vals)):
+                vals[x] = sh.dispL(vals[x], representative=median)
+            
+            # ラベル調整
+            toplabel  = "LABEL"
+            linLabel  = [f"y:{label}" for label in linLabel]
+            colLabal  = [f"x:{label}" for label in colLabal]
+            linLblLen = max([len(label) for label in [toplabel] + linLabel])
+            colLen    = [max([len(colLabal[x])] + [len(vals[x][y]) for y in range(len(vals[x]))]) for x in range(len(vals))]
             
             # ヘッダー行
-            if width:
-                content += "LABEL"
-                for x in  range(width):
-                    if displayCols < width and displayCols//2 == x:
-                        content += "\t..."
-                    content += "\t"
-                    content += f"x:{x}".ljust(max([0]+[len(t) for t in cols[x]]))
-                content += "\n"
+            content += f"\n[plane: {planeName}]\n"
+            row = [toplabel.ljust(linLblLen)]
+            for x in range(displayColLen):
+                if colSepPos == x:
+                    row.append("...")
+                row.append(colLabal[x].ljust(colLen[x]))
+            content += "\t".join(row) + "\n"
             
             # データ行
-            for y in range(displayRows):
-                if displayRows < height and displayRows//2 == y:
+            for y in range(displayRowLen):
+                if rowSepPos == y:
                     content += " :\n"
-                if displayRows < height and displayRows//2 <= y:
-                    row = [f"y:{y + height - displayRows}"]
-                else:
-                    row = [f"y:{y}"]
-                for x in range(displayCols):
-                    if displayCols < width and displayCols//2 == x:
+                row = [linLabel[y].ljust(linLblLen)]
+                for x in range(displayColLen):
+                    if colSepPos == x:
                         row.append("...")
-                    row.append(cols[x][y])
+                    row.append(vals[x][y].rjust(colLen[x]))
                 content += "\t".join(row) + "\n"
         
         return content
@@ -372,21 +388,32 @@ class ResultWindow(tk.Toplevel):
         columns = headers.get('columns', [])
         
         width, height = flowData.getDimensions()
+        rowLimit = 10 # 最初と最後の5行のみ表示
+        colLimit = 10 # 最初と最後の5列のみ表示
+        displayRowLen = min(height, rowLimit)
+        displayColLen = min(width , colLimit)
+        rowSepPos = displayRowLen//2 if displayRowLen < height else height
+        colSepPos = displayColLen//2 if displayColLen < width  else width
         
         for planeIndex, planeName in enumerate(planes):
-            content += f"\n[plane: {planeName}]\n"
-            
-            median = flowData.getQuantile(0.5)
-            
             block = None
             blockX = 0
             blockY = 0
             blockW = 0
             blockH = 0
-            cols = []
-            for x in range(width):
+            linLabel = []
+            colLabal = []
+            vals = []
+            
+            # displayCols, displayRows サイズに間引き
+            for x in range(displayColLen):
+                x += 0 if x < colSepPos else width - displayColLen
+                colLabal.append(columns[x] if x < len(columns) else x)
                 cells = []
-                for y in range(height):
+                for y in range(displayRowLen):
+                    y += 0 if y < rowSepPos else height - displayRowLen
+                    if 0 == x:
+                        linLabel.append(lines[y] if y < len(lines) else y)
                     if(  x < blockX or blockX + blockW <= x
                       or y < blockY or blockY + blockH <= y
                       ):
@@ -403,29 +430,40 @@ class ResultWindow(tk.Toplevel):
                     if block and not block.data is None:
                         cells.append(block.data[y-blockY][x-blockX])
                     else:
-                        cells.append(math.nan)
-                cols.append(sh.dispL(cells, representative=median))
+                        cells.append(nh.nan)
+                vals.append(cells)
+            
+            # 表示桁数調整
+            median = float(np.nanmedian(vals))
+            for x in range(len(vals)):
+                vals[x] = sh.dispL(vals[x], representative=median)
+            
+            # ラベル調整
+            toplabel  = "LABEL"
+            linLabel  = [label if isinstance(label,str) else f"y({label})" for label in linLabel]
+            colLabal  = [label if isinstance(label,str) else f"x({label})" for label in colLabal]
+            linLblLen = max([len(label) for label in [toplabel] + linLabel])
+            colLen    = [max([len(colLabal[x])] + [len(vals[x][y]) for y in range(len(vals[x]))]) for x in range(len(vals))]
             
             # ヘッダー行
-            if columns:
-                content += "LABEL"
-                length = max([len(label) for label in lines])
-                content += "\t"*((length-5)//8)
-                for x, column in enumerate(columns):
-                    content += "\t"
-                    content += column.ljust(max([0]+[len(t) for t in cols[x]]))
-                content += "\n"
+            content += f"\n[plane: {planeName}]\n"
+            row = [toplabel.ljust(linLblLen)]
+            for x in range(displayColLen):
+                if colSepPos == x:
+                    row.append("...")
+                row.append(colLabal[x].ljust(colLen[x]))
+            content += "\t".join(row) + "\n"
             
             # データ行
-            for y in range(height):
-                row = [lines[y] if y < len(lines) else f"row_{y}"]
-                for x in range(width):
-                    row.append(cols[x][y])
-                if width > width:
-                    row.append("...")
+            for y in range(displayRowLen):
+                if rowSepPos == y:
+                    content += " :\n"
+                row = [linLabel[y].ljust(linLblLen)]
+                for x in range(displayColLen):
+                    if colSepPos == x:
+                        row.append("...")
+                    row.append(vals[x][y].rjust(colLen[x]))
                 content += "\t".join(row) + "\n"
-            if height > height:
-                content += "...\n"
         
         return content
     
@@ -439,25 +477,32 @@ class ResultWindow(tk.Toplevel):
         columns = headers.get('columns', [])
         
         width, height = flowData.getDimensions()
-        displayRows = min(height, 1000)  # 最初と最後の500行のみ表示
-        displayCols = min(width ,   10)  # 最初と最後の5列のみ表示
+        rowLimit = 1000 # 最初と最後の500行のみ表示
+        colLimit =   10 # 最初と最後の5列のみ表示
+        displayRowLen = min(height, rowLimit)
+        displayColLen = min(width , colLimit)
+        rowSepPos = displayRowLen//2 if displayRowLen < height else height
+        colSepPos = displayColLen//2 if displayColLen < width  else width
         
         for planeIndex, planeName in enumerate(planes):
-            content += f"\n[plane: {planeName}]\n"
-        
             block = None
             blockX = 0
             blockY = 0
             blockW = 0
             blockH = 0
-            cols = []
-            for x in range(displayCols):
-                if displayCols < width and displayCols//2 <= x:
-                    x += width - displayCols
+            linLabel = []
+            colLabal = []
+            vals = []
+            
+            # displayCols, displayRows サイズに間引き
+            for x in range(displayColLen):
+                x += 0 if x < colSepPos else width - displayColLen
+                colLabal.append(columns[x] if x < len(columns) else x)
                 cells = []
-                for y in range(displayRows):
-                    if displayRows < height and displayRows//2 <= y:
-                        y += height - displayRows
+                for y in range(displayRowLen):
+                    y += 0 if y < rowSepPos else height - displayRowLen
+                    if 0 == x:
+                        linLabel.append(lines[y] if y < len(lines) else y)
                     if(  x < blockX or blockX + blockW <= x
                       or y < blockY or blockY + blockH <= y
                       ):
@@ -474,33 +519,38 @@ class ResultWindow(tk.Toplevel):
                     if block and not block.data is None:
                         cells.append(block.data[y-blockY][x-blockX])
                     else:
-                        cells.append(math.nan)
-                cols.append(sh.dispL(cells))
+                        cells.append(nh.nan)
+                vals.append(cells)
+            
+            # 表示桁数調整
+            for x in range(len(vals)):
+                vals[x] = sh.dispL(vals[x])
+            
+            # ラベル調整
+            toplabel  = "LABEL"
+            linLabel  = [label if isinstance(label,str) else f"({label})"   for label in linLabel]
+            colLabal  = [label if isinstance(label,str) else f"col_{label}" for label in colLabal]
+            linLblLen = max([len(label) for label in [toplabel] + linLabel])
+            colLen    = [max([len(colLabal[x])] + [len(vals[x][y]) for y in range(len(vals[x]))]) for x in range(len(vals))]
             
             # ヘッダー行
-            content += "LABEL"
-            length = max([len(label) for label in lines]) if lines else 7
-            content += "\t"*((length-5)//8)
-            for x in range(displayCols):
-                if displayCols < width and displayCols//2 == x:
-                    content += "\t..."
-                content += "\t"
-                column = columns[x] if x < len(columns) else f"col_{x}"
-                content += column.ljust(max([0]+[len(t) for t in cols[x]]))
-            content += "\n"
+            content += f"\n[plane: {planeName}]\n"
+            row = [toplabel.ljust(linLblLen)]
+            for x in range(displayColLen):
+                if colSepPos == x:
+                    row.append("...")
+                row.append(colLabal[x].ljust(colLen[x]))
+            content += "\t".join(row) + "\n"
             
             # データ行
-            for y in range(displayRows):
-                if displayRows < height and displayRows//2 == y:
+            for y in range(displayRowLen):
+                if rowSepPos == y:
                     content += " :\n"
-                if displayRows < height and displayRows//2 <= y:
-                    row = [lines[y] if y < len(lines) else f"row_{y + height - displayRows}"]
-                else:
-                    row = [lines[y] if y < len(lines) else f"row_{y}"]
-                for x in range(displayCols):
-                    if displayCols < width and displayCols//2 == x:
+                row = [linLabel[y].ljust(linLblLen)]
+                for x in range(displayColLen):
+                    if colSepPos == x:
                         row.append("...")
-                    row.append(cols[x][y])
+                    row.append(vals[x][y].rjust(colLen[x]))
                 content += "\t".join(row) + "\n"
             
         return content
