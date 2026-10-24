@@ -7,6 +7,11 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+import hashlib
+
+import tkinter as tk
+from tkinter import messagebox
+
 from base.FlowNode_CONST import *
 from nodes import NNPlaneOperationNode
 from config import MAX_WORKERS
@@ -21,6 +26,33 @@ class QuantileFilterNode(NNPlaneOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
+    def __init__(self, canvas, editor, x, y, **kwargs):
+        super().__init__(canvas, editor, x, y, **kwargs)
+        
+        self.quantile               = 0.5               # 分位数 (概算時は 0.5 固定、カーネルは正方形のみ)
+        self.useApproximation       = False             # 概算を使う
+        self.approximation          = 1                 # 概算回数
+    
+    def getText(self):
+        """ノードのテキストを取得"""
+        if self.useApproximation:
+            displayText = f"{self.name}\n概算:{self.approximation} q:0.5"
+        else:
+            displayText = f"{self.name}\nq:{self.quantile}"
+        return displayText
+    
+    def store(self, nodeData):
+        """ノード設定を辞書に保存"""
+        nodeData["quantile"]         = self.quantile
+        nodeData["useApproximation"] = self.useApproximation
+        nodeData["approximation"]    = self.approximation
+
+    def restore(self, nodeData):
+        """辞書からノード設定を復元"""
+        self.quantile         = nodeData.get("quantile"        , self.quantile        )
+        self.useApproximation = nodeData.get("useApproximation", self.useApproximation)
+        self.approximation    = nodeData.get("approximation"   , self.approximation   )
+        
     def planeOperation(self, flowDatas, planeIndex):
         """分位数濾過処理"""
         import numpy as np
@@ -50,12 +82,6 @@ class QuantileFilterNode(NNPlaneOperationNode):
         auxPlane = nh.empty((auxH, auxW))
         
         auxPlaneIdx = 0 if 1 == auxPlanCnt else planeIndex # 補正データが 1 プレーンだけの場合、全プレーンに同じ補正データを適用する
-        auxName = auxData.headers["planes"][auxPlaneIdx]
-        pram = auxName.lower().split(" ")
-        idx = pram.index("quantile") if "quantile" in pram else pram.index("q") if "q" in pram else -1
-        q = 0.5 if idx < 0 or len(pram) <= idx+1 else float(pram[idx+1])
-        idx = pram.index("approximation") if "approximation" in pram else pram.index("approx") if "approx" in pram else -1
-        approx = 0 if idx < 0 else 1 if len(pram) <= idx+1 else int(pram[idx+1])
         for block in auxData.iterateBlocks(auxPlaneIdx):
             x = block.x
             y = block.y
@@ -65,18 +91,18 @@ class QuantileFilterNode(NNPlaneOperationNode):
             endY = block.y + blockHeight
             auxPlane[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
         
-        if np.uint8 == planeData.dtype:
+        if np.uint8 == planeData.dtype and self.useApproximation:
             import cv2
             k = np.max(auxPlane.shape)
             result = cv2.medianBlur(planeData, k) # 分位数濾過
-        elif 0.5 == q and 0 < approx:
+        elif self.useApproximation:
             import cv2
             # 中央値 概算 なので、uint8 にスケールして cv2.medianBlur で概算
             k      = np.max(auxPlane.shape)
             offset = np.nanmin(planeData)
             endV   = np.nanmax(planeData) * (1.0 + nh.epsilon)
             scale  = (256.0 / (endV - offset))
-            cnt    = approx
+            approx = self.approximation
             # 作業用メモリを確保
             tmp        = nh.empty((height, width))
             planeUByte = np.empty((height, width), dtype=np.uint8)
@@ -84,16 +110,16 @@ class QuantileFilterNode(NNPlaneOperationNode):
             result     = nh.zeros((height, width))
             # NaN を 0 で補完
             np.nan_to_num(planeData, nan=0, copy=False)
-            for i in range(cnt):
+            for i in range(approx):
                 # 少しづつズラして中央値を得て誤差を分散させる
-                a = (i - (cnt - 1) / 2.0) / cnt / scale
+                a = (i - (approx - 1) / 2.0) / approx / scale
                 np.add(planeData, -(offset + a), out=tmp)
                 tmp *= scale
                 planeUByte[:] = tmp.astype(np.uint8) # キャスト
                 cv2.medianBlur(planeUByte, k, dst=resUByte) # 分位数濾過
                 tmp[:] = resUByte # キャスト
-                tmp /= cnt * scale
-                tmp += (offset + a) / cnt
+                tmp /= approx * scale
+                tmp += (offset + a) / approx
                 result += tmp
         elif False:
             # cv2.medianBlur を使って float32 を計算する。
@@ -110,6 +136,7 @@ class QuantileFilterNode(NNPlaneOperationNode):
             resultUlong[~maskB] ^= 0x80000000 # 符号ビットを反転
             result = resultUlong.view(np.float32).reshape((height, width))
         else:
+            q      = self.quantile
             kh, kw = auxPlane.shape
             kCount = int(np.sum(~np.isnan(auxPlane))) # カーネルの nan 以外の数
             result = nh.nans((height, width))
@@ -167,3 +194,75 @@ class QuantileFilterNode(NNPlaneOperationNode):
                 blocks.append(dataBlock)
         
         return blocks
+
+    def createSettingWindow(self):
+        """設定ダイアログを作成"""
+        return QuantileFilterSettingsDialog(self.view.editor.root, self)
+    
+    def getConfigHash(self):
+        config =(f"{self.minorType}_"
+                 f"{self._outputCat}_"
+                 f"{self.quantile}_"
+                 f"{self.useApproximation}_"
+                 f"{self.approximation}_"
+                )
+        return hashlib.md5(config.encode()).hexdigest()
+
+class QuantileFilterSettingsDialog(tk.Toplevel):
+    """QuantileFilterNode 用設定ダイアログ"""
+    
+    def __init__(self, parent, node:QuantileFilterNode):
+        super().__init__(parent)
+        self.node = node
+        self.title(f"{node.name} 設定")
+        self.geometry("450x200")
+        
+        self._createWidgets()
+    
+    def _createWidgets(self):
+        """UI ウィジェットを生成"""
+        mainFrame = tk.Frame(self)
+        mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # 分位数
+        approximationFrame = tk.Frame(mainFrame)
+        approximationFrame.pack(fill=tk.X, pady=2)
+        tk.Label(approximationFrame, text="分位数:").pack(side=tk.LEFT)
+        self.quantileEntry = tk.Entry(approximationFrame, width=6)
+        self.quantileEntry.insert(0, str(self.node.quantile))
+        self.quantileEntry.pack(side=tk.LEFT, padx=4)
+        
+        # 概算
+        approximationFrame = tk.Frame(mainFrame)
+        approximationFrame.pack(fill=tk.X, pady=2)
+        tk.Label(approximationFrame, text="概算を使う:").pack(side=tk.LEFT)
+        self.useApproximationVar = tk.BooleanVar(value=self.node.useApproximation)
+        tk.Checkbutton(approximationFrame, text="概算回数:", variable=self.useApproximationVar).pack(side=tk.LEFT)
+        self.approximationEntry = tk.Entry(approximationFrame, width=3)
+        self.approximationEntry.insert(0, str(self.node.approximation))
+        self.approximationEntry.pack(side=tk.LEFT, padx=4)
+        tk.Label(approximationFrame, text="分位数は 0.5 固定、カーネルは正方形のみ").pack(side=tk.LEFT)
+        
+        # ボタンフレーム
+        btnFrame = tk.Frame(self)
+        btnFrame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
+        
+        tk.Button(btnFrame, text="適用", command=self.onApply).pack(side=tk.LEFT, padx=5)
+        tk.Button(btnFrame, text="閉じる", command=self.onClose).pack(side=tk.LEFT, padx=5)
+        
+        self.protocol("WM_DELETE_WINDOW", self.onClose)
+    
+    def onApply(self):
+        """適用ボタンクリックハンドラ"""
+        try:
+            self.node.quantile         = max(0.0, float(self.quantileEntry.get()))
+            self.node.useApproximation = self.useApproximationVar.get()
+            self.node.approximation    = max(1, int(self.approximationEntry.get()))
+            
+            self.node.view.onNodeConfigChanged(self.node)
+        except ValueError:
+            messagebox.showerror("エラー", "入力値が正しくありません")
+    
+    def onClose(self):
+        """ダイアログを閉じる"""
+        self.destroy()
