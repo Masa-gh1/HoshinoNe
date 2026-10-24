@@ -470,11 +470,11 @@ class Catalog:
             return self.getId(cidx)
         elif isinstance(cidx, int):
             name = np.concatenate([self._id[cidx, np.newaxis], self._name[cidx]], axis=-1)
-            return np.array(np.apply_along_axis(lambda row: ' '.join(row), -1, name), dtype="object")
+            return np.array(np.apply_along_axis(lambda row: " ".join(row).strip(), -1, name), dtype="object")
         else:
             cidx = np.asanyarray(cidx, dtype=np.uint32)
             name = np.concatenate([self._id[cidx, np.newaxis], self._name[cidx]], axis=-1)
-            return np.array(np.apply_along_axis(lambda row: ' '.join(row), -1, name), dtype="object")
+            return np.array(np.apply_along_axis(lambda row: " ".join(row).strip(), -1, name), dtype="object")
     
     def getCatalog(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
         """
