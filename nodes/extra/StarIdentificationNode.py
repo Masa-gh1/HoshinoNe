@@ -144,7 +144,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             
             # カタログ照合
             matchedStars, ransac = self.matchCatalog(starsV, catalog)
-            matchedIds     = catalog.getId(     matchedStars[:, CIDX])
+            matchedIds     = catalog.getName(   matchedStars[:, CIDX])
             matchedCatalog = catalog.getCatalog(matchedStars[:, CIDX])
             matchedSarts   = stars[             matchedStars[:, PIDX]]
             
@@ -590,11 +590,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         matchedIds     = matchedIds[sortedIdx]
         matchedCatalog = matchedCatalog[sortedIdx]
         matchedStars   = matchedStars[sortedIdx]
-
-        symbol = catalog.getSymbol()
+        
         columns = ['ra', 'dec', 'mag', 'x', 'y', 'brightness']
         lines   = [f"{id}" for id in matchedIds]
-
+        
         tableRows = []
         for cat, str in zip(matchedCatalog, matchedStars):
             row = [
@@ -606,12 +605,12 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 str[BRI],
             ]
             tableRows.append(row)
-
+        
         if 0 < len(tableRows):
             tableArray = nh.array(tableRows, dtype=nh.BDTYPE)
         else:
             tableArray = nh.zeros((0, len(columns)), dtype=nh.BDTYPE)
-
+        
         # headers を生成
         headers = inputData.headers.copy()
         headers.update({
@@ -626,14 +625,14 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         flowData = FlowData(headers)
         rows, cols = tableArray.shape
         flowData.setDimensions(cols, rows)
-
+        
         for y in range(0, rows, BLOCK_SIZE):
             blockHeight = min(BLOCK_SIZE, rows - y)
             blockData   = tableArray[y:y + blockHeight, :]
             flowData.setBlock(DataBlock(blockData, 0, 0, y))
-
+        
         return flowData
-
+    
     def debug(self, flowData:FlowData, matchedCatalog:np.ndarray, matchedStars:np.ndarray, ransac:dict):
         from utils.Debug import Debug
         if Debug.isTestMode() or Debug.LEVEL_NONE < Debug.LEVEL:

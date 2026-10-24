@@ -23,10 +23,12 @@ class Catalog:
     """星カタログのパース、キャッシュ管理、および幾何計算を行うユーティリティ"""
     _cachedSymbol    = None
     _cachedPath      = None
+    _cachedColumn    = None
+    _cachedId        = None
     _cachedCatalog   = None
-    _cachedIds       = None
+    _cachedName      = None
     _cachedRatioTree = None
-    _cachedIdMap     = None
+    _cachedIdxMap    = None
     _cachedValues    = None
 
     def __init__(self, symbol:str|None=None, catalog:np.ndarray|None=None):
@@ -36,8 +38,10 @@ class Catalog:
             self.loadCatalog(symbol, filePath)
             assert not self._symbol    is None
             assert not self._path      is None
+            assert not self._column    is None
+            assert not self._id        is None
             assert not self._catalog   is None
-            assert not self._ids       is None
+            assert not self._name      is None
             assert not self._ratioTree is None
             assert not self._idxMap    is None
             assert not self._values    is None
@@ -45,9 +49,11 @@ class Catalog:
             assert not symbol is None and not catalog is None, "symbol and catalog must be specified together."
             self._symbol  = symbol
             self._path    = None
-            self._catalog = catalog
-            self._ids     = None
-            ratioTree, idxMap, values = self.generateTriangleDatabase(symbol, catalog)
+            self._column  = None
+            self._id      = catalog[:,0]
+            self._catalog = catalog[:,1:]
+            self._name    = None
+            ratioTree, idxMap, values = self.generateTriangleDatabase(symbol, self._catalog, self._id)
             self._ratioTree = ratioTree
             self._idxMap    = idxMap
             self._values    = values
@@ -124,145 +130,160 @@ class Catalog:
         from utils import numpy_helpers as nh
         from config import CATALOG_HEADERS
         
-        if self._cachedCatalog is not None and filePath == self._cachedPath: # キャッシュが有効な場合
-            return self._cachedCatalog
-        
         if not os.path.exists(filePath):
             raise FileNotFoundError(f"Catalog file not found: {filePath}")
         
         # キャッシュパス
         cachePath = os.path.splitext(filePath)[0] + ".npz"
         
-        if(   self._cachedSymbol == symbol
-          and self._cachedPath   == cachePath
-          and self._cachedCatalog   is not None
-          and self._cachedIds       is not None
-          and self._cachedRatioTree is not None
-          and self._cachedIdMap     is not None
-          and self._cachedValues    is not None
+        if(   self.__class__._cachedSymbol == symbol
+          and self.__class__._cachedPath   == cachePath
+          and self.__class__._cachedColumn    is not None
+          and self.__class__._cachedId        is not None
+          and self.__class__._cachedCatalog   is not None
+          and self.__class__._cachedName      is not None
+          and self.__class__._cachedRatioTree is not None
+          and self.__class__._cachedIdxMap    is not None
+          and self.__class__._cachedValues    is not None
           and os.path.exists(cachePath)
           and os.path.getmtime(filePath) < os.path.getmtime(cachePath)
           ):
-            self._symbol    = self._cachedSymbol
-            self._path      = self._cachedPath
-            self._catalog   = self._cachedCatalog
-            self._ids       = self._cachedIds
-            self._ratioTree = self._cachedRatioTree
-            self._idxMap    = self._cachedIdMap
-            self._values    = self._cachedValues
+            self._symbol    = self.__class__._cachedSymbol
+            self._path      = self.__class__._cachedPath
+            self._column    = self.__class__._cachedColumn
+            self._id        = self.__class__._cachedId
+            self._catalog   = self.__class__._cachedCatalog
+            self._name      = self.__class__._cachedName
+            self._ratioTree = self.__class__._cachedRatioTree
+            self._idxMap    = self.__class__._cachedIdxMap
+            self._values    = self.__class__._cachedValues
         elif(   os.path.exists(cachePath)
             and os.path.getmtime(filePath) <= os.path.getmtime(cachePath)
             ):
             # キャッシュが存在し元ファイルより新しいので、キャッシュからロード
             cacheFile = np.load(cachePath, allow_pickle=True)
-            self._cachedSymbol    = symbol
-            self._cachedPath      = filePath
-            self._cachedCatalog   = cacheFile["catalog"]           if "catalog"    in cacheFile else None
-            self._cachedIds       = cacheFile["ids"]               if "ids"        in cacheFile else None
-            self._cachedRatioTree = cacheFile["ratioTreee"].item() if "ratioTreee" in cacheFile else None
-            self._cachedIdMap     = cacheFile["idxMap"].item()     if "idxMap"     in cacheFile else None
-            self._cachedValues    = cacheFile["values"]            if "values"     in cacheFile else None
-            self._symbol    = self._cachedSymbol
-            self._path      = self._cachedPath
-            self._catalog   = self._cachedCatalog
-            self._ids       = self._cachedIds
-            self._ratioTree = self._cachedRatioTree
-            self._idxMap    = self._cachedIdMap
-            self._values    = self._cachedValues
+            self.__class__._cachedSymbol    = symbol
+            self.__class__._cachedPath      = cachePath
+            self.__class__._cachedColumn    = cacheFile["column"]            if "column"     in cacheFile else None
+            self.__class__._cachedId        = cacheFile["id"]                if "id"         in cacheFile else None
+            self.__class__._cachedCatalog   = cacheFile["catalog"]           if "catalog"    in cacheFile else None
+            self.__class__._cachedName      = cacheFile["name"]              if "name"       in cacheFile else None
+            self.__class__._cachedRatioTree = cacheFile["ratioTreee"].item() if "ratioTreee" in cacheFile else None
+            self.__class__._cachedIdxMap    = cacheFile["idxMap"].item()     if "idxMap"     in cacheFile else None
+            self.__class__._cachedValues    = cacheFile["values"]            if "values"     in cacheFile else None
+            self._symbol    = self.__class__._cachedSymbol
+            self._path      = self.__class__._cachedPath
+            self._column    = self.__class__._cachedColumn
+            self._id        = self.__class__._cachedId
+            self._catalog   = self.__class__._cachedCatalog
+            self._name      = self.__class__._cachedName
+            self._ratioTree = self.__class__._cachedRatioTree
+            self._idxMap    = self.__class__._cachedIdxMap
+            self._values    = self.__class__._cachedValues
         else:
             pass
 
-        if(  self._cachedCatalog   is None
-          or self._cachedIds       is None
+        if(  self.__class__._cachedColumn    is None
+          or self.__class__._cachedId        is None
+          or self.__class__._cachedCatalog   is None
+          or self.__class__._cachedName      is None
           ):
             # 元ファイル(TSV)からパース
             from utils.Debug import Debug
             Debug.log(self.__class__.__name__, f"load {symbol}")
+            id      = []
             catalog = []
-            ids     = []
+            name    = []
             with open(filePath, "r", encoding="utf-8") as f:
                 pos = {}
                 for line in f:
                     if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
                         continue
                     
-                    items = line.strip().split("\t")
+                    items = [item.strip() for item in line.split("\t")]
                     
                     # ヘッダ読み込み
                     # 位置情報収集
-                    for name,key in CATALOG_HEADERS:
-                        if key in items:
-                            idx = items.index(key)
-                            pos[name] = idx
+                    for key,col in CATALOG_HEADERS:
+                        if col in items:
+                            idx = items.index(col)
+                            pos[key] = idx
                     break
                 
-                names = ("ID", "RA", "Dec", "Mag") # 読み込むデータ名(CATALOG_HEADERS)
-                maxIdx = max([pos[name] for name in names])
+                iCols = ["ID"]               # 読み込むデータ名(CATALOG_HEADERS)
+                cCols = ["RA", "Dec", "Mag"] # 読み込むデータ名(CATALOG_HEADERS)
+                nCols = [name for name in pos if not name in (iCols+cCols)]
+                maxIdx = max([pos[iCol] for iCol in iCols] + [pos[cCol] for cCol in cCols])
+                column  = iCols + cCols + nCols
                 
                 for line in f:
                     if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
                         continue
                     
-                    items = line.strip().split("\t")
+                    items = [item.strip() for item in line.split("\t")]
                     if len(items) <= maxIdx: # 項目が足りないのでスキップ
                         from utils.Debug import Debug
                         Debug.log(self.__class__.__name__, f"skip: {line}")
                         continue
                     
-                    data = []
-                    for name in names:
-                        data.append(items[pos[name]].strip())
-                    
                     try:
-                        for i in range(len(data)):
-                            if 1<=i:
-                                data[i] = float(data[i])
-                        catalog.append(data[1:])
-                        ids.append(symbol+data[0])
+                        i = " ".join([symbol] + [      items[pos[iCol]]  for iCol in iCols]) # ID列
+                        c =          [           float(items[pos[cCol]]) for cCol in cCols]  # 数値列
+                        n =          [                 items[pos[nCol]]  for nCol in nCols]  # テキスト列
+                        id.append(i)
+                        catalog.append(c)
+                        name.append(n)
                     except ValueError:
                         Debug.log(self.__class__.__name__, f"ValueError: {line}")
                         continue
-            
+
+            id      = np.array(id, dtype='object')
             catalog = nh.array(catalog)
-            ids     = np.array(ids, dtype='object')
+            name    = np.array(name, dtype='object')
             
-            self._cachedSymbol    = symbol
-            self._cachedPath      = filePath
-            self._cachedCatalog   = catalog
-            self._cachedIds       = ids
-            self._cachedRatioTree = None
-            self._cachedIdMap     = None
-            self._cachedValues    = None
-            self._symbol    = self._cachedSymbol
-            self._path      = self._cachedPath
-            self._catalog   = self._cachedCatalog
-            self._ids       = self._cachedIds
+            self.__class__._cachedSymbol    = symbol
+            self.__class__._cachedPath      = cachePath
+            self.__class__._cachedColumn    = column
+            self.__class__._cachedId        = id
+            self.__class__._cachedCatalog   = catalog
+            self.__class__._cachedName      = name
+            self.__class__._cachedRatioTree = None
+            self.__class__._cachedIdxMap    = None
+            self.__class__._cachedValues    = None
+            self._symbol    = self.__class__._cachedSymbol
+            self._path      = self.__class__._cachedPath
+            self._column    = self.__class__._cachedColumn
+            self._id        = self.__class__._cachedId
+            self._catalog   = self.__class__._cachedCatalog
+            self._name      = self.__class__._cachedName
             self._ratioTree = None
             self._idMap     = None
             self._values    = None
             
-        if(  self._cachedRatioTree is None
-          or self._cachedIdMap     is None
-          or self._cachedValues    is None
+        if(  self.__class__._cachedRatioTree is None
+          or self.__class__._cachedIdxMap    is None
+          or self.__class__._cachedValues    is None
           ):
             # 検索辞書作成
-            ratioTreee, idxMap, values = self.generateTriangleDatabase(symbol, self._cachedCatalog, self._cachedIds)
+            _cachedColumn    = None  
+            ratioTreee, idxMap, values = self.generateTriangleDatabase(symbol, self.__class__._cachedCatalog, self.__class__._cachedId)
             
-            self._cachedRatioTree = ratioTreee
-            self._cachedIdMap     = idxMap
-            self._cachedValues    = values
-            self._ratioTree = self._cachedRatioTree
-            self._idxMap    = self._cachedIdMap
-            self._values    = self._cachedValues
+            self.__class__._cachedRatioTree = ratioTreee
+            self.__class__._cachedIdxMap    = idxMap
+            self.__class__._cachedValues    = values
+            self._ratioTree = self.__class__._cachedRatioTree
+            self._idxMap    = self.__class__._cachedIdxMap
+            self._values    = self.__class__._cachedValues
             
             # 次回高速化のためにキャッシュ保存
             try:
-                np.savez(cachePath, catalog=catalog, ids=ids, ratioTreee=ratioTreee, idxMap=idxMap, values=values, allow_pickle=True)
-            except Exception:
+                _cachedColumn    = None  
+                np.savez(cachePath, column=self.__class__._cachedColumn, id=self.__class__._cachedId, catalog=self.__class__._cachedCatalog, name=self.__class__._cachedName, ratioTreee=ratioTreee, idxMap=idxMap, values=values, allow_pickle=True)
+            except Exception as e:
                 from utils.Debug import Debug
-                Debug.log(self.__class__.__name__, "Warning: Save catalog cache failed.")
+                Debug.log(self.__class__.__name__, "Warning: Save catalog cache failed.", e)
     
-    def generateTriangleDatabase(self, symbol:str, catalog:np.ndarray, ids:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
+    def generateTriangleDatabase(self, symbol:str, catalog:np.ndarray, id:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
         """三角形データベースの生成"""
         from config import CATALOG_DB_MAG, CATALOG_DB_NUM
         
@@ -340,39 +361,48 @@ class Catalog:
             rn = magRad[max(0, min(len(magRad)-1, int(mag)))]
             radius = list(filter(lambda x: x[1] < CATALOG_DB_NUM, rn))[-1][0]
             idx = self.queryStars(ra, dec, radius, mag)
-            idx = idx[np.unique(ids[idx], return_index=True)[1]] # ID の重複を除く
+            idx = idx[np.unique(id[idx], return_index=True)[1]] # ID の重複を除く
             while (CATALOG_DB_NUM+1) < len(idx) and 0.9 < radius: # (CATALOG_DB_NUM+1) 未満になるまで絞る
                 radius /= 1.41421356237
                 idx = self.queryStars(ra, dec, radius, mag)
-                idx = idx[np.unique(ids[idx], return_index=True)[1]] # ID の重複を除く
+                idx = idx[np.unique(id[idx], return_index=True)[1]] # ID の重複を除く
             while len(idx) < (CATALOG_DB_NUM+1) and radius < 180.0: # (CATALOG_DB_NUM+1) 以上になるまで広げる
                 radius *= 1.41421356237
                 idx = self.queryStars(ra, dec, radius, mag)
-                idx = idx[np.unique(ids[idx], return_index=True)[1]] # ID の重複を除く
+                idx = idx[np.unique(id[idx], return_index=True)[1]] # ID の重複を除く
+            if len(idx) < 3: continue # 三角形を作れないのでスキップ
+            
             # 自身と他の星の総組み合わせで三角形をつくる
             oidx = idx[idx != c0idx]
             other = catalog[oidx]
             x, y = self.gnomonicProjection(other[:, RA], other[:, DEC], ra, dec)
-            for j in range(len(oidx)):
-                for k in range(j+1, len(oidx)):
-                    c1idx = oidx[j]
-                    c2idx = oidx[k]
-                    c0 = catalog[c0idx]
-                    c1 = catalog[c1idx]
-                    c2 = catalog[c2idx]
-                    x1, y1 = x[j], y[j]
-                    x2, y2 = x[k], y[k]
-                    if 0 < ((x1 - 0) * (y2 - 0)) - ((y1 - 0) * (x2 - 0)):
-                        c1   , c2    = c2   , c1    # 時計回りに修正
-                        c1idx, c2idx = c2idx, c1idx # 時計回りに修正
-                    c01d = self.angularDistance(c0[RA:DEC+1], c1[RA:DEC+1])
-                    c12d = self.angularDistance(c1[RA:DEC+1], c2[RA:DEC+1])
-                    c20d = self.angularDistance(c2[RA:DEC+1], c0[RA:DEC+1])
-                    if c01d <= 0 or c12d <= 0 or c20d <= 0: continue # 距離が 0 なので、スキップ
-                    
-                    key, cidx = self._makeKey([c01d, c12d, c20d], [c0idx, c1idx, c2idx])
-                    keys.append(key)
-                    values.append(cidx)
+            
+            j, k = np.triu_indices(len(oidx), k=1)
+            o1idx, o2idx = oidx[j] ,oidx[k]
+            x1, y1 = x[j], y[j]
+            x2, y2 = x[k], y[k]
+            crossProduct = ((x1 - 0) * (y2 - 0)) - ((y1 - 0) * (x2 - 0))
+            c1idx = np.where(crossProduct <= 0, o1idx, o2idx) # 時計回りに修正
+            c2idx = np.where(crossProduct <= 0, o2idx, o1idx) # 時計回りに修正
+            c1 = catalog[c1idx]
+            c2 = catalog[c2idx]
+            c0 = catalog[c0idx] # 全ペアで同じ
+            c01d = self.angularDistance(c0[   RA:DEC+1], c1[:, RA:DEC+1])
+            c12d = self.angularDistance(c1[:, RA:DEC+1], c2[:, RA:DEC+1])
+            c20d = self.angularDistance(c2[:, RA:DEC+1], c0[   RA:DEC+1])
+            valid = (0 < c01d) & (0 < c12d) & (0 < c20d)
+            c1idx = c1idx[valid] # 距離が 0 を除外
+            c2idx = c2idx[valid] # 距離が 0 を除外
+            c01d = c01d[valid]   # 距離が 0 を除外
+            c12d = c12d[valid]   # 距離が 0 を除外
+            c20d = c20d[valid]   # 距離が 0 を除外
+            
+            # key を計算し登録
+            c0idx = np.broadcast_to(c0idx, c1idx.shape)
+            key, cidx = self._makeKey(np.stack([c01d, c12d, c20d], axis=1), np.stack([c0idx, c1idx, c2idx], axis=1))
+            keys.extend(key)
+            values.extend(cidx)
+        
         Debug.log(self.__class__.__name__, f"Total triangle count: {len(keys)}")
         ratioTree = KDTree(nh.array(keys))
         values    = np.array(values, dtype=np.uint32)
@@ -414,13 +444,37 @@ class Catalog:
         """
         import numpy as np
         
-        assert not self._ids is None, "Catalog IDs are not loaded."
+        assert not self._id is None, "Catalog IDs are not loaded."
         
         if isinstance(cidx, int):
-            return self._ids[cidx]
+            return self._id[cidx]
         else:
             cidx = np.asanyarray(cidx, dtype=np.uint32)
-            return self._ids[cidx]
+            return self._id[cidx]
+    
+    def getName(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
+        """
+        星識別子と通称を取得
+        
+        Args:
+            cidx: カタログの idx または idx の配列
+        
+        Returns:
+            np.ndarray: ID + name の配列 shape=(N) [ID,...]
+        """
+        import numpy as np
+        
+        assert not self._id is None, "Catalog IDs are not loaded."
+        
+        if self._name is None:
+            return self.getId(cidx)
+        elif isinstance(cidx, int):
+            name = np.concatenate([self._id[cidx, np.newaxis], self._name[cidx]], axis=-1)
+            return np.array(np.apply_along_axis(lambda row: ' '.join(row), -1, name), dtype="object")
+        else:
+            cidx = np.asanyarray(cidx, dtype=np.uint32)
+            name = np.concatenate([self._id[cidx, np.newaxis], self._name[cidx]], axis=-1)
+            return np.array(np.apply_along_axis(lambda row: ' '.join(row), -1, name), dtype="object")
     
     def getCatalog(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
         """
@@ -521,15 +575,19 @@ class Catalog:
         from utils import numpy_helpers as nh
         
         side = np.asanyarray(side, dtype=nh.BDTYPE)
-        idx   = np.asanyarray(idx)
-        n    = len(side)
+        idx  = np.asanyarray(idx)
+        n    = side.shape[-1]
         
-        roll = n - 1 - np.argmax(side) # 最大長の辺を配列の末尾に移動
-        side = np.roll(side, roll)
-        idx   = np.roll(idx  , roll)
-        
-        base = side[-1]
-        key = side[:-1] / base
+        roll = n - 1 - np.argmax(side, axis=-1) # 最大長の辺を配列の末尾に移動
+        #side = np.roll(side, roll, axis=-1)
+        #idx  = np.roll(idx , roll, axis=-1)
+        # np.roll の sift 量は配列に対応していないので take_along_axis を用いる
+        colIdx = np.arange(n).reshape(([1] * (idx.ndim-1)) + [n])
+        colIdx = (colIdx - roll[..., np.newaxis]) % n
+        side = np.take_along_axis(side, colIdx, axis=-1)
+        idx  = np.take_along_axis(idx , colIdx, axis=-1)
+
+        key = side[..., :-1] / side[..., -1, np.newaxis]
         
         return key, idx
     
@@ -595,7 +653,7 @@ class Catalog:
         return indices
     
     @staticmethod
-    def angularDistance(p0:np.ndarray|list, p1:np.ndarray|list) -> np.ndarray|float:
+    def angularDistance(p0:np.ndarray|list, p1:np.ndarray|list) -> np.ndarray:
         """
         天球上の2点間の角距離 ( deg ) を計算する
         ハヴァースィン公式
@@ -629,7 +687,7 @@ class Catalog:
         # d = 2 * arcsin(sqrt(a))
         distRad = 2 * np.arcsin(np.sqrt(a))
         distDeg = np.degrees(distRad)
-
+        
         if distDeg.ndim == 0:
             return distDeg.item()
         else:
