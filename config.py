@@ -275,16 +275,31 @@ HEADERS_EXIF = [
 #    ("Dec", "DErad", float),
 #    ("Mag", "Hpmag", float),
 #]
-CATALOG_PATH = ("HIP", "./sample/catalog/I_311_hip2+IV_27A_table3.tsv")
-CATALOG_HEADERS = [
-    # name   catalog  型
-    ("ID"  , "HIP"  , str  ),
-    ("RA"  , "RArad", float),
-    ("Dec" , "DErad", float),
-    ("Mag" , "Hpmag", float),
-    ("BFD" , "BFD"  , str  ),
-    ("Name", "Name" , str  ),
-]
+CATALOG = {
+    "HIP":{
+        "PATH":"./sample/catalog/I_311_hip2+IV_27A_table3.tsv",
+        "HEADER":[
+            # name   catalog  型
+            ("ID"  , "HIP"  , str  ),
+            ("RA"  , "RArad", float),
+            ("Dec" , "DErad", float),
+            ("Mag" , "Hpmag", float),
+            ("BFD" , "BFD"  , str  ),
+            ("Name", "Name" , str  ),
+        ]
+    },
+    "NGC":{
+        "PATH":"./sample/catalog/VII_118_ngc2000+names.tsv",
+        "HEADER":[
+            # name      catalog     型
+            ("ID"     , "Name"    , str  ),
+            ("RA"     , "_RAJ2000", float),
+            ("Dec"    , "_DEJ2000", float),
+            ("Mag"    , "mag"     , float),
+            ("Comment", "Comment" , str  ),
+        ]
+    }
+}
 # 使用容量の目安
 # CATALOG_DB_MAG = 8, CATALOG_DB_NUM =  5 の時、約  68 MB
 # CATALOG_DB_MAG = 8, CATALOG_DB_NUM = 10 の時、約 259 MB

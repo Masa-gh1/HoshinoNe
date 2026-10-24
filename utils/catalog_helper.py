@@ -21,7 +21,6 @@ RA, DEC, MAG = 0, 1, 2
 
 class Catalog:
     """星カタログのパース、キャッシュ管理、および幾何計算を行うユーティリティ"""
-    _cachedSymbol    = None
     _cachedPath      = None
     _cachedColumn    = None
     _cachedId        = None
@@ -33,10 +32,7 @@ class Catalog:
 
     def __init__(self, symbol:str|None=None, catalog:np.ndarray|None=None):
         if symbol is None and catalog is None:
-            from config import CATALOG_PATH
-            symbol, filePath = CATALOG_PATH
-            self.loadCatalog(symbol, filePath)
-            assert not self._symbol    is None
+            self.loadCatalog()
             assert not self._path      is None
             assert not self._column    is None
             assert not self._id        is None
@@ -47,13 +43,12 @@ class Catalog:
             assert not self._values    is None
         else:
             assert not symbol is None and not catalog is None, "symbol and catalog must be specified together."
-            self._symbol  = symbol
             self._path    = None
             self._column  = None
             self._id      = catalog[:,0]
             self._catalog = catalog[:,1:]
             self._name    = None
-            ratioTree, idxMap, values = self.generateTriangleDatabase(symbol, self._catalog, self._id)
+            ratioTree, idxMap, values = self.generateTriangleDatabase(self._catalog, self._id)
             self._ratioTree = ratioTree
             self._idxMap    = idxMap
             self._values    = values
@@ -118,26 +113,36 @@ class Catalog:
         
         assert 0==errCnt, f"Self test {errCnt}/{testCnt}: {errMsg}"
     
-    def loadCatalog(self, symbol:str, filePath:str):
+    def loadCatalog(self):
         """
         カタログファイルを読み込み
-        
-        Args:
-            symbol: カタログシンボル
-            filePath: カタログファイルパス        
         """
         import numpy as np
         from utils import numpy_helpers as nh
-        from config import CATALOG_HEADERS
+        from config import CATALOG
+
+        if 0 == len(CATALOG):
+            raise ValueError("CATALOG is empty.")
         
-        if not os.path.exists(filePath):
-            raise FileNotFoundError(f"Catalog file not found: {filePath}")
+        for value in CATALOG.values():
+            filepath = value["PATH"]
+            if not os.path.exists(filepath):
+                raise FileNotFoundError(f"Catalog file not found: {filepath}")
+        
+        # ファイルのタイムスタンプ
+        mtime = max([os.path.getmtime(CATALOG[symbol]["PATH"]) for symbol in CATALOG])
         
         # キャッシュパス
-        cachePath = os.path.splitext(filePath)[0] + ".npz"
+        symbol   = next(iter(CATALOG.keys()))
+        filepath = CATALOG[symbol]["PATH"]
+        if 1 == len(CATALOG):
+            cachePath = os.path.splitext(filepath)[0] + ".npz"
+        else:
+            cachename = "combined_" + "_".join(CATALOG.keys()) + ".npz"
+            dirpath = os.path.dirname(filepath)
+            cachePath = os.path.join(dirpath, cachename)
         
-        if(   self.__class__._cachedSymbol == symbol
-          and self.__class__._cachedPath   == cachePath
+        if(   self.__class__._cachedPath   == cachePath
           and self.__class__._cachedColumn    is not None
           and self.__class__._cachedId        is not None
           and self.__class__._cachedCatalog   is not None
@@ -146,9 +151,9 @@ class Catalog:
           and self.__class__._cachedIdxMap    is not None
           and self.__class__._cachedValues    is not None
           and os.path.exists(cachePath)
-          and os.path.getmtime(filePath) < os.path.getmtime(cachePath)
+          and mtime < os.path.getmtime(cachePath)
           ):
-            self._symbol    = self.__class__._cachedSymbol
+            # キャッシュが存在し、かつキャッシュが最新なので、キャッシュからロード
             self._path      = self.__class__._cachedPath
             self._column    = self.__class__._cachedColumn
             self._id        = self.__class__._cachedId
@@ -158,11 +163,10 @@ class Catalog:
             self._idxMap    = self.__class__._cachedIdxMap
             self._values    = self.__class__._cachedValues
         elif(   os.path.exists(cachePath)
-            and os.path.getmtime(filePath) <= os.path.getmtime(cachePath)
+            and mtime < os.path.getmtime(cachePath)
             ):
-            # キャッシュが存在し元ファイルより新しいので、キャッシュからロード
+            # キャッシュファイルが存在し元ファイルより新しいので、キャッシュファイルからロード
             cacheFile = np.load(cachePath, allow_pickle=True)
-            self.__class__._cachedSymbol    = symbol
             self.__class__._cachedPath      = cachePath
             self.__class__._cachedColumn    = cacheFile["column"]            if "column"     in cacheFile else None
             self.__class__._cachedId        = cacheFile["id"]                if "id"         in cacheFile else None
@@ -171,7 +175,6 @@ class Catalog:
             self.__class__._cachedRatioTree = cacheFile["ratioTreee"].item() if "ratioTreee" in cacheFile else None
             self.__class__._cachedIdxMap    = cacheFile["idxMap"].item()     if "idxMap"     in cacheFile else None
             self.__class__._cachedValues    = cacheFile["values"]            if "values"     in cacheFile else None
-            self._symbol    = self.__class__._cachedSymbol
             self._path      = self.__class__._cachedPath
             self._column    = self.__class__._cachedColumn
             self._id        = self.__class__._cachedId
@@ -187,64 +190,71 @@ class Catalog:
           or self.__class__._cachedId        is None
           or self.__class__._cachedCatalog   is None
           or self.__class__._cachedName      is None
+          or not os.path.exists(cachePath)
+          or os.path.getmtime(cachePath) <= mtime
           ):
             # 元ファイル(TSV)からパース
-            from utils.Debug import Debug
-            Debug.log(self.__class__.__name__, f"load {symbol}")
+            # ヘッダを合成し、列リストを作成
+            header = {}
+            for symbol in reversed(CATALOG):
+                header.update({key:tf for key, col, tf in CATALOG[symbol]["HEADER"]})
+            iCols = ["ID"]               # 読み込むデータ名(CATALOG HEADERS)
+            cCols = ["RA", "Dec", "Mag"] # 読み込むデータ名(CATALOG HEADERS)
+            cCols.extend([key for key in header if not key in (iCols+cCols) and issubclass(header[key], (float,int))])
+            nCols = [key for key in header if not key in (iCols+cCols)]
+            column  = iCols + cCols + nCols
+            
             id      = []
             catalog = []
             name    = []
-            with open(filePath, "r", encoding="utf-8") as f:
-                pos      = {}
-                typefunc = {}
-                for line in f:
-                    if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
-                        continue
+            for symbol in CATALOG:
+                from utils.Debug import Debug
+                Debug.log(self.__class__.__name__, f"load {symbol}")
+                with open(CATALOG[symbol]["PATH"], "r", encoding="utf-8") as f:
+                    pos      = {}
+                    typefunc = {}
+                    for line in f:
+                        if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
+                            continue
+                        
+                        items = [item.strip() for item in line.split("\t")]
+                        
+                        # ヘッダ読み込み
+                        # 位置情報収集
+                        for key,col,tf in CATALOG[symbol]["HEADER"]:
+                            if col in items:
+                                idx = items.index(col)
+                                pos[key] = idx
+                                typefunc[key] = tf
+                        break
                     
-                    items = [item.strip() for item in line.split("\t")]
+                    maxIdx = max([pos[key] for key in pos if key in column])
                     
-                    # ヘッダ読み込み
-                    # 位置情報収集
-                    for key,col,tf in CATALOG_HEADERS:
-                        if col in items:
-                            idx = items.index(col)
-                            pos[key] = idx
-                            typefunc[key] = tf
-                    break
-                
-                iCols = ["ID"]               # 読み込むデータ名(CATALOG_HEADERS)
-                cCols = ["RA", "Dec", "Mag"] # 読み込むデータ名(CATALOG_HEADERS)
-                cCols.extend([key for key in pos if not key in (iCols+cCols) and issubclass(typefunc[key], (float,int))])
-                nCols = [name for name in pos if not name in (iCols+cCols)]
-                maxIdx = max([pos[iCol] for iCol in iCols] + [pos[cCol] for cCol in cCols])
-                column  = iCols + cCols + nCols
-                
-                for line in f:
-                    if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
-                        continue
-                    
-                    items = [item.strip() for item in line.split("\t")]
-                    if len(items) <= maxIdx: # 項目が足りないのでスキップ
-                        from utils.Debug import Debug
-                        Debug.log(self.__class__.__name__, f"skip: {line}")
-                        continue
-                    
-                    try:
-                        i = " ".join([symbol] + [typefunc[iCol](items[pos[iCol]]) for iCol in iCols]) # ID列
-                        c =                     [typefunc[cCol](items[pos[cCol]]) for cCol in cCols]  # 数値列
-                        n =                     [typefunc[nCol](items[pos[nCol]]) for nCol in nCols]  # テキスト列
-                        id.append(i)
-                        catalog.append(c)
-                        name.append(n)
-                    except ValueError:
-                        Debug.log(self.__class__.__name__, f"ValueError: {line}")
-                        continue
+                    for line in f:
+                        if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
+                            continue
+                        
+                        items = [item.strip() for item in line.split("\t")]
+                        if len(items) <= maxIdx: # 項目が足りないのでスキップ
+                            from utils.Debug import Debug
+                            Debug.log(self.__class__.__name__, f"skip: {line}")
+                            continue
+                        
+                        try:
+                            i = " ".join([symbol] + [typefunc[iCol](items[pos[iCol]]) if iCol in pos and 0 < len(items[pos[iCol]]) else "----" for iCol in iCols]) # ID列
+                            c =                     [typefunc[cCol](items[pos[cCol]]) if cCol in pos and 0 < len(items[pos[cCol]]) else nh.nan for cCol in cCols]  # 数値列
+                            n =                     [typefunc[nCol](items[pos[nCol]]) if nCol in pos and 0 < len(items[pos[nCol]]) else None   for nCol in nCols]  # テキスト列
+                            id.append(i)
+                            catalog.append(c)
+                            name.append(n)
+                        except ValueError:
+                            Debug.log(self.__class__.__name__, f"ValueError: {line}")
+                            continue
 
             id      = np.array(id, dtype='object')
             catalog = nh.array(catalog)
             name    = np.array(name, dtype='object')
             
-            self.__class__._cachedSymbol    = symbol
             self.__class__._cachedPath      = cachePath
             self.__class__._cachedColumn    = column
             self.__class__._cachedId        = id
@@ -253,32 +263,35 @@ class Catalog:
             self.__class__._cachedRatioTree = None
             self.__class__._cachedIdxMap    = None
             self.__class__._cachedValues    = None
-            self._symbol    = self.__class__._cachedSymbol
-            self._path      = self.__class__._cachedPath
-            self._column    = self.__class__._cachedColumn
-            self._id        = self.__class__._cachedId
-            self._catalog   = self.__class__._cachedCatalog
-            self._name      = self.__class__._cachedName
-            self._ratioTree = None
-            self._idMap     = None
-            self._values    = None
-            
+        
+        self._path    = self.__class__._cachedPath
+        self._column  = self.__class__._cachedColumn
+        self._id      = self.__class__._cachedId
+        self._catalog = self.__class__._cachedCatalog
+        self._name    = self.__class__._cachedName
+        
         if(  self.__class__._cachedRatioTree is None
           or self.__class__._cachedIdxMap    is None
           or self.__class__._cachedValues    is None
+          or not os.path.exists(cachePath)
+          or os.path.getmtime(cachePath) <= mtime
           ):
             # 検索辞書作成
             _cachedColumn    = None  
-            ratioTreee, idxMap, values = self.generateTriangleDatabase(symbol, self.__class__._cachedCatalog, self.__class__._cachedId)
+            ratioTreee, idxMap, values = self.generateTriangleDatabase(self.__class__._cachedCatalog, self.__class__._cachedId)
             
             self.__class__._cachedRatioTree = ratioTreee
             self.__class__._cachedIdxMap    = idxMap
             self.__class__._cachedValues    = values
-            self._ratioTree = self.__class__._cachedRatioTree
-            self._idxMap    = self.__class__._cachedIdxMap
-            self._values    = self.__class__._cachedValues
-            
-            # 次回高速化のためにキャッシュ保存
+        
+        self._ratioTree = self.__class__._cachedRatioTree
+        self._idxMap    = self.__class__._cachedIdxMap
+        self._values    = self.__class__._cachedValues
+        
+        # 次回高速化のためにキャッシュ保存
+        if(  not os.path.exists(cachePath)
+          or os.path.getmtime(cachePath) < mtime
+          ):
             try:
                 _cachedColumn    = None  
                 np.savez(cachePath, column=self.__class__._cachedColumn, id=self.__class__._cachedId, catalog=self.__class__._cachedCatalog, name=self.__class__._cachedName, ratioTreee=ratioTreee, idxMap=idxMap, values=values, allow_pickle=True)
@@ -286,7 +299,7 @@ class Catalog:
                 from utils.Debug import Debug
                 Debug.log(self.__class__.__name__, "Warning: Save catalog cache failed.", e)
     
-    def generateTriangleDatabase(self, symbol:str, catalog:np.ndarray, id:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
+    def generateTriangleDatabase(self, catalog:np.ndarray, id:np.ndarray) -> tuple[KDTree, dict, np.ndarray]:
         """三角形データベースの生成"""
         from config import CATALOG_DB_MAG, CATALOG_DB_NUM
         
@@ -298,7 +311,7 @@ class Catalog:
         from scipy.spatial import KDTree
         from utils import numpy_helpers as nh
         from utils.Debug import Debug
-        Debug.log(self.__class__.__name__, f" {symbol} [{len(catalog)} stars]")
+        Debug.log(self.__class__.__name__, f"total [{len(catalog)} stars]")
         
         # 等級の10%毎のパーセンタイル
         p  = list(range(0, 101, 10))
@@ -424,11 +437,6 @@ class Catalog:
         
         return (ratioTree, idxMap, values)
     
-    def getSymbol(self) -> str:
-        """カタログシンボルを取得"""
-        assert not self._symbol is None, "Catalog symbol is not set."
-        return self._symbol
-    
     def count(self) -> int:
         if self._catalog is None:
             return 0
@@ -473,11 +481,11 @@ class Catalog:
             return self.getId(cidx)
         elif isinstance(cidx, int):
             name = np.concatenate([self._id[cidx, np.newaxis], self._name[cidx]], axis=-1)
-            return np.array(np.apply_along_axis(lambda row: " ".join(row).strip(), -1, name), dtype="object")
+            return np.array(np.apply_along_axis(lambda row: " ".join([s for s in row if s]).strip(), -1, name), dtype="object")
         else:
             cidx = np.asanyarray(cidx, dtype=np.uint32)
             name = np.concatenate([self._id[cidx, np.newaxis], self._name[cidx]], axis=-1)
-            return np.array(np.apply_along_axis(lambda row: " ".join(row).strip(), -1, name), dtype="object")
+            return np.array(np.apply_along_axis(lambda row: " ".join([s for s in row if s]).strip(), -1, name), dtype="object")
     
     def getCatalog(self, cidx:np.ndarray|list[int]|int) -> np.ndarray:
         """
