@@ -267,23 +267,23 @@ HEADERS_EXIF = [
 #
 # 下記は VizieR から得た Hipparcos カタログ I/311/hip2 のTSVファイルでの例
 # https://vizier.unistra.fr/
-#CATALOG_PATH = ("HIP", "./sample/I_311_HIS2.tsv")
+#CATALOG_PATH = ("HIP", "./sample/catalog/I_311_HIS2.tsv")
 #CATALOG_HEADERS = [
-#    # name  catalog
-#    ("ID" , "HIP"  ),
-#    ("RA" , "RArad"),
-#    ("Dec", "DErad"),
-#    ("Mag", "Hpmag"),
+#    # name  catalog  型
+#    ("ID" , "HIP"  , str  ),
+#    ("RA" , "RArad", float),
+#    ("Dec", "DErad", float),
+#    ("Mag", "Hpmag", float),
 #]
-CATALOG_PATH = ("HIP", "./sample/I_311_hip2+IV_27A_table3.tsv")
+CATALOG_PATH = ("HIP", "./sample/catalog/I_311_hip2+IV_27A_table3.tsv")
 CATALOG_HEADERS = [
-    # name   catalog
-    ("ID"  , "HIP"  ),
-    ("RA"  , "RArad"),
-    ("Dec" , "DErad"),
-    ("Mag" , "Hpmag"),
-    ("BFD" , "BFD"  ),
-    ("Name", "Name" ),
+    # name   catalog  型
+    ("ID"  , "HIP"  , str  ),
+    ("RA"  , "RArad", float),
+    ("Dec" , "DErad", float),
+    ("Mag" , "Hpmag", float),
+    ("BFD" , "BFD"  , str  ),
+    ("Name", "Name" , str  ),
 ]
 # 使用容量の目安
 # CATALOG_DB_MAG = 8, CATALOG_DB_NUM =  5 の時、約  68 MB

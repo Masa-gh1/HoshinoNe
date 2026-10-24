@@ -195,7 +195,8 @@ class Catalog:
             catalog = []
             name    = []
             with open(filePath, "r", encoding="utf-8") as f:
-                pos = {}
+                pos      = {}
+                typefunc = {}
                 for line in f:
                     if not line or not line.strip() or line.startswith("#"): # コメント行なので、スキップ
                         continue
@@ -204,14 +205,16 @@ class Catalog:
                     
                     # ヘッダ読み込み
                     # 位置情報収集
-                    for key,col in CATALOG_HEADERS:
+                    for key,col,tf in CATALOG_HEADERS:
                         if col in items:
                             idx = items.index(col)
                             pos[key] = idx
+                            typefunc[key] = tf
                     break
                 
                 iCols = ["ID"]               # 読み込むデータ名(CATALOG_HEADERS)
                 cCols = ["RA", "Dec", "Mag"] # 読み込むデータ名(CATALOG_HEADERS)
+                cCols.extend([key for key in pos if not key in (iCols+cCols) and issubclass(typefunc[key], (float,int))])
                 nCols = [name for name in pos if not name in (iCols+cCols)]
                 maxIdx = max([pos[iCol] for iCol in iCols] + [pos[cCol] for cCol in cCols])
                 column  = iCols + cCols + nCols
@@ -227,9 +230,9 @@ class Catalog:
                         continue
                     
                     try:
-                        i = " ".join([symbol] + [      items[pos[iCol]]  for iCol in iCols]) # ID列
-                        c =          [           float(items[pos[cCol]]) for cCol in cCols]  # 数値列
-                        n =          [                 items[pos[nCol]]  for nCol in nCols]  # テキスト列
+                        i = " ".join([symbol] + [typefunc[iCol](items[pos[iCol]]) for iCol in iCols]) # ID列
+                        c =                     [typefunc[cCol](items[pos[cCol]]) for cCol in cCols]  # 数値列
+                        n =                     [typefunc[nCol](items[pos[nCol]]) for nCol in nCols]  # テキスト列
                         id.append(i)
                         catalog.append(c)
                         name.append(n)
