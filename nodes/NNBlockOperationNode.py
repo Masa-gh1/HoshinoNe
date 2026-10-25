@@ -51,7 +51,7 @@ class NNBlockOperationNode(NxBlockOperationNode):
         # 前処理
         from base import BroadcastMixin
         tempStreams = self.preprocessStreams(inputStreams)
-        tempStreams = BroadcastMixin.calculateBroadcastedStream(tempStreams)
+        tempStreams = BroadcastMixin.broadcastToStream(tempStreams)
         processedStreams = []
         for stream in tempStreams:
             processedstream = self.preprocessStream(stream)
@@ -122,7 +122,7 @@ class NNBlockOperationNode(NxBlockOperationNode):
             処理結果の DataBlock
         """
         from base import BroadcastMixin
-        blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
+        blocks, shape = BroadcastMixin.broadcastToBlock(flowDatas, planeIndex, x, y)
         return self.blockOperation(blocks, planeIndex, x, y)
     
     @abstractmethod
