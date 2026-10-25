@@ -69,7 +69,7 @@ class ImageWriterNode(BaseWriterNode):
             scale = 1.0
             offset = 0.0
 
-        if(  type == 'image'  and mode == 'RGB' and 3 <= planeCount
+        if(  type == 'image' and mode == 'RGB' and 3 <= planeCount
           or type == 'table' and mode == '2D'  and 3 <= planeCount
           ):
             # RGBカラー画像
@@ -116,7 +116,7 @@ class ImageWriterNode(BaseWriterNode):
                 
                 self.reportBlockProgress(context)
             
-        elif(  type == 'image'  and mode == 'RGBG' and 4 <= planeCount
+        elif(  type == 'image' and mode == 'RGBG' and 4 <= planeCount
             or type == 'table' and mode == '2D'   and 4 <= planeCount
             ):
             # RGBG 4チャンネル画像をRGBに変換
@@ -155,7 +155,7 @@ class ImageWriterNode(BaseWriterNode):
                 
                 self.reportBlockProgress(context)
             
-        elif(  type == 'image'  and mode == 'L'  and 1 <= planeCount
+        elif(  type == 'image' and mode == 'L'  and 1 <= planeCount
             or type == 'table' and mode == '2D' and 1 <= planeCount
             ):
             # グレースケール画像
@@ -205,7 +205,8 @@ class ImageWriterNode(BaseWriterNode):
             from utils.Debug import Debug
             if not Debug.isTestMode():
                 # テストモードではないので現在時刻を入れる
-                exifInfo[306] = datetime.datetime.now().strftime("%Y:%m:%d %H:%M:%S") # 306 DateTime
+                from utils import exif_helper as exif
+                exifInfo[306] = exif.toExifDatetime(datetime.datetime.now()) # 306 DateTime
         
         exifInfo.pop(256, None) # 256 ImageWidth         画像の幅
         exifInfo.pop(257, None) # 256 ImageLength        画像の高さ

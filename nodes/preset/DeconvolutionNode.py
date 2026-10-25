@@ -1,5 +1,5 @@
 '''
-ConvolveNode - 畳み込みノード
+DeconvolutionNode - 逆畳み込みノード
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -12,7 +12,7 @@ from nodes import NNPlaneOperationNode
 
 class DeconvolutionNode(NNPlaneOperationNode):
     # ノードタイプ
-    majorType = _MAJOR_TYPE_FUNC
+    majorType = _MAJOR_TYPE_NEIBR
     minorType = 'deconvolution'
     # ノード名
     name      = '逆畳み込み'
@@ -21,7 +21,7 @@ class DeconvolutionNode(NNPlaneOperationNode):
     #outputCat = スーパークラスを継承
     
     def planeOperation(self, flowDatas, planeIndex):
-        """相関処理"""
+        """逆畳み込み処理"""
         from utils import numpy_helpers as nh
         from config import BLOCK_SIZE
         from base import DataBlock

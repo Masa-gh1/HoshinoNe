@@ -1,39 +1,8 @@
 {
-  "version": "0.2.20260227",
+  "version": "0.3.20260814",
   "nodes": [
     {
       "index": 0,
-      "zOrder": 3,
-      "type": "lab_converter",
-      "text": "Lab変換",
-      "x": 41.0,
-      "y": 67.0,
-      "connections": [
-        2
-      ]
-    },
-    {
-      "index": 1,
-      "zOrder": 13,
-      "type": "rgb_converter",
-      "text": "RGB変換",
-      "x": 325.0,
-      "y": 93.0,
-      "connections": []
-    },
-    {
-      "index": 2,
-      "zOrder": 7,
-      "type": "scale",
-      "text": "乗算",
-      "x": 131.0,
-      "y": 62.0,
-      "connections": [
-        6
-      ]
-    },
-    {
-      "index": 3,
       "zOrder": 17,
       "type": "coefficients",
       "text": "係数",
@@ -55,18 +24,40 @@
       ]
     },
     {
-      "index": 4,
-      "zOrder": 9,
+      "index": 1,
+      "zOrder": 3,
+      "type": "lab_converter",
+      "text": "Lab変換",
+      "x": 41.0,
+      "y": 67.0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 7,
       "type": "scale",
       "text": "乗算",
-      "x": 133.0,
-      "y": 117.0,
+      "x": 131.0,
+      "y": 62.0,
       "connections": [
         6
       ]
     },
     {
-      "index": 5,
+      "index": 3,
+      "zOrder": 5,
+      "type": "lab_converter",
+      "text": "Lab変換",
+      "x": 40.0,
+      "y": 120.0,
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 4,
       "zOrder": 15,
       "type": "coefficients",
       "text": "係数",
@@ -85,7 +76,18 @@
         "2,0,0": 1.0
       },
       "connections": [
-        4
+        5
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 9,
+      "type": "scale",
+      "text": "乗算",
+      "x": 133.0,
+      "y": 117.0,
+      "connections": [
+        6
       ]
     },
     {
@@ -96,19 +98,17 @@
       "x": 215.0,
       "y": 94.0,
       "connections": [
-        1
+        7
       ]
     },
     {
       "index": 7,
-      "zOrder": 5,
-      "type": "lab_converter",
-      "text": "Lab変換",
-      "x": 40.0,
-      "y": 120.0,
-      "connections": [
-        4
-      ]
+      "zOrder": 13,
+      "type": "rgb_converter",
+      "text": "RGB変換",
+      "x": 325.0,
+      "y": 93.0,
+      "connections": []
     }
   ],
   "trays": [

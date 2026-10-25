@@ -7,11 +7,17 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 import hashlib
 
 from base.FlowNode_CONST import *
-from base import LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class TransformNode(LazyNNOperationNode):
     # ノードタイプ
@@ -37,27 +43,20 @@ class TransformNode(LazyNNOperationNode):
             return
     
     def preprocessStreams(self, inputStreams):
-        """入力ストリームの前処理：primary/auxiliaryで分類"""
-        primaryStreams = []
-        auxiliarys     = []
-        
-        for stream in inputStreams:
-            if stream:
-                category = stream[0].headers.get('category', 'primary')
-                if category == 'auxiliary':
-                    auxiliarys.extend(stream)
-                else:
-                    primaryStreams.append(stream)
-        
+        """入力ストリームの前処理"""
+        inputStreams = super().preprocessStreams(inputStreams)
+        stream = inputStreams[0]
+        param  = [d for s in inputStreams[1:] for d in s]
+                
         # auxiliary データから変換パラメータを取得
-        self._params = self._loadParams(auxiliarys)
+        self._params = self._loadParams(param)
         
         # 画像拡張を計算
-        self._extendParams = self._calculateExpand(primaryStreams, self._params)
+        self._extendParams = self._calculateExpand(stream, self._params)
         
-        return primaryStreams
+        return [stream]
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
         if not self._params or not self._extendParams:
@@ -68,7 +67,7 @@ class TransformNode(LazyNNOperationNode):
         
         if not transformParams:
             expand_left, expand_top, new_width, new_height = self._extendParams
-            return TransformLazyFlowData(inputData, expand_left, expand_top, 0, 1, new_width, new_height)
+            return TransformLazyFlowData(headers, inputData, expand_left, expand_top, 0, 1, new_width, new_height)
         else:
             expand_left, expand_top, new_width, new_height = self._extendParams
             dx, dy, rotation, scale, left, top, width, height = transformParams
@@ -78,7 +77,7 @@ class TransformNode(LazyNNOperationNode):
             height = height if height else new_height
             dx -= left
             dy -= top
-            return TransformLazyFlowData(inputData, dx, dy, rotation, scale, width, height)
+            return TransformLazyFlowData(headers, inputData, dx, dy, rotation, scale, width, height)
         
     def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
@@ -114,26 +113,25 @@ class TransformNode(LazyNNOperationNode):
             'data': tabledata
         }
     
-    def _calculateExpand(self, inputStreams, params):
+    def _calculateExpand(self, inputStream, params):
         """拡張領域計算"""
         import numpy as np
 
-        if not inputStreams or not params:
+        if not inputStream or not params:
             return None
         
-        width, height = inputStreams[0][0].getDimensions()
+        width, height = inputStream[0].getDimensions()
         all_corners = []
         
         # paramsから各画像の変換パラメータを取得
-        for inputStream in inputStreams:
-            for inputData in inputStream:
-                image_id = self._generateImageId(inputData)
-                transformParams = self._getTransformParams(image_id, params)
-                
-                if transformParams:
-                    dx, dy, rotation, scale, left, top, _, _ = transformParams
-                    corners  = self._calculateTransformedCorners(width, height, dx, dy, rotation, scale)
-                    all_corners.extend(corners)
+        for inputData in inputStream:
+            image_id = self._generateImageId(inputData)
+            transformParams = self._getTransformParams(image_id, params)
+            
+            if transformParams:
+                dx, dy, rotation, scale, left, top, _, _ = transformParams
+                corners  = self._calculateTransformedCorners(width, height, dx, dy, rotation, scale)
+                all_corners.extend(corners)
         
         if not all_corners:
             return (0, 0, width, height)
@@ -204,9 +202,15 @@ class TransformNode(LazyNNOperationNode):
         
         return( dx, dy, rotation, scale, left, top, width, height)
 
-class TransformLazyFlowData(LazyFlowData):
-    def __init__(self, flowData, dx, dy, rotation, scale, new_width, new_height):
-        super().__init__(flowData, dx, dy, rotation, scale, new_width, new_height)
+class TransformLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ('sourceHeaders',)
+    
+    def __init__(self, headers, flowData, dx, dy, rotation, scale, new_width, new_height):
+        from base import LazyHeaders
+        
+        super().__init__(headers, flowData, dx, dy, rotation, scale, new_width, new_height)
+        self.sourceHeaders = headers
+        self.headers       = LazyHeaders(self, headers, flowData, dx, dy, rotation, scale, new_width, new_height)
         self.setDimensions(new_width, new_height)
     
     def operation(self, flowData, planeIndex, x, y, dx, dy, rotation, scale, new_width, new_height):
@@ -369,6 +373,23 @@ class TransformLazyFlowData(LazyFlowData):
             result = transformed_data[0:output_height, 0:output_width]
             
             return DataBlock(result, planeIndex, x, y)
+    
+    def getLazyHeaderkeys(self) -> Iterable[str]:
+        return ['transformation']
+    
+    def headerOperation(self, key:str, sourceflowData, dx, dy, rotation, scale, new_width, new_height, *args:Any, **kwargs:Any) -> dict[str,Any]:
+        import numpy as np
+        from utils import numpy_helpers as nh
+        # 画像の中心を原点に変換してアフィン行列を作成
+        orgW, orgH = sourceflowData.getDimensions()
+        M = TransformLazyFlowData.createAffine( orgW, orgH, 0, 0, dx, dy, rotation, scale)
+        M = np.concatenate([M, [[0, 0, 1]]], axis=0) # 2x3 -> 3x3
+        transformation = self.sourceHeaders['transformation']
+        transformation = M @ nh.array(transformation)
+        transformation = transformation.tolist()
+        return {
+            'transformation': transformation,
+        }
     
     @staticmethod
     def createAffine(worldW, worldH, objectX, objectY, dx, dy, rotation, scale):

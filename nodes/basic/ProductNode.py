@@ -22,19 +22,6 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def getOutputDimensions(self, baseData, inputDatas):
-        """乗算では全入力データを包含するサイズを使用"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-        
-        variableType = nh.BDTYPE
-        for data in inputDatas:
-            variableType = np.result_type(variableType, data.getVariableType())
-        self._variableType = variableType
-
-        self._outputDimensions = self.getUnionDimensions(inputDatas)
-        return self._outputDimensions
-    
     def blockOperation(self, blocks, planeIndex, x, y):
         """単一ブロックの乗算処理"""
         import numpy as np
@@ -79,12 +66,12 @@ class ProductNode(N1BlockOperationNode, PolynomialOperationMixin, TensorOperatio
                 np.logical_and(inv, invalidA, out=inv)
 
                 # 値の乗算
-                np.nan_to_num(data, nan=0.0, copy=False)
+                data[invalidA] = 1.0
                 res *= data
         
         # nan の位置を適用
         if invalid.any():
-            result[invalid] = np.nan
+            result[invalid] = nh.nan
         
         return DataBlock(result, planeIndex, x, y)
     

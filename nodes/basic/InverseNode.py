@@ -21,11 +21,13 @@ class InverseNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return InverseLazyFlowData(inputData)
+        return InverseLazyFlowData(headers, inputData)
 
 class InverseLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from utils import numpy_helpers as nh

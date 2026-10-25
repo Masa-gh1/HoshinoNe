@@ -18,7 +18,7 @@ class AutoLevelsNode(FlowNode):
     name      = '自動レベル'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
-    outputCat = _OUT_CAT_PAS
+    outputCat = _OUT_CAT_PRI
     
     def process(self, context=None):
         import numpy as np
@@ -43,7 +43,7 @@ class AutoLevelsNode(FlowNode):
                 # 全画像データを読み込み
                 blockArrays = []
                 for block in inputData.iterateBlocks():
-                    blockArrays.append(block.data.flatten())
+                    blockArrays.append(block.data.ravel())
                 data = np.concatenate(blockArrays)
                 
                 # NaN値を除外して1%と99%のパーセンタイルを計算

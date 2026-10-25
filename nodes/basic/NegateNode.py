@@ -21,11 +21,13 @@ class NegateNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return NegateLazyFlowData(inputData)
+        return NegateLazyFlowData(headers, inputData)
 
 class NegateLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

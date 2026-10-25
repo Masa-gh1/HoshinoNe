@@ -6,10 +6,16 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import json
 
 from Version import VERSION
 
+if TYPE_CHECKING:
+    from FlowNode import FlowNode
+    
 class FlowFile:
     def __init__(self):
         pass
@@ -20,24 +26,26 @@ class FlowFile:
             "nodes": [],
             "trays": [],
         }
+
+        sortedNodes = self.sort(nodes)
         
         # ノードの index マッピングを作成
-        nodeIdxs = {id(node): index for index, node in enumerate(nodes)}        
+        nodeIdxs = {id(node): index for index, node in enumerate(sortedNodes)}        
         
         # ノードとトレイの最小座標を取得
-        minNodeX = min(node.view.x for node in nodes)
-        minNodeY = min(node.view.y for node in nodes)
+        minNodeX = min(node.view.x for node in sortedNodes)
+        minNodeY = min(node.view.y for node in sortedNodes)
         minTrayX = min(tray.x for tray in trays) if trays else None
         minTrayY = min(tray.y for tray in trays) if trays else None
         minX = min(minNodeX, minTrayX) if minTrayX else minNodeX
         minY = min(minNodeY, minTrayY) if minTrayY else minNodeY
         
-        # オフセットを計算(マージンを加える)
-        offsetX = -minX + 40
-        offsetY = -minY + 40
+        # オフセットを計算(余分な余白を切り詰めマージンを加える)
+        offsetX = (-minX + 40) if minX < 0 or 100 < minX else 0
+        offsetY = (-minY + 40) if minY < 0 or 100 < minY else 0
         
         # ノード情報を保存
-        for node in nodes:
+        for node in sortedNodes:
             # ノードのZ-orderを取得
             allItems = canvas.find_all()
             nodeZOrder = max(allItems.index(node.view.rect), allItems.index(node.view.label))
@@ -75,11 +83,11 @@ class FlowFile:
             with open( filePath, 'w', encoding='utf-8') as f:
                 import numpy as np
                 class JSONEncoder(json.JSONEncoder):
-                    def default( self, obj):
-                        if isinstance( obj, np.floating):
-                            return float(obj)
+                    def default( self, o):
+                        if isinstance( o, np.floating):
+                            return float(o)
                         else:
-                            return json.JSONEncoder.default(self, obj)
+                            return json.JSONEncoder.default(self, o)
                 
                 json.dump(serial, f, ensure_ascii=False, indent=2, cls=JSONEncoder)
         
@@ -149,6 +157,62 @@ class FlowFile:
         zOrderObj = list(zOrderMap.values())
             
         return nodes, trays, connections, zOrderObj
+
+    def sort(self, nodes:list[FlowNode]) -> list[FlowNode]:
+        # 依存関係の収集
+        nodeMap = {}
+        for node in nodes:
+            endId = id(node)
+            nodeMap[endId] = {
+                "in_degree": len(node.inputNodes),
+                "in_nodes": [id(in_n) for in_n in node.inputNodes],
+                "out_degree": len(node.outputNodes),
+                "out_nodes": [id(out_n) for out_n in node.outputNodes],
+                "node": node,
+            }
+        
+        # 後ろからのトポロジカルソートによるパス長計算
+        backends = [nid for nid, data in nodeMap.items() if 0 == data["out_degree"]]
+        path_lens = {nid: 0 for nid in backends}
+        
+        while backends:
+            next_backends = []
+            for endId in backends:
+                # このノードの入力を提供しているノード（親）を探索
+                for inId in nodeMap[endId]["in_nodes"]:
+                    nodeMap[inId]["out_degree"] -= 1
+                    if nodeMap[inId]["out_degree"] == 0:
+                        # 最も最後に処理されたノードからパス長を継承する
+                        path_lens[inId] = path_lens[endId] + 1
+                        next_backends.append(inId)
+            backends = next_backends
+
+        # 重み付きトポロジカルソート
+        ready = [nodeId for nodeId, data in nodeMap.items() if 0 == data["in_degree"]]
+        sortedNodeIds = []
+        last = None
+        
+        while ready:
+            # スコア計算: (直前のノードが親であるか, パスの長さ, -Y座標, -X座標)
+            best_nid = max(ready, key=lambda nodeId: (
+                1 if last in nodeMap[nodeId]["in_nodes"] else 0,
+                path_lens.get(nodeId, 0), 
+                -nodeMap[nodeId]["node"].view.y, 
+                -nodeMap[nodeId]["node"].view.x
+            ))
+            
+            sortedNodeIds.append(best_nid)
+            last = best_nid
+            ready.remove(best_nid)
+            
+            for outId in nodeMap[best_nid]["out_nodes"]:
+                nodeMap[outId]["in_degree"] -= 1
+                if 0 == nodeMap[outId]["in_degree"]:
+                    ready.append(outId)
+
+        # ソート済みノードリストを返却
+        sorted_nodes = [nodeMap[nid]["node"] for nid in sortedNodeIds]
+        return sorted_nodes
 
 ######################
 # ここから旧ファイル対応

@@ -7,6 +7,10 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any
+
+import time
 import threading
 from collections import UserDict
 
@@ -14,10 +18,12 @@ from config import MAX_WORKERS
 from .Constants import CachePolicy
 from .FlowData import FlowData
 
+if TYPE_CHECKING:
+    from .DataBlock import DataBlock
+
 class LazyFlowData(FlowData):
-    """遅延評価FlowData"""
+    """遅延評価 FlowData"""
     __slots__ = ('cachePolicy'    ,
-                 'sourceFlowData' ,
                  'sourceFlowDatas',
                  'headers'        ,
                  'args'           ,
@@ -25,20 +31,18 @@ class LazyFlowData(FlowData):
                  '_blockLocks'    ,
                 )
     
-    def __init__(self, sourceFlowDatas, *args, **kwargs):
-        super().__init__(None)
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args, **kwargs):
+        super().__init__()
+        
         self.cachePolicy     = CachePolicy.CALCULABLE # キャッシュポリシー（遅延評価データはCALCULABLE固定）
-        self.sourceFlowData  = sourceFlowDatas[0] if isinstance(sourceFlowDatas, (list,tuple)) else sourceFlowDatas
         self.sourceFlowDatas = sourceFlowDatas
-        self.headers         = LazyHeadersDict(self, *args, **kwargs)
+        self.headers         = headers
         self.args            = args
         self.kwargs          = kwargs
         
-        self.setDimensions(*self.sourceFlowData.getDimensions())
-        
-        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*4)]
+        self._blockLocks = [threading.Lock() for _ in range(MAX_WORKERS*8)]
     
-    def getBlock(self, planeIndex, x, y):
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock|None:
         """指定位置からブロックを取得（遅延評価）"""
         from utils import measurement as mes
         block = super().getBlock(planeIndex, x, y)
@@ -49,13 +53,19 @@ class LazyFlowData(FlowData):
         else:
             from utils.ThreadPool import ParallelExecutor
             # 有効なブロックが無いので遅延評価を実行
-            lockKey = hash((planeIndex, x, y)) % len(self._blockLocks)
-            if self._blockLocks[lockKey].locked():
+            lockIndex = hash((planeIndex, x, y)) % len(self._blockLocks)
+            lock = self._blockLocks[lockIndex]
+            if lock.locked():
                 ParallelExecutor.enterWait() # 長時間の待ちが考えられることを通知する
                 isWait = True
             else:
                 isWait = False
-            with self._blockLocks[lockKey]: # 既に計算中の場合、終了を待つ
+            start = time.perf_counter_ns()
+            with lock: # 既に計算中の場合、終了を待つ
+                t = time.perf_counter_ns() - start
+                if 1000 < t:
+                    from base import CacheManager
+                    CacheManager.elapsedLogging("lazyFlowData lock waitting", t)
                 if isWait:
                     ParallelExecutor.exitWait() # 長時間の待ちが終わった事を通知する
                 if block.isValid():
@@ -63,61 +73,28 @@ class LazyFlowData(FlowData):
                 elif type(self).operation == LazyFlowData.operation:
                     # operation がオーバーライドされていないので計測しない
                     block = self.operation(self.sourceFlowDatas, planeIndex, x, y, *self.args, **self.kwargs)
+                    assert not block is None, f"block is None: class={type(self).__name__}, planeIndex={planeIndex}, x={x}, y={y}"
                     self.setBlock(block)
                     return block
                 else:
                     # operation がオーバーライドされているので計測する
                     block = mes.elapsedThreading(self.operation, self.sourceFlowDatas, planeIndex, x, y, *self.args, **self.kwargs)
+                    assert not block is None, f"block is None: class={type(self).__name__}, planeIndex={planeIndex}, x={x}, y={y}"
                     self.setBlock(block)
                     return block
     
-    def operation(self, flowDatas, planeIndex, x, y, *args, **kwargs):
+    def operation(self, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, *args, **kwargs) -> DataBlock:
         """遅延評価を実行"""
         from utils import measurement as mes
         from base import BroadcastMixin
         blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
-        if not blocks:
-            return blocks
-        elif isinstance(blocks, (list,tuple)) and not any(blocks):
-            return blocks
-        else:
-            return self.blockOperation(blocks, planeIndex, x, y, *args, **kwargs)
+        assert blocks                                             , f"blocks is None: class={type(self).__name__}, planeIndex={planeIndex}, x={x}, y={y}"
+        assert not isinstance(blocks, (list,tuple)) or any(blocks), f"blocks is all empty: class={type(self).__name__}, planeIndex={planeIndex}, x={x}, y={y}"
+        return self.blockOperation(blocks, planeIndex, x, y, *args, **kwargs)
     
-    def blockOperation(self, blocks, planeIndex, x, y, *args, **kwargs):
+    def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int, *args, **kwargs) -> DataBlock:
         """遅延評価を実行"""
-        return blocks
-    
-    def getLazyHeaderkeys(self):
-        """遅延評価対象の header キーを取得"""
-        return []
-    
-    def headerOperation(self, lazyFlowData, key, *args, **kwargs):
-        """headers 遅延評価"""
-        return {}
-
-class LazyHeadersDict(UserDict):
-    """遅延評価対応のheaders辞書"""
-    __slots__ = ('_lazyFlowData',
-                 'args'         ,
-                 'kwargs'       ,
-                )
-    def __init__(self, lazyFlowData, *args, **kwargs):
-        super().__init__(lazyFlowData.sourceFlowData.headers)
-        
-        self._lazyFlowData = lazyFlowData
-        self.args          = args
-        self.kwargs        = kwargs
-
-        for key in self._lazyFlowData.getLazyHeaderkeys():
-            self.data[key]= "<LazyHeaderOperation>"
-    
-    def __getitem__(self, key):
-        if not key in self.data:
-            return None
+        if isinstance(blocks, (list,tuple)):
+            return blocks[0]
         else:
-            value = self.data[key]
-            if isinstance(value, str) and "<LazyHeaderOperation>"==value:
-                lazyResult = self._lazyFlowData.headerOperation(self._lazyFlowData, key, *self.args, **self.kwargs)
-                self.data.update(lazyResult)
-                value = self.data[key]
-            return value
+            return blocks

@@ -7,13 +7,21 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from itertools import zip_longest
 from abc import abstractmethod
 
 from base.FlowNode_CONST import *
-from base import FlowNode
+from .NxBlockOperationNode import NxBlockOperationNode
 
-class LazyNNOperationNode(FlowNode):
+if TYPE_CHECKING:
+    from base.DataBlock import DataBlock
+    from base.FlowData import FlowData
+    from base.LazyFlowData import LazyFlowData
+
+class LazyNNOperationNode(NxBlockOperationNode):
     """LazyFlowDataを用いるN:N処理ノードの基底クラス"""
     # ノードタイプ
     majorType = 'Lazy_NN_operation'
@@ -22,7 +30,7 @@ class LazyNNOperationNode(FlowNode):
     name      = 'LazyNNOperationNode'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
-    outputCat = _OUT_CAT_PAS
+    #outputCat = スーパークラスを継承
 
     def process(self, context=None):
         self.reportProgress(context, "開始")
@@ -53,64 +61,48 @@ class LazyNNOperationNode(FlowNode):
             if not inputDatas:
                 pass
             elif 1 < len(inputDatas):
-                lazyFlowData = self.createLazyFlowData(inputDatas)
+                lazyFlowData = self.createFlowData(inputDatas)
                 resultFlowDatas.append(lazyFlowData)
             else:
-                lazyFlowData = self.createLazyFlowData(inputDatas[0])
+                lazyFlowData = self.createFlowData(inputDatas[0])
                 resultFlowDatas.append(lazyFlowData)
         
         self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")
     
-    def preprocessStreams(self, inputStreams):
-        """入力ストリームの前処理（サブクラスでオーバーライド可能）
-        演算結果のデータタイプを primary 優先とするため、
-        primary/auxiliaryで分類し、primaryを前に集める。
+    def createFlowData(self, inputDatas:FlowData|list[FlowData]) -> FlowData:
+        from base import FlowData
         
-        Args:
-            inputStreams: 入力ストリームのリスト
-            
-        Returns:
-            処理対象ストリームのリスト
-        """
-        def getPriority(stream):
-            category = stream[0].headers.get("category", "primary")
-            dataType = stream[0].headers.get("type", "table")
-            n        = len(stream)
-            
-            if   "primary"   == category: priority =     0
-            elif "auxiliary" == category: priority = 10000
-            else                        : priority = 20000
-            
-            if   "tensor"     == dataType: priority += 1000
-            elif "polynomial" == dataType: priority += 2000
-            else                         : priority +=    0
-            
-            priority += max(0, min(999, 1000 - n))
-            
-            return priority
+        _inputDatas = inputDatas if isinstance(inputDatas, (list,tuple)) else [inputDatas]
         
-        streams = filter(lambda s: s, inputStreams)
-        streams = sorted(streams, key=getPriority)
-        return streams
-    
-    def preprocessStream(self, inputStream):
-        """入力データの前処理(サブクラスでオーバーライド可能)
+        # 基準データを決定
+        baseDataIndex = self.getBaseDataIndex(_inputDatas)
+        baseData = _inputDatas[baseDataIndex]
+
+        # headers を生成
+        headers = baseData.headers.copy() if baseData.headers else {}
+        headers["category"] = self.getOutputCategory()
+        headers.update(self.processHeaders(baseData, _inputDatas))
+
+        # サイズを決定
+        width, height = self.getOutputDimensions(baseData, _inputDatas)
         
-        Args:
-            inputStream: 入力ストリーム
-            
-        Returns:
-            処理対象データのリスト
-        """
-        return inputStream
-    
+        # 結果用の FlowData を生成
+        flowData = self.createLazyFlowData(headers, inputDatas)
+        if (0,0) == flowData.getDimensions():
+            flowData.setDimensions(width, height)
+        
+        return flowData
+        
     @abstractmethod
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers:dict, inputDatas:FlowData|list[FlowData]) -> LazyFlowData:
         """LazyFlowDataを作成（サブクラスで実装）
         
+        実装例
+        return LazyFlowData(headers, inputDatas)
+        
         Args:
-            inputData: 入力FlowData
+            inputDatas: 入力 FlowData のリスト
             
         Returns:
             LazyFlowData

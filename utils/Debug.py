@@ -19,7 +19,7 @@ class Debug:
     LEVEL_INFO  = 3
     LEVEL_NONE  = 0
 
-    LEVEL = LEVEL_NONE
+    LEVEL:int = LEVEL_NONE
 
     _debugReportLog = []
     _debugRecord    = {}

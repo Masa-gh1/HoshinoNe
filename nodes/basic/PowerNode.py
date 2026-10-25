@@ -21,11 +21,13 @@ class PowerNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputDatas):
+    def createLazyFlowData(self, headers, inputDatas):
         """LazyFlowDataを作成"""
-        return PowerLazyFlowData(inputDatas)
+        return PowerLazyFlowData(headers, inputDatas)
 
 class PowerLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, blocks, planeIndex, x, y):
         import numpy as np
         from base import DataBlock

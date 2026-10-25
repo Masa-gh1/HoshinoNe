@@ -1,0 +1,213 @@
+{
+  "version": "0.3.20260918",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 7,
+      "type": "pass",
+      "text": "通点",
+      "x": 40.0,
+      "y": 92.0,
+      "connections": [
+        5,
+        2
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 11,
+      "type": "table",
+      "text": "表",
+      "x": 99.39999999999998,
+      "y": 207.0,
+      "category": "auxiliary",
+      "planes": [
+        "quantile 0.5 approx"
+      ],
+      "columns": 51,
+      "lines": 51,
+      "table": 1.0,
+      "connections": [
+        2
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 9,
+      "type": "quantile_filter",
+      "text": "分位数濾過",
+      "x": 97.39999999999998,
+      "y": 149.0,
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 15,
+      "type": "negate",
+      "text": "符号反転",
+      "x": 184.39999999999998,
+      "y": 147.0,
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 4,
+      "zOrder": 25,
+      "type": "table",
+      "text": "表",
+      "x": 168.0,
+      "y": 40.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "columns": [
+        "A",
+        "B",
+        "C"
+      ],
+      "lines": [
+        "1",
+        "2",
+        "3"
+      ],
+      "table": {
+        "0,0,0": 0.0625,
+        "0,1,0": 0.125,
+        "0,2,0": 0.0625,
+        "0,0,1": 0.125,
+        "0,1,1": 0.25,
+        "0,2,1": 0.125,
+        "0,0,2": 0.0625,
+        "0,1,2": 0.125,
+        "0,2,2": 0.0625
+      },
+      "connections": [
+        5
+      ]
+    },
+    {
+      "index": 5,
+      "zOrder": 5,
+      "type": "convolution",
+      "text": "畳み込み",
+      "x": 131.0,
+      "y": 93.0,
+      "connections": [
+        6
+      ]
+    },
+    {
+      "index": 6,
+      "zOrder": 13,
+      "type": "offset",
+      "text": "加算",
+      "x": 213.39999999999998,
+      "y": 89.0,
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 7,
+      "zOrder": 19,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 245.39999999999998,
+      "y": 207.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {
+        "0,0,0": -400.0
+      },
+      "connections": [
+        8
+      ]
+    },
+    {
+      "index": 8,
+      "zOrder": 17,
+      "type": "offset",
+      "text": "加算",
+      "x": 242.39999999999998,
+      "y": 145.0,
+      "connections": [
+        9
+      ]
+    },
+    {
+      "index": 9,
+      "zOrder": 29,
+      "type": "sign",
+      "text": "符号",
+      "x": 303.4,
+      "y": 145.0,
+      "connections": [
+        11
+      ]
+    },
+    {
+      "index": 10,
+      "zOrder": 27,
+      "type": "coefficients",
+      "text": "係数",
+      "x": 277.4,
+      "y": 40.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 0,
+      "yOrder": 0,
+      "coefficients": {},
+      "connections": [
+        11
+      ]
+    },
+    {
+      "index": 11,
+      "zOrder": 21,
+      "type": "max",
+      "text": "比較大",
+      "x": 268.4,
+      "y": 91.0,
+      "connections": [
+        12
+      ]
+    },
+    {
+      "index": 12,
+      "zOrder": 23,
+      "type": "pass",
+      "text": "通点",
+      "x": 325.4,
+      "y": 91.0,
+      "connections": []
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 3,
+      "x": 112,
+      "y": 83,
+      "width": 138,
+      "height": 80,
+      "title": "ぼかし"
+    },
+    {
+      "zOrder": 1,
+      "x": 186,
+      "y": 112,
+      "width": 305,
+      "height": 204,
+      "title": "星マスク"
+    }
+  ]
+}

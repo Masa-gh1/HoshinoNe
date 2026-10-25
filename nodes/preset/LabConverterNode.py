@@ -7,11 +7,16 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 from base.FlowNode_CONST import *
-from base import LazyFlowData
-from base import PolynomialOperationMixin
-from base import TensorOperationMixin
+from base import LazyFlowData, LazyHeadersMixin
+from base import PolynomialOperationMixin, TensorOperationMixin
 from nodes import LazyNNOperationNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     # ノードタイプ
@@ -23,11 +28,19 @@ class LabConverterNode(LazyNNOperationNode, PolynomialOperationMixin):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return LabConverterLazyFlowData(inputData)
+        return LabConverterLazyFlowData(headers, inputData)
 
-class LabConverterLazyFlowData(LazyFlowData):
+class LabConverterLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ()
+    
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args:Any, **kwargs:Any):
+        from base import LazyHeaders
+        
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.headers = LazyHeaders(self, headers)
+    
     def operation(self, flowData, planeIndex, x, y):
         """Lab 変換操作(正規化なし)"""
         from base import DataBlock
@@ -60,10 +73,10 @@ class LabConverterLazyFlowData(LazyFlowData):
                 _b = (_R + _G - 2.0*_B) / 2.44948974278
                 return DataBlock(_b, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> Iterable[str]:
         return ['mode', 'planes']
     
-    def headerOperation(self, lazyFlowData, key):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
         # Lab変換では mode plane が変わる
         return {
             'mode': 'Lab',

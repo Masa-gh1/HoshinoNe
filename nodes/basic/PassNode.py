@@ -18,9 +18,11 @@ class PassNode(FlowNode):
     name      = '通点'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
-    outputCat = _OUT_CAT_PAS
+    outputCat = _OUT_CAT_PRI
     
     def process(self, context=None):
+        from base import FlowDataWrapper
+        
         self.reportProgress(context, "開始")
         
         # 入力データを収集
@@ -31,6 +33,13 @@ class PassNode(FlowNode):
         if not inputStreams or not inputStreams[0]:
             return
         
-        # 入力データをそのまま出力
-        self.flowDatas = inputStreams[0]
+        # FlowDataWrapperを使用して category を書き換え
+        resultFlowDatas = []
+        for inputData in inputStreams[0]:
+            updatedHeaders = {'category': self.getOutputCategory()}
+            wrappedData = FlowDataWrapper(inputData, updatedHeaders)
+            resultFlowDatas.append(wrappedData)
+        
+        # ラップされたデータを出力
+        self.flowDatas = resultFlowDatas
         self.reportProgress(context, "完了")

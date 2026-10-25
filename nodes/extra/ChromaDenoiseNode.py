@@ -23,7 +23,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
     name      = '色空間分離ノイズ除去'
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
-    outputCat = _OUT_CAT_PAS
+    outputCat = _OUT_CAT_PRI
 
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
@@ -63,7 +63,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         self.edge_threshold = nodeData.get("edge_threshold", 0.1)
     
     def getConfigHash(self):
-        config = f"{self.colorspace}_{self.chroma_strength}_{self.luma_strength}_{self.preserve_edges}_{self.edge_threshold}"
+        config = f"{self.minorType}_{self._outputCat}_{self.colorspace}_{self.chroma_strength}_{self.luma_strength}_{self.preserve_edges}_{self.edge_threshold}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def process(self, context=None):
@@ -402,6 +402,7 @@ class ChromaDenoiseNode(FlowNode,ConfigurableNode):
         from base import FlowData
 
         headers = original_flowdata.headers.copy()
+        headers["category"] = self.getOutputCategory(),
         result_flowdata = FlowData(headers)
         
         if 4 <= original_flowdata.getPlaneCount():

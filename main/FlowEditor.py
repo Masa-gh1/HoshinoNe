@@ -7,6 +7,8 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from typing import cast, Literal
+
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import sys
@@ -36,7 +38,7 @@ class FlowEditor:
         self.connectionLines = [] # (fromNode, toNode, line)
         self.flowControl     = FlowControl()
 
-        self.applicationHome = None
+        self.applicationHome = "."
         self.currentFlowPath = None
         self.lastDirectory   = None
         
@@ -89,23 +91,28 @@ class FlowEditor:
         columnbreak = False
         col=0
         row=0
-        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [('***', None, None)]:
-            if '---' in nodeType:
+        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [("***", "", "")]:
+            if   not nodeType:
+                self.contextMenu.add_command(label=label, accelerator=tooltip, columnbreak=columnbreak)
+                columnbreak = False
+                row += 1
+            elif "---" in nodeType:
                 self.contextMenu.add_separator()
                 row += 1
-            elif '***' in nodeType:
-                columnbreak = True
+            elif "***" in nodeType:
                 if 0 == col:
                     self.contextMenu.add_separator()
                     self.contextMenu.add_separator()
                     self.contextMenu.add_command(label="トレイ作成", command=self.addTrayAtPosition)
                     self.contextMenu.add_command(label="別のフローをインポート", command=self.addFlowAtPosition)
+                    row += 4
+                columnbreak = True
                 col += 1
                 row = 0
             else:
                 self.contextMenu.add_command(label=label, accelerator=tooltip, command=lambda nt=nodeType: self.addNodeAtPosition(nt), columnbreak=columnbreak)
                 columnbreak = False
-                row += 2
+                row += 1
         
         # 使い方説明
         infoLabel = tk.Label(self.root, text="使い方: 1.右クリックでノード/トレイ追加 2.ドラッグで移動 3.クリックで接続 4.実行 5.ダブルクリックで結果表示", bg='lightyellow')
@@ -487,6 +494,9 @@ class FlowEditor:
                 else:
                     menu = tk.Menu(self.canvas, tearoff=0)
                     
+                    category = tk.BooleanVar(value=(_OUT_CAT_AUX == node.getOutputCategory()))
+                    menu.add_checkbutton(label="補正値", variable=category, command=lambda: node.setOutputCategory(_OUT_CAT_AUX if category.get() else _OUT_CAT_PRI))
+                    
                     if hasattr(node, 'setFilePaths'):
                         menu.add_command(label="ファイル選択", command=lambda n=node:self.onSelectFiles(n))
                     if hasattr(node, 'setOutputFilePath'):
@@ -522,14 +532,20 @@ class FlowEditor:
             node.setOutputFilePath(outputPath)
             node.view.onNodeConfigChanged(node)
     
-    def openFilesSelector(self, *args, **kwargs):
-        return self._openFileSelector(filedialog.askopenfilenames, *args, **kwargs)
+    def openFilesSelector(self, *args, **kwargs) -> tuple[str,...]|Literal['']:
+        ret =  self._openFileSelector(filedialog.askopenfilenames, *args, **kwargs)
+        assert isinstance(ret, tuple) or ""==ret
+        return cast(tuple[str, ...] | Literal[''], ret)
     
-    def openFileSelector(self, *args, **kwargs):
-        return self._openFileSelector(filedialog.askopenfilename, *args, **kwargs)
-    
-    def openOutputFileSelector(self, *args, **kwargs):
-        return self._openFileSelector(filedialog.asksaveasfilename, *args, **kwargs)
+    def openFileSelector(self, *args, **kwargs) -> str:
+        ret = self._openFileSelector(filedialog.askopenfilename, *args, **kwargs)
+        assert isinstance(ret, str)
+        return ret
+
+    def openOutputFileSelector(self, *args, **kwargs) -> str:
+        ret = self._openFileSelector(filedialog.asksaveasfilename, *args, **kwargs)
+        assert isinstance(ret, str)
+        return ret
     
     def _openFileSelector(self, func, *args, **kwargs):
         newKwargs = kwargs.copy()
@@ -643,7 +659,7 @@ class FlowEditor:
             Debug.log(type(self).__name__, f"保存に失敗しました", e)
             messagebox.showerror("エラー", f"保存に失敗しました: {str(e)}")
     
-    def loadFlow(self, targetX=0, targetY=0, appendMode=False, filePath=None, initialdir=None):
+    def loadFlow(self, targetX=0.0, targetY=0.0, appendMode=False, filePath=None, initialdir=None):
         if not filePath:
             filePath = self.openFileSelector(
                 title="フローをインポート" if appendMode else "フローを読み込む",
@@ -883,7 +899,7 @@ class FlowEditor:
                 del self.activeProgressBars[nodeId]
         
         from utils.Debug import Debug
-        if Debug.isTestMode() and current and int(current)==(total*9)//10:
+        if Debug.isTestMode() and 0==hash((nodeId, nodeName, message, current, total))%100:
             import gc
             objectCount = len(gc.get_objects())
             self.maxObjectCount = max(self.maxObjectCount, objectCount)
@@ -972,7 +988,7 @@ class FlowEditor:
 
             blockInfo = f"Block: {getpsStr}, {setpsStr}, {save1psStr}, {save2psStr}"
             objInfo   = f"Object: {ObjectCount}"
-            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount} {purgeCount/setCount:.3f} Save:{save2Count}({save2Count/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
+            CacheInfo = f"Cache[Hit: {cacheHitCount}({cacheHitCount/getCount:.3f}) Recalculate: {recalculateCount}({recalculateCount/getCount:.3f}) Load: {loadCount}({loadCount/getCount:.3f}) Purge: {purgeCount}({purgeCount/setCount:.3f}) Save:{save2Count}({save2Count/setCount:.3f})]" if 0!=getCount and 0!=setCount else ""
             dataInfo  = f"Data: {flowDataCount} Object: {objCacheCount} Cache: {cacheCount}({cacheSizeStr}) Storage: {storageCount}({storageSizeStr})"
             nodeInfo  = f"Node: {flowNodeCount} Exist: {cacheNodeCount}"
         

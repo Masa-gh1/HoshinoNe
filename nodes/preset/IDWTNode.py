@@ -27,6 +27,7 @@ class IDWTNode(NNPlaneOperationNode):
         
         # headers を生成
         headers = inputDatas[0].headers.copy()
+        headers["category"] = self.getOutputCategory()
         
         # 逆 DWT 後のプレーンを設定
         level = headers.pop("DWT level")
@@ -38,8 +39,8 @@ class IDWTNode(NNPlaneOperationNode):
         for plane in planes[0::1+(level*3)]:
             newPlanes.append(plane)
         
-        headers.update({"mode"   : mode,
-                        "planes" : newPlanes,
+        headers.update({"mode"    : mode,
+                        "planes"  : newPlanes,
                        })
         
         # 結果用の FlowData を生成
@@ -116,7 +117,7 @@ class IDWTNode(NNPlaneOperationNode):
             endY = block.y + blockHeight
             auxPlane[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
         
-        filter_bank = pywt.orthogonal_filter_bank(auxPlane.flatten())
+        filter_bank = pywt.orthogonal_filter_bank(auxPlane.ravel())
         wavelet = pywt.Wavelet(name="custom", filter_bank=filter_bank)
         data = pywt.waverecn(coeffs, wavelet) # 逆DWT
         

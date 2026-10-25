@@ -3,45 +3,45 @@
   "nodes": [
     {
       "index": 0,
-      "zOrder": 7,
-      "type": "scale",
-      "text": "乗算",
-      "x": 138.0,
-      "y": 40.0,
-      "connections": []
-    },
-    {
-      "index": 1,
-      "zOrder": 3,
-      "type": "sum",
-      "text": "総和",
-      "x": 41.0,
-      "y": 40.0,
-      "connections": [
-        0
-      ]
-    },
-    {
-      "index": 2,
-      "zOrder": 9,
-      "type": "inverse",
-      "text": "逆数",
-      "x": 119.0,
-      "y": 89.0,
-      "connections": [
-        0
-      ]
-    },
-    {
-      "index": 3,
       "zOrder": 5,
       "type": "count",
       "text": "カウント",
       "x": 40.0,
       "y": 90.0,
       "connections": [
-        2
+        1
       ]
+    },
+    {
+      "index": 1,
+      "zOrder": 9,
+      "type": "inverse",
+      "text": "逆数",
+      "x": 119.0,
+      "y": 89.0,
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 3,
+      "type": "sum",
+      "text": "総和",
+      "x": 41.0,
+      "y": 40.0,
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 7,
+      "type": "scale",
+      "text": "乗算",
+      "x": 138.0,
+      "y": 40.0,
+      "connections": []
     }
   ],
   "trays": [

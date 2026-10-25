@@ -6,14 +6,24 @@ All rights reserved.
 
 @author: Masakazu Inoue
 '''
+
+from typing import overload
 import math
+
+@overload
+def dispS(value:float, representative:float|None = None) -> str: ...
+
+@overload
+def dispS(value:list[float], representative:float|None = None) -> list[str]:...
 
 def dispS(value, representative = None):
     """数値を表示に適した長さで文字列化(短)する"""
-    if isinstance(value,(list,tuple)):
+    if not isinstance(value,(list,tuple)):
+        values = [value]
+    elif 0 < len(value):
         values = value
     else:
-        values = [value]
+        return []
     
     if representative:
         abss   = [abs(representative)]
@@ -41,28 +51,35 @@ def dispS(value, representative = None):
     else:
         return texts[0]
 
+@overload
+def dispL(value:float, representative:float|None = None) -> str: ...
+
+@overload
+def dispL(value:list[float], representative:float|None = None) -> list[str]:...
+
 def dispL(value, representative = None):
     """数値を表示に適した長さで文字列化(長)する"""
-    if isinstance(value,(list,tuple)):
+    if not isinstance(value,(list,tuple)):
+        values = [value]
+    elif 0 < len(value):
         values = value
     else:
-        values = [value]
+        return []
     
     if representative:
-        abss   = [abs(representative)]
-        absMax = max(abss)
+        rep = abs(representative)
     else:
-        abss   = [abs(v) if not math.isnan(v) else 0.0 for v in values]
-        absMax = max(abss)
+        reps = [abs(v) if not math.isnan(v) else 0.0 for v in values]
+        rep  = max(reps)-min(reps)
     
     threshold = [100.0,  0.1, 0.0001, 0.0000001]
     format    = [".0f",".3f",  ".6f",     ".9f"]
-    if 0.0 == absMax:
+    if 0.0 == rep:
         fm = ".3f"
     else:
         fm = format[-1]
         for th,fm in zip(threshold,format):
-            if th <= absMax:
+            if th <= rep:
                 break
     
     texts = [f"{v:{fm}}" for v in values]

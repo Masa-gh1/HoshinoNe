@@ -3,7 +3,7 @@ import tkinter as tk
 from nodes import NodeFactory
 
 class Tray:
-    def __init__(self, canvas, editor, x=30, y=30, width=200, height=150, title="トレイ", **kwargs):
+    def __init__(self, canvas, editor, x=30.0, y=30.0, width=200.0, height=150.0, title="トレイ", **kwargs):
         self.canvas = canvas
         self.editor = editor
         self.x = x
@@ -44,24 +44,29 @@ class Tray:
         columnbreak = False
         col=0
         row=0
-        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [('***', None, None)]:
-            if '---' in nodeType:
+        for nodeType, label, tooltip in NodeFactory.getMenuItems() + [("***", "", "")]:
+            if   not nodeType:
+                self.contextMenu.add_command(label=label, accelerator=tooltip, columnbreak=columnbreak)
+                columnbreak = False
+                row += 1
+            elif "---" in nodeType:
                 self.contextMenu.add_separator()
                 row += 1
-            elif '***' in nodeType:
-                columnbreak = True
+            elif "***" in nodeType:
                 if 0 == col:
                     self.contextMenu.add_separator()
                     self.contextMenu.add_separator()
                     self.contextMenu.add_command(label="編集", command=self.editTray)
                     self.contextMenu.add_command(label="最背面", command=self.lower)
                     self.contextMenu.add_command(label="削除", command=self.deleteTray)
+                    row += 5
+                columnbreak = True
                 col += 1
                 row = 0
             else:
                 self.contextMenu.add_command(label=label, accelerator=tooltip, command=lambda nt=nodeType: self.editor.addNodeAtPosition(nt), columnbreak=columnbreak)
                 columnbreak = False
-                row += 2
+                row += 1
 
     def onPress(self, event):
         self.startX = event.x
@@ -91,7 +96,6 @@ class Tray:
                 bottom = self.y + self.height//2
 
                 # リサイズハンドルの判定
-                self.resizeHandle = None
                 if abs(canvasX - right) < margin and abs(canvasY - bottom) < margin:
                     self.resizeHandle = 'se'  # 右下
                 elif abs(canvasX - left) < margin and abs(canvasY - bottom) < margin:
@@ -108,6 +112,8 @@ class Tray:
                     self.resizeHandle = 's'   # 下
                 elif abs(canvasY - top) < margin:
                     self.resizeHandle = 'n'   # 上
+                else:
+                    self.resizeHandle = None
 
                 if self.resizeHandle:
                     self.isResizing = True
@@ -183,13 +189,17 @@ class Tray:
                 newRight = fixedRight
                 newTop = fixedTop
                 newBottom = fixedBottom
-
-                if 'e' in self.resizeHandle:  # 右辺移動
+                
+                if not self.resizeHandle:
+                    pass
+                elif 'e' in self.resizeHandle:  # 右辺移動
                     newRight = max(fixedLeft + 100, canvasX)
                 elif 'w' in self.resizeHandle:  # 左辺移動
                     newLeft = min(fixedRight - 100, canvasX)
-
-                if 's' in self.resizeHandle:  # 下辺移動
+                
+                if not self.resizeHandle:
+                    pass
+                elif 's' in self.resizeHandle:  # 下辺移動
                     newBottom = max(fixedTop + 80, canvasY)
                 elif 'n' in self.resizeHandle:  # 上辺移動
                     newTop = min(fixedBottom - 80, canvasY)

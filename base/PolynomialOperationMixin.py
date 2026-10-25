@@ -7,11 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    import numpy as np
+    from .DataBlock import DataBlock
+    from .FlowData import FlowData
+
 class PolynomialOperationMixin:
     """polynomial 操作の共通機能を提供するMixin"""
     
     @classmethod
-    def computeCombinedPolynomial(cls, polynomialDatas, operation):
+    def computeCombinedPolynomial(cls, polynomialDatas:list[FlowData], operation:Callable) -> FlowData|None:
         """
         複数 polynomial を統合
         
@@ -20,6 +28,7 @@ class PolynomialOperationMixin:
             operation: 係数演算関数
         """
         import numpy as np
+        from utils import numpy_helpers as nh
         from base import FlowData
         from base import DataBlock
 
@@ -54,14 +63,16 @@ class PolynomialOperationMixin:
             for planeIndex in range(planeCount):
                 # 最初の polynomial の係数行列を取得
                 coeffBlock = polynomialDatas[0].getBlock(planeIndex, 0, 0)
-                h, w = coeffBlock.data.shape
-                result.setDimensions(w, h)
-                data = coeffBlock.data.copy()
+                data = coeffBlock.data.copy() if coeffBlock else None
 
                 # 残りの polynomial を順次適用
                 for polynomialData in polynomialDatas[1:]:
                     otherBlock = polynomialData.getBlock(planeIndex, 0, 0)
-                    data = operation(data, otherBlock.data)
+                    data = operation(data, otherBlock.data if otherBlock else None)
+
+                assert data is not None, "Failed to calculate polynomial"
+                h, w = data.shape
+                result.setDimensions(w, h)
                 result.setBlock(DataBlock(data, planeIndex, 0, 0))
         
         # headers 更新
@@ -71,7 +82,7 @@ class PolynomialOperationMixin:
         return result
     
     @classmethod
-    def calculatePolynomialRange(cls, polynomial, width, height):
+    def calculatePolynomialRange(cls, polynomial:np.ndarray, width:int, height:int) -> tuple[float, float]:
         """多項式 polynomial の範囲を計算（四隅と中央で評価）"""
         def evalPoly(x, y):
             value = 0.0
@@ -94,7 +105,7 @@ class PolynomialOperationMixin:
         return min(v1, v2, v3, v4, v5), max(v1, v2, v3, v4, v5)
     
     @classmethod
-    def calculatePolynomialBlock(cls, polynomialFlowData, planeIndex, x, y, blockShape, defaultValue=0.0):
+    def calculatePolynomialBlock(cls, polynomialFlowData:FlowData, planeIndex:int, x:int, y:int, blockShape:tuple, defaultValue:float=0.0) -> DataBlock:
         """Polynomial データからブロック内の各座標に対応する値を計算"""
         import numpy as np
         import utils.numpy_helpers as nh
@@ -118,12 +129,9 @@ class PolynomialOperationMixin:
         coeffMatrix = coeffBlock.data
         maxOrderY, maxOrderX = coeffMatrix.shape
         
-        # ブロック内の座標配列を作成（スレッドセーフ: np.meshgrid 置き換え）
+        # ブロック内の座標配列を作成
         blockHeight, blockWidth = blockShape
-        y_indices = nh.arange(blockHeight).reshape(-1, 1)
-        x_indices = nh.arange(blockWidth)
-        y_coords = y + np.broadcast_to(y_indices, (blockHeight, blockWidth))
-        x_coords = x + np.broadcast_to(x_indices, (blockHeight, blockWidth))
+        x_coords, y_coords = np.meshgrid(nh.arange(x, x+blockWidth), nh.arange(y, y+blockHeight), copy=False, sparse=True)
         
         # numpy 配列演算で多項式計算
         result = nh.zeros(blockShape)

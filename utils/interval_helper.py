@@ -28,4 +28,4 @@ def createHalfOpenEnd(minValue, maxValue):
         return float(maxValue) + 1.0
     else:
         # 浮動小数点値の場合は微小値を加算
-        return float(maxValue) + maxValue * nh.epsilon
+        return float(maxValue + maxValue * nh.epsilon)

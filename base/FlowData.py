@@ -7,6 +7,9 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterator, Any
+
 import uuid
 import threading
 from tkinter import messagebox
@@ -15,6 +18,10 @@ from config import BLOCK_SIZE
 from .Constants import CachePolicy
 from .CacheManager import CacheManager
 from utils.Debug import Debug
+
+if TYPE_CHECKING:
+    import numpy as np
+    from .DataBlock import DataBlock
 
 class FlowData:
     """ノードの実行結果を保存する"""
@@ -31,7 +38,7 @@ class FlowData:
                  '_existingBlocks'  ,
                  '_lock'            ,
                 )
-    def __init__(self, headers={}):
+    def __init__(self, headers:dict[str,Any]={}):
         self.instanceId = str(uuid.uuid4())
         
         self.cachePolicy = CachePolicy.PERSISTENT # キャッシュポリシー（元データはPERSISTENT固定）
@@ -47,7 +54,6 @@ class FlowData:
         self._existingBlocks   = None # 保存済みブロックの記録 上書きチェックなどに使用する
         self._lock             = threading.Lock()
         
-        
         import importlib.util
         import sys
         if not getattr(sys, 'frozen', False) and not importlib.util.find_spec("numpy"):
@@ -60,54 +66,64 @@ class FlowData:
         except Exception as e:
             Debug.log(type(self).__name__, "Warning: cleanup", e)
 
-    def setDimensions(self, width, height):
-        """次元を設定"""
-        self._dimensions = (width, height)
-    
-    def getType(self):
+    def getType(self) -> str:
         """型を取得"""
         if 'type' in self.headers:
             return self.headers['type']
         return 'table'
     
-    def getMode(self):
+    def getMode(self) -> str|None:
         """モードを取得"""
         if 'mode' in self.headers:
             return self.headers['mode']
-        # プレーン数から推定
-        planeCount = self.getPlaneCount()
-        if planeCount == 3:
-            return 'RGB'
-        elif planeCount == 4:
-            return 'RGBG'
-        elif planeCount == 1:
-            return 'L'
         else:
             return None
     
-    def getPlaneCount(self):
+    def getPlaneCount(self) -> int:
         """プレーン数を取得"""
         if 'planes' in self.headers:
             return len(self.headers['planes'])
-        return None
+        else:
+            return 0
     
-    def getDimensions(self):
+    def getDimensions(self) -> tuple[int, int]:
         """次元を取得 (width, height)"""
         return self._dimensions
     
-    def getVariableType(self):
+    def setDimensions(self, width, height):
+        """次元を設定"""
+        self._dimensions = (width, height)
+    
+    def getVariableType(self) -> np.dtype:
         """データ型を取得"""
-        if self._variableType is None:
-            self.getBlock(0,0,0).data
+        from .LazyFlowData import LazyFlowData
+        if not self._variableType and isinstance(self,LazyFlowData):
+            # 型が未設定かつ LazyFlowData の場合、データを取得して型を確定させる
+            block = self.getBlock(0,0,0)
+            assert not block is None, "block is None: planeIndex: 0, x: 0, y: 0"
+            _ = block.data
+        assert not self._variableType is None, "variableType is None"
         return self._variableType
 
-    def getArea(self):
+    def getArea(self) -> int:
         """面積を取得"""
         width, height = self.getDimensions()
         return (width*height)
     
-    def getBlock(self, planeIndex, x, y):
-        """指定位置からブロックを取得"""
+    def getBlock(self, planeIndex:int, x:int, y:int) -> DataBlock|None:
+        """
+        指定位置からブロックを取得
+
+        指定の座標が存在しない場合、Noneを返す。
+        
+        Args:
+            planeIndex: プレーンインデックス
+            x: x 座標
+            y: y 座標
+        
+        Return:
+            DataBlock 又は None
+        """
         from .DataBlock import DataBlock
         
         width, height = self.getDimensions()
@@ -125,15 +141,17 @@ class FlowData:
             # 未設定なので all nan
             from utils import numpy_helpers as nh
             from base import DataBlock
-            return DataBlock(nh.nans((BLOCK_SIZE, BLOCK_SIZE)), planeIndex, x, y)
+            w = min(BLOCK_SIZE, width-x)
+            h = min(BLOCK_SIZE, height-y)
+            return DataBlock(nh.nans((h, w)), planeIndex, x, y)
         
         # 遅延ロード用のDataBlockを作成
-        block = DataBlock(None, planeIndex, x, y)
+        from base.DataBlock import _DataBlock
+        block = _DataBlock(self.instanceId, planeIndex, x, y)
         block.cachePolicy = self.cachePolicy
-        block.blockId = f"{self.instanceId}:{planeIndex}:{x}:{y}"
         return block
     
-    def getBlockCount(self):
+    def getBlockCount(self) -> int:
         """ブロックの総数を取得"""
         width, height = self.getDimensions()
         planeCount = self.getPlaneCount()
@@ -145,67 +163,35 @@ class FlowData:
         
         return planeCount * blocksX * blocksY
     
-    def iterateBlocks(self, planeIndex=None):
+    def iterateBlocks(self, planeIndex:int|None=None) -> Iterator[DataBlock]:
         """全ブロックを順次取得するジェネレータ"""
-        width, height = self.getDimensions()
-        planeCount = self.getPlaneCount()
-        if 0 == planeCount:
-            return None
-        
         # Z階数曲線でブロックを返す
         from utils.order import zOrderGenerator
         if planeIndex is None:
+            width, height = self.getDimensions()
+            planeCount = self.getPlaneCount()
             for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
                 for planeIndex in range(planeCount):
                     block = self.getBlock(planeIndex, x, y)
                     if block:
                         yield block
         else:
+            width, height = self.getDimensions()
             for x, y in zOrderGenerator(0, 0, width, height, BLOCK_SIZE, BLOCK_SIZE):
                 block = self.getBlock(planeIndex, x, y)
                 if block:
                     yield block
     
-    def setBlock(self, dataBlock):
+    def setBlock(self, dataBlock:DataBlock):
         """ブロックデータを保存"""
-        import numpy as np
-        from utils import numpy_helpers as nh
-        
-        # numpy配列として正規化
-        data = dataBlock.data
-        if np.isnan(data).all():
-            # all nan 設定をパス
-            return
-        elif isinstance(data, list):
-            if np.iscomplexobj(data):
-                # 複素数
-                data = np.array(data, dtype=nh.BDCOMPLEX)
-            else:
-                # 実数
-                data = nh.array(data)
-        else:
-            if np.iscomplexobj(data):
-                # 複素数
-                if data.dtype != nh.BDCOMPLEX:
-                    data = data.astype(nh.BDCOMPLEX)
-                else:
-                    data = data
-            else:
-                # 実数
-                if data.dtype != nh.BDTYPE:
-                    data = data.astype(nh.BDTYPE)
-                else:
-                    data = data
-        
-        # DataBlock を再利用
-        dataBlock.blockId = f"{self.instanceId}:{dataBlock.planeIndex}:{dataBlock.x}:{dataBlock.y}"
+        # DataBlock をこの FlowData 用に設定
         dataBlock.cachePolicy = self.cachePolicy
-        dataBlock.data = data
+        dataBlock.setID(self.instanceId)
     
         # 統計情報更新
         self._updateStatistics(dataBlock)
         
-    def _updateStatistics(self, blockData):
+    def _updateStatistics(self, dataBlock:DataBlock):
         """統計情報を更新"""
         import numpy as np
         
@@ -218,24 +204,24 @@ class FlowData:
                     blockH = (height + BLOCK_SIZE - 1) // BLOCK_SIZE
                     self._existingBlocks = np.zeros((planeCount, blockH, blockW), dtype=bool)
             
-        planeIndex = blockData.planeIndex
-        x = blockData.x
-        y = blockData.y
+        planeIndex = dataBlock.planeIndex
+        x = dataBlock.x
+        y = dataBlock.y
         blockX = x // BLOCK_SIZE
         blockY = y // BLOCK_SIZE
-
+        
         if self._existingBlocks[planeIndex, blockY, blockX]:
             # ブロック上書き検出
             if CachePolicy.PERSISTENT == self.cachePolicy: # 永続なので再setは発生しない見込み
                 from utils.Debug import Debug
                 Debug.log(type(self).__name__, f"Warning: Block overwrite detected at plane={planeIndex}, x={x}, y={y}")
-        elif not self._variableType is None and self._variableType != blockData.data.dtype:
+        elif not self._variableType is None and self._variableType != dataBlock.data.dtype:
             # 型違い検出
             from utils.Debug import Debug
             Debug.log(type(self).__name__, f"Warning: Block type mismatch at plane={planeIndex}, x={x}, y={y}")
         else:
             self._existingBlocks[planeIndex, blockY, blockX] = True
-            data = blockData.data
+            data = dataBlock.data
             self._variableType = data.dtype
             if 0 < data.size and not np.isnan(data).all():
                 # 最大値・最小値を更新し、キャッシュをクリア
@@ -248,24 +234,24 @@ class FlowData:
                 
                 with self._lock:
                     if self._maxValue is None or self._maxValue < blockMax:
-                        self._maxValue = blockMax
+                        self._maxValue = float(blockMax)
                     if self._minValue is None or blockMin < self._minValue:
-                        self._minValue = blockMin
+                        self._minValue = float(blockMin)
                     
                     # データ更新時にキャッシュをクリア
                     self._percentileCache.clear()
                     self._histogramCache.clear()
                     self._highResHistCache.clear()
     
-    def getMaxValue(self):
+    def getMaxValue(self) -> float|None:
         """最大値を取得"""
         return self._maxValue
     
-    def getMinValue(self):
+    def getMinValue(self) -> float|None:
         """最小値を取得"""
         return self._minValue
     
-    def _getHighResHistograms(self, bins=1024):
+    def _getHighResHistograms(self, bins=1024) -> list[dict]:
         """高解像度ヒストグラム(不等間隔)を取得（キャッシュ用の中間生成物）"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -280,7 +266,8 @@ class FlowData:
         for planeIndex in range(planeCount):
             blockArrays = []
             for block in self.iterateBlocks(planeIndex):
-                blockArrays.append(block.data.flatten())
+                if block:
+                    blockArrays.append(block.data.ravel())
             
             if not blockArrays:
                 planeHistograms.append(None)
@@ -298,6 +285,9 @@ class FlowData:
                     maxVal = sortedData[-1]
                     minEdge = minVal
                     maxEdge = maxVal
+                    
+                    linear_edges = nh.array([minVal,maxVal])
+                    log_edges    = nh.array([minVal,maxVal])
                     
                     while minEdge < maxEdge:
                         # linear bins
@@ -359,8 +349,8 @@ class FlowData:
         self._highResHistCache[bins] = planeHistograms
         return planeHistograms
     
-    def getModeValue(self):
-        """最頻値を取得（全プレーン統合）"""
+    def getModeValue(self, planeIndex:int|None=None) -> float:
+        """最頻値を取得"""
         import numpy as np
         
         planeHistograms = self._getHighResHistograms()
@@ -368,11 +358,11 @@ class FlowData:
         if not planeHistograms or not any(hist is not None for hist in planeHistograms):
             return 0.0
         
-        # 全プレーンで最大カウントのビンを探す
+        # 最大カウントのビンを探す
         max_count = 0
         mode_value = 0.0
         
-        for hist_data in planeHistograms:
+        for hist_data in [planeHistograms[planeIndex]] if not planeIndex is None else planeHistograms:
             if(   not hist_data is None
               and 0 < hist_data['bin_counts'].size
               ):
@@ -384,16 +374,19 @@ class FlowData:
         
         return mode_value
     
-    def getQuantile(self, per):
+    def getQuantile(self, per:float, planeIndex:int|None=None) -> float:
         """指定したクォンタイル値(分位数)を取得（キャッシュ付き）"""
         import numpy as np
-        
-        if per in self._percentileCache:
-            return self._percentileCache[per]
+
+        if (per, planeIndex) in self._percentileCache:
+            return self._percentileCache[(per, planeIndex)]
         
         # 高解像度ヒストグラムで全プレーンを取得
         planeCount = self.getPlaneCount()
         planeHistograms = self._getHighResHistograms()
+
+        # planeIndex が指定されている場合はそのプレーンのみを使用
+        planeHistograms = [planeHistograms[planeIndex]] if not planeIndex is None else planeHistograms
         
         if planeHistograms and any(hist is not None for hist in planeHistograms):
             # 全プレーンのビン中央値を収集
@@ -401,7 +394,7 @@ class FlowData:
             all_counts = []
             
             for hist_data in planeHistograms:
-                if hist_data is not None:
+                if not hist_data is None:
                     centers = (hist_data['bin_edges'][:-1] + hist_data['bin_edges'][1:]) / 2
                     all_centers.append(centers)
                     all_counts.append(hist_data['bin_counts'])
@@ -424,11 +417,11 @@ class FlowData:
                 bin_idx = min(bin_idx, len(sorted_centers) - 1)
                 
                 result = sorted_centers[bin_idx]
-                self._percentileCache[per] = result
+                self._percentileCache[(per, planeIndex)] = result
                 return result
         return 0.0
     
-    def getHistogram(self, bins=256, log_scale=False):
+    def getHistogram(self, bins:int=256, log_scale:bool=False) -> dict:
         """プレーン別ヒストグラムを取得（キャッシュ付き）"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -473,9 +466,9 @@ class FlowData:
                 # 目標ビンエッジを作成
                 if log_scale:
                     bin_edges = np.logspace(np.log10(0.1), np.log10(1.0), bins + 1)
-                    scale = 0.9 / (range_max - range_min)
-                    offset = -range_min + 0.1 / scale
-                    bin_edges = bin_edges / scale - offset
+                    scale = (range_max - range_min) / 0.9
+                    offset = -range_min + 0.1 * scale
+                    bin_edges = bin_edges * scale - offset
                 else:
                     bin_edges = np.linspace(range_min, range_max, bins + 1)
                 

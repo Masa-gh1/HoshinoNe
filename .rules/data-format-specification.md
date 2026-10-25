@@ -48,6 +48,22 @@
 - `columns`: 列名リスト (['dx', 'dy', 'rotation', 'scale'] 順不同)
 - `lines`: 行名リスト (ファイル名)
 
+#### PointsExtractionNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['x', 'y', 'brightness', 'center_brightness', 'area', 'aspect_raito'])
+- `lines`: 行名リスト (行番号)
+
+#### StarIdentificationNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['hip_id', 'ra', 'dec', 'mag', 'x', 'y', 'brightness'])
+- `lines`: 行名リスト (星識別子)
+
+#### OrientationNode の出力 Table 固有ヘッダー
+- `columns`: 列名リスト (['crval1', 'crval2', 'rotation', 'pixel_scale', 'confidence'])
+- `lines`: 行名リスト (ファイル名/画像識別子)
+
+#### DistortionAnalysisNode の出力 Table 固有ヘッダー (FITS SIP 準拠)
+- `columns`: 列名リスト (['CRPIX1', 'CRPIX2', 'A_ORDER', 'B_ORDER', 'A_2_0', 'A_1_1', 'A_0_2', 'A_3_0', 'A_2_1', 'A_1_2', 'A_0_3', 'B_2_0', 'B_1_1', 'B_0_2', 'B_3_0', 'B_2_1', 'B_1_2', 'B_0_3', 'RMS_ERROR'])
+- `lines`: 行名リスト (ファイル名/画像識別子)
+
 ### Polynomial データ (type: 'polynomial')
 #### mode 値
 - `0D`, `1D`, `2D`: 多項式次元
@@ -83,7 +99,6 @@
 
 ### 読み込みノード（BaseReaderNode継承）
 #### 共通ヘッダー（全読み込みノード）
-- `category`: 'primary' (デフォルト)
 - `source_file`: 元ファイルパス
 - `width`: データ幅
 - `height`: データ高さ
@@ -126,21 +141,16 @@
 
 ### 生成ノード
 #### TableNode
-- category='auxiliary', type='table'
+- type='table'
 - columns, lines
 
 #### CoefficientsNode
-- category='auxiliary', type='polynomial'
+- type='polynomial'
 - mode, axes, columns, lines, max_orders, equations を設定
 
 #### TensorNode
-- category='auxiliary', type='tensor'
+- type='tensor'
 - mode, axes, columns, lines, max_orders を設定
-
-### 分類ノード
-#### CategoryAuxiliary
-- category='auxiliary'に変更
-- その他は入力を継承
 
 ## Headers 継承ルール
 1. 入力 headers をベースとして継承

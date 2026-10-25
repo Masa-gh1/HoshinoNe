@@ -21,17 +21,20 @@ class Fill0Node(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return AbsoluteLazyFlowData(inputData)
+        return AbsoluteLazyFlowData(headers, inputData)
 
 class AbsoluteLazyFlowData(LazyFlowData):
+    __slots__ = ()
+    
     def blockOperation(self, block, planeIndex, x, y):
         import numpy as np
+        from utils import numpy_helpers as nh
         from base import DataBlock
         
         result = np.where(np.isnan(block.data),
-                          np.array(np.nan, dtype=block.data.dtype),
+                          np.array(nh.nan, dtype=block.data.dtype),
                           np.array(     0, dtype=block.data.dtype)
                          )
         

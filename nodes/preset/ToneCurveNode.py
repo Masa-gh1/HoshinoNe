@@ -154,7 +154,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         self.boundaryCondition = boundaryCondition
         self.view.onNodeConfigChanged(self)
     
-    def processHeaders(self, inputData):
+    def processHeaders(self, baseData, inputDatas):
         """出力のdisplay_levelsを設定"""
         return {
             'display_levels':{
@@ -164,7 +164,7 @@ class ToneCurveNode(NNBlockOperationNode,ConfigurableNode):
         }
     
     def getConfigHash(self):
-        config = f"{self.outputMin}_{self.outputEnd}_{self.controlPoints}_{self.boundaryCondition}"
+        config = f"{self.minorType}_{self._outputCat}_{self.outputMin}_{self.outputEnd}_{self.controlPoints}_{self.boundaryCondition}"
         return hashlib.md5(config.encode()).hexdigest()
 
 class ToneCurveDialog(tk.Toplevel):
@@ -378,7 +378,7 @@ class ToneCurveDialog(tk.Toplevel):
             for planeIndex in range(flowData.getPlaneCount()):
                 blockArrays = []
                 for block in flowData.iterateBlocks(planeIndex):
-                    blockArrays.append(block.data.flatten())
+                    blockArrays.append(block.data.ravel())
                 planeData = np.concatenate(blockArrays)
                 validData = planeData[~np.isnan(planeData)]
                 sortedData = np.sort(validData)

@@ -7,9 +7,15 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 from base.FlowNode_CONST import *
-from base import DataBlock, LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class BayerUnpackSparseNode(LazyNNOperationNode):
     # ノードタイプ
@@ -25,15 +31,24 @@ class BayerUnpackSparseNode(LazyNNOperationNode):
         """ベイヤーデータのみを抽出"""
         return [data for data in inputStream if data.headers.get('is_bayer', False)]
     
-    def createLazyFlowData(self, inputData):
+    def createLazyFlowData(self, headers, inputData):
         """LazyFlowDataを作成"""
-        return BayerUnpackSparseLazyFlowData(inputData)
+        return BayerUnpackSparseLazyFlowData(headers, inputData)
     
-class BayerUnpackSparseLazyFlowData(LazyFlowData):
+class BayerUnpackSparseLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ()
+    
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args:Any, **kwargs:Any):
+        from base import LazyHeaders
+        
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.headers = LazyHeaders(self, headers)
+    
     def operation(self, flowData, planeIndex, x, y):
         """ベイヤー分離操作（3プレーン、元サイズ、NaN埋め）"""
         import numpy as np
         from utils import numpy_helpers as nh
+        from base import DataBlock
         
         block = flowData.getBlock(0, x, y)
         if not block or block.data is None:
@@ -46,13 +61,10 @@ class BayerUnpackSparseLazyFlowData(LazyFlowData):
         height, width = data.shape
         result = nh.nans((height, width))
         
-        # 座標配列を作成（スレッドセーフ: np.mgrid 置き換え）
-        y_indices = np.arange(height).reshape(-1, 1)
-        x_indices = np.arange(width)
-        y_coords = np.broadcast_to(y_indices, (height, width))
-        x_coords = np.broadcast_to(x_indices, (height, width))
+        # 座標配列を作成
+        x_coords, y_coords = np.meshgrid(nh.arange(width), nh.arange(height), copy=False, sparse=True)
         
-        # ベイヤーパターンに応じてマスクを作成     [   R      G1      B       G2  ]
+        # ベイヤーパターンに応じてマスクを作成  [   R      G1      B       G2  ]
         if   bayer_pattern == 'RGGB': offsets = [(0, 0), (0, 1), (1, 1), (1, 0)]
         elif bayer_pattern == 'GRBG': offsets = [(0, 1), (0, 0), (1, 0), (1, 1)]
         elif bayer_pattern == 'GBRG': offsets = [(1, 0), (1, 1), (0, 1), (0, 0)]
@@ -72,10 +84,10 @@ class BayerUnpackSparseLazyFlowData(LazyFlowData):
         
         return DataBlock(result, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> Iterable[str]:
         return ['mode', 'planes']
 
-    def headerOperation(self, lazyFlowData, key):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
         return {
             'mode': 'RGB',
             'planes': ['R', 'G', 'B']

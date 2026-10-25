@@ -31,6 +31,7 @@ class DWTNode(NNPlaneOperationNode):
         
         # headers を生成
         headers = inputData.headers.copy()
+        headers["category"] = self.getOutputCategory()
         
         # DWT 後のプレーンを設定
         if "DWT level" in headers:
@@ -124,7 +125,7 @@ class DWTNode(NNPlaneOperationNode):
                 endY = block.y + blockHeight
                 auxPlane[y:endY, x:endX] = block.data[:blockHeight, :blockWidth]
             
-            filter_bank = pywt.orthogonal_filter_bank(auxPlane.flatten())
+            filter_bank = pywt.orthogonal_filter_bank(auxPlane.ravel())
             wavelet = pywt.Wavelet(name="custom", filter_bank=filter_bank)
             cA, detail = pywt.wavedecn(planeData, wavelet, level=1) # DWT
             result = {'cA':cA}

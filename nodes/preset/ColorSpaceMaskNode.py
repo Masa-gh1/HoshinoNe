@@ -7,13 +7,19 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable, Any
+
 import hashlib
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 
 from base.FlowNode_CONST import *
-from base import LazyFlowData
+from base import LazyFlowData, LazyHeadersMixin
 from nodes import LazyNNOperationNode, ConfigurableNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
     # ノードタイプ
@@ -62,16 +68,23 @@ class ColorSpaceMaskNode(LazyNNOperationNode, ConfigurableNode):
         self.mask3dPoints = mask3dPoints
         self.view.onNodeConfigChanged(self)
     
-    def createLazyFlowData(self, inputData):
-        return ColorSpaceMaskLazyFlowData(inputData, self.colorSpace, self.mask3dPoints)
+    def createLazyFlowData(self, headers, inputData):
+        return ColorSpaceMaskLazyFlowData(headers, inputData, self.colorSpace, self.mask3dPoints)
     
     def getConfigHash(self):
-        import numpy as np
-        
-        config = f"{self.colorSpace}_{self.mask3dPoints}"
+        config = f"{self.minorType}_{self._outputCat}_{self.colorSpace}_{self.mask3dPoints}"
         return hashlib.sha256(config.encode()).hexdigest()
 
-class ColorSpaceMaskLazyFlowData(LazyFlowData):
+class ColorSpaceMaskLazyFlowData(LazyFlowData, LazyHeadersMixin):
+    __slots__ = ('sourceHeaders',)
+    
+    def __init__(self, headers:dict[str,Any], sourceFlowDatas:FlowData|list[FlowData], *args:Any, **kwargs:Any):
+        from base import LazyHeaders
+        
+        super().__init__(headers, sourceFlowDatas, *args, **kwargs)
+        self.sourceHeaders = headers
+        self.headers       = LazyHeaders(self, headers)
+    
     def operation(self, flowData, planeIndex, x, y, colorSpace, mask3dPoints):
         from base import DataBlock
         from config import BLOCK_SIZE
@@ -185,14 +198,14 @@ class ColorSpaceMaskLazyFlowData(LazyFlowData):
         
         return DataBlock(mask, planeIndex, x, y)
     
-    def getLazyHeaderkeys(self):
+    def getLazyHeaderkeys(self) -> Iterable[str]:
         return ['type', 'mode', 'planes', 'display_levels']
     
-    def headerOperation(self, lazyFlowData, key, *args, **kwargs):
+    def headerOperation(self, key:str, *args:Any, **kwargs:Any) -> dict[str,Any]:
         return {
             'type': 'image',
             'mode': 'L',
-            'planes': ['Mask'] * len(lazyFlowData.sourceFlowData.headers['planes']),
+            'planes': ['Mask'] * len(self.sourceHeaders['planes']),
             'display_levels': {'min': 0.0, 'exclusive_upper': 1.0}
         }
 
@@ -698,7 +711,7 @@ class ColorSpaceCanvas(tk.Canvas):
         # Z=sliceZ 断面の色空間を描画
         
         # スクリーン座標のグリッドを生成
-        y_coords, x_coords = np.mgrid[0:height, 0:width]
+        x_coords, y_coords = np.meshgrid(nh.arange(width), nh.arange(height), copy=False)
 
         # スクリーン座標をワールド座標に変換
         worldX, worldY = self.screenToWorld(x_coords, y_coords)

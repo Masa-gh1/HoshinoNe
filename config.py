@@ -77,24 +77,40 @@ def getIsoSpeed(exif):
     
     return result
 
+def getFocalPlaneResolutionUnit(exif):
+    result = None
+    if "FocalPlaneResolutionUnit" in exif:
+        result = exif["FocalPlaneResolutionUnit"]
+        if   1 == result: result = None
+        elif 2 == result: result = "inch"
+        elif 3 == result: result = "cm"
+        elif 4 == result: result = "mm"
+        elif 5 == result: result = "um"
+        else:
+            raise ValueError(f"Unsupported FocalPlaneResolutionUnit {result}")
+    else:
+        result = None
+    return result
+    
+
 # 画像読み書きノードで使用するヘッダに含める項目
 # HEADERS は天体写真加工に欲しい情報
 # HEADERS_EXIF は EXIF の読み書き対象とする情報
 HEADERS = [
-    # name                          Exif tag                       Exif id     名称
-    ("width"                      , "ImageWidth"              ), #   256 0100h 画像の幅
-    ("width"                      , "PixelXDimension"         ), # 40962 0100h 画像の幅
-    ("height"                     , "ImageLength"             ), #   257 0101h 画像の高さ
-    ("height"                     , "PixelYDimension"         ), # 40963 0101h 画像の高さ
-    ("bits_per_sample"            , "BitsPerSample"           ), #   258 0102h 画像のビットの深さ
-    ("datetime"                   , getDatetime               ), # ----- ----- 観測時刻
-    ("exposure_time"              , "ExposureTime"            ), # 33434 829Ah 露出時間
-    ("f_number"                   , "FNumber"                 ), # 33437 829Dh F ナンバー
-    ("iso_speed"                  , getIsoSpeed               ), # ----- ----- 撮影感度
-    ("focal_length"               , "FocalLength"             ), # 37386 920Ah レンズ焦点距離
-    ("focal_plane_x_resolution"   , "FocalPlaneXResolution"   ), # 41486 A20Eh 焦点面の幅の解像度
-    ("focal_plane_y_resolution"   , "FocalPlaneYResolution"   ), # 41487 A20Fh 焦点面の高さの解像度
-    ("focal_plane_resolution_unit", "FocalPlaneResolutionUnit"), # 41488 A210h 焦点面解像度単位
+    # name                          Exif tag                        Exif id     名称
+    ("width"                      , "ImageWidth"               ), #   256 0100h 画像の幅
+    ("width"                      , "PixelXDimension"          ), # 40962 0100h 画像の幅
+    ("height"                     , "ImageLength"              ), #   257 0101h 画像の高さ
+    ("height"                     , "PixelYDimension"          ), # 40963 0101h 画像の高さ
+    ("bits_per_sample"            , "BitsPerSample"            ), #   258 0102h 画像のビットの深さ
+    ("datetime"                   , getDatetime                ), # ----- ----- 観測時刻
+    ("exposure_time"              , "ExposureTime"             ), # 33434 829Ah 露出時間
+    ("f_number"                   , "FNumber"                  ), # 33437 829Dh F ナンバー
+    ("iso_speed"                  , getIsoSpeed                ), # ----- ----- 撮影感度
+    ("focal_length"               , "FocalLength"              ), # 37386 920Ah レンズ焦点距離
+    ("focal_plane_x_resolution"   , "FocalPlaneXResolution"    ), # 41486 A20Eh 焦点面の幅の解像度
+    ("focal_plane_y_resolution"   , "FocalPlaneYResolution"    ), # 41487 A20Fh 焦点面の高さの解像度
+    ("focal_plane_resolution_unit", getFocalPlaneResolutionUnit), # 41488 A210h 焦点面解像度単位
 ]
 HEADERS_EXIF = [
     #############################################################
@@ -242,6 +258,55 @@ HEADERS_EXIF = [
    #(   31, "GPSHPositioningError"         , Fraction,     1), # 001Fh 水平方向測位誤差
 ]
 
+###############################################################################
+# StarIdentificationNode 用
+# CATALOG_PATH    星カタログファイルの識別子とパス
+# CATALOG_HEADERS 星カタログヘッダの読み込み対象とする情報
+# CATALOG_DB_MAG  カタログ索引に入れる恒星の等級制限
+# CATALOG_DB_NUM  カタログ索引に入れる恒星 1 つ当たり関係させる星の数、データ量は nC2 で増加する。
+#
+# 下記は VizieR から得た Hipparcos カタログ I/311/hip2 のTSVファイルでの例
+# https://vizier.unistra.fr/
+#CATALOG_PATH = ("HIP", "./sample/catalog/I_311_HIS2.tsv")
+#CATALOG_HEADERS = [
+#    # name  catalog  型
+#    ("ID" , "HIP"  , str  ),
+#    ("RA" , "RArad", float),
+#    ("Dec", "DErad", float),
+#    ("Mag", "Hpmag", float),
+#]
+CATALOG = {
+    "HIP":{
+        "PATH":"./sample/catalog/I_311_hip2+IV_27A_table3.tsv",
+        "HEADER":[
+            # name   catalog  型
+            ("ID"  , "HIP"  , str  ),
+            ("RA"  , "RArad", float),
+            ("Dec" , "DErad", float),
+            ("Mag" , "Hpmag", float),
+            ("BFD" , "BFD"  , str  ),
+            ("Name", "Name" , str  ),
+        ]
+    },
+    "NGC":{
+        "PATH":"./sample/catalog/VII_118_ngc2000+names.tsv",
+        "HEADER":[
+            # name      catalog     型
+            ("ID"     , "Name"    , str  ),
+            ("RA"     , "_RAJ2000", float),
+            ("Dec"    , "_DEJ2000", float),
+            ("Mag"    , "mag"     , float),
+            ("Comment", "Comment" , str  ),
+        ]
+    }
+}
+# 使用容量の目安
+# CATALOG_DB_MAG = 8, CATALOG_DB_NUM =  5 の時、約  68 MB
+# CATALOG_DB_MAG = 8, CATALOG_DB_NUM = 10 の時、約 259 MB
+CATALOG_DB_MAG = 8.0
+CATALOG_DB_NUM = 10
+
+###############################################################################
 # RawReaderNode 用
 # 選択し入れるデモザイクアルゴリズム
 # ここには無い、"bayer", "bayer crop", "unpack", "raw" はプリセットされています。

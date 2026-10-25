@@ -72,7 +72,7 @@ class WaveletDenoiseNode(NNBlockOperationNode,ConfigurableNode):
         self.protection_radius = nodeData.get("protection_radius", 3)
     
     def getConfigHash(self):
-        config = f"{self.wavelet}_{self.levels}_{self.sigma}_{self.star_threshold}_{self.star_protection}_{self.protection_radius}"
+        config = f"{self.minorType}_{self._outputCat}_{self.wavelet}_{self.levels}_{self.sigma}_{self.star_threshold}_{self.star_protection}_{self.protection_radius}"
         return hashlib.md5(config.encode()).hexdigest()
     
     def blockOperation(self, block, planeIndex, x, y):

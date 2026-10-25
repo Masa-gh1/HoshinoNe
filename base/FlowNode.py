@@ -7,23 +7,26 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Callable
+
 from abc import ABC as AbstractBaseClass, abstractmethod
 import hashlib
 import traceback
 import sys
 import tkinter as tk
-from tkinter import filedialog
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from config import MAX_WORKERS
 from main.ResultWindow import ResultWindow
-from utils.ThreadPool import ParallelExecutor
+
+if TYPE_CHECKING:
+    from main.FlowEditor import FlowEditor
 
 # 定数
 _MAJOR_TYPE_FUNC  = 'func'             # 関数系
 _MAJOR_TYPE_U_OP  = 'unary operation'  # 単項演算系
 _MAJOR_TYPE_B_OP  = 'binary operation' # 二項演算系
 _MAJOR_TYPE_AGG   = 'aggregate'        # 集計系
+_MAJOR_TYPE_NEIBR = 'neighborhood'     # 近傍演算系
 _MAJOR_TYPE_IO    = 'in/out'           # 入出系
 _MAJOR_TYPE_CONST = 'constant'         # 定数系
 _MAJOR_TYPE_UTIL  = 'utility'          # ユーティリティ
@@ -35,9 +38,7 @@ _IO_TYPE_N1 = 'N:1' # N入力:1出力
 
 _OUT_CAT_PRI = 'primary'   # 主データを出力
 _OUT_CAT_AUX = 'auxiliary' # 補正値を出力
-_OUT_CAT_PAS = 'pass'      # 入力カテゴリを変えない
 _OUT_CAT_ETC = 'etc'       # その他(実行レポートなどの出力が在るノードはこちら)
-_OUT_CAT_NON = 'none'      # なし
 
 class FlowNode(AbstractBaseClass):
     # ノードタイプ(サブクラスでオーバーライド)
@@ -49,8 +50,8 @@ class FlowNode(AbstractBaseClass):
     ioType    = '0:0'
     outputCat = _OUT_CAT_PRI
 
-    def __init__(self, canvas, editor, x, y, **kwargs):
-        self.view = FlowNodeView( self.majorType, self.ioType, self.outputCat, self.name, canvas, editor, x, y, **kwargs)
+    def __init__(self, canvas:tk.Canvas, editor:FlowEditor, x:float, y:float, **kwargs):
+        self.view = FlowNodeView( self.majorType, self.ioType, self.name, canvas, editor, x, y, **kwargs)
 
         self.outputNodes = [] # 接続先ノードの一覧
         self.inputNodes  = [] # 入力元ノードの一覧
@@ -59,8 +60,7 @@ class FlowNode(AbstractBaseClass):
         self._lastInputHash  = None
         self._lastConfigHash = None
         
-        self.fileTypes = [("CSV files", "*.csv")]
-        self.defaultOutputExtension = ".csv"
+        self._outputCat = self.outputCat
 
     def cleanUp(self):
         # 接続の初期化
@@ -72,49 +72,51 @@ class FlowNode(AbstractBaseClass):
         
         self.view.cleanUp()
 
-    def getText(self):
+    def getText(self) -> str:
         """ノードのテキストを取得（サブクラスでオーバーライド）"""
         return self.name
     
-    def getOutputCategory(self):
-        """ノードへの入力を考慮した出力カテゴリを取得"""
-        return self._getOutputCategory()
+    def getOutputCategory(self) -> str:
+        """ノードへの出力カテゴリを取得"""
+        return self._outputCat
+
+    def setOutputCategory(self, category:str):
+        """ノードへの出力カテゴリを設定"""
+        self._outputCat = category if category else self.outputCat
+        self.view.onNodeConfigChanged(self)
     
-    def _getOutputCategory(self, path=None):
-        catList = [_OUT_CAT_PRI, _OUT_CAT_AUX, _OUT_CAT_ETC, _OUT_CAT_NON]
-        if _OUT_CAT_PAS == self.outputCat:
-            path = path.copy() if path else []
-            path.append(self) # 循環参照を除く
-            inCats = [catList.index(x._getOutputCategory(path)) for x in self.inputNodes if x not in path]
-            if inCats:
-                return catList[min(inCats)]
-            else:
-                return _OUT_CAT_NON
-        else:
-            return self.outputCat
-    
-    def getOutputCount(self):
-        """ノードへの入力を考慮した出力数を取得
-        (オーバーライドする場合、_getOutputCountを実装すること)
-        """
-        return self._getOutputCount()
-    
-    def _getOutputCount(self, path=None):
-        """ノードへの入力を考慮した出力数を取得
-        (オーバーライドする場合、_getOutputCountを実装すること)
-        """
-        if   _IO_TYPE_N0 == self.ioType:
+    def getOutputCount(self, withCheck:bool=True) -> int:
+        """ノードへの入力を考慮した出力数を取得"""
+        if _IO_TYPE_N0 == self.ioType:
             return 0
         elif _IO_TYPE_N1 == self.ioType:
             return 1
-        elif(  _IO_TYPE_0N == self.ioType
-            or _IO_TYPE_NN == self.ioType
-            ):
-            path = path.copy() if path else []
-            path.append(self) # 循環参照を除く
-            return max([0]+[x._getOutputCount(path) for x in self.inputNodes if not x in path])
+        elif withCheck and not self.isConnectedSuccess():
+            return 0
+        elif _IO_TYPE_NN == self.ioType:
+            return max([0]+[x.getOutputCount(False) for x in self.inputNodes])
+        elif _IO_TYPE_0N == self.ioType:
+            assert False, f"Please override `getOutputCount` in the {self.__class__.__name__}."
         else:
             return 0
+
+    def isConnectedSuccess(self) -> bool:
+        """ノード接続チェック
+        ・循環パスに成っていないかチェックする
+        
+        Return:
+           True 問題なし、False 循環パスに含まれる
+        """
+        return self._isConnectedSuccess()
+    
+    def _isConnectedSuccess(self, path:set[FlowNode]|None=None) -> bool:
+        """ノード接続チェック"""
+        path = path.copy() if path else set()
+        if self in path:
+            return False # 循環参照
+        else:
+            path.add(self)
+            return all([x._isConnectedSuccess(path) for x in self.inputNodes])
     
     @abstractmethod
     def process(self, context=None):
@@ -131,18 +133,22 @@ class FlowNode(AbstractBaseClass):
         # 実行時設定ハッシュの更新
         self._lastInputHash = self.getInputHashe()
         self._lastConfigHash = self.getConfigHash()
-        self.view.editor.root.after(0,self.view.updateResult)
+        if self.view:
+            assert not self.view.editor is None
+            self.view.editor.root.after(0,self.view.updateResult)
     
-    def reportProgress(self, context, message, current=None, total=None):
+    def reportProgress(self, context, message:str, current:int|None=None, total:int|None=None):
         """処理経過を報告"""
         if context and 'progress_callback' in context:
             context['progress_callback'](message, current, total)
 
     def preview(self):
         """プレビュー専用処理（ノード個別実行）"""
-        self.view.editor.executeFlow(self)
+        if self.view:
+            assert not self.view.editor is None
+            self.view.editor.executeFlow(self)
     
-    def needsReprocessing(self):
+    def needsReprocessing(self) -> bool:
         """再処理が必要かどうかを判定"""
         # ハッシュを計算
         inputHash = self.getInputHashe()
@@ -153,7 +159,7 @@ class FlowNode(AbstractBaseClass):
                 or self._lastConfigHash != configHash
                )
     
-    def getInputHashe(self):
+    def getInputHashe(self) -> str:
         inputHashes = []
         for node in self.inputNodes:
             inputHashes.append(str(id(node)))
@@ -161,30 +167,36 @@ class FlowNode(AbstractBaseClass):
                 inputHashes.append(str(id(flowData)))
         return hashlib.md5(':'.join(inputHashes).encode()).hexdigest()
     
-    def getConfigHash(self):
+    def getConfigHash(self) -> str:
         """ノード固有の設定ハッシュを取得（サブクラスでオーバーライド）"""
-        return hashlib.md5(str(self.minorType).encode()).hexdigest()
+        config = f"{self.minorType}_{self._outputCat}"
+        return hashlib.md5(config.encode()).hexdigest()
     
-    def serialize(self):
+    def serialize(self) -> dict:
         """ノードをシリアライズ"""
         serial = {
-            "type": self.minorType,
-            "text": self.name,
-            "x"   : self.view.x,
-            "y"   : self.view.y,
+            "type"    : self.minorType,
+            "text"    : self.name,
+            "x"       : self.view.x,
+            "y"       : self.view.y,
         }
+        
+        if _OUT_CAT_PRI != self._outputCat:
+            serial["category"] = self._outputCat
+
         self.store(serial)
         serial["connections"] = [id(node) for node in self.outputNodes]
         return serial
     
-    def deserialize(self, serial):
+    def deserialize(self, serial: dict):
         """ノードをデシリアライズ"""
-        self.view.x = serial["x"]
-        self.view.y = serial["y"]
+        self.view.x     = serial["x"]
+        self.view.y     = serial["y"]
+        self._outputCat = serial["category"] if "category" in serial else _OUT_CAT_PRI
         self.restore(serial)
         self.view.onNodeConfigChanged(self)
 
-    def store(self, nodeData):
+    def store(self, nodeData: dict):
         """ノード固有の設定を nodeData に保存（サブクラスでオーバーライド）
         
         Args:
@@ -192,7 +204,7 @@ class FlowNode(AbstractBaseClass):
         """
         pass
     
-    def restore(self, nodeData):
+    def restore(self, nodeData: dict):
         """ノード固有の設定を nodeData から復元（サブクラスでオーバーライド）
         
         Args:
@@ -201,10 +213,9 @@ class FlowNode(AbstractBaseClass):
         pass
     
 class FlowNodeView():
-    def __init__(self, majorType, ioType, outputCat, text, canvas, editor, x, y, **kwargs):
+    def __init__(self, majorType:str, ioType:str, text:str, canvas:tk.Canvas, editor:FlowEditor, x:float, y:float, **kwargs):
         self.majorType = majorType
         self.ioType    = ioType
-        self.outputCat = outputCat
         self.text      = text
 
         self.canvas  = canvas
@@ -236,6 +247,10 @@ class FlowNodeView():
         self.canvasBind('<Double-Button-1>', self.onDoubleClick)
     
     def cleanUp(self):
+        # クリーンアップ
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         # UIウィンドウを閉じる
         for window in self._window.values():
             window.destroy()
@@ -245,7 +260,7 @@ class FlowNodeView():
         for sequence,fid in self._binds:
             self.canvas.unbind(sequence,fid)
         self._binds = []
-            
+        
         # ノード図を削除
         self.canvas.delete(self.rect)
         self.canvas.delete(self.label)
@@ -255,7 +270,7 @@ class FlowNodeView():
 
         self.editor = None
     
-    def _getShapePoints(self):
+    def _getShapePoints(self) -> list[tuple[int,int]]:
         """形状の頂点座標を返す (中心からの相対座標)"""
         if   _MAJOR_TYPE_U_OP == self.majorType and _IO_TYPE_NN == self.ioType:
             # 菱形
@@ -263,6 +278,9 @@ class FlowNodeView():
         elif _MAJOR_TYPE_B_OP == self.majorType and _IO_TYPE_NN == self.ioType:
             # 正方形
             return [(-20, -20), (20, -20), (20, 20), (-20, 20)]
+        elif _MAJOR_TYPE_NEIBR == self.majorType and _IO_TYPE_NN == self.ioType:
+            # 八角形
+            return [(-30, -20), (-40,-10), (-40, 10), (-30, 20), (30, 20), (40,10), (40, -10), (30, -20)]
         elif _MAJOR_TYPE_AGG == self.majorType and _IO_TYPE_N1 == self.ioType:
             # 六角形
             return [(-30, -20), (-40, 0), (-30, 20), (30, 20), (40, 0), (30, -20)]
@@ -285,28 +303,29 @@ class FlowNodeView():
             # 長方形
             return [(-50, -20), (50, -20), (50, 20), (-50, 20)]
     
-    def _getColor(self):
+    def _getColor(self) -> str:
         colorMap = {
             _MAJOR_TYPE_FUNC : 'plum'       , # 関数系 magenta
             _MAJOR_TYPE_U_OP : 'lightgrey'  , # 単項演算系 grey
             _MAJOR_TYPE_B_OP : 'pink'       , # 二項演算系 red
             _MAJOR_TYPE_AGG  : 'pink'       , # 集計系 red
+            _MAJOR_TYPE_NEIBR: 'lightcoral' , # 近傍演算系 red
             _MAJOR_TYPE_IO   : 'lightyellow', # 入出系 yellow
                              # 'lightgreen'   # 予約 green
-            _MAJOR_TYPE_CONST: 'lightcyan'  , # 定数系 blue
-                             # 'lightblue'    # 予約 cyan
+            _MAJOR_TYPE_CONST: 'lightcyan'  , # 定数系 cyan
+                             # 'lightblue'    # 予約 blue
             _MAJOR_TYPE_UTIL : 'lightgrey'  , # ユーティリティ grey
         }
         return colorMap.get(self.majorType, 'lightgreen')
     
-    def getShapeBounds(self):
+    def getShapeBounds(self) -> tuple[float, float, float, float]:
         """形状の境界を返す (ハイライト用)"""
         xs = [self.x + dx for dx, dy in self.shapePoints]
         ys = [self.y + dy for dx, dy in self.shapePoints]
         margin = 5
         return (min(xs)-margin, min(ys)-margin, max(xs)+margin, max(ys)+margin)
     
-    def getConnectionPoint(self, dx, dy):
+    def getConnectionPoint(self, dx:int, dy:int) -> tuple[float, float]:
         """接続点を返す (dx, dy: 接続先への方向ベクトル)"""
         if dx == 0 and dy == 0:
             return (self.x, self.y)
@@ -326,8 +345,8 @@ class FlowNodeView():
             p1x, p1y = self.shapePoints[i]
             p2x, p2y = self.shapePoints[(i+1) % n]
             
-            # 線分 (0,0)-(ndx*1000, ndy*1000) と (p1x,p1y)-(p2x,p2y) の交点
-            point = self._lineIntersection(0, 0, ndx*1000, ndy*1000, p1x, p1y, p2x, p2y)
+            # 線分 (0,0)-(ndx*10000, ndy*10000) と (p1x,p1y)-(p2x,p2y) の交点
+            point = self._lineIntersection(0, 0, ndx*10000, ndy*10000, p1x, p1y, p2x, p2y)
             if point:
                 px, py = point
                 dist = px*ndx + py*ndy  # 方向ベクトル方向の距離
@@ -337,47 +356,58 @@ class FlowNodeView():
         
         return bestPoint
     
-    def _lineIntersection(self, x1, y1, x2, y2, x3, y3, x4, y4):
+    def _lineIntersection(self, x1:float, y1:float, x2:float, y2:float, x3:float, y3:float, x4:float, y4:float) -> tuple[float, float]|None:
         """2線分の交点を計算"""
         denom = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
         if abs(denom) < 1e-10:
             return None
         
-        t = ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / denom
+        t =  ((x1-x3)*(y3-y4) - (y1-y3)*(x3-x4)) / denom
         u = -((x1-x2)*(y1-y3) - (y1-y2)*(x1-x3)) / denom
         
         if 0 <= t <= 1 and 0 <= u <= 1:
             return (x1 + t*(x2-x1), y1 + t*(y2-y1))
-        return None
+        else:
+            return None
     
-    def canvasBind(self, sequence, callback):
+    def canvasBind(self, sequence:str, callback:Callable):
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         fid1 = self.canvas.tag_bind( self.rect , sequence, callback)
         fid2 = self.canvas.tag_bind( self.label, sequence, callback)
         self._binds.append((sequence,fid1))
         self._binds.append((sequence,fid2))
     
     def updatePosition(self):
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         points = []
         for dx, dy in self.shapePoints:
             points.extend([self.x + dx, self.y + dy])
         self.canvas.coords(self.rect, *points)
         self.canvas.coords(self.label, self.x, self.y)
 
-    def updatePositionAndAppearance(self,node):
+    def updatePositionAndAppearance(self, node:FlowNode):
+        assert not self.editor is None
         """位置と外観を更新"""
         self.updatePosition()
         self.editor.onNodeConfigChanged(node)
 
-    def onNodeConfigChanged(self, node):
+    def onNodeConfigChanged(self, node:FlowNode):
+        assert not self.editor is None
         self.text = node.getText()
         self.editor.onNodeConfigChanged(node)
 
-    def onPress(self, event):
+    def onPress(self, event:tk.Event):
         self.startX = event.x
         self.startY = event.y
         self.isDragging = False
     
-    def onDrag(self, event):
+    def onDrag(self, event:tk.Event):
+        assert not self.canvas is None
+        assert not self.editor is None
         if self.isDoubleClick:
             return
         
@@ -409,37 +439,42 @@ class FlowNodeView():
             
             self.editor.updateConnections()
     
-    def onRelease(self, event):
+    def onRelease(self, event:tk.Event):
         if self.isDoubleClick:
             self.isDoubleClick = False
             return
         
         if not self.isDragging:
             # クリックとして処理
+            assert not self.editor is None
             self.editor.onNodeClick(self)
         self.isDragging = False
     
-    def onDoubleClick(self, event):
+    def onDoubleClick(self, event:tk.Event):
+        assert not self.editor is None
         self.isDoubleClick = True
         self.editor.onNodeDoubleClick(self)
     
-    def onRightPress(self, event):
+    def onRightPress(self, event:tk.Event):
+        assert not self.editor is None
         self.editor.onNodeRightClick(self, event)
     
-    def onEdit(self, node):
+    def onEdit(self, node:FlowNode):
         """編集メニューから呼び出される編集処理"""
-        if not hasattr(node, 'createSettingWindow'):
+        createSettingWindow = getattr(node, 'createSettingWindow', None)
+        if not createSettingWindow:
             pass
         elif not 'settings_dialog' in self._window:
-            self._window["settings_dialog"] = node.createSettingWindow()
+            self._window["settings_dialog"] = createSettingWindow()
         elif not self._window["settings_dialog"].winfo_exists():
             self._window["settings_dialog"].destroy()
-            self._window["settings_dialog"] = node.createSettingWindow()
+            self._window["settings_dialog"] = createSettingWindow()
         else:
             self._window["settings_dialog"].lift()
     
-    def onResult(self, node):
+    def onResult(self, node:FlowNode):
         """ノードの処理結果を表示"""
+        assert not self.editor is None
         if not 'result_window' in self._window:
             self._window["result_window"] = ResultWindow(self.editor.root, node)
         elif not self._window["result_window"].winfo_exists():
@@ -463,5 +498,8 @@ class FlowNodeView():
 
     def lift(self):
         """ノードを最前面に表示"""
+        assert not self.canvas is None
+        assert not self.rect is None
+        assert not self.label is None
         self.canvas.tag_raise(self.rect)
         self.canvas.tag_raise(self.label)
