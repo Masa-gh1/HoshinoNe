@@ -96,7 +96,7 @@ class BroadcastMixin:
 
         if retBlocks and np.all(maxShape) and maxShape != retBlocks[0].data.shape and (1 in maxShape or 1 in retBlocks[0].data.shape):
             # 1つ目のデータの大きさが異なるので、1つ目だけブロードキャスト適用する。
-            # これにより、サブクラスでの実装でを簡潔にする。(インプレース演算(+=)を使える)
+            # これにより、サブクラスでの実装を簡潔にする。(インプレース演算(+=)を使える)
             from .DataBlock import DataBlock
             data = np.zeros(maxShape, dtype=retBlocks[0].data.dtype) + retBlocks[0].data
             retBlocks[0] = DataBlock(data, planeIndex, x, y)
