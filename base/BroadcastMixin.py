@@ -21,7 +21,7 @@ class BroadcastMixin:
     """ブロードキャスト処理の共通機能を提供するMixin"""
     
     @classmethod
-    def calculateBroadcastedStream(cls, streams):
+    def broadcastToStream(cls, streams):
         """stream 間でデータのブロードキャストを行う
         
         Args:
@@ -44,7 +44,7 @@ class BroadcastMixin:
         return result
 
     @classmethod
-    def calculateBroadcastedBlock(cls, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, shape=None) -> tuple[DataBlock|list[DataBlock], tuple]:
+    def broadcastToBlock(cls, flowDatas:FlowData|list[FlowData], planeIndex:int, x:int, y:int, shape=None) -> tuple[DataBlock|list[DataBlock], tuple]:
         """FlowData 間でブロードキャストを行うブロックを計算する
         
         Args:
@@ -96,7 +96,7 @@ class BroadcastMixin:
 
         if retBlocks and np.all(maxShape) and maxShape != retBlocks[0].data.shape and (1 in maxShape or 1 in retBlocks[0].data.shape):
             # 1つ目のデータの大きさが異なるので、1つ目だけブロードキャスト適用する。
-            # これにより、サブクラスでの実装でを簡潔にする。(インプレース演算(+=)を使える)
+            # これにより、サブクラスでの実装を簡潔にする。(インプレース演算(+=)を使える)
             from .DataBlock import DataBlock
             data = np.zeros(maxShape, dtype=retBlocks[0].data.dtype) + retBlocks[0].data
             retBlocks[0] = DataBlock(data, planeIndex, x, y)

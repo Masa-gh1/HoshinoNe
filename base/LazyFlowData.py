@@ -87,7 +87,7 @@ class LazyFlowData(FlowData):
         """遅延評価を実行"""
         from utils import measurement as mes
         from base import BroadcastMixin
-        blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
+        blocks, shape = BroadcastMixin.broadcastToBlock(flowDatas, planeIndex, x, y)
         assert blocks                                             , f"blocks is None: class={type(self).__name__}, planeIndex={planeIndex}, x={x}, y={y}"
         assert not isinstance(blocks, (list,tuple)) or any(blocks), f"blocks is all empty: class={type(self).__name__}, planeIndex={planeIndex}, x={x}, y={y}"
         return self.blockOperation(blocks, planeIndex, x, y, *args, **kwargs)
