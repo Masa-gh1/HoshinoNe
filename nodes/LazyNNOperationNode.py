@@ -31,7 +31,7 @@ class LazyNNOperationNode(NxBlockOperationNode):
     # 入出力タイプ
     ioType    = _IO_TYPE_NN
     #outputCat = スーパークラスを継承
-
+    
     def process(self, context=None):
         self.reportProgress(context, "開始")
         
