@@ -210,9 +210,14 @@ class RepositionLazyFlowData(LazyFlowData):
         # width/height/plane/stream  が指定されていれば、その領域を切り出す
         w = width  if width  else w
         h = height if height else h
-        p = plane  if plane  else o
+        p = plane  if plane  else p
         s = stream if stream else s
         self.setDimensions(w, h)
+        if int(p) != flowData.getPlaneCount():
+            pc = flowData.getPlaneCount()
+            ps = self.headers["planes"] + [f"C{pc + i}" for i in range(int(p) - pc)]
+            ps = ps[:int(p)]
+            self.headers["planes"] = ps
     
     def operation(self, flowData:FlowData, planeIndex:int, x:int, y:int, node:RepositionNode, M, shift_x, shift_y, dx, dy, d_plane, d_stream, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, front, begin, width, height, plane, stream):
         """再配置を実行
