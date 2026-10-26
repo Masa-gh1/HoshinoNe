@@ -299,7 +299,6 @@ class RepositionLazyFlowData(LazyFlowData):
             return nh.nans((dstBlockH, dstBlockW))
         
         srcFlowData = node.inputStream[srcS]
-        srcW, srcH = srcFlowData.getDimensions()
         source = self._fetchRect(srcFlowData, srcP, minSrcX, minSrcY, endSrcX - minSrcX, endSrcY - minSrcY)
         
         # 結果バッファ
