@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from types import SimpleNamespace
+from itertools import zip_longest
 
 import hashlib
 import datetime
@@ -28,18 +29,18 @@ if TYPE_CHECKING:
     from base.FlowData import FlowData
 
 # 配列 index 定義
-X, Y, BRI    = 0, 1, 2 # 点像配列
-U, V, W      = 0, 1, 2 # 単位ベクトル配列
+X, Y, BRI         = 0, 1, 2    # 点像配列
+U, V, W           = 0, 1, 2    # 単位ベクトル配列
+DX, DY, ROT, TIME = 0, 1, 2, 3 # 結果配列
 
-class AlignmentResult:
-    def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, time=None, method="", extra_info={}):
+class Result:
+    def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, time=None, extra_info={}):
         self.success = success
         self.dx = dx
         self.dy = dy
         self.rotation = rotation
         self.confidence = confidence
         self.time = time
-        self.method = method
         self.extra_info = extra_info
 
 class PointShiftEstimationNode(FlowNode, ConfigurableNode):
@@ -117,24 +118,31 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             return
         
         inputStream = primaryStreams[0]
+        assert self._referenceStream
+        if 1 == len(self._referenceStream):
+            # 基準画像が1枚の場合は全体へブロードキャスト
+            self._referenceStream = [self._referenceStream[0]] * len(inputStream)
         
         # 基準点像配列作成
-        refPoints, refPointsV = self.getPoints(self._referenceData)
         
         # 各画像の点像ズレ推定
         results = []
-        previous_result = AlignmentResult()  # 前画像の結果
+        resultL = Result()  # 前画像の結果
         
-        for i, flowData in enumerate(inputStream):
+        for i, (flowData, ref) in enumerate(zip_longest(inputStream, self._referenceStream)):
             self.reportProgress(context, f"画像 {i + 1}/{len(inputStream)} 処理中", i, len(inputStream))
             
             # 点像配列作成
             import numpy as np
-            points, pointsV = self.getPoints(flowData)
+            refPoints, refPointsV = self.getPoints(ref)
+            points   , pointsV    = self.getPoints(flowData)
             
             # 点像ズレ推定
-            result = self._findOffsetByStarDetection(refPoints, points, previous_result)
-            previous_result = result
+            if self.usePreviousOffset:
+                result, ransac = self.matchPoints(refPoints, points, resultL)
+            else:
+                result, ransac = self.matchPoints(refPoints, points)
+            resultL = result
             
             # 結果を保存
             #aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in targetPoints])
@@ -147,7 +155,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             #extra_info["target_grid_counts"]  = target_grid_counts
             #extra_info["aspectRatioMedian"]   = aspectRatioMedian
             
-            refDatetime = self._referenceData.headers.get('datetime', '')
+            refDatetime = ref.headers.get('datetime', '')
             refDatetime = datetime.datetime.fromisoformat(refDatetime)
             imageId = self._generateImageId(flowData)
             dt = flowData.headers.get('datetime', '')
@@ -181,11 +189,11 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         if not auxiliaryStreams or not auxiliaryStreams[0]:
             # 基準画像（auxiliary）が必要
-            self._referenceData = None
+            self._referenceStream = None
             raise ValueError("基準画像（補正値）が必要です")
         else:
             # 複数ある場合は最初のものを採用
-            self._referenceData = auxiliaryStreams[0][0]
+            self._referenceStream = auxiliaryStreams[0]
         
         return primaryStreams
     
@@ -316,77 +324,78 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
             return f"hash_{data_hash}"
     
-    def _findOffsetByStarDetection(self, refPoints, targetPoints, previous_result=None):
-        """星点検出による天体写真用位置合わせ"""
+    def matchPoints(self, refPoints:np.ndarray, targetPoints:np.ndarray, resultL=None) -> tuple[Result, dict]:
+        """点像をマッチングしてオフセットを推定"""
         import numpy as np
         from utils import numpy_helpers as nh
 
-        if previous_result is None:
-            previous_result = AlignmentResult()
+        if resultL is None:
+            resultL = Result()
         
-        extra_info = {}
+        logging = {} # 実行記録
         
         # 現在の画像サイズを保存（_calculateAffineTransformで使用）
         currentImageShape = refPoints.shape
         
         # RANSAC用固定シードを設定
         rng = np.random.default_rng(self.ransac.seed)
-        extra_info["ransac_seed"] = self.ransac.seed
+        logging["ransac_seed"] = self.ransac.seed
         
-        if len(refPoints) < 3 or len(targetPoints) < 3:
-            return AlignmentResult(success=False, method="points", extra_info=extra_info)
+        if len(refPoints) < 3 or len(targetPoints) < 3: # 最低でも3点必要
+            logging["message"] = "Not enough points for matching"
+            return Result(success=False), logging
         
         # 前画像のオフセット・回転を考慮した対応点探索
         matches = []
         radius_sq = self.ransac.sampleRadius ** 2  # 二乗距離で比較
         
         # 予測位置計算
-        if self.usePreviousOffset:
-            expected_pos = targetPoints[:, X:Y+1] + nh.array([previous_result.dx, previous_result.dy])
-        else:
-            expected_pos = targetPoints[:, X:Y+1]
+        rad = np.radians(resultL.rotation)
+        M = nh.array([[ np.cos(rad), np.sin(rad)],
+                      [-np.sin(rad), np.cos(rad)],
+                      [ resultL.dx , resultL.dy ],
+                    ])
+        expected_pos = np.concatenate([targetPoints[:, X:Y+1], nh.ones((targetPoints.shape[0], 1))], axis=1) @ M
         
-        for i, (rx, ry) in enumerate(refPoints[:, X:Y+1]):
+        for ref in refPoints:
             # 距離計算（二乗距離）
-            dist_sq = np.sum((expected_pos - nh.array([rx, ry]))**2, axis=1)
-            valid_indices = np.where(dist_sq < radius_sq)[0]
+            dist_sq = np.sum((expected_pos - nh.array(ref[X:Y+1]))**2, axis=1)
+            indices = np.where(dist_sq < radius_sq)[0]
             
             # マッチを追加
-            for j in valid_indices:
-                tx, ty, brightness = targetPoints[j]
-                matches.append(((rx, ry), (tx, ty), brightness))
+            for idx in indices:
+                matches.append((ref, targetPoints[idx]))
         
-        #aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in matches])
-        extra_info["matches_count"] = len(matches)
-        extra_info["matches_count_min_required"] = 5
-        #extra_info["aspectRatioMedian"] = aspectRatioMedian
+        matchTargetCnt = len(np.unique([match[1] for match in matches], axis=0))
+        logging["matches_count"] = matchTargetCnt
 
-        if len(matches) < 5:
-            return AlignmentResult(success=False, method="star", extra_info=extra_info)
+        if matchTargetCnt < 5:
+            logging["message"] = "Not enough matched points for robust estimation"
+            return Result(success=False), logging
         
         # RANSACでロバストなオフセットを計算
         offset = None
         inliers = 0
-        for ransac_iteration in range(self.ransac.iterations): # RANSAC試行回数
+        for iterations in range(self.ransac.iterations): # RANSAC試行回数
             # ランダムに3点選択
-            sample = rng.choice(len(matches), min(3, len(matches)), replace=False)
+            indices = rng.choice(len(matches), min(3, len(matches)), replace=False)
             
-            # オフセットを計算（基準画像に向かって対象画像を動かす方向）
+            # オフセットを計算 (基準画像に向かって対象画像を動かす方向)
             dx_sum, dy_sum = 0, 0
-            for idx in sample:
-                ref_pt, target_pt, _ = matches[idx]
-                dx_sum += ref_pt[0] - target_pt[0]
-                dy_sum += ref_pt[1] - target_pt[1]
+            for idx in indices:
+                ref_pt, target_pt = matches[idx]
+                dx_sum += ref_pt[X] - target_pt[X]
+                dy_sum += ref_pt[Y] - target_pt[Y]
             
-            dx = dx_sum / len(sample)
-            dy = dy_sum / len(sample)
+            dx = dx_sum / len(indices)
+            dy = dy_sum / len(indices)
             
             # インライアをカウント
             cur_inliers = 0
-            for ref_pt, target_pt, _ in matches:
-                expected_x = target_pt[0] + dx
-                expected_y = target_pt[1] + dy
-                error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
+            for ref_pt, target_pt in matches:
+                expected_x = target_pt[X] + dx
+                expected_y = target_pt[Y] + dy
+                error = np.sqrt((ref_pt[X] - expected_x)**2 + (ref_pt[Y] - expected_y)**2)
                 if error < 1.5:  # 1.5ピクセル以内
                     cur_inliers += 1
             
@@ -398,25 +407,26 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
                 if inliers > len(matches) * 0.5 or inliers > 40:  # 50%以上または40個以上のインライア
                     break
         
-        extra_info["ransac_iteration"] = ransac_iteration + 1
-        extra_info["inliers"] = inliers
-        extra_info["inliers_min_required"] = 5
+        logging["ransac_iteration"] = iterations + 1
+        logging["inliers"] = inliers
+        logging["inliers_min_required"] = 5
         
         if inliers < 5:  # 5個未満のインライア
-            return AlignmentResult(success=False, method="star", extra_info=extra_info)
+            logging["message"] = "Not enough inliers for robust estimation"
+            return Result(success=False), logging
         
         # グリッド別マッチ数を計算
         grid_match_counts = self._calculateGridMatches(matches, offset, refPoints.shape)
-        extra_info["grid_match_counts"] = grid_match_counts
+        logging["grid_match_counts"] = grid_match_counts
         
         # インライアを使って回転も含めた変換を計算
         inlier_matches = []
-        for ref_pt, target_pt, brightness  in matches:
-            expected_x = target_pt[0] + offset[0]
-            expected_y = target_pt[1] + offset[1]
-            error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
+        for ref_pt, target_pt in matches:
+            expected_x = target_pt[X] + offset[X]
+            expected_y = target_pt[Y] + offset[Y]
+            error = np.sqrt((ref_pt[X] - expected_x)**2 + (ref_pt[Y] - expected_y)**2)
             if error < 2.0:
-                inlier_matches.append((ref_pt, target_pt, brightness))
+                inlier_matches.append((ref_pt, target_pt))
         
         dx, dy = offset
         rotation = 0
@@ -430,13 +440,13 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         from utils.Debug import Debug
         debug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f} confidence:{confidence:.3f}"
-        debug += f" target_bright_count:{extra_info['target_bright_count']  }" if 'target_bright_count' in extra_info else ""
-        debug += f" aspectRatioMedian:{  extra_info['aspectRatioMedian']:.2f}" if 'aspectRatioMedian'   in extra_info else ""
-        debug += f" inliers:{            extra_info['inliers']              }" if 'inliers'             in extra_info else ""
-        debug += f" ransac_iteration:{   extra_info['ransac_iteration']     }" if 'ransac_iteration'    in extra_info else ""
+        debug += f" target_bright_count:{logging['target_bright_count']  }" if 'target_bright_count' in logging else ""
+        debug += f" aspectRatioMedian:{  logging['aspectRatioMedian']:.2f}" if 'aspectRatioMedian'   in logging else ""
+        debug += f" inliers:{            logging['inliers']              }" if 'inliers'             in logging else ""
+        debug += f" ransac_iteration:{   logging['ransac_iteration']     }" if 'ransac_iteration'    in logging else ""
         Debug.log(type(self).__name__, f"{debug}")
         
-        return AlignmentResult( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence, method="star", extra_info=extra_info)
+        return Result( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence), logging
     
     def _calculateAffineTransform(self, matches, shape):
         """対応点からアフィン変換を計算（画像中心回転）"""
@@ -444,7 +454,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         import cv2
         from utils import numpy_helpers as nh
 
-        ref_pts = nh.array([match[0] for match in matches])
+        ref_pts    = nh.array([match[0] for match in matches])
         target_pts = nh.array([match[1] for match in matches])
         
         # 画像中心を回転中心として使用
@@ -452,11 +462,11 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         image_center = nh.array([w/2, h/2])
         
         # 画像中心を原点とした座標系に変換
-        ref_centered = ref_pts - image_center
-        target_centered = target_pts - image_center
+        ref_centered = ref_pts[:, X:Y+1] - image_center
+        target_centered = target_pts[:, X:Y+1] - image_center
         
-        # 中心座標系でアフィン変換を計算
-        M = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.RANSAC, ransacReprojThreshold=2.0)[0]
+        # 中心座標系でアフィン変換を計算(最小二乗法)
+        M, _ = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.LMEDS, ransacReprojThreshold=2.0)
         
         if M is not None:
             # 回転角を計算
@@ -471,8 +481,8 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             return (dx, dy, rotation_angle)
         else:
             # アフィン変換が失敗した場合は平行移動のみ
-            dx_sum = sum(ref_pt[0] - target_pt[0] for ref_pt, target_pt in matches)
-            dy_sum = sum(ref_pt[1] - target_pt[1] for ref_pt, target_pt in matches)
+            dx_sum = sum(ref_pt[X] - target_pt[X] for ref_pt, target_pt in matches)
+            dy_sum = sum(ref_pt[Y] - target_pt[Y] for ref_pt, target_pt in matches)
             return (dx_sum / len(matches), dy_sum / len(matches), 0.0)
     
     def _calculateGridMatches(self, matches, offset, image_shape):
@@ -486,14 +496,14 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         grid_match_counts = [0] * (grid_rows * grid_cols)
         
-        for ref_pt, target_pt, _ in matches:
-            expected_x = target_pt[0] + offset[0]
-            expected_y = target_pt[1] + offset[1]
-            error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
+        for ref_pt, target_pt in matches:
+            expected_x = target_pt[X] + offset[X]
+            expected_y = target_pt[Y] + offset[Y]
+            error = np.sqrt((ref_pt[X] - expected_x)**2 + (ref_pt[Y] - expected_y)**2)
             
             if error < 1.5:  # マッチした場合
                 # 基準画像の星がどのグリッドに属するか判定
-                rx, ry = ref_pt
+                rx, ry, _ = ref_pt
                 grid_row = min(int(ry // cell_h), grid_rows - 1)
                 grid_col = min(int(rx // cell_w), grid_cols - 1)
                 grid_index = grid_row * grid_cols + grid_col
@@ -501,7 +511,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         return grid_match_counts
     
-    def createFlowData(self, inputDatas:FlowData, results) -> FlowData:
+    def createFlowData(self, inputDatas:list[FlowData], results) -> FlowData:
         """table形式のFlowDataを生成"""
         from config import BLOCK_SIZE
         from utils import numpy_helpers as nh
@@ -528,14 +538,15 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             table_array = nh.zeros((0, 5))
         
         # ヘッダー情報を設定
-        headers = {
+        headers = inputDatas[0].headers.copy()
+        headers.update({
             'category': self.getOutputCategory(),
             'type'    : 'table',
             'mode'    : '2D',
             'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
             'lines'   : lines,
             'planes'  : ['shift_detection']
-        }
+        })
                 
         # FlowDataを作成
         flowData = FlowData(headers)

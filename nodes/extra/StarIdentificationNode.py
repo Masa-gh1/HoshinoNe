@@ -366,9 +366,9 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             [[2, 3, 0], [2, 3, 1]],
             [[2, 3, 1], [2, 3, 0]],
         ], dtype=np.int8)
-
-        i = 0
-        for i in range(self.star.ransac.iterations): # RANSAC試行回数
+        
+        iterations = 0
+        for iterations in range(self.star.ransac.iterations): # RANSAC試行回数
             # 画像側で 4 点をランダムに選択し接する時計回りの三角形 P と Q を作成する
             pqidx = random.choice(pointCnt, 4, replace=False)
             pqidx = pqidx[COMB_TRIANGLE_PAIRS]
@@ -444,8 +444,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 
                 # 一致した星に対し、画像内の全星について位置関係をランダムに検証
                 oIndices = random.choice(otherIdx, len(otherIdx), replace=False)
-                for j, p0idx in enumerate(oIndices):
-                    if currentInliers + len(otherIdx) - j < bestMatchCount:
+                for i, p0idx in enumerate(oIndices):
+                    if currentInliers + len(otherIdx) - i < bestMatchCount:
                         # このあと全て inlier でも bestMatchCount に届かないので早期終了 
                         break
                     
@@ -479,7 +479,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         cidx = random.choice(cidx) # 複数候補からランダムに選択
                         c0idx = cidx[0]
                         c0 = catalog.getCatalog(c0idx)
-                    elif j < 1:
+                    elif i < 1:
                         break # 安易に見つかるはずのタイミングで失敗したので早期終了
                     else:
                         continue # 相似の三角形が見つからないのでスキップ
@@ -510,15 +510,14 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                         bestMatchError = currentError
                         bestMatchStars = currentMatched
                 
-                if(   5 <= bestMatchCount
-                  and self.star.minMatchedStars <= bestMatchCount
+                if(   self.star.minMatchedStars <= bestMatchCount
                   and bestMatchError < self.catalog.matchLimit/100.0
-                  and np.log(1-0.9999) / np.log(1-(bestMatchCount/pointCnt)**4) < i # 初期一致数(最小インライア数):4
+                  and np.log(1-0.9999) / np.log(1 - (bestMatchCount/pointCnt)**self.star.minMatchedStars) < iterations # 初期一致数(最小インライア数)
                   ):
                     # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
                     break
         
-        return bestMatchStars, {"points": pointCnt, "stars": catalogTotal, "error": bestMatchError, "iterations": i+1}
+        return bestMatchStars, {"points": pointCnt, "stars": catalogTotal, "error": bestMatchError, "iterations": iterations+1}
     
     def calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
