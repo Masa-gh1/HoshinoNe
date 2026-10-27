@@ -1,5 +1,5 @@
 '''
-RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose)
+RepositionNode - 再配置ノード (Roll, Flip, Rot90, Transpose, Scale)
 
 Copyright (c) 2025 Masakazu Inoue
 All rights reserved.
@@ -7,11 +7,18 @@ All rights reserved.
 @author: Masakazu Inoue
 '''
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+import math
 import hashlib
 
 from base.FlowNode_CONST import *
 from base import LazyFlowData
 from nodes import LazyNNOperationNode
+
+if TYPE_CHECKING:
+    from base import FlowData
 
 class RepositionNode(LazyNNOperationNode):
     # ノードタイプ
@@ -23,18 +30,19 @@ class RepositionNode(LazyNNOperationNode):
     #ioType    = スーパークラスを継承
     #outputCat = スーパークラスを継承
 
-    def preprocessStreams(self, inputStreams):
+    def preprocessStreams(self, inputStreams:list[list[FlowData]]):
         """入力ストリームの前処理"""
         inputStreams = super().preprocessStreams(inputStreams)
-        stream = inputStreams[0]
+        inputStream = inputStreams[0]
         param  = [d for s in inputStreams[1:] for d in s]
-                
+        
+        self.inputStream = inputStream        
         # auxiliary データから変換パラメータを取得
         self._params = self._loadParams(param)
         
-        return [stream]
-
-    def createLazyFlowData(self, headers, inputData):
+        return [inputStream]
+    
+    def createLazyFlowData(self, headers:dict, inputData:FlowData) -> LazyFlowData:
         """LazyFlowDataを作成"""
         # auxiliaryデータから変換パラメータを取得
         if not self._params:
@@ -46,8 +54,25 @@ class RepositionNode(LazyNNOperationNode):
         if not params:
             return inputData
         else:
-            shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height  = params
-            return RepositionLazyFlowData(headers, inputData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+            (shift_x, shift_y,
+             dx, dy, d_plane, d_stream,
+             flip_x, flip_y,
+             rot90,
+             transpose,
+             scale_x, scale_y,
+             left, top, front, begin,
+             width, height, plane, stream) = params
+            return RepositionLazyFlowData(headers,
+                                          inputData,
+                                          self,
+                                          shift_x, shift_y,
+                                          dx, dy, d_plane, d_stream,
+                                          flip_x, flip_y,
+                                          rot90,
+                                          transpose,
+                                          scale_x, scale_y,
+                                          left, top, front, begin,
+                                          width, height, plane, stream)
 
     def _loadParams(self, auxiliarys):
         """table 形式データを読み込み"""
@@ -62,20 +87,25 @@ class RepositionNode(LazyNNOperationNode):
                 lines.extend(tableFlowData.headers.get('lines', []))
                 columnCur = tableFlowData.headers.get('columns', [])
                 
-                # 縦1列のブロックのみを結合
-                for block in tableFlowData.iterateBlocks():
-                    if not block or block.data is None or 0 != block.x:
-                        pass
-                    elif not columns:
-                        columns = columnCur
-                        tabledatas.append(block.data)
-                    elif columns == columnCur:
-                        tabledatas.append(block.data)
+                columns = columnCur if columns is None else columns
+
+                if columns != columnCur:
+                    pass # 列が違う場合は無視
+                else:
+                    # 縦1列のブロックのみを結合
+                    for block in tableFlowData.iterateBlocks():
+                        if not block or block.data is None or 0 != block.x:
+                            pass
+                        else:
+                            tabledatas.append(block.data)
         
         if not tabledatas:
             raise ValueError("再配置パラメータが必要です")
         
         tabledata = np.vstack(tabledatas)
+
+        if 1 != len(lines) and len(tabledata) != len(lines):
+            raise ValueError("再配置パラメータの行数が不正です")
         
         return {
             'columns': columns,
@@ -113,190 +143,188 @@ class RepositionNode(LazyNNOperationNode):
         
         shift_x   = int(row_data[columns.index('shift_x'  )]) if 'shift_x'  in columns else 0
         shift_y   = int(row_data[columns.index('shift_y'  )]) if 'shift_y'  in columns else 0
-        rot90     = int(row_data[columns.index('rot90'    )]) if 'rot90'    in columns else 0
+        dx        = int(row_data[columns.index('dx'       )]) if 'dx'       in columns else 0
+        dy        = int(row_data[columns.index('dy'       )]) if 'dy'       in columns else 0
+        d_plane   = int(row_data[columns.index('d_plane'  )]) if 'd_plane'  in columns else 0
+        d_stream  = int(row_data[columns.index('d_stream' )]) if 'd_stream' in columns else 0
         flip_x    = int(row_data[columns.index('flip_x'   )]) if 'flip_x'   in columns else 0
         flip_y    = int(row_data[columns.index('flip_y'   )]) if 'flip_y'   in columns else 0
+        rot90     = int(row_data[columns.index('rot90'    )]) if 'rot90'    in columns else 0
         transpose = int(row_data[columns.index('transpose')]) if 'transpose'in columns else 0
+        scale_x   = int(row_data[columns.index('scale_x'  )]) if 'scale_x'  in columns else 1
+        scale_y   = int(row_data[columns.index('scale_y'  )]) if 'scale_y'  in columns else 1
         left      = int(row_data[columns.index('left'     )]) if 'left'     in columns else None
         top       = int(row_data[columns.index('top'      )]) if 'top'      in columns else None
+        front     = int(row_data[columns.index('front'    )]) if 'front'    in columns else None
+        begin     = int(row_data[columns.index('begin'    )]) if 'begin'    in columns else None
         width     = int(row_data[columns.index('width'    )]) if 'width'    in columns else None
         height    = int(row_data[columns.index('height'   )]) if 'height'   in columns else None
+        plane     = int(row_data[columns.index('plane'    )]) if 'plane'    in columns else None
+        stream    = int(row_data[columns.index('stream'   )]) if 'stream'   in columns else None
         
-        return (shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+        # scale の検証
+        if scale_x < 1 or scale_y < 1:
+            raise ValueError('scale_x/scale_y must be integers >= 1')
+        
+        return (shift_x, shift_y, dx, dy, d_plane, d_stream, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, front, begin, width, height, plane, stream)
 
 class RepositionLazyFlowData(LazyFlowData):
     __slots__ = ()
     
-    def __init__(self, headers, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
-        super().__init__(headers, flowData, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height)
+    def __init__(self, headers:dict, flowData:FlowData, node:RepositionNode, shift_x, shift_y, dx, dy, d_plane, d_stream, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, front, begin, width, height, plane, stream):
+        from utils import numpy_helpers as nh
+        
+        # 出力位置を計算
+        w, h = flowData.getDimensions()
+        p = flowData.getPlaneCount()
+        s = len(node.inputStream)
+        M = self.createAffine(w, h, 0, 0, 0, 0, flip_x, flip_y, rot90, transpose, scale_x, scale_y)
+        o = M @ nh.array([[0, w-1], # ピクセル位置で最小位置を計算
+                          [0, h-1],
+                          [0, p-1],
+                          [0, s-1],
+                          [1,   1]])
+        l = min(o[0]) # 左(x)
+        t = min(o[1]) # 上(y)
+        f = min(o[2]) # 前(plane)
+        b = min(o[3]) # 始(stream)
+        # left/top/front/begin が指定されていれば、その領域を切り出す
+        l = left  if left  else l
+        t = top   if top   else t
+        f = front if front else f
+        b = begin if begin else b
+        M = self.createAffine(w, h, dx - l, dy - t, d_plane - f, d_stream - b,  flip_x, flip_y, rot90, transpose, scale_x, scale_y)
+        super().__init__(headers, flowData, node, M, shift_x, shift_y, dx, dy, d_plane, d_stream, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, front, begin, width, height, plane, stream)
         
         # 出力サイズを計算
-        w, h = flowData.getDimensions()
-        w = w - left if left   else w
-        h = h - top  if top    else h
-        w = width    if width  else w
-        h = height   if height else h
+        o = M @ nh.array([[0, w], # 入力サイズで出力サイズを計算
+                          [0, h],
+                          [0, p],
+                          [0, s],
+                          [1, 1]])
+        w = math.floor(max(o[0]) - min(o[0]))
+        h = math.floor(max(o[1]) - min(o[1]))
+        p = math.floor(max(o[2]) - min(o[2]))
+        s = math.floor(max(o[3]) - min(o[3]))
         
-        # Transpose または Rot90(奇数回) の場合、幅と高さを入れ替え
-        isTransposed = (transpose % 2 != 0)
-        isRotOdd = (rot90 % 2 != 0)
-        
-        # Transpose Rot90 どちらか片方だけなら入れ替え、両方なら元に戻る
-        if isTransposed ^ isRotOdd:
-            self.setDimensions(h, w)
-        else:
-            self.setDimensions(w, h)
-
-    def operation(self, flowData, planeIndex, x, y, shift_x, shift_y, rot90, flip_x, flip_y, transpose, left, top, width, height):
-        """再配置を実行"""
-        import numpy as np
+        # width/height/plane/stream  が指定されていれば、その領域を切り出す
+        w = width  if width  else w
+        h = height if height else h
+        p = plane  if plane  else p
+        s = stream if stream else s
+        self.setDimensions(w, h)
+        if int(p) != flowData.getPlaneCount():
+            pc = flowData.getPlaneCount()
+            ps = self.headers["planes"] + [f"C{pc + i}" for i in range(int(p) - pc)]
+            ps = ps[:int(p)]
+            self.headers["planes"] = ps
+    
+    def operation(self, flowData:FlowData, planeIndex:int, x:int, y:int, node:RepositionNode, M, shift_x, shift_y, dx, dy, d_plane, d_stream, flip_x, flip_y, rot90, transpose, scale_x, scale_y, left, top, front, begin, width, height, plane, stream):
+        """再配置を実行
+        処理順序は Scale -> Transpose -> Rot90 -> Flip -> Shift
+        Resize は 出力結果の範囲
+        """
         from config import BLOCK_SIZE
         from base import DataBlock
         from utils import numpy_helpers as nh
         
-        srcW, srcH = flowData.getDimensions()
-        dstW, dstH = self.getDimensions()
-        
-        # 要求されたブロックサイズ
-        reqW = min(BLOCK_SIZE, dstW - x)
-        reqH = min(BLOCK_SIZE, dstH - y)
-        
-        # Shift (Roll) の逆変換を行い、必要な領域を特定する
-        # Shiftは循環するので、出力ブロックは最大4つの矩形領域に分割される可能性がある
-        
-        # X方向の分割
-        srcX_start = (x - shift_x) % dstW
-        srcX_end   = (x + reqW - shift_x) % dstW
-        
-        if srcX_start < srcX_end:
-            xs = [(srcX_start, reqW, 0)] # (start, width, dst_offset)
+        if 0 == shift_x and 0 == shift_y:
+            result = self._operation(flowData, planeIndex, x, y, node, M)
         else:
-            w1 = dstW - srcX_start
-            w2 = reqW - w1
-            xs = [(srcX_start, w1, 0), (0, w2, w1)]
-        
-        # Y方向の分割
-        srcY_start = (y - shift_y) % dstH
-        srcY_end   = (y + reqH - shift_y) % dstH
-        
-        if srcY_start < srcY_end:
-            ys = [(srcY_start, reqH, 0)]
-        else:
-            h1 = dstH - srcY_start
-            h2 = reqH - h1
-            ys = [(srcY_start, h1, 0), (0, h2, h1)]
+            # shift_x / shift_y がある
+            dstW, dstH = self.getDimensions()
+            dstBlockW = min(BLOCK_SIZE, dstW - x)
+            dstBlockH = min(BLOCK_SIZE, dstH - y)
+            shiftedX = (x - shift_x) % dstW
+            shiftedY = (y - shift_y) % dstH
+            shiftedW = min(dstBlockW, dstW - shiftedX)
+            shiftedH = min(dstBlockH, dstH - shiftedY)
+
+            # ロールシフトで縁を跨ぐ場合、2つ以上のブロックを取得して合成
+            chunk, BX, BY, X, Y, W, H = [], 0, 1, 2, 3, 4, 5
+            chunk.append([0       , 0       , shiftedX, shiftedY,             shiftedW,             shiftedH])
+            chunk.append([shiftedW, 0       , 0       , shiftedY, dstBlockW - shiftedW,             shiftedH]) if shiftedW < dstBlockW                          else None
+            chunk.append([0       , shiftedH, shiftedX, 0       ,             shiftedW, dstBlockH - shiftedH]) if                          shiftedH < dstBlockH else None
+            chunk.append([shiftedW, shiftedH, 0       , 0       , dstBlockW - shiftedW, dstBlockH - shiftedH]) if shiftedW < dstBlockW and shiftedH < dstBlockH else None
             
-        # 結果バッファ
-        result = nh.nans((reqH, reqW), dtype=flowData.getVariableType())
-        
-        # 各領域について処理
-        for sy, h, dy in ys:
-            for sx, w, dx in xs:
-                # (sx, sy, w, h) を 逆順変換し Source データを取得し、順変換を適用する
-                
-                # 対応する Source 領域を計算
-                # Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Resize
-                
-                # 矩形の4隅
-                corners = [(sx, sy), (sx+w, sy), (sx+w, sy+h), (sx, sy+h)]
-                
-                # Un-Flip
-                unflipped_corners = []
-                for cx, cy in corners:
-                    tx, ty = cx, cy
-                    if flip_x % 2: tx = dstW - 1 - tx
-                    if flip_y % 2: ty = dstH - 1 - ty
-                    unflipped_corners.append((tx, ty))
-                
-                # Un-Rot90 (Inverse of k*90 deg CW)
-                # k=1 (90 CW)  -> Inv (90 CCW)
-                # k=2 (180)    -> Inv (180)
-                # k=3 (270 CW) -> Inv (90 CW) = 270 CCW
-                
-                # 回転前の空間サイズ (Transpose後のサイズ)
-                # 現在の dstW, dstH は回転後のサイズ
-                
-                # 回転シミュレーション (CCW)
-                # rot90 は時計回り回数。逆変換は rot90 回の CCW 回転。
-                k = rot90 % 4
-                
-                curW, curH = dstW, dstH
-                unrotated_corners = unflipped_corners
-                
-                for _ in range(k):
-                    next_corners = []
-                    for cx, cy in unrotated_corners:
-                        # 90 deg CCW: (x, y) -> (y, W-1-x)
-                        nx = cy
-                        ny = curW - 1 - cx
-                        next_corners.append((nx, ny))
-                    unrotated_corners = next_corners
-                    curW, curH = curH, curW
-                
-                # Un-Transpose
-                untranspose_corners = []
-                for cx, cy in unrotated_corners:
-                    tx, ty = cx, cy
-                    if transpose % 2:
-                        tx, ty = ty, tx
-                    untranspose_corners.append((tx, ty))
-                
-                # 逆変換結果
-                src_corners = untranspose_corners
-                
-                # Source 空間でのバウンディングボックス
-                min_src_x = min(c[0] for c in src_corners)
-                max_src_x = max(c[0] for c in src_corners)
-                min_src_y = min(c[1] for c in src_corners)
-                max_src_y = max(c[1] for c in src_corners)
-                
-                # Un-Resize (Add offset)
-                off_x = left if left else 0
-                off_y = top  if top  else 0
-                
-                min_src_x += off_x
-                max_src_x += off_x
-                min_src_y += off_y
-                max_src_y += off_y
-                
-                # 整数座標に丸める (ピクセル中心ではなくインデックスとして扱うため)
-                # 厳密には、回転によって矩形の頂点が入れ替わっているだけなので、
-                # min/max で正しい範囲が得られる (ただし max は inclusive)
-                
-                # 範囲: [min_src_x, max_src_x + 1)
-                # ただし、回転しているので width/height が入れ替わっている可能性がある
-                
-                fetch_w = max_src_x - min_src_x
-                fetch_h = max_src_y - min_src_y
-                source = self._fetchRect(flowData, planeIndex, min_src_x, min_src_y, fetch_w, fetch_h)
-                
-                # 取得したデータに対して順変換を適用
-                # Source -> Resize -> Transpose -> Rot90 -> Flip -> Shift
-                
-                processed = source
-                
-                # Transpose
-                if transpose % 2:
-                    processed = np.transpose(processed)
-                
-                # Rot90
-                k = rot90 % 4
-                if k != 0:
-                    # rot90 は時計回り(CW)指定、numpy.rot90 は反時計回り(CCW)
-                    # そのため負の値を渡して時計回りにする
-                    processed = np.rot90(processed, k=-k)
-                
-                # Flip
-                if flip_x % 2:
-                    processed = np.fliplr(processed)
-                if flip_y % 2:
-                    processed = np.flipud(processed)
-                
-                # 結果バッファに配置
-                result[dy:dy+h, dx:dx+w] = processed
+            # 結果バッファ
+            result = nh.nans((dstBlockH, dstBlockW), dtype=flowData.getVariableType())
+            
+            for c in chunk:
+                tmp = self._operation(flowData, planeIndex, c[X], c[Y], node, M)
+                result[c[BY]:c[BY]+c[H], c[BX]:c[BX]+c[W]] = tmp[:c[H], :c[W]]
         
         return DataBlock(result, planeIndex, x, y)
+    
+    def _operation(self, flowData:FlowData, planeIndex:int, x:int, y:int, node:RepositionNode, M):
+        import numpy as np
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        
+        streamIndex = node.flowDatas.index(self)
+        dstW, dstH = self.getDimensions()
+        
+        # 要求された結果ブロックサイズ
+        dstBlockW = min(BLOCK_SIZE, dstW - x)
+        dstBlockH = min(BLOCK_SIZE, dstH - y)
+        
+        # 出力ブロック位置のコーナー座標
+        l, r, t, b = x, x + dstBlockW - 1, y, y + dstBlockH - 1
+        dst_corners = nh.array([
+            [l, t, planeIndex, streamIndex, 1],
+            [r, t, planeIndex, streamIndex, 1],
+            [r, b, planeIndex, streamIndex, 1],
+            [l, b, planeIndex, streamIndex, 1],
+        ])
+        
+        # 逆算して読み込む Source 領域を計算
+        # Un-Resize -> Un-Shift -> Un-Flip -> Un-Rot90 -> Un-Transpose -> Un-Scale
+        Minv = np.linalg.inv(M)
+        src_corners = dst_corners @ Minv.T[:, :4]
+        
+        # corners の境界跨ぎ(roll)を分解する
+        minCorX = min([c[0] for c in src_corners])
+        maxCorX = max([c[0] for c in src_corners])
+        minCorY = min([c[1] for c in src_corners])
+        maxCorY = max([c[1] for c in src_corners])
+        minSrcX = math.floor(minCorX)
+        endSrcX = math.floor(maxCorX) + 1
+        minSrcY = math.floor(minCorY)
+        endSrcY = math.floor(maxCorY) + 1
+        srcP    = int(min([c[2] for c in src_corners]))
+        srcS    = int(min([c[3] for c in src_corners]))
 
+        # ソース取得
+        if srcS < 0 or len(node.inputStream) <= srcS:
+            return nh.nans((dstBlockH, dstBlockW))
+        
+        srcFlowData = node.inputStream[srcS]
+        source = self._fetchRect(srcFlowData, srcP, minSrcX, minSrcY, endSrcX - minSrcX, endSrcY - minSrcY)
+        
+        # 結果バッファ
+        result = nh.nans((dstBlockH, dstBlockW), dtype=srcFlowData.getVariableType())
+        
+        # 結果バッファに再配置
+        sy, sx = np.mgrid[minSrcY:endSrcY, minSrcX:endSrcX].astype(nh.BDTYPE)
+        sx = sx.ravel()
+        sy = sy.ravel()
+        pts = np.vstack([sx, sy, nh.full(sx.shape, srcP), nh.full(sx.shape, srcS), nh.ones(sx.shape)])
+        dst_pts = M[:2, :] @ pts
+        dx = (dst_pts[0] - x).astype(np.uint32)
+        dy = (dst_pts[1] - y).astype(np.uint32)
+        px = (sx - minSrcX).astype(np.uint32)
+        py = (sy - minSrcY).astype(np.uint32)
+        valid = (
+            (0 <= dx) & (dx < dstBlockW) &
+            (0 <= dy) & (dy < dstBlockH) &
+            (0 <= px) & (px < source.shape[1]) &
+            (0 <= py) & (py < source.shape[0])
+        )
+        if np.any(valid):
+            result[dy[valid], dx[valid]] = source[py[valid], px[valid]]
+
+        return result
+    
     def _fetchRect(self, flowData, planeIndex, x, y, w, h):
         """指定された矩形領域のデータを取得（ブロック境界を跨ぐ場合に対応）"""
         from config import BLOCK_SIZE
@@ -338,3 +366,86 @@ class RepositionLazyFlowData(LazyFlowData):
         crop_x = x - bx_start
         crop_y = y - by_start
         return buffer[crop_y:crop_y+h, crop_x:crop_x+w]
+    
+    def createAffine(self, width, height, dx, dy, d_plane, d_stream, flip_x, flip_y, rot90, transpose, scale_x, scale_y):
+        from utils import numpy_helpers as nh
+        
+        # 変換行列を計算
+        # Scale -> Transpose -> Rot90 -> Flip -> move
+        M = nh.eye(5) # x, y, planeIndex, streamIndex, 1
+        
+        # 左上座標系から中央座標系へ変換
+        M = nh.array([[1, 0, 0, 0, -width /2.0],
+                      [0, 1, 0, 0, -height/2.0],
+                      [0, 0, 1, 0,           0],
+                      [0, 0, 0, 1,           0],
+                      [0, 0, 0, 0,           1]]) @ M
+        
+        # Scale
+        M = nh.array([[scale_x,       0, 0, 0, 0],
+                      [      0, scale_y, 0, 0, 0],
+                      [      0,       0, 1, 0, 0],
+                      [      0,       0, 0, 1, 0],
+                      [      0,       0, 0, 0, 1]]) @ M
+        
+        # Transpose
+        if transpose % 2 != 0:
+            M = nh.array([[0, 1, 0, 0, 0],
+                          [1, 0, 0, 0, 0],
+                          [0, 0, 1, 0, 0],
+                          [0, 0, 0, 1, 0],
+                          [0, 0, 0, 0, 1]]) @ M
+        
+        # Rot90
+        # k=1 (90 CW)  -> Inv (90 CCW)
+        # k=2 (180)    -> Inv (180)
+        # k=3 (270 CW) -> Inv (90 CW) = 270 CCW
+        # rot90 は時計回り(CW)回数、逆変換は rot90 回の CCW 回転
+        if rot90 % 4 == 1:
+            M = nh.array([[ 0, -1, 0, 0, 0],
+                          [ 1,  0, 0, 0, 0],
+                          [ 0,  0, 1, 0, 0],
+                          [ 0,  0, 0, 1, 0],
+                          [ 0,  0, 0, 0, 1]]) @ M
+        elif rot90 % 4 == 2:
+            M = nh.array([[-1,  0, 0, 0, 0],
+                          [ 0, -1, 0, 0, 0],
+                          [ 0,  0, 1, 1, 0],
+                          [ 0,  0, 0, 1, 0],
+                          [ 0,  0, 0, 0, 1]]) @ M
+        elif rot90 % 4 == 3:
+            M = nh.array([[ 0, 1, 0, 0, 0],
+                          [-1, 0, 0, 0, 0],
+                          [ 0, 0, 1, 0, 0],
+                          [ 0, 0, 0, 1, 0],
+                          [ 0, 0, 0, 0, 1]]) @ M
+        
+        # Flip
+        if flip_x % 2 != 0:
+            M = nh.array([[-1, 0, 0, 0, 0],
+                          [ 0, 1, 0, 0, 0],
+                          [ 0, 0, 1, 0, 0],
+                          [ 0, 0, 0, 1, 0],
+                          [ 0, 0, 0, 0, 1]]) @ M
+        if flip_y % 2 != 0:
+            M = nh.array([[1,  0, 0, 0, 0],
+                          [0, -1, 0, 0, 0],
+                          [0,  0, 1, 0, 0],
+                          [0,  0, 0, 1, 0],
+                          [0,  0, 0, 0, 1]]) @ M
+        
+        # move
+        M = nh.array([[1, 0, 0, 0, dx      ],
+                      [0, 1, 0, 0, dy      ],
+                      [0, 0, 1, 0, d_plane ],
+                      [0, 0, 0, 1, d_stream],
+                      [0, 0, 0, 0, 1       ]]) @ M
+        
+        # 中央座標系から左上座標系へ変換
+        M = nh.array([[1, 0, 0, 0, width /2.0],
+                      [0, 1, 0, 0, height/2.0],
+                      [0, 0, 1, 0,          0],
+                      [0, 0, 0, 1,          0],
+                      [0, 0, 0, 0,          1]]) @ M
+        
+        return M

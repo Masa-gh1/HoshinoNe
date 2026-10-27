@@ -93,7 +93,7 @@ class N1BlockOperationNode(NxBlockOperationNode):
             処理結果の DataBlock
         """
         from base import BroadcastMixin
-        blocks, shape = BroadcastMixin.calculateBroadcastedBlock(flowDatas, planeIndex, x, y)
+        blocks, shape = BroadcastMixin.broadcastToBlock(flowDatas, planeIndex, x, y)
         return self.blockOperation(blocks, planeIndex, x, y)
     
     def blockOperation(self, blocks:DataBlock|list[DataBlock], planeIndex:int, x:int, y:int) -> DataBlock:
