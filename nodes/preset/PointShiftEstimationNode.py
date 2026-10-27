@@ -97,28 +97,6 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         if "ransacSeed" in nodeData:
             self.ransac.seed = nodeData["ransacSeed"]
     
-    def preprocessStreams(self, inputStreams):
-        """入力データの前処理：primary/auxiliaryで分類"""
-        primaryStreams = []
-        auxiliaryStreams = []
-        
-        for stream in inputStreams:
-            category = stream[0].headers.get('category', _OUT_CAT_PRI)
-            if _OUT_CAT_AUX == category:
-                auxiliaryStreams.append(stream)
-            else:
-                primaryStreams.append(stream)
-        
-        if not auxiliaryStreams or not auxiliaryStreams[0]:
-            # 基準画像（auxiliary）が必要
-            self._referenceData = None
-            raise ValueError("基準画像（補正値）が必要です")
-        else:
-            # 複数ある場合は最初のものを採用
-            self._referenceData = auxiliaryStreams[0][0]
-        
-        return primaryStreams
-    
     def process(self, context=None):
         """シフト検出のメイン処理"""
         self.reportProgress(context, "開始")
@@ -140,9 +118,31 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         results = self._calculateShifts(self._referenceData, inputStream, context)
         
         # table形式でFlowDataを生成
-        self.flowDatas = [self._createTableOutput(inputStream, results)]
+        self.flowDatas = [self.createFlowData(inputStream, results)]
         
         self.reportProgress(context, "完了")
+    
+    def preprocessStreams(self, inputStreams:list[list[FlowData]]) -> list[list[FlowData]]:
+        """入力データの前処理：primary/auxiliaryで分類"""
+        primaryStreams = []
+        auxiliaryStreams = []
+        
+        for stream in inputStreams:
+            category = stream[0].headers.get('category', _OUT_CAT_PRI)
+            if _OUT_CAT_AUX == category:
+                auxiliaryStreams.append(stream)
+            else:
+                primaryStreams.append(stream)
+        
+        if not auxiliaryStreams or not auxiliaryStreams[0]:
+            # 基準画像（auxiliary）が必要
+            self._referenceData = None
+            raise ValueError("基準画像（補正値）が必要です")
+        else:
+            # 複数ある場合は最初のものを採用
+            self._referenceData = auxiliaryStreams[0][0]
+        
+        return primaryStreams
     
     def _calculateShifts(self, referenceData, inputDatas, context):
         """シフト検出を実行"""
@@ -221,54 +221,47 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
             return f"hash_{data_hash}"
     
-    def _createTableOutput(self, inputDatas, results):
-        """table形式のFlowDataを生成"""
-        from config import BLOCK_SIZE
-        from utils import numpy_helpers as nh
-        from base import DataBlock
-        from base import FlowData
+    def _selectDistributedStars(self, stars:np.ndarray, imageShape) -> tuple[np.ndarray, list[int]]:
+        """画像全体に分散した星を選択"""
+        if 0 == len(stars):
+            return stars, []
         
-        # データ行を作成
-        table_data = []
-        lines = []
+        h, w = imageShape
+        gridRows, gridCols = self.grid.rows, self.grid.cols
         
-        for result_data in results:
-            imageId = result_data['image_id']
-            result  = result_data['result']
-
-            # データ行: [dx, dy, rotation, confidence, time]
-            row = [result.dx, result.dy, result.rotation, result.confidence, result.time]
-            table_data.append(row)
-            lines.append(imageId)
+        # 各グリッド領域のサイズ
+        cellH = h // gridRows
+        cellW = w // gridCols
         
-        # numpy配列に変換
-        if table_data:
-            table_array = nh.array(table_data)
-        else:
-            table_array = nh.zeros((0, 5))
+        distributedStars = []
+        gridSelectedCounts = []
         
-        # ヘッダー情報を設定
-        headers = {
-            'category': self.getOutputCategory(),
-            'type'    : 'table',
-            'mode'    : '2D',
-            'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
-            'lines'   : lines,
-            'planes'  : ['shift_detection']
-        }
+        # 各グリッドから最大 n 個の明るい星を選択
+        for row in range(gridRows):
+            for col in range(gridCols):
+                yMin = row * cellH
+                yEnd = (row + 1) * cellH if row < gridRows - 1 else h
+                xMin = col * cellW
+                xEnd = (col + 1) * cellW if col < gridCols - 1 else w
                 
-        # FlowDataを作成
-        flowData = FlowData(headers)
+                # このグリッド内の星を抽出
+                gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
+                
+                # 明度順でソートして上位指定数を選択
+                gridStars.sort(key=lambda x: x[2], reverse=True)
+                selected = gridStars[:self.grid.starsPerGrid]
+                distributedStars.extend(selected)
+                gridSelectedCounts.append(len(selected))
         
-        # 複数ブロックに対応
-        rows, cols = table_array.shape
-        flowData.setDimensions(cols, rows)
-        for y in range(0, rows, BLOCK_SIZE):
-            block_height = min(BLOCK_SIZE, rows - y)
-            result = table_array[y:y+block_height, :]
-            flowData.setBlock(DataBlock(result, 0, 0, y))
+        # 全体からも明るい星を追加（重複除去）
+        maxTotalStars = gridRows * gridCols * self.grid.starsPerGrid + 20
+        all_bright = sorted(stars, key=lambda x: x[2], reverse=True)
+        for star in all_bright:
+            if star not in distributedStars and len(distributedStars) < maxTotalStars:
+                distributedStars.append(star)
+        distributedStars = distributedStars[:maxTotalStars]
         
-        return flowData
+        return distributedStars, gridSelectedCounts
     
     def _findOffsetByStarDetection(self, refImage, targetImage, previous_result=None):
         """星点検出による天体写真用位置合わせ"""
@@ -481,47 +474,54 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         return grid_match_counts
     
-    def _selectDistributedStars(self, stars, imageShape):
-        """画像全体に分散した星を選択"""
-        if 0 == len(stars):
-            return stars, []
+    def createFlowData(self, inputDatas:FlowData, results) -> FlowData:
+        """table形式のFlowDataを生成"""
+        from config import BLOCK_SIZE
+        from utils import numpy_helpers as nh
+        from base import DataBlock
+        from base import FlowData
         
-        h, w = imageShape
-        gridRows, gridCols = self.grid.rows, self.grid.cols
+        # データ行を作成
+        table_data = []
+        lines = []
         
-        # 各グリッド領域のサイズ
-        cellH = h // gridRows
-        cellW = w // gridCols
+        for result_data in results:
+            imageId = result_data['image_id']
+            result  = result_data['result']
+
+            # データ行: [dx, dy, rotation, confidence, time]
+            row = [result.dx, result.dy, result.rotation, result.confidence, result.time]
+            table_data.append(row)
+            lines.append(imageId)
         
-        distributedStars = []
-        gridSelectedCounts = []
+        # numpy配列に変換
+        if table_data:
+            table_array = nh.array(table_data)
+        else:
+            table_array = nh.zeros((0, 5))
         
-        # 各グリッドから最大 n 個の明るい星を選択
-        for row in range(gridRows):
-            for col in range(gridCols):
-                yMin = row * cellH
-                yEnd = (row + 1) * cellH if row < gridRows - 1 else h
-                xMin = col * cellW
-                xEnd = (col + 1) * cellW if col < gridCols - 1 else w
+        # ヘッダー情報を設定
+        headers = {
+            'category': self.getOutputCategory(),
+            'type'    : 'table',
+            'mode'    : '2D',
+            'columns' : ['dx', 'dy', 'rotation', 'confidence', 'time'],
+            'lines'   : lines,
+            'planes'  : ['shift_detection']
+        }
                 
-                # このグリッド内の星を抽出
-                gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
-                
-                # 明度順でソートして上位指定数を選択
-                gridStars.sort(key=lambda x: x[2], reverse=True)
-                selected = gridStars[:self.grid.starsPerGrid]
-                distributedStars.extend(selected)
-                gridSelectedCounts.append(len(selected))
+        # FlowDataを作成
+        flowData = FlowData(headers)
         
-        # 全体からも明るい星を追加（重複除去）
-        maxTotalStars = gridRows * gridCols * self.grid.starsPerGrid + 20
-        all_bright = sorted(stars, key=lambda x: x[2], reverse=True)
-        for star in all_bright:
-            if star not in distributedStars and len(distributedStars) < maxTotalStars:
-                distributedStars.append(star)
-        distributedStars = distributedStars[:maxTotalStars]
+        # 複数ブロックに対応
+        rows, cols = table_array.shape
+        flowData.setDimensions(cols, rows)
+        for y in range(0, rows, BLOCK_SIZE):
+            block_height = min(BLOCK_SIZE, rows - y)
+            result = table_array[y:y+block_height, :]
+            flowData.setBlock(DataBlock(result, 0, 0, y))
         
-        return distributedStars, gridSelectedCounts
+        return flowData
     
     def createSettingWindow(self):
         """設定ダイアログを作成"""
@@ -540,8 +540,8 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
                 )
         return hashlib.md5(config.encode()).hexdigest()
 
-
 class PointShiftEstimationSettingsDialog(tk.Toplevel):
+    """PointShiftEstimationNode 用設定ダイアログ"""
     def __init__(self, parent, node:PointShiftEstimationNode):
         super().__init__(parent)
         self.node = node

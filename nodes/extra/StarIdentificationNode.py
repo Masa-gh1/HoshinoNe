@@ -112,7 +112,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             self.star.ransac.seed = nodeData["ransacSeed"]
     
     def process(self, context=None):
-        """星抽出処理のメイン実行"""
+        """星同定処理のメイン処理"""
         self.reportProgress(context, "開始")
 
         # 入力データを収集
@@ -268,7 +268,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         starsV = starsV / np.linalg.norm(starsV, axis=1, keepdims=True) # 単位ベクトルに変換 SHAPE=(N,3) [[u, v, w],...]
         
         return stars[selectIdx], starsV
-        
+    
     def _selectDistributedStars(self, stars:np.ndarray, width:int, height:int) -> tuple[np.ndarray, list[int]]:
         """
         画像全体に分散した星を選択
