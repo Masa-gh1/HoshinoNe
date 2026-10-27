@@ -136,12 +136,15 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             import numpy as np
             refPoints, refPointsV = self.getPoints(ref)
             points   , pointsV    = self.getPoints(flowData)
+
+            from utils import exif_helper as eh
+            width, height = eh.getImageSize(flowData.headers)
             
             # 点像ズレ推定
             if self.usePreviousOffset:
-                result, ransac = self.matchPoints(refPoints, points, resultL)
+                result, ransac = self.matchPoints(refPoints, points, width, height, resultL)
             else:
-                result, ransac = self.matchPoints(refPoints, points)
+                result, ransac = self.matchPoints(refPoints, points, width, height)
             resultL = result
             
             # 結果を保存
@@ -324,7 +327,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
             return f"hash_{data_hash}"
     
-    def matchPoints(self, refPoints:np.ndarray, targetPoints:np.ndarray, resultL=None) -> tuple[Result, dict]:
+    def matchPoints(self, refPoints:np.ndarray, targetPoints:np.ndarray, width:int, height:int, resultL=None) -> tuple[Result, dict]:
         """点像をマッチングしてオフセットを推定"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -333,9 +336,6 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             resultL = Result()
         
         logging = {} # 実行記録
-        
-        # 現在の画像サイズを保存（_calculateAffineTransformで使用）
-        currentImageShape = refPoints.shape
         
         # RANSAC用固定シードを設定
         rng = np.random.default_rng(self.ransac.seed)
@@ -436,7 +436,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         #extra_info["aspectRatioMedian"] = aspectRatioMedian
         
         if 3 <= len(inlier_matches):
-            dx, dy, rotation = self._calculateAffineTransform(inlier_matches, currentImageShape)
+            dx, dy, rotation = self._calculateAffineTransform(inlier_matches, width, height)
         
         from utils.Debug import Debug
         debug = f"dx,dy:{dx:.3f},{dy:.3f} rotation:{rotation:.3f} confidence:{confidence:.3f}"
@@ -448,42 +448,30 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         return Result( success=True, dx=dx, dy=dy, rotation=rotation, confidence=confidence), logging
     
-    def _calculateAffineTransform(self, matches, shape):
+    def _calculateAffineTransform(self, matches, width, height):
         """対応点からアフィン変換を計算（画像中心回転）"""
         import numpy as np
-        import cv2
         from utils import numpy_helpers as nh
 
-        ref_pts    = nh.array([match[0] for match in matches])
-        target_pts = nh.array([match[1] for match in matches])
+        cx, cy = width / 2, height / 2
         
-        # 画像中心を回転中心として使用
-        h, w = shape
-        image_center = nh.array([w/2, h/2])
-        
-        # 画像中心を原点とした座標系に変換
-        ref_centered = ref_pts[:, X:Y+1] - image_center
-        target_centered = target_pts[:, X:Y+1] - image_center
-        
-        # 中心座標系でアフィン変換を計算(最小二乗法)
-        M, _ = cv2.estimateAffinePartial2D(target_centered, ref_centered, method=cv2.LMEDS, ransacReprojThreshold=2.0)
-        
-        if M is not None:
-            # 回転角を計算
-            cos_r = M[0, 0]
-            sin_r = M[1, 0]
-            rotation_angle = np.arctan2(sin_r, cos_r) * 180 / np.pi
+        N_in = len(matches)
+        t = np.zeros((2 * N_in, 4))
+        r = np.zeros(2 * N_in)
+        for i in range(N_in):
+            rx, ry = matches[i][0][X:Y+1] - [cx, cy]  # 基準 (Ref)
+            tx, ty = matches[i][1][X:Y+1] - [cx, cy]  # 対象 (Target)
             
-            # 平行移動成分
-            dx = M[0, 2]
-            dy = M[1, 2]
-            
-            return (dx, dy, rotation_angle)
-        else:
-            # アフィン変換が失敗した場合は平行移動のみ
-            dx_sum = sum(ref_pt[X] - target_pt[X] for ref_pt, target_pt in matches)
-            dy_sum = sum(ref_pt[Y] - target_pt[Y] for ref_pt, target_pt in matches)
-            return (dx_sum / len(matches), dy_sum / len(matches), 0.0)
+            # rx = a*tx - b*ty + dx
+            t[2*i] = [tx, -ty, 1, 0]
+            r[2*i] = rx
+            # ry = b*tx + a*ty + dy
+            t[2*i+1] = [ty, tx, 0, 1]
+            r[2*i+1] = ry
+        (a, b, dx, dy), _, _, _ = np.linalg.lstsq(t, r, rcond=None)
+        rotation = np.degrees(np.arctan2(b, a))
+        
+        return (dx, dy, rotation)
     
     def _calculateGridMatches(self, matches, offset, image_shape):
         """グリッド別のマッチ数を計算"""
