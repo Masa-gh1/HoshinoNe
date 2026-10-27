@@ -73,6 +73,7 @@ class NodeFactory:
         ('------------------------', None                           , None             ),
         ('points_extraction'       , '点像抽出(N:N)'                , None             ),
         ('shift_detection'         , 'ズレ検出(N:1)'                , None             ),
+        ('point_shift_estimation'  , '点像ズレ推定(N:1)'            , 'テスト中'      ),
         ('transform'               , '変形(N:N)'                    , None             ),
         ('reposition'              , '再配置(N:N)'                  , None             ),
         ('------------------------', None                           , None             ),

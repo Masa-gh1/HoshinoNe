@@ -27,6 +27,10 @@ if TYPE_CHECKING:
     from base.DataBlock import DataBlock
     from base.FlowData import FlowData
 
+# 配列 index 定義
+X, Y, BRI    = 0, 1, 2 # 点像配列
+U, V, W      = 0, 1, 2 # 単位ベクトル配列
+
 class AlignmentResult:
     def __init__(self, success=False, dx=0, dy=0, rotation=0, confidence=0, time=None, method="", extra_info={}):
         self.success = success
@@ -98,7 +102,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             self.ransac.seed = nodeData["ransacSeed"]
     
     def process(self, context=None):
-        """シフト検出のメイン処理"""
+        """点像ズレ推定のメイン処理"""
         self.reportProgress(context, "開始")
         
         # 入力データを収集
@@ -108,16 +112,57 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         # primary/auxiliaryで分類
         primaryStreams = self.preprocessStreams(inputStreams)
-        if self._referenceData is None:
+        if 0 == len(primaryStreams) or not primaryStreams[0]:
             self.flowDatas = []
             return
         
         inputStream = primaryStreams[0]
         
-        # シフト検出を実行
-        results = self._calculateShifts(self._referenceData, inputStream, context)
+        # 基準点像配列作成
+        refPoints, refPointsV = self.getPoints(self._referenceData)
         
-        # table形式でFlowDataを生成
+        # 各画像の点像ズレ推定
+        results = []
+        previous_result = AlignmentResult()  # 前画像の結果
+        
+        for i, flowData in enumerate(inputStream):
+            self.reportProgress(context, f"画像 {i + 1}/{len(inputStream)} 処理中", i, len(inputStream))
+            
+            # 点像配列作成
+            import numpy as np
+            points, pointsV = self.getPoints(flowData)
+            
+            # 点像ズレ推定
+            result = self._findOffsetByStarDetection(refPoints, points, previous_result)
+            previous_result = result
+            
+            # 結果を保存
+            #aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in targetPoints])
+            #extra_info["ref_points_count"] = len(refPoints)
+            #extra_info["target_points_count"] = len(targetPoints)
+            #extra_info["target_points_min_required"] = 3
+            #extra_info["ref_bright_count"]    = len(refPoints)
+            #extra_info["ref_grid_counts"]     = ref_grid_counts
+            #extra_info["target_bright_count"] = len(targetPoints)
+            #extra_info["target_grid_counts"]  = target_grid_counts
+            #extra_info["aspectRatioMedian"]   = aspectRatioMedian
+            
+            refDatetime = self._referenceData.headers.get('datetime', '')
+            refDatetime = datetime.datetime.fromisoformat(refDatetime)
+            imageId = self._generateImageId(flowData)
+            dt = flowData.headers.get('datetime', '')
+            time = (datetime.datetime.fromisoformat(dt) - refDatetime).total_seconds()
+            result.time = time
+            results.append({
+                'image_id': imageId,
+                'datetime': dt,
+                'result'  : result,
+            #    'methods' : method_results
+            })
+            
+            # デバッグ出力
+        
+        # 出力 Table の FlowData を作成
         self.flowDatas = [self.createFlowData(inputStream, results)]
         
         self.reportProgress(context, "完了")
@@ -144,126 +189,134 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         return primaryStreams
     
-    def _calculateShifts(self, referenceData, inputDatas, context):
-        """シフト検出を実行"""
-        # 経過報告用全画像のズレ計算ステップ数
-        totalGlobalBlocks = 1 + 2*(len(inputDatas) - 1)  # 基準画像処理(1) + 各非基準画像のズレ計算(2回ずつ)
-        globalProcessedBlocks = 0
+    def getPoints(self, flowData:FlowData) -> tuple[np.ndarray,np.ndarray]:
+        """
+        点像の配列を読み出し
         
-        # 基準画像の星を一度だけ検出して保存
-        self._cached_ref_stars = self._detectStars(refGray)
-        
-        globalProcessedBlocks += 1
-        if context:
-            self.reportProgress(context, f"画像1のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
-        
-        # 各画像の移動/回転を計算
-        all_results = []
-        all_method_results_list = []  # 各画像の計算法毎の結果を保存
-        previous_result = AlignmentResult()  # 前画像の結果
-        
-        for i, inputData in enumerate(inputDatas):
-            # 対象画像を検出用に処理
-            targetGray = self._flowDataToImage(inputData, planeIndex=alignmentPlane, normalizeForDetection=True)
-            globalProcessedBlocks += 1
-            if context:
-                self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
+        Args:
+            flowData: 入力 FlowData
             
-            # 位置合わせ計算
-            result = None
-            result = self._findOffsetByStarDetection(refGray, targetGray, previous_result)
-            if result:
-                star_result = result
-            
-            # 成功した結果を選択
-            if result is None:
-                result = AlignmentResult()
-            
-            # この画像の計算法毎の結果を保存
-            method_results = {'star': star_result}
-            
-            all_results.append(result)
-            all_method_results_list.append(method_results)
-            previous_result = result
-            
-            globalProcessedBlocks += 1
-            if context:
-                self.reportProgress(context, f"画像{i+1}のズレ計算中", globalProcessedBlocks, totalGlobalBlocks)
+        Returns:
+            stars: 点像の配列 SHAPE=(N,M) [x, y, brightness,...],...]
+            starsV: 点像への単位ベクトル SHAPE=(N,3) [[u, v, w],...]
+        """
+        import numpy as np
+        from utils import numpy_helpers as nh
+        from utils import exif_helper as eh
         
-        # 結果を返す
-        results = []
-        refDatetime = self._referenceData.headers.get('datetime', '')
-        refDatetime = datetime.datetime.fromisoformat(refDatetime)
-        for i, (inputData, result, method_results) in enumerate(zip(inputDatas, all_results, all_method_results_list)):
-            imageId = self._generateImageId(inputData)
-            dt = inputData.headers.get('datetime', '')
-            time = (datetime.datetime.fromisoformat(dt) - refDatetime).total_seconds()
-            result.time = time
-            results.append({
-                'image_id': imageId,
-                'datetime': dt,
-                'result'  : result,
-                'methods' : method_results
-            })
+        columnCnt, rowCnt = flowData.getDimensions()
+        width, height = eh.getImageSize(flowData.headers)
         
-        return results
-    
-    def _generateImageId(self, flowData):
-        """画像識別子を生成"""
-        source_file = flowData.headers.get('source_file', '')
-        datetime_str = flowData.headers.get('datetime', '')
+        # 画像側の点像を読み込み
+        stars = nh.nans((rowCnt, columnCnt)) #  SHAPE=(N,M) [x, y, brightness,...],...]
+        for block in flowData.iterateBlocks():
+            if block:
+                x, y = block.x, block.y
+                h, w = block.data.shape
+                stars[y:y+h, x:x+w] = block.data
+                
+        select = []
+        columns = flowData.headers["columns"]
+        for name in ["x", "y", "brightness"]:
+            idx = columns.index(name)
+            select.append(stars[:,idx])
+        select = np.stack(select, axis=1) # SHAPE=(N,3) [x, y, brightness],...]
         
-        if source_file:
-            return source_file
-        elif datetime_str:
-            return f"datetime_{datetime_str}"
+        # 点像を絞り込み
+        selectIdx, _  = self._selectDistributedPoints(select, width, height)
+        select = select[selectIdx]
+        
+        # レンズ中心からの単位 vector を追加
+        if True: # self.useHeaderFovDeg:
+            # 画像のヘッダからレンズ中心と焦点距離を得て計算
+            from utils import exif_helper as eh
+            
+            focalCenter_px   = eh.getFocalCenter(flowData.headers) # [px]
+            focalLength_mm   = eh.getFocalLength(flowData.headers) # [mm]
+            resolution_pxpmm = eh.getResolution(flowData.headers)  # [px/mm]
+            if focalLength_mm is None or resolution_pxpmm is None:
+                raise ValueError("画像のヘッダに焦点情報が設定されていません。")
+            
+            pointsX = (select[:, X] - focalCenter_px[0]) / resolution_pxpmm[0] # 中心を原点に [mm]
+            pointsY = (select[:, Y] - focalCenter_px[1]) / resolution_pxpmm[1] # 中心を原点に [mm]
+            f = float(focalLength_mm)                                        # 焦点距離 [mm]
+            f = np.broadcast_to(f, pointsX.shape)
         else:
-            data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
-            return f"hash_{data_hash}"
-    
-    def _selectDistributedStars(self, stars:np.ndarray, imageShape) -> tuple[np.ndarray, list[int]]:
-        """画像全体に分散した星を選択"""
-        if 0 == len(stars):
-            return stars, []
+            # 設定値の画角から計算
+            pointsX = select[:, X] - (width  / 2) # 中心を原点に [px]
+            pointsY = select[:, Y] - (height / 2) # 中心を原点に [px]
+            f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算 [px]
+            f = np.broadcast_to(f, pointsX.shape)
+        pointsV = np.stack([pointsX, pointsY, f]).T
+        pointsV = pointsV / np.linalg.norm(pointsV, axis=1, keepdims=True) # 単位ベクトルに変換 SHAPE=(N,3) [[u, v, w],...]
         
-        h, w = imageShape
+        return select, pointsV
+        
+    def _selectDistributedPoints(self, points:np.ndarray, width:int, height:int) -> tuple[np.ndarray, list[int]]:
+        """
+        画像全体に分散した星を選択
+        
+        Args:
+            stars: 点像の座標と明度の配列 SHAPE=(N,4) [[x, y, brightness, area],...]
+            width: 画像の幅
+            height: 画像の高さ
+        
+        Returns:
+            distributedStars: 分散した星の indx 配列 SHAPE=(N) [pidx,...]
+            gridSelectedCounts: 各グリッドから選択された星の数のリスト
+        """
+        import numpy as np
+        
+        if 0 == len(points):
+            return points, []
+        
         gridRows, gridCols = self.grid.rows, self.grid.cols
         
         # 各グリッド領域のサイズ
-        cellH = h // gridRows
-        cellW = w // gridCols
+        cellH = height // gridRows
+        cellW = width // gridCols
         
-        distributedStars = []
+        distributedIdx   = []
         gridSelectedCounts = []
         
         # 各グリッドから最大 n 個の明るい星を選択
         for row in range(gridRows):
             for col in range(gridCols):
                 yMin = row * cellH
-                yEnd = (row + 1) * cellH if row < gridRows - 1 else h
+                yEnd = (row + 1) * cellH if row < gridRows - 1 else height
                 xMin = col * cellW
-                xEnd = (col + 1) * cellW if col < gridCols - 1 else w
+                xEnd = (col + 1) * cellW if col < gridCols - 1 else width
                 
                 # このグリッド内の星を抽出
-                gridStars = [(x, y, br, ar) for x, y, br, ar in stars if xMin <= x < xEnd and yMin <= y < yEnd]
+                gridIdx = (np.where((xMin <= points[:,X]) & (points[:,X] < xEnd) & (yMin <= points[:,Y]) & (points[:,Y] < yEnd)))[0]
                 
                 # 明度順でソートして上位指定数を選択
-                gridStars.sort(key=lambda x: x[2], reverse=True)
-                selected = gridStars[:self.grid.starsPerGrid]
-                distributedStars.extend(selected)
-                gridSelectedCounts.append(len(selected))
+                gridIdx = gridIdx[np.argsort(points[gridIdx, BRI])][::-1] # 明度順でソート
+                selectIdx = gridIdx[:self.grid.starsPerGrid]
+                distributedIdx.extend(selectIdx)
+                gridSelectedCounts.append(len(selectIdx))
         
-        # 全体からも明るい星を追加（重複除去）
-        maxTotalStars = gridRows * gridCols * self.grid.starsPerGrid + 20
-        all_bright = sorted(stars, key=lambda x: x[2], reverse=True)
-        for star in all_bright:
-            if star not in distributedStars and len(distributedStars) < maxTotalStars:
-                distributedStars.append(star)
-        distributedStars = distributedStars[:maxTotalStars]
+        # 全体からも明るい星を追加 (重複を除く)
+        maxTotalStars = gridRows * gridCols * self.grid.starsPerGrid + self.grid.starsPerGrid
+        allIdx = np.argsort(points[:, BRI])[::-1] # 明度順でソート
+        allIdx = allIdx[~np.isin(allIdx, distributedIdx)]
+        distributedIdx.extend(allIdx[:maxTotalStars - len(distributedIdx)])
         
-        return distributedStars, gridSelectedCounts
+        distributedIdx = np.array(distributedIdx[:maxTotalStars])
+        
+        return distributedIdx, gridSelectedCounts
     
-    def _findOffsetByStarDetection(self, refImage, targetImage, previous_result=None):
+    def _generateImageId(self, flowData):
+        """画像識別子を生成"""
+        if "source_file" in flowData.headers:
+            return flowData.headers["source_file"]
+        elif "datetime" in flowData.headers:
+            return f"datetime_{flowData.headers['datetime']}"
+        else:
+            data_hash = hashlib.md5(str(flowData.headers).encode()).hexdigest()[:8]
+            return f"hash_{data_hash}"
+    
+    def _findOffsetByStarDetection(self, refPoints, targetPoints, previous_result=None):
         """星点検出による天体写真用位置合わせ"""
         import numpy as np
         from utils import numpy_helpers as nh
@@ -274,65 +327,39 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         extra_info = {}
         
         # 現在の画像サイズを保存（_calculateAffineTransformで使用）
-        currentImageShape = refImage.shape
+        currentImageShape = refPoints.shape
         
         # RANSAC用固定シードを設定
         rng = np.random.default_rng(self.ransac.seed)
-        extra_info["star_ransac_seed"] = self.ransac.seed
+        extra_info["ransac_seed"] = self.ransac.seed
         
-        # 星点を検出（基準画像の星はキャッシュから取得）
-        if hasattr(self, '_cached_ref_stars') and self._cached_ref_stars:
-            ref_stars = self._cached_ref_stars
-        else:
-            ref_stars = self._detectStars(refImage)
-        target_stars = self._detectStars(targetImage)
-        
-        extra_info["ref_stars_count"] = len(ref_stars)
-        extra_info["target_stars_count"] = len(target_stars)
-        extra_info["target_stars_min_required"] = 3
-        
-        if len(ref_stars) < 3 or len(target_stars) < 3:
-            return AlignmentResult(success=False, method="star", extra_info=extra_info)
-        
-        # 画像全体に分散した星を選択
-        ref_bright,    ref_grid_counts    = self._selectDistributedStars(ref_stars, refImage.shape)
-        target_bright, target_grid_counts = self._selectDistributedStars(target_stars, targetImage.shape)
-        
-        aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in target_bright])
-        extra_info["ref_bright_count"]    = len(ref_bright)
-        extra_info["ref_grid_counts"]     = ref_grid_counts
-        extra_info["target_bright_count"] = len(target_bright)
-        extra_info["target_grid_counts"]  = target_grid_counts
-        extra_info["aspectRatioMedian"]   = aspectRatioMedian
+        if len(refPoints) < 3 or len(targetPoints) < 3:
+            return AlignmentResult(success=False, method="points", extra_info=extra_info)
         
         # 前画像のオフセット・回転を考慮した対応点探索
         matches = []
         radius_sq = self.ransac.sampleRadius ** 2  # 二乗距離で比較
         
-        # NumPy配列化で高速化
-        ref_array = nh.array([(rx, ry) for rx, ry, _, _ in ref_bright])
-        target_array = nh.array([(tx, ty) for tx, ty, _, _ in target_bright])
+        # 予測位置計算
+        if self.usePreviousOffset:
+            expected_pos = targetPoints[:, X:Y+1] + nh.array([previous_result.dx, previous_result.dy])
+        else:
+            expected_pos = targetPoints[:, X:Y+1]
         
-        for i, (rx, ry, _, _) in enumerate(ref_bright):
-            # 予測位置計算
-            if self.usePreviousOffset:
-                expected_pos = target_array + nh.array([previous_result.dx, previous_result.dy])
-            else:
-                expected_pos = target_array
-            
+        for i, (rx, ry) in enumerate(refPoints[:, X:Y+1]):
             # 距離計算（二乗距離）
             dist_sq = np.sum((expected_pos - nh.array([rx, ry]))**2, axis=1)
             valid_indices = np.where(dist_sq < radius_sq)[0]
             
             # マッチを追加
             for j in valid_indices:
-                tx, ty, brightness, aspectRatio = target_bright[j]
-                matches.append(((rx, ry), (tx, ty), brightness, aspectRatio))
+                tx, ty, brightness = targetPoints[j]
+                matches.append(((rx, ry), (tx, ty), brightness))
         
-        aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in matches])
+        #aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in matches])
         extra_info["matches_count"] = len(matches)
         extra_info["matches_count_min_required"] = 5
-        extra_info["aspectRatioMedian"] = aspectRatioMedian
+        #extra_info["aspectRatioMedian"] = aspectRatioMedian
 
         if len(matches) < 5:
             return AlignmentResult(success=False, method="star", extra_info=extra_info)
@@ -347,7 +374,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             # オフセットを計算（基準画像に向かって対象画像を動かす方向）
             dx_sum, dy_sum = 0, 0
             for idx in sample:
-                ref_pt, target_pt, _, _ = matches[idx]
+                ref_pt, target_pt, _ = matches[idx]
                 dx_sum += ref_pt[0] - target_pt[0]
                 dy_sum += ref_pt[1] - target_pt[1]
             
@@ -356,7 +383,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             
             # インライアをカウント
             cur_inliers = 0
-            for ref_pt, target_pt, _, _ in matches:
+            for ref_pt, target_pt, _ in matches:
                 expected_x = target_pt[0] + dx
                 expected_y = target_pt[1] + dy
                 error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
@@ -379,24 +406,24 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             return AlignmentResult(success=False, method="star", extra_info=extra_info)
         
         # グリッド別マッチ数を計算
-        grid_match_counts = self._calculateGridMatches(matches, offset, refImage.shape)
+        grid_match_counts = self._calculateGridMatches(matches, offset, refPoints.shape)
         extra_info["grid_match_counts"] = grid_match_counts
         
         # インライアを使って回転も含めた変換を計算
         inlier_matches = []
-        for ref_pt, target_pt, brightness, aspectRatio  in matches:
+        for ref_pt, target_pt, brightness  in matches:
             expected_x = target_pt[0] + offset[0]
             expected_y = target_pt[1] + offset[1]
             error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
             if error < 2.0:
-                inlier_matches.append((ref_pt, target_pt, brightness, aspectRatio))
+                inlier_matches.append((ref_pt, target_pt, brightness))
         
         dx, dy = offset
         rotation = 0
         confidence = min(1.0, inliers / 20.0)  # 正規化した信頼度
         
-        aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in inlier_matches])
-        extra_info["aspectRatioMedian"] = aspectRatioMedian
+        #aspectRatioMedian = np.median([aspectRatio for _, _, _, aspectRatio in inlier_matches])
+        #extra_info["aspectRatioMedian"] = aspectRatioMedian
         
         if 3 <= len(inlier_matches):
             dx, dy, rotation = self._calculateAffineTransform(inlier_matches, currentImageShape)
@@ -459,7 +486,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
         grid_match_counts = [0] * (grid_rows * grid_cols)
         
-        for ref_pt, target_pt, _, _ in matches:
+        for ref_pt, target_pt, _ in matches:
             expected_x = target_pt[0] + offset[0]
             expected_y = target_pt[1] + offset[1]
             error = np.sqrt((ref_pt[0] - expected_x)**2 + (ref_pt[1] - expected_y)**2)
