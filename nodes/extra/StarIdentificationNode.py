@@ -423,99 +423,100 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             c01Hash = c0idx * 0x9E3779B97F4A7C15 + c1idx # 2^64 / φ
             g01Hash = g0idx * 0x9E3779B97F4A7C15 + g1idx # 2^64 / φ
             _, cHashIdx, gHashIdx = np.intersect1d(c01Hash, g01Hash, return_indices=True)
+            if 0 == len(cHashIdx) or 0 == len(gHashIdx): continue # 1辺を共有する三角形が見つからないのでスキップ
             
-            if 0 < len(cHashIdx) and 0 < len(gHashIdx):
-                cHashIdx = random.choice(cHashIdx) # 複数ある場合はランダムに選択
-                gHashIdx = random.choice(gHashIdx) # 複数ある場合はランダムに選択
-                cidx = cidx[cHashIdx]
-                gidx = gidx[gHashIdx]
-                c = catalog.getCatalog(cidx)
-                g = catalog.getCatalog(gidx)
-                
-                # 画像 4 点とカタログ 4 点が相似だった
-                currentInliers = 4
-                currentMatched = np.array([[cidx[0],pidx[0]],
-                                           [cidx[1],pidx[1]],
-                                           [cidx[2],pidx[2]],
-                                           [gidx[2],qidx[2]]], dtype=np.uint32)
-                
-                # 確定済み以外の星配列を作成
-                otherIdx = np.where(np.logical_not(np.isin(np.arange(pointCnt), pidx) | np.isin(np.arange(pointCnt), qidx)))[0]
-                
-                # 一致した星に対し、画像内の全星について位置関係をランダムに検証
-                oIndices = random.choice(otherIdx, len(otherIdx), replace=False)
-                for i, p0idx in enumerate(oIndices):
-                    if currentInliers + len(otherIdx) - i < bestMatchCount:
-                        # このあと全て inlier でも bestMatchCount に届かないので早期終了 
-                        break
-                    
-                    p0 = pointsV[p0idx]
-                    m1idx, m2idx = random.choice(len(currentMatched), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
-                    c1idx = currentMatched[m1idx, CIDX]
-                    c2idx = currentMatched[m2idx, CIDX]
-                    p1idx = currentMatched[m1idx, PIDX]
-                    p2idx = currentMatched[m2idx, PIDX]
-                    p1 = pointsV[p1idx]
-                    p2 = pointsV[p2idx]
-                    
-                    if 0 < (p1[U] - p0[U]) * (p2[V] - p0[V]) - (p1[V] - p0[V]) * (p2[U] - p0[U]):
-                        p1   ,p2    = p2   ,p1 # 時計回りに修正
-                        p1idx,p2idx = p2idx,p1idx # インデックスも入れ替え
-                        c1idx,c2idx = c2idx,c1idx # カタログ側も入れ替え
-                    
-                    dp01 = self.calcAngDistance(p0[U:W+1], p1[U:W+1])
-                    dp12 = self.calcAngDistance(p1[U:W+1], p2[U:W+1])
-                    dp20 = self.calcAngDistance(p2[U:W+1], p0[U:W+1])
-                    dp = np.stack([dp01, dp12, dp20])
-                    
-                    # 検証に不適切な三角形をスキップする
-                    if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
-                    
-                    # カタログから検索
-                    cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1idx, c2idx))
-                    catalogTotal += len(cidx)
-                    cidx = cidx[np.all(cidx[:,0,np.newaxis] != currentMatched[np.newaxis, :, CIDX], axis=1)] # 既知の点を除く
-                    if 0 < len(cidx):
-                        cidx = random.choice(cidx) # 複数候補からランダムに選択
-                        c0idx = cidx[0]
-                        c0 = catalog.getCatalog(c0idx)
-                    elif i < 1:
-                        break # 安易に見つかるはずのタイミングで失敗したので早期終了
-                    else:
-                        continue # 相似の三角形が見つからないのでスキップ
-                    
-                    currentInliers += 1
-                    currentMatched = np.concatenate([currentMatched, np.array([[c0idx,p0idx]], dtype=np.uint32)], axis=0)
-                    
-                    #重複チェック
-                    x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
-                    for x1,x2 in zip(x1s,x2s):
-                        assert np.all(currentMatched[x1,CIDX] != currentMatched[x2,CIDX]), "重複が発生しています。"
-                
-                # インライア数が閾値を超えた場合、モデル情報を更新
-                if 3 <= currentInliers and bestMatchCount <= currentInliers:
-                    currentMatched = currentMatched[np.argsort(catalog.getCatalog(currentMatched[:,PIDX])[:, MAG])] # カタログ等級順にソート
-                    # 誤差算出
-                    # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                    p = pointsV[currentMatched[:,PIDX], U:W+1]
-                    c = catalog.getCatalog(currentMatched[:,CIDX])[:, RA:DEC+1]
-                    dp = self.calcAngDistance(   p[:, np.newaxis, :], p[np.newaxis, :, :])
-                    dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
-                    assert isinstance(dc, np.ndarray), "this should be a numpy array"
-                    currentError = self.calcError( dp, dc)
-                    
-                    # インライア数が同じでも、誤差が小さい方が優先
-                    if bestMatchCount < currentInliers or currentError < bestMatchError:
-                        bestMatchCount = currentInliers
-                        bestMatchError = currentError
-                        bestMatchStars = currentMatched
-                
-                if(   self.star.minMatchedStars <= bestMatchCount
-                  and bestMatchError < self.catalog.matchLimit/100.0
-                  and np.log(1-0.9999) / np.log(1 - (bestMatchCount/pointCnt)**self.star.minMatchedStars) < iterations # 初期一致数(最小インライア数)
-                  ):
-                    # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
+            selectIdx = random.choice(len(cHashIdx)) # 複数ある場合はランダムに選択
+            cHashIdx = cHashIdx[selectIdx] # 複数ある場合はランダムに選択
+            gHashIdx = gHashIdx[selectIdx] # 複数ある場合はランダムに選択
+            cidx = cidx[cHashIdx]
+            gidx = gidx[gHashIdx]
+            c = catalog.getCatalog(cidx)
+            g = catalog.getCatalog(gidx)
+            
+            # 画像 4 点とカタログ 4 点が相似だった
+            currentInliers = 4
+            currentMatched = np.array([[cidx[0],pidx[0]],
+                                       [cidx[1],pidx[1]],
+                                       [cidx[2],pidx[2]],
+                                       [gidx[2],qidx[2]]], dtype=np.uint32)
+            
+            # 確定済み以外の星配列を作成
+            otherIdx = np.where(np.logical_not(np.isin(np.arange(pointCnt), pidx) | np.isin(np.arange(pointCnt), qidx)))[0]
+            
+            # 一致した星に対し、画像内の全星について位置関係をランダムに検証
+            oIndices = random.choice(otherIdx, len(otherIdx), replace=False)
+            for i, p0idx in enumerate(oIndices):
+                if currentInliers + len(otherIdx) - i < bestMatchCount:
+                    # このあと全て inlier でも bestMatchCount に届かないので早期終了 
                     break
+                
+                p0 = pointsV[p0idx]
+                m1idx, m2idx = random.choice(len(currentMatched), 2, replace=False) # currentMatched の中からランダムに 2 つ選択する。
+                c1idx = currentMatched[m1idx, CIDX]
+                c2idx = currentMatched[m2idx, CIDX]
+                p1idx = currentMatched[m1idx, PIDX]
+                p2idx = currentMatched[m2idx, PIDX]
+                p1 = pointsV[p1idx]
+                p2 = pointsV[p2idx]
+                
+                if 0 < (p1[U] - p0[U]) * (p2[V] - p0[V]) - (p1[V] - p0[V]) * (p2[U] - p0[U]):
+                    p1   ,p2    = p2   ,p1 # 時計回りに修正
+                    p1idx,p2idx = p2idx,p1idx # インデックスも入れ替え
+                    c1idx,c2idx = c2idx,c1idx # カタログ側も入れ替え
+                
+                dp01 = self.calcAngDistance(p0[U:W+1], p1[U:W+1])
+                dp12 = self.calcAngDistance(p1[U:W+1], p2[U:W+1])
+                dp20 = self.calcAngDistance(p2[U:W+1], p0[U:W+1])
+                dp = np.stack([dp01, dp12, dp20])
+                
+                # 検証に不適切な三角形をスキップする
+                if np.any(dp < 1e-7) or np.min(dp) / np.max(dp) < 0.2: continue # 極端に短い辺が在るのでスキップ
+                
+                # カタログから検索
+                cidx = catalog.searchTriangle(dp01, dp12, dp20, self.catalog.matchLimit/100.0, self.catalog.magLimit, (None, c1idx, c2idx))
+                catalogTotal += len(cidx)
+                cidx = cidx[np.all(cidx[:,0,np.newaxis] != currentMatched[np.newaxis, :, CIDX], axis=1)] # 既知の点を除く
+                if 0 < len(cidx):
+                    cidx = random.choice(cidx) # 複数候補からランダムに選択
+                    c0idx = cidx[0]
+                    c0 = catalog.getCatalog(c0idx)
+                elif currentInliers <= 4:
+                    break # 安易に見つかるはずのタイミングで失敗したので早期終了
+                else:
+                    continue # 相似の三角形が見つからないのでスキップ
+                
+                currentInliers += 1
+                currentMatched = np.concatenate([currentMatched, np.array([[c0idx,p0idx]], dtype=np.uint32)], axis=0)
+                
+                #重複チェック
+                x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
+                for x1,x2 in zip(x1s,x2s):
+                    assert np.all(currentMatched[x1,CIDX] != currentMatched[x2,CIDX]), "重複が発生しています。"
+            
+            # インライア数が閾値を超えた場合、モデル情報を更新
+            if bestMatchCount <= currentInliers:
+                currentMatched = currentMatched[np.argsort(catalog.getCatalog(currentMatched[:,PIDX])[:, MAG])] # カタログ等級順にソート
+                # 誤差算出
+                # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
+                p = pointsV[currentMatched[:,PIDX], U:W+1]
+                c = catalog.getCatalog(currentMatched[:,CIDX])[:, RA:DEC+1]
+                dp = self.calcAngDistance(   p[:, np.newaxis, :], p[np.newaxis, :, :])
+                dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
+                assert isinstance(dc, np.ndarray), "this should be a numpy array"
+                currentError = self.calcError( dp, dc)
+                
+                # インライア数が同じでも、誤差が小さい方が優先
+                if bestMatchCount < currentInliers or currentError < bestMatchError:
+                    bestMatchCount = currentInliers
+                    bestMatchError = currentError
+                    bestMatchStars = currentMatched
+            
+            if(   self.star.minMatchedStars <= bestMatchCount
+                and bestMatchError < self.catalog.matchLimit/100.0
+                and np.log(1-0.9999) / np.log(1 - (bestMatchCount/pointCnt)**self.star.minMatchedStars) < iterations # 初期一致数(最小インライア数)
+                ):
+                # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
+                break
         
         return bestMatchStars, {"points": pointCnt, "stars": catalogTotal, "error": bestMatchError, "iterations": iterations+1}
     
@@ -822,10 +823,11 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
     def onApply(self):
         """適用ボタンクリックハンドラ"""
         try:
+            from config import CATALOG_DB_MAG
             self.node.fovDeg                   = max(0.01, float(self.fovDegEntry.get()))
             self.node.useHeaderFovDeg          = self.useHeaderFovDegVar.get()
             self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
-            self.node.catalog.magLimit         = max(1, min(20, float(self.magLimitEntry.get())))
+            self.node.catalog.magLimit         = max(1, min(CATALOG_DB_MAG, float(self.magLimitEntry.get())))
             self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
             self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
