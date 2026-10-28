@@ -1,0 +1,113 @@
+{
+  "version": "0.3.20261017",
+  "nodes": [
+    {
+      "index": 0,
+      "zOrder": 5,
+      "type": "tensor",
+      "text": "数列",
+      "x": 40.0,
+      "y": 100.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 5,
+      "yOrder": 5,
+      "tensor": {
+        "0,0,0": NaN,
+        "0,1,0": 1.0,
+        "0,2,0": 1.0,
+        "0,3,0": 1.0,
+        "0,4,0": NaN,
+        "0,0,1": 1.0,
+        "0,1,1": 1.0,
+        "0,2,1": 1.0,
+        "0,3,1": 1.0,
+        "0,4,1": 1.0,
+        "0,0,2": 1.0,
+        "0,1,2": 1.0,
+        "0,2,2": 1.0,
+        "0,3,2": 1.0,
+        "0,4,2": 1.0,
+        "0,0,3": 1.0,
+        "0,1,3": 1.0,
+        "0,2,3": 1.0,
+        "0,3,3": 1.0,
+        "0,4,3": 1.0,
+        "0,0,4": NaN,
+        "0,1,4": 1.0,
+        "0,2,4": 1.0,
+        "0,3,4": 1.0,
+        "0,4,4": NaN
+      },
+      "connections": [
+        1
+      ]
+    },
+    {
+      "index": 1,
+      "zOrder": 3,
+      "type": "quantile_filter",
+      "text": "分位数濾過",
+      "x": 41.0,
+      "y": 40.0,
+      "quantile": 0.0,
+      "useApproximation": false,
+      "approximation": 1,
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 2,
+      "zOrder": 7,
+      "type": "tensor",
+      "text": "数列",
+      "x": 151.0,
+      "y": 99.0,
+      "category": "auxiliary",
+      "planes": [
+        "Plane 0"
+      ],
+      "xOrder": 3,
+      "yOrder": 3,
+      "tensor": {
+        "0,0,0": 1.0,
+        "0,1,0": 1.0,
+        "0,2,0": 1.0,
+        "0,0,1": 1.0,
+        "0,1,1": 1.0,
+        "0,2,1": 1.0,
+        "0,0,2": 1.0,
+        "0,1,2": 1.0,
+        "0,2,2": 1.0
+      },
+      "connections": [
+        3
+      ]
+    },
+    {
+      "index": 3,
+      "zOrder": 9,
+      "type": "quantile_filter",
+      "text": "分位数濾過",
+      "x": 146.0,
+      "y": 41.0,
+      "quantile": 1.0,
+      "useApproximation": false,
+      "approximation": 1,
+      "connections": []
+    }
+  ],
+  "trays": [
+    {
+      "zOrder": 1,
+      "x": 94.0,
+      "y": 56.0,
+      "width": 160,
+      "height": 150,
+      "title": "星消し (このフローを繰り返す)"
+    }
+  ]
+}

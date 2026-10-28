@@ -1,5 +1,5 @@
 {
-  "version": "0.3.20260918",
+  "version": "0.3.20261017",
   "nodes": [
     {
       "index": 0,
@@ -38,6 +38,9 @@
       "text": "分位数濾過",
       "x": 97.39999999999998,
       "y": 149.0,
+      "quantile": 0.5,
+      "useApproximation": true,
+      "approximation": 1,
       "connections": [
         3
       ]
