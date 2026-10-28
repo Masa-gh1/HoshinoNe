@@ -170,9 +170,9 @@ class QuantileFilterNode(NNPlaneOperationNode):
                         maskBV = maskB[:h,:w, :]
                         np.isnan(tmpBV, out=maskBV)
                         tmpBV[maskBV] = nh.inf
-                        validCnt = (kh * kw) - np.sum(maskBV, axis=-1)
-                        idx = np.maximum(0, np.round(q * (validCnt - 1)).astype(np.uint16))
                         tmpBV.sort(axis=-1)
+                        validCnt = (kh * kw) - np.sum(maskBV, axis=-1)
+                        idx = np.round(q * (np.maximum(1, validCnt) - 1)).astype(np.uint16)
                         qua = np.take_along_axis(tmpBV, idx[..., np.newaxis], axis=-1).squeeze(-1) # 分位数濾過
                         qua[validCnt == 0] = np.nan
                     else:
