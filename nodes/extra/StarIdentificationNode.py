@@ -58,6 +58,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         self.catalog                = SimpleNamespace()
         self.catalog.matchLimit     = 1.0                   # カタログ照合許容比 [%]
         self.catalog.magLimit       = 8.0                   # カタログ等級上限 [mag]
+        self.catalog.addMagLimit    = 12.0                  # 同定する等級上限 [mag]
         
         # 星像選択パラメーター
         self.star                   = SimpleNamespace()
@@ -81,6 +82,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         nodeData["useHeaderFovDeg"]     = self.useHeaderFovDeg
         nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
         nodeData["catalog.magLimit"]    = self.catalog.magLimit
+        nodeData["catalog.addMagLimit"] = self.catalog.addMagLimit
         nodeData["gridRows"]            = self.star.grid.rows
         nodeData["gridCols"]            = self.star.grid.cols
         nodeData["starsPerGrid"]        = self.star.grid.starsPerGrid
@@ -98,6 +100,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             self.catalog.matchLimit = nodeData["catalog.matchLimit"]
         if "catalog.magLimit" in nodeData:
             self.catalog.magLimit = nodeData["catalog.magLimit"]
+        if "catalog.addMagLimit" in nodeData:
+            self.catalog.addMagLimit = nodeData["catalog.addMagLimit"]
         if "gridRows" in nodeData:
             self.star.grid.rows = nodeData["gridRows"]
         if "gridCols" in nodeData:
@@ -430,8 +434,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             gHashIdx = gHashIdx[selectIdx] # 複数ある場合はランダムに選択
             cidx = cidx[cHashIdx]
             gidx = gidx[gHashIdx]
-            c = catalog.getCatalog(cidx)
-            g = catalog.getCatalog(gidx)
             
             # 画像 4 点とカタログ 4 点が相似だった
             currentInliers = 4
@@ -479,7 +481,6 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 if 0 < len(cidx):
                     cidx = random.choice(cidx) # 複数候補からランダムに選択
                     c0idx = cidx[0]
-                    c0 = catalog.getCatalog(c0idx)
                 elif currentInliers <= 4:
                     break # 安易に見つかるはずのタイミングで失敗したので早期終了
                 else:
@@ -492,6 +493,27 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 x1s, x2s = np.triu_indices(len(currentMatched), k=1) # 表の右上だけ選択
                 for x1,x2 in zip(x1s,x2s):
                     assert np.all(currentMatched[x1,CIDX] != currentMatched[x2,CIDX]), "重複が発生しています。"
+            
+            # 確定済み以外の星配列を作成
+            otherIdx = np.where(np.logical_not(np.isin(np.arange(pointCnt), pidx) | np.isin(np.arange(pointCnt), qidx)))[0]
+            
+            # 確定済みの星の緯度経度を用いて、残りの星の緯度経度を計算する
+            points   = pointsV[currentMatched[:,PIDX], U:W+1]
+            catalogs = catalog.getCatalog(currentMatched[:,CIDX])[:, RA:DEC+1]
+            otherCrd = self.calcCoords( pointsV[otherIdx], points, catalogs)
+            # catalogs の最大角距離から許容範囲を計算する。
+            maxDeg = np.max(catalog.angularDistance(catalogs[:, np.newaxis, :], catalogs[np.newaxis, :, :]))
+            rdeg = maxDeg * self.catalog.matchLimit/100.0
+            for oidx, pidx in enumerate(otherIdx):
+                # 閾値内にカタログ側の星が在るか確認
+                cidx = catalog.queryStars(otherCrd[oidx, RA], otherCrd[oidx, DEC], rdeg, self.catalog.addMagLimit)
+                if 0 == len(cidx): continue # 閾値内にカタログが見つからないのでスキップ
+                
+                # 複数候補がある場合はランダムに選択
+                cidx = random.choice(cidx)
+                
+                currentInliers += 1
+                currentMatched = np.concatenate([currentMatched, np.array([[cidx,pidx]], dtype=np.uint32)], axis=0)
             
             # インライア数が閾値を超えた場合、モデル情報を更新
             if bestMatchCount <= currentInliers:
@@ -533,6 +555,42 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         cosTheta = np.clip(cosTheta, -1.0, 1.0) # 浮動小数点誤差により -1.0 未満や 1.0 を超えることがあるのでクリップ
         return np.degrees(np.arccos(cosTheta))
     
+    def calcCoords(self, p:np.ndarray, refP:np.ndarray, refC:np.ndarray) -> np.ndarray:
+        """画像側の点像の座標から、カタログ側の緯度経度を計算する
+        
+        Args:
+            p: 画像側の点像の座標 [[u, v, w],...]
+            refP: 参照画像の点像の座標 [[u, v, w],...]
+            refC: 参照カタログの座標 [[ra, dec],...]
+        Returns:
+            計算されたカタログの座標 [[ra, dec],...]
+        """
+        import numpy as np
+        from utils import numpy_helpers as nh
+        from utils.catalog_helper import Catalog
+        
+        center  = np.mean(refC[:,RA:DEC+1], axis=0)
+        refXi, refEta = Catalog.gnomonicProjection(refC[:, RA], refC[:, DEC], center[RA], center[DEC])
+        
+        refU = refP[:, U] / refP[:, W]
+        refV = refP[:, V] / refP[:, W]
+        
+        # アフィン変換
+        # xi  = A*u + B*v + C
+        # eta = D*u + E*v + F
+        mat = np.stack([refU, refV, np.ones(len(refU))], axis=1)
+        coeff_xi , _, _, _ = np.linalg.lstsq(mat, refXi,  rcond=None)
+        coeff_eta, _, _, _ = np.linalg.lstsq(mat, refEta, rcond=None)
+        
+        u = p[:, U] / p[:, W]
+        v = p[:, V] / p[:, W]
+
+        xi  = coeff_xi[ 0] * u + coeff_xi[ 1] * v + coeff_xi[ 2]
+        eta = coeff_eta[0] * u + coeff_eta[1] * v + coeff_eta[2]
+        
+        ra, dec = Catalog.gnomonicDeprojection(xi, eta, center[RA], center[DEC])
+        return np.stack([ra, dec], axis=1)
+
     def calcError(self, d0:np.ndarray, d1:np.ndarray) -> float:
         """星の配置から誤差を計算する
         
@@ -699,6 +757,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                  f"{self.useHeaderFovDeg}_"
                  f"{self.catalog.matchLimit}_"
                  f"{self.catalog.magLimit}_"
+                 f"{self.catalog.addMagLimit}_"
                  f"{self.star.grid.rows}_"
                  f"{self.star.grid.cols}_"
                  f"{self.star.grid.starsPerGrid}_"
@@ -750,14 +809,23 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.catalogMatchLimitEntry.pack(side=tk.LEFT, padx=5)
         tk.Label(radFrame, text="% (カタログとのズレ許容比)").pack(side=tk.LEFT)
         
-        # 等級上限
+        # 全球検索等級上限
         magFrame = tk.Frame(mainFrame)
         magFrame.pack(fill=tk.X, pady=2)
-        tk.Label(magFrame, text="  等級上限:").pack(side=tk.LEFT)
+        tk.Label(magFrame, text="  全球検索等級上限:").pack(side=tk.LEFT)
         self.magLimitEntry = tk.Entry(magFrame, width=6)
         self.magLimitEntry.insert(0, str(self.node.catalog.magLimit))
         self.magLimitEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(magFrame, text="mag (カタログの暗い星を除外)").pack(side=tk.LEFT)
+        tk.Label(magFrame, text="mag (索引を用いた全球検索の等級上限)").pack(side=tk.LEFT)
+        
+        # 同定する等級上限
+        magFrame = tk.Frame(mainFrame)
+        magFrame.pack(fill=tk.X, pady=2)
+        tk.Label(magFrame, text="  同定する等級上限:").pack(side=tk.LEFT)
+        self.addMagLimitEntry = tk.Entry(magFrame, width=6)
+        self.addMagLimitEntry.insert(0, str(self.node.catalog.addMagLimit))
+        self.addMagLimitEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(magFrame, text="mag (検索後に追加で同定する等級上限)").pack(side=tk.LEFT)
         
         # 星像選択パラメーター
         tk.Label(mainFrame, text="■ 星像選択パラメーター", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(8, 2))
@@ -828,6 +896,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
             self.node.useHeaderFovDeg          = self.useHeaderFovDegVar.get()
             self.node.catalog.matchLimit       = max(0.001, min(99.0, float(self.catalogMatchLimitEntry.get())))
             self.node.catalog.magLimit         = max(1, min(CATALOG_DB_MAG, float(self.magLimitEntry.get())))
+            self.node.catalog.addMagLimit      = max(1, min(20, float(self.addMagLimitEntry.get())))
             self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
             self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))

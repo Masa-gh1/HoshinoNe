@@ -613,7 +613,7 @@ class Catalog:
             magLimit: 等級上限 ( mag )
             
         Returns:
-            np.ndarray: 抽出された星の配列 shape=(N, 4) [[idx, raDeg, decDeg, mag],...]
+            カタログの idx の配列 shape=(N) [cidx,...]
         """
         import numpy as np
         from utils import numpy_helpers as nh
@@ -705,7 +705,7 @@ class Catalog:
             return distDeg
     
     @staticmethod
-    def gnomonicProjection(raDeg, decDeg, crval1Deg, crval2Deg):
+    def gnomonicProjection(raDeg, decDeg, crvalRADeg, crvalDecDeg):
         """
         天球接平面投影 ( グノモン投影 / TAN 投影 )
         天球座標 ( ra, dec ) を基準点 ( crval1, crval2 ) の接平面直交座標 ( xi, eta ) [rad] に変換
@@ -723,8 +723,8 @@ class Catalog:
         
         alpha  = np.radians(raDeg)
         delta  = np.radians(decDeg)
-        alpha0 = np.radians(crval1Deg)
-        delta0 = np.radians(crval2Deg)
+        alpha0 = np.radians(crvalRADeg)
+        delta0 = np.radians(crvalDecDeg)
 
         deltaAlpha = alpha - alpha0
         cosC = np.sin(delta0) * np.sin(delta) + np.cos(delta0) * np.cos(delta) * np.cos(deltaAlpha)
@@ -736,7 +736,7 @@ class Catalog:
         return xi, eta
 
     @staticmethod
-    def gnomonicDeprojection(xiRad, etaRad, crval1Deg, crval2Deg):
+    def gnomonicDeprojection(xiRad, etaRad, crvalRADeg, crvalDecDeg):
         """
         天球接平面逆投影 ( グノモン逆投影 )
         接平面直交座標 ( xi, eta ) [rad] から天球座標 ( ra, dec ) [deg] に変換
@@ -752,8 +752,8 @@ class Catalog:
         """
         import numpy as np
         
-        alpha0 = np.radians(crval1Deg)
-        delta0 = np.radians(crval2Deg)
+        alpha0 = np.radians(crvalRADeg)
+        delta0 = np.radians(crvalDecDeg)
 
         rho   = np.sqrt(xiRad**2 + etaRad**2)
         c     = np.arctan(rho)
