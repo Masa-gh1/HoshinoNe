@@ -572,29 +572,40 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             計算されたカタログの座標 [[ra, dec],...]
         """
         import numpy as np
-        from utils import numpy_helpers as nh
-        from utils.catalog_helper import Catalog
-        
-        center  = np.mean(refC[:,RA:DEC+1], axis=0)
-        refXi, refEta = Catalog.gnomonicProjection(refC[:, RA], refC[:, DEC], center[RA], center[DEC])
-        
-        refU = refP[:, U] / refP[:, W]
-        refV = refP[:, V] / refP[:, W]
-        
-        # アフィン変換
-        # xi  = A*u + B*v + C
-        # eta = D*u + E*v + F
-        mat = np.stack([refU, refV, np.ones(len(refU))], axis=1)
-        coeff_xi , _, _, _ = np.linalg.lstsq(mat, refXi,  rcond=None)
-        coeff_eta, _, _, _ = np.linalg.lstsq(mat, refEta, rcond=None)
-        
-        u = p[:, U] / p[:, W]
-        v = p[:, V] / p[:, W]
 
-        xi  = coeff_xi[ 0] * u + coeff_xi[ 1] * v + coeff_xi[ 2]
-        eta = coeff_eta[0] * u + coeff_eta[1] * v + coeff_eta[2]
+        # カタログ座標 (RA, Dec) をラジアン単位に変換
+        refCRA  = np.radians(refC[:, RA ])
+        refCDec = np.radians(refC[:, DEC])
         
-        ra, dec = Catalog.gnomonicDeprojection(xi, eta, center[RA], center[DEC])
+        # 球面座標から 3次元単位ベクトルへ変換
+        refCV = np.stack([
+            np.cos(refCDec) * np.cos(refCRA),
+            np.cos(refCDec) * np.sin(refCRA),
+            np.sin(refCDec)
+        ], axis=1)
+        
+        # 共分散行列の計算と SVD による回転行列の推定 (Kabschアルゴリズム)
+        H = refP.T @ refCV
+        U, S, Vt = np.linalg.svd(H)
+        R = Vt.T @ U.T
+        
+        # 反転（鏡像）を防ぐための修正
+        if np.linalg.det(R) < 0:
+            Vt[2, :] *= -1
+            R = Vt.T @ U.T
+
+        # p に回転を適用
+        c = (R @ p.T).T
+
+        # 3次元ベクトルから球面座標 (RA, Dec) へ変換
+        x, y, z = c[:, 0], c[:, 1], c[:, 2]
+        ra  = np.arctan2(y, x)
+        dec = np.arcsin(np.clip(z, -1.0, 1.0))
+
+        # ラジアン単位をカタログ座標 (RA, Dec) に変換
+        ra  = np.degrees(ra) % 360.0
+        dec = np.degrees(dec)
+        
         return np.stack([ra, dec], axis=1)
 
     def calcError(self, d0:np.ndarray, d1:np.ndarray) -> float:
