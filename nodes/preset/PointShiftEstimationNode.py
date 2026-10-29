@@ -56,14 +56,14 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
     def __init__(self, canvas, editor, x, y, **kwargs):
         super().__init__(canvas, editor, x, y, **kwargs)
         
-        # 設定パラメータ
-        # 画像パラメータ
+        # 設定パラメーター
+        # 画像パラメーター
         self.usePreviousOffset   = True              # 前の画像のズレを考慮する
-        # オフセット計算 優先順位1: 星点検出法
+        # 点像検出法パラメーター
         self.grid                = SimpleNamespace()
         self.grid.rows           = 3                 # グリッド行数
         self.grid.cols           = 3                 # グリッド列数
-        self.grid.starsPerGrid   = 8                 # グリッド当たりの選択星数
+        self.grid.matchPerGrid   = 8                 # グリッド当たりの選択点像数
         self.ransac              = SimpleNamespace()
         self.ransac.sampleRadius = 100               # RANSAC対応点サンプル半径（ピクセル）
         self.ransac.iterations   = 100               # RANSAC試行回数
@@ -84,7 +84,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         nodeData["usePreviousOffset"] = self.usePreviousOffset
         nodeData["gridRows"] = self.grid.rows
         nodeData["gridCols"] = self.grid.cols
-        nodeData["starsPerGrid"] = self.grid.starsPerGrid
+        nodeData["matchPerGrid"] = self.grid.matchPerGrid
         nodeData["ransacIterations"] = self.ransac.iterations
         nodeData["ransacSeed"] = self.ransac.seed
     
@@ -95,8 +95,8 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             self.grid.rows = nodeData["gridRows"]
         if "gridCols" in nodeData:
             self.grid.cols = nodeData["gridCols"]
-        if "starsPerGrid" in nodeData:
-            self.grid.starsPerGrid = nodeData["starsPerGrid"]
+        if "matchPerGrid" in nodeData:
+            self.grid.matchPerGrid = nodeData["matchPerGrid"]
         if "ransacIterations" in nodeData:
             self.ransac.iterations = nodeData["ransacIterations"]
         if "ransacSeed" in nodeData:
@@ -265,7 +265,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         
     def _selectDistributedPoints(self, points:np.ndarray, width:int, height:int) -> tuple[np.ndarray, list[int]]:
         """
-        画像全体に分散した星を選択
+        画像全体に分散した点像を選択
         
         Args:
             stars: 点像の座標と明度の配列 SHAPE=(N,4) [[x, y, brightness, area],...]
@@ -273,8 +273,8 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             height: 画像の高さ
         
         Returns:
-            distributedStars: 分散した星の indx 配列 SHAPE=(N) [pidx,...]
-            gridSelectedCounts: 各グリッドから選択された星の数のリスト
+            distributedStars: 分散した点像の indx 配列 SHAPE=(N) [pidx,...]
+            gridSelectedCounts: 各グリッドから選択された点像の数のリスト
         """
         import numpy as np
         
@@ -290,7 +290,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
         distributedIdx   = []
         gridSelectedCounts = []
         
-        # 各グリッドから最大 n 個の明るい星を選択
+        # 各グリッドから最大 n 個の明るい点像を選択
         for row in range(gridRows):
             for col in range(gridCols):
                 yMin = row * cellH
@@ -298,17 +298,17 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
                 xMin = col * cellW
                 xEnd = (col + 1) * cellW if col < gridCols - 1 else width
                 
-                # このグリッド内の星を抽出
+                # このグリッド内の点像を抽出
                 gridIdx = (np.where((xMin <= points[:,X]) & (points[:,X] < xEnd) & (yMin <= points[:,Y]) & (points[:,Y] < yEnd)))[0]
                 
                 # 明度順でソートして上位指定数を選択
                 gridIdx = gridIdx[np.argsort(points[gridIdx, BRI])][::-1] # 明度順でソート
-                selectIdx = gridIdx[:self.grid.starsPerGrid]
+                selectIdx = gridIdx[:self.grid.matchPerGrid]
                 distributedIdx.extend(selectIdx)
                 gridSelectedCounts.append(len(selectIdx))
         
-        # 全体からも明るい星を追加 (重複を除く)
-        maxTotalStars = gridRows * gridCols * self.grid.starsPerGrid + self.grid.starsPerGrid
+        # 全体からも明るい点像を追加 (重複を除く)
+        maxTotalStars = gridRows * gridCols * self.grid.matchPerGrid + self.grid.matchPerGrid
         allIdx = np.argsort(points[:, BRI])[::-1] # 明度順でソート
         allIdx = allIdx[~np.isin(allIdx, distributedIdx)]
         distributedIdx.extend(allIdx[:maxTotalStars - len(distributedIdx)])
@@ -490,7 +490,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
             error = np.sqrt((ref_pt[X] - expected_x)**2 + (ref_pt[Y] - expected_y)**2)
             
             if error < 1.5:  # マッチした場合
-                # 基準画像の星がどのグリッドに属するか判定
+                # 基準画像の点像がどのグリッドに属するか判定
                 rx, ry, _ = ref_pt
                 grid_row = min(int(ry // cell_h), grid_rows - 1)
                 grid_col = min(int(rx // cell_w), grid_cols - 1)
@@ -559,7 +559,7 @@ class PointShiftEstimationNode(FlowNode, ConfigurableNode):
                  f"{self.usePreviousOffset}_"
                  f"{self.grid.rows}_"
                  f"{self.grid.cols}_"
-                 f"{self.grid.starsPerGrid}_"
+                 f"{self.grid.matchPerGrid}_"
                  f"{self.ransac.sampleRadius}_"
                  f"{self.ransac.iterations}_"
                  f"{self.ransac.seed}_"
@@ -581,7 +581,7 @@ class PointShiftEstimationSettingsDialog(tk.Toplevel):
         mainFrame = tk.Frame(self)
         mainFrame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # 画像パラメータ
+        # 画像パラメーター
         tk.Label(mainFrame, text="■ 画像パラメータ", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(5,2))
         
         # 前の画像を参照
@@ -592,11 +592,8 @@ class PointShiftEstimationSettingsDialog(tk.Toplevel):
         self.usePrevOffsetVar = tk.BooleanVar(value=self.node.usePreviousOffset)
         tk.Checkbutton(prevOffsetFrame, text="前の画像のズレを検索範囲の中央に設定", variable=self.usePrevOffsetVar).pack(side=tk.LEFT)
         
-        # オフセット計算
-        tk.Label(mainFrame, text="■ オフセット計算", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
-        
-        # 優先順位1: 星点検出法
-        tk.Label(mainFrame, text="  □ 優先順位1: 星点検出法", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(8,2))
+        # 点像検出法パラメーター
+        tk.Label(mainFrame, text="■ 点像検出法パラメーター", font=("Arial", 10, "bold")).pack(anchor=tk.W, pady=(10,2))
         
         # グリッド設定
         gridFrame = tk.Frame(mainFrame)
@@ -609,21 +606,21 @@ class PointShiftEstimationSettingsDialog(tk.Toplevel):
         self.gridColsEntry = tk.Entry(gridFrame, width=5)
         self.gridColsEntry.insert(0, str(self.node.grid.cols))
         self.gridColsEntry.pack(side=tk.LEFT, padx=2)
-        tk.Label(gridFrame, text="(星選択用分割数)").pack(side=tk.LEFT)
+        tk.Label(gridFrame, text="(点像選択用分割数)").pack(side=tk.LEFT)
         
-        # グリッド当たりの選択星数
-        starsFrame = tk.Frame(mainFrame)
-        starsFrame.pack(fill=tk.X, pady=2)
-        tk.Label(starsFrame, text="    グリッド当たり星数:").pack(side=tk.LEFT)
-        self.PerGridEntry = tk.Entry(starsFrame, width=10)
-        self.PerGridEntry.insert(0, str(self.node.grid.starsPerGrid))
-        self.PerGridEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(starsFrame, text="個 (各グリッドから選ぶ星数)").pack(side=tk.LEFT)
+        # グリッド当たりの選択点像数
+        matchPerGridFrame = tk.Frame(mainFrame)
+        matchPerGridFrame.pack(fill=tk.X, pady=2)
+        tk.Label(matchPerGridFrame, text="    グリッド当たり点像数:").pack(side=tk.LEFT)
+        self.matchPerGridEntry = tk.Entry(matchPerGridFrame, width=10)
+        self.matchPerGridEntry.insert(0, str(self.node.grid.matchPerGrid))
+        self.matchPerGridEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(matchPerGridFrame, text="個 (各グリッドから選ぶ点像数)").pack(side=tk.LEFT)
         
-        # 星サンプル半径
+        # サンプル半径
         starDistFrame = tk.Frame(mainFrame)
         starDistFrame.pack(fill=tk.X, pady=2)
-        tk.Label(starDistFrame, text="    星サンプル半径:").pack(side=tk.LEFT)
+        tk.Label(starDistFrame, text="    サンプル半径:").pack(side=tk.LEFT)
         self.DistEntry = tk.Entry(starDistFrame, width=5)
         self.DistEntry.insert(0, str(self.node.ransac.sampleRadius))
         self.DistEntry.pack(side=tk.LEFT, padx=5)
@@ -661,7 +658,7 @@ class PointShiftEstimationSettingsDialog(tk.Toplevel):
             self.node.usePreviousOffset        = self.usePrevOffsetVar.get()
             self.node.grid.rows                = max(1, int(self.gridRowsEntry.get()))
             self.node.grid.cols                = max(1, int(self.gridColsEntry.get()))
-            self.node.grid.starsPerGrid        = max(1, int(self.PerGridEntry.get()))
+            self.node.grid.matchPerGrid        = max(1, int(self.matchPerGridEntry.get()))
             self.node.ransac.sampleRadius      = max(10, int(self.DistEntry.get()))
             self.node.ransac.iterations        = max(10, min(10000, int(self.ransacEntry.get())))
             self.node.ransac.seed              = max(1, int(self.ransacSeedEntry.get()))

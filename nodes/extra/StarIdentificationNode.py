@@ -57,15 +57,16 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         # カタログ照合パラメーター
         self.catalog                = SimpleNamespace()
         self.catalog.matchLimit     = 1.0                   # カタログ照合許容比 [%]
-        self.catalog.magLimit       = 8.0                   # カタログ等級上限 [mag]
+        self.catalog.magLimit       = 8.0                   # 全球検索等級上限 [mag]
         self.catalog.addMagLimit    = 12.0                  # 同定する等級上限 [mag]
         
-        # 星像選択パラメーター
+        # 点像選択パラメーター
         self.star                   = SimpleNamespace()
         self.star.grid              = SimpleNamespace()
         self.star.grid.rows         = 1                     # グリッド行数
         self.star.grid.cols         = 1                     # グリッド列数
-        self.star.grid.starsPerGrid = 8                     # グリッド当たりの選択星数
+        self.star.grid.matchPerGrid = 8                     # グリッド当たりの全球検索点像数
+        self.star.grid.addPerGrid   = 30                    # グリッド当たりの同定する点像数
         self.star.minMatchedStars   = 5                     # 少なくとも同定したい星の数
         self.star.ransac            = SimpleNamespace()
         self.star.ransac.iterations = 100                   # RANSAC試行回数
@@ -78,42 +79,33 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 
     def store(self, nodeData):
         """ノード設定を辞書に保存"""
-        nodeData["fovDeg"]              = self.fovDeg
-        nodeData["useHeaderFovDeg"]     = self.useHeaderFovDeg
-        nodeData["catalog.matchLimit"]  = self.catalog.matchLimit
-        nodeData["catalog.magLimit"]    = self.catalog.magLimit
+        nodeData["fovDeg"             ] = self.fovDeg
+        nodeData["useHeaderFovDeg"    ] = self.useHeaderFovDeg
+        nodeData["catalog.matchLimit" ] = self.catalog.matchLimit
+        nodeData["catalog.magLimit"   ] = self.catalog.magLimit
         nodeData["catalog.addMagLimit"] = self.catalog.addMagLimit
-        nodeData["gridRows"]            = self.star.grid.rows
-        nodeData["gridCols"]            = self.star.grid.cols
-        nodeData["starsPerGrid"]        = self.star.grid.starsPerGrid
-        nodeData["minMatchedStars"]     = self.star.minMatchedStars
-        nodeData["ransacIterations"]    = self.star.ransac.iterations
-        nodeData["ransacSeed"]          = self.star.ransac.seed
-
+        nodeData["gridRows"           ] = self.star.grid.rows
+        nodeData["gridCols"           ] = self.star.grid.cols
+        nodeData["matchPerGrid"       ] = self.star.grid.matchPerGrid
+        nodeData["addPerGrid"         ] = self.star.grid.addPerGrid
+        nodeData["minMatchedStars"    ] = self.star.minMatchedStars
+        nodeData["ransacIterations"   ] = self.star.ransac.iterations
+        nodeData["ransacSeed"         ] = self.star.ransac.seed
+    
     def restore(self, nodeData):
         """辞書からノード設定を復元"""
-        if "fovDeg" in nodeData:
-            self.fovDeg = nodeData["fovDeg"]
-        if "useHeaderFovDeg" in nodeData:
-            self.useHeaderFovDeg = nodeData["useHeaderFovDeg"]
-        if "catalog.matchLimit" in nodeData:
-            self.catalog.matchLimit = nodeData["catalog.matchLimit"]
-        if "catalog.magLimit" in nodeData:
-            self.catalog.magLimit = nodeData["catalog.magLimit"]
-        if "catalog.addMagLimit" in nodeData:
-            self.catalog.addMagLimit = nodeData["catalog.addMagLimit"]
-        if "gridRows" in nodeData:
-            self.star.grid.rows = nodeData["gridRows"]
-        if "gridCols" in nodeData:
-            self.star.grid.cols = nodeData["gridCols"]
-        if "starsPerGrid" in nodeData:
-            self.star.grid.starsPerGrid = nodeData["starsPerGrid"]
-        if "minMatchedStars" in nodeData:
-            self.star.minMatchedStars = nodeData["minMatchedStars"]
-        if "ransacIterations" in nodeData:
-            self.star.ransac.iterations = nodeData["ransacIterations"]
-        if "ransacSeed" in nodeData:
-            self.star.ransac.seed = nodeData["ransacSeed"]
+        if (val := nodeData.get("fovDeg"             )) is not None: self.fovDeg                 = val
+        if (val := nodeData.get("useHeaderFovDeg"    )) is not None: self.useHeaderFovDeg        = val
+        if (val := nodeData.get("catalog.matchLimit" )) is not None: self.catalog.matchLimit     = val
+        if (val := nodeData.get("catalog.magLimit"   )) is not None: self.catalog.magLimit       = val
+        if (val := nodeData.get("catalog.addMagLimit")) is not None: self.catalog.addMagLimit    = val
+        if (val := nodeData.get("gridRows"           )) is not None: self.star.grid.rows         = val
+        if (val := nodeData.get("gridCols"           )) is not None: self.star.grid.cols         = val
+        if (val := nodeData.get("matchPerGrid"       )) is not None: self.star.grid.matchPerGrid = val
+        if (val := nodeData.get("addPerGrid"         )) is not None: self.star.grid.addPerGrid   = val
+        if (val := nodeData.get("minMatchedStars"    )) is not None: self.star.minMatchedStars   = val
+        if (val := nodeData.get("ransacIterations"   )) is not None: self.star.ransac.iterations = val
+        if (val := nodeData.get("ransacSeed"         )) is not None: self.star.ransac.seed       = val
     
     def process(self, context=None):
         """星同定処理のメイン処理"""
@@ -144,10 +136,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
 
             # 点像配列作成
             import numpy as np
-            points, pointsV = self.getPoints(flowData)
+            points, pointsV, matchIdx = self.getPoints(flowData)
             
             # カタログ照合
-            matchedStars, ransac = self.matchCatalog(pointsV, catalog)
+            matchedStars, ransac = self.matchCatalog(pointsV, matchIdx, catalog)
             matchedIds     = catalog.getName(   matchedStars[:, CIDX])
             matchedCatalog = catalog.getCatalog(matchedStars[:, CIDX])
             matchedSarts   = points[            matchedStars[:, PIDX]]
@@ -211,7 +203,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         # ファイルから読み込み
         return Catalog()
 
-    def getPoints(self, flowData:FlowData) -> tuple[np.ndarray,np.ndarray]:
+    def getPoints(self, flowData:FlowData) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
         """
         点像の配列を読み出し
         
@@ -219,8 +211,9 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             flowData: 入力 FlowData
             
         Returns:
-            stars: 点像の配列 SHAPE=(N,M) [x, y, brightness,...],...]
-            starsV: 点像への単位ベクトル SHAPE=(N,3) [[u, v, w],...]
+            points: 点像の配列 SHAPE=(N,M) [x, y, brightness,...],...]
+            pointV: 点像への単位ベクトル SHAPE=(N,3) [[u, v, w],...]
+            matchIdx: 検索対象点像のインデックス SHAPE=(M,)
         """
         import numpy as np
         from utils import numpy_helpers as nh
@@ -230,23 +223,24 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         width, height = eh.getImageSize(flowData.headers)
         
         # 画像側の点像を読み込み
-        stars = nh.nans((rowCnt, columnCnt)) #  SHAPE=(N,M) [x, y, brightness,...],...]
+        points = nh.nans((rowCnt, columnCnt)) #  SHAPE=(N,M) [x, y, brightness,...],...]
         for block in flowData.iterateBlocks():
             if block:
                 x, y = block.x, block.y
                 h, w = block.data.shape
-                stars[y:y+h, x:x+w] = block.data
+                points[y:y+h, x:x+w] = block.data
                 
         select = []
         columns = flowData.headers["columns"]
         for name in ["x", "y", "brightness"]:
             idx = columns.index(name)
-            select.append(stars[:,idx])
-        select = np.stack(select, axis=1) # SHAPE=(N,3) [x, y, brightness],...]
+            select.append(points[:,idx])
+        points = np.stack(select, axis=1) # SHAPE=(N,3) [x, y, brightness],...]
         
         # 点像を絞り込み
-        selectIdx, _  = self._selectDistributedPoints(select, width, height)
-        select = select[selectIdx]
+        pointsIdx, _  = self._selectDistributedPoints(points, width, height, self.star.grid.addPerGrid)
+        points = points[pointsIdx]
+        matchIdx, _  = self._selectDistributedPoints(points, width, height, self.star.grid.matchPerGrid)
         
         # レンズ中心からの単位 vector を追加
         if self.useHeaderFovDeg:
@@ -259,24 +253,24 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             if focalLength_mm is None or resolution_pxpmm is None:
                 raise ValueError("画像のヘッダに焦点情報が設定されていません。")
             
-            pointsX = (select[:, X] - focalCenter_px[0]) / resolution_pxpmm[0] # 中心を原点に [mm]
-            pointsY = (select[:, Y] - focalCenter_px[1]) / resolution_pxpmm[1] # 中心を原点に [mm]
+            pointsX = (points[:, X] - focalCenter_px[0]) / resolution_pxpmm[0] # 中心を原点に [mm]
+            pointsY = (points[:, Y] - focalCenter_px[1]) / resolution_pxpmm[1] # 中心を原点に [mm]
             f = float(focalLength_mm)                                        # 焦点距離 [mm]
             f = np.broadcast_to(f, pointsX.shape)
         else:
             # 設定値の画角から計算
-            pointsX = select[:, X] - (width  / 2) # 中心を原点に [px]
-            pointsY = select[:, Y] - (height / 2) # 中心を原点に [px]
+            pointsX = points[:, X] - (width  / 2) # 中心を原点に [px]
+            pointsY = points[:, Y] - (height / 2) # 中心を原点に [px]
             f = (width * width + height * height) ** 0.5 / (2.0 * np.tan(np.radians(self.fovDeg) / 2.0)) # 焦点距離を計算 [px]
             f = np.broadcast_to(f, pointsX.shape)
         pointsV = np.stack([pointsX, pointsY, f]).T
         pointsV = pointsV / np.linalg.norm(pointsV, axis=1, keepdims=True) # 単位ベクトルに変換 SHAPE=(N,3) [[u, v, w],...]
         
-        return select, pointsV
+        return points, pointsV, matchIdx
     
-    def _selectDistributedPoints(self, points:np.ndarray, width:int, height:int) -> tuple[np.ndarray, list[int]]:
+    def _selectDistributedPoints(self, points:np.ndarray, width:int, height:int, pointsPerGrid:int) -> tuple[np.ndarray, list[int]]:
         """
-        画像全体に分散した星を選択
+        画像全体に分散した点像を選択
         
         Args:
             stars: 点像の座標と明度の配列 SHAPE=(N,4) [[x, y, brightness, area],...]
@@ -284,8 +278,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             height: 画像の高さ
         
         Returns:
-            distributedStars: 分散した星の indx 配列 SHAPE=(N) [pidx,...]
-            gridSelectedCounts: 各グリッドから選択された星の数のリスト
+            distributedStars: 分散した点像の indx 配列 SHAPE=(N) [pidx,...]
+            gridSelectedCounts: 各グリッドから選択された点像の数のリスト
         """
         import numpy as np
         
@@ -301,7 +295,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         distributedIdx   = []
         gridSelectedCounts = []
 
-        # 各グリッドから最大 n 個の明るい星を選択
+        # 各グリッドから最大 n 個の明るい点像を選択
         for row in range(gridRows):
             for col in range(gridCols):
                 yMin = row * cellH
@@ -309,20 +303,20 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 xMin = col * cellW
                 xEnd = (col + 1) * cellW if col < gridCols - 1 else width
                 
-                # このグリッド内の星を抽出
+                # このグリッド内の点像を抽出
                 gridIdx = (np.where((xMin <= points[:,X]) & (points[:,X] < xEnd) & (yMin <= points[:,Y]) & (points[:,Y] < yEnd)))[0]
                 
                 # 明度順でソートして上位指定数を選択
                 gridIdx = gridIdx[np.argsort(points[gridIdx, BRI])][::-1] # 明度順でソート
-                selectIdx = gridIdx[:self.star.grid.starsPerGrid]
-                distributedIdx.extend(selectIdx)
-                gridSelectedCounts.append(len(selectIdx))
+                whereIdx = gridIdx[:pointsPerGrid]
+                distributedIdx.extend(whereIdx)
+                gridSelectedCounts.append(len(whereIdx))
         
         distributedIdx = np.array(distributedIdx)
         
         return distributedIdx, gridSelectedCounts
     
-    def matchCatalog(self, pointsV:np.ndarray, catalog:Catalog) -> tuple[np.ndarray, dict]:
+    def matchCatalog(self, pointsV:np.ndarray, matchIdx:np.ndarray, catalog:Catalog) -> tuple[np.ndarray, dict]:
         """
         画像座標と天球座標の間で投影を行わず、
         幾何学的な相似の比較のみで全星の同定（インライア判定）を行う。
@@ -330,6 +324,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         
         Args:
             pointsV: 点像の座標と明度の配列 SHAPE=(N,3) [[u, v, w],...]
+            matchIdx: 検索対象点像のインデックス配列 SHAPE=(N) [pidx,...]
             catalog: 星のカタログ情報
             
         Returns:
@@ -342,9 +337,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         if catalog.count() < 4:
             raise ValueError("少なくともカタログに 4 つ以上の星が必要です。")
         
-        pointCnt = len(pointsV)
-        if pointCnt < 4:
-            raise ValueError("少なくとも 4 つ以上の星が必要です。")
+        if len(matchIdx) < 4 or len(pointsV) < 4:
+            raise ValueError("少なくとも 4 つ以上の点像が必要です。")
         
         # RANSAC用固定シードを設定
         random = np.random.default_rng(self.star.ransac.seed)
@@ -374,7 +368,7 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
         iterations = 0
         for iterations in range(self.star.ransac.iterations): # RANSAC試行回数
             # 画像側で 4 点をランダムに選択し接する時計回りの三角形 P と Q を作成する
-            pqidx = random.choice(pointCnt, 4, replace=False)
+            pqidx = random.choice(matchIdx, 4, replace=False)
             pqidx = pqidx[COMB_TRIANGLE_PAIRS]
             pq = pointsV[pqidx] # 3点2組の組み合わせ
             pq0x = pq[:, :, 0, U]
@@ -429,9 +423,9 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             _, cHashIdx, gHashIdx = np.intersect1d(c01Hash, g01Hash, return_indices=True)
             if 0 == len(cHashIdx) or 0 == len(gHashIdx): continue # 1辺を共有する三角形が見つからないのでスキップ
             
-            selectIdx = random.choice(len(cHashIdx)) # 複数ある場合はランダムに選択
-            cHashIdx = cHashIdx[selectIdx] # 複数ある場合はランダムに選択
-            gHashIdx = gHashIdx[selectIdx] # 複数ある場合はランダムに選択
+            whereIdx = random.choice(len(cHashIdx)) # 複数ある場合はランダムに選択
+            cHashIdx = cHashIdx[whereIdx] # 複数ある場合はランダムに選択
+            gHashIdx = gHashIdx[whereIdx] # 複数ある場合はランダムに選択
             cidx = cidx[cHashIdx]
             gidx = gidx[gHashIdx]
             
@@ -442,10 +436,10 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                                        [cidx[2],pidx[2]],
                                        [gidx[2],qidx[2]]], dtype=np.uint32)
             
-            # 確定済み以外の星配列を作成
-            otherIdx = np.where(np.logical_not(np.isin(np.arange(pointCnt), pidx) | np.isin(np.arange(pointCnt), qidx)))[0]
+            # 確定済み以外の点像配列を作成
+            otherIdx = matchIdx[np.where(np.logical_not(np.isin(matchIdx, pidx) | np.isin(matchIdx, qidx)))]
             
-            # 一致した星に対し、画像内の全星について位置関係をランダムに検証
+            # 一致した点像に対し、画像内の全点像について位置関係をランダムに検証
             oIndices = random.choice(otherIdx, len(otherIdx), replace=False)
             for i, p0idx in enumerate(oIndices):
                 if currentInliers + len(otherIdx) - i < bestMatchCount:
@@ -494,34 +488,42 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                 for x1,x2 in zip(x1s,x2s):
                     assert np.all(currentMatched[x1,CIDX] != currentMatched[x2,CIDX]), "重複が発生しています。"
             
-            # 確定済み以外の星配列を作成
-            otherIdx = np.where(np.logical_not(np.isin(np.arange(pointCnt), pidx) | np.isin(np.arange(pointCnt), qidx)))[0]
-            
-            # 確定済みの星の緯度経度を用いて、残りの星の緯度経度を計算する
-            points   = pointsV[currentMatched[:,PIDX], U:W+1]
-            catalogs = catalog.getCatalog(currentMatched[:,CIDX])[:, RA:DEC+1]
-            otherCrd = self.calcCoords( pointsV[otherIdx], points, catalogs)
-            # catalogs の最大角距離から許容範囲を計算する。
-            maxDeg = np.max(catalog.angularDistance(catalogs[:, np.newaxis, :], catalogs[np.newaxis, :, :]))
-            rdeg = maxDeg * self.catalog.matchLimit/100.0
-            for oidx, pidx in enumerate(otherIdx):
-                # 閾値内にカタログ側の星が在るか確認
-                cidx = catalog.queryStars(otherCrd[oidx, RA], otherCrd[oidx, DEC], rdeg, self.catalog.addMagLimit)
-                if 0 == len(cidx): continue # 閾値内にカタログが見つからないのでスキップ
+            if(   self.star.minMatchedStars <= currentInliers
+                and np.log(1-0.9999) / np.log(1 - (currentInliers/len(matchIdx))**self.star.minMatchedStars) < iterations # 初期一致数(最小インライア数 minMatchedStars)
+                ):
+                # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達したので、その他の検索対象外の点像を同定する
+                # 確定済み以外の点像配列を作成
+                otherIdx = np.where(np.logical_not(np.isin(np.arange(len(pointsV)), pidx) | np.isin(np.arange(len(pointsV)), qidx)))[0]
                 
-                # 複数候補がある場合はランダムに選択
-                cidx = random.choice(cidx)
-                
-                currentInliers += 1
-                currentMatched = np.concatenate([currentMatched, np.array([[cidx,pidx]], dtype=np.uint32)], axis=0)
+                # 確定済みの星の緯度経度を用いて、残りの点像の緯度経度を計算する
+                pidx = currentMatched[:,PIDX]
+                cidx = currentMatched[:,CIDX]
+                p = pointsV[pidx, U:W+1]
+                c = catalog.getCatalog(cidx)[:, RA:DEC+1]
+                otherCrd   = self.calcCoords( pointsV[otherIdx], p, c)
+                # catalogs の角距離から許容範囲を計算する。
+                refDeg = np.median(catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :]))
+                rdeg = refDeg * self.catalog.matchLimit/100.0
+                for oidx, pidx in enumerate(otherIdx):
+                    # 閾値内にカタログ側の星が在るか確認
+                    cidx = catalog.queryStars(otherCrd[oidx, RA], otherCrd[oidx, DEC], rdeg, self.catalog.addMagLimit)
+                    if 0 == len(cidx): continue # 閾値内にカタログが見つからないのでスキップ
+                    
+                    # 複数候補がある場合はランダムに選択
+                    cidx = random.choice(cidx)
+                    
+                    currentInliers += 1
+                    currentMatched = np.concatenate([currentMatched, np.array([[cidx,pidx]], dtype=np.uint32)], axis=0)
             
             # インライア数が閾値を超えた場合、モデル情報を更新
             if bestMatchCount <= currentInliers:
-                currentMatched = currentMatched[np.argsort(catalog.getCatalog(currentMatched[:,PIDX])[:, MAG])] # カタログ等級順にソート
+                pidx = currentMatched[:,PIDX]
+                cidx = currentMatched[:,CIDX]
+                currentMatched = currentMatched[np.argsort(catalog.getCatalog(pidx)[:, MAG])] # カタログ等級順にソート
                 # 誤差算出
                 # 画像側とカタログ側の全ペア間角距離マトリクス (N x N)を作成
-                p = pointsV[currentMatched[:,PIDX], U:W+1]
-                c = catalog.getCatalog(currentMatched[:,CIDX])[:, RA:DEC+1]
+                p = pointsV[pidx, U:W+1]
+                c = catalog.getCatalog(cidx)[:, RA:DEC+1]
                 dp = self.calcAngDistance(   p[:, np.newaxis, :], p[np.newaxis, :, :])
                 dc = catalog.angularDistance(c[:, np.newaxis, :], c[np.newaxis, :, :])
                 assert isinstance(dc, np.ndarray), "this should be a numpy array"
@@ -535,12 +537,12 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
             
             if(   self.star.minMatchedStars <= bestMatchCount
                 and bestMatchError < self.catalog.matchLimit/100.0
-                and np.log(1-0.9999) / np.log(1 - (bestMatchCount/pointCnt)**self.star.minMatchedStars) < iterations # 初期一致数(最小インライア数)
+                and np.log(1-0.9999) / np.log(1 - (bestMatchCount/len(pointsV))**self.star.minMatchedStars) < iterations # 初期一致数(最小インライア数 minMatchedStars)
                 ):
                 # 99.99% の確率で外れ値を除外するのに十分な試行回数に到達
                 break
         
-        return bestMatchStars, {"points": pointCnt, "stars": catalogTotal, "error": bestMatchError, "iterations": iterations+1}
+        return bestMatchStars, {"points": len(pointsV), "stars": catalogTotal, "error": bestMatchError, "iterations": iterations+1}
     
     def calcAngDistance(self, vector0:np.ndarray, vector1:np.ndarray) -> np.ndarray:
         """2点への単位 vector の角距離を求める
@@ -760,7 +762,8 @@ class StarIdentificationNode(FlowNode, ConfigurableNode):
                  f"{self.catalog.addMagLimit}_"
                  f"{self.star.grid.rows}_"
                  f"{self.star.grid.cols}_"
-                 f"{self.star.grid.starsPerGrid}_"
+                 f"{self.star.grid.matchPerGrid}_"
+                 f"{self.star.grid.addPerGrid}_"
                  f"{self.star.minMatchedStars}"
                  f"{self.star.ransac.iterations}_"
                  f"{self.star.ransac.seed}_"
@@ -774,7 +777,7 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.node = node
         self.title(f"{node.name} 設定")
-        self.geometry("450x400")
+        self.geometry("450x450")
         
         self._createWidgets()
     
@@ -843,14 +846,23 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
         self.gridColsEntry.pack(side=tk.LEFT, padx=2)
         tk.Label(gridFrame, text="(星像選択用分割数)").pack(side=tk.LEFT)
         
-        # グリッド当たりの選択星数
+        # グリッド当たりの全球検索星数
         starsFrame = tk.Frame(mainFrame)
         starsFrame.pack(fill=tk.X, pady=2)
-        tk.Label(starsFrame, text="  グリッド当たり星数:").pack(side=tk.LEFT)
-        self.starsPerGridEntry = tk.Entry(starsFrame, width=5)
-        self.starsPerGridEntry.insert(0, str(self.node.star.grid.starsPerGrid))
-        self.starsPerGridEntry.pack(side=tk.LEFT, padx=5)
-        tk.Label(starsFrame, text="個 (各グリッドから選ぶ星数)").pack(side=tk.LEFT)
+        tk.Label(starsFrame, text="  グリッド当たり全球検索星数:").pack(side=tk.LEFT)
+        self.matchPerGridEntry = tk.Entry(starsFrame, width=5)
+        self.matchPerGridEntry.insert(0, str(self.node.star.grid.matchPerGrid))
+        self.matchPerGridEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(starsFrame, text="個 (各グリッドから全球検索する星数の上限)").pack(side=tk.LEFT)
+        
+        # グリッド当たりの同定する星数
+        starsFrame = tk.Frame(mainFrame)
+        starsFrame.pack(fill=tk.X, pady=2)
+        tk.Label(starsFrame, text="  グリッド当たり同定する星数:").pack(side=tk.LEFT)
+        self.addPerGridEntry = tk.Entry(starsFrame, width=5)
+        self.addPerGridEntry.insert(0, str(self.node.star.grid.addPerGrid))
+        self.addPerGridEntry.pack(side=tk.LEFT, padx=5)
+        tk.Label(starsFrame, text="個 (各グリッドから同定する星数の上限)").pack(side=tk.LEFT)
         
         # 少なくとも同定したい星の数
         minMatchedStarsFrame = tk.Frame(mainFrame)
@@ -899,7 +911,8 @@ class StarIdentificationSettingsDialog(tk.Toplevel):
             self.node.catalog.addMagLimit      = max(1, min(20, float(self.addMagLimitEntry.get())))
             self.node.star.grid.rows           = max(1, int(self.gridRowsEntry.get()))
             self.node.star.grid.cols           = max(1, int(self.gridColsEntry.get()))
-            self.node.star.grid.starsPerGrid   = max(1, int(self.starsPerGridEntry.get()))
+            self.node.star.grid.matchPerGrid   = max(1, int(self.matchPerGridEntry.get()))
+            self.node.star.grid.addPerGrid     = max(1, int(self.addPerGridEntry.get()))
             self.node.star.minMatchedStars     = max(4, min(100, int(self.minMatchedStarsEntry.get())))
             self.node.star.ransac.iterations   = max(10, min(10000, int(self.ransacEntry.get())))
             self.node.star.ransac.seed         = max(1, int(self.ransacSeedEntry.get()))
