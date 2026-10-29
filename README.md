@@ -10,6 +10,8 @@ Visual Flow-based Image Processing Tool
 
 For detailed usage, visit [https://www.hoshinone.highwell.jp/](https://www.hoshinone.highwell.jp/)
 
+![screen shot](screen.png)
+
 ## Quick start
 
 ### 1. Clone the repository
