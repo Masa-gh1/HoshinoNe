@@ -40,34 +40,41 @@ def getExif(filepath):
         result = _exif_cache[filepath]
         return normalize(result), result
     
-    attr = {}
-    
-    # PILからEXIF情報を取得
+    # PIL から EXIF 情報を取得
+    pil_exif = {}
     if PIL_AVAILABLE:
-        _attr, pil_exif = _getPilExif(filepath)
-        attr.update(_attr)
+        pil_exif, pil_all_exif = _getPilExif(filepath)
     else:
         Debug.log(__name__, "ライブラリ PIL がインストールされていません\npip install pillow でインストールしてください。")
         pil_exif = {}
+        pil_all_exif = {}
     
-    tagMap = {id:name for id, name, _, _ in HEADERS_EXIF}
-    expectedTags = tagMap
-    missingTags = [id for id in expectedTags if id not in attr]
-    
-    if not missingTags:
-        exifread_tags = {}
-    elif EXIFREAD_AVAILABLE:
-        # 不足情報をexifreadで補完
-        _attr, exifread_tags = _getExifread(filepath)
-        attr.update({id: _attr[id] for id in missingTags if id in _attr})
+    # exifread から EXIF 情報を取得
+    exifread_exif = {}
+    if EXIFREAD_AVAILABLE:
+        exifread_exif, exifread_all_exif = _getExifread(filepath)
     else:
         Debug.log(__name__, "ライブラリ exifread がインストールされていません\npip install ExifRead でインストールしてください。")
-        exifread_tags = {}
+        exifread_exif = {}
+        exifread_all_exif = {}
+
+    exif = {}
+    exif.update(pil_exif)
+    exif.update(exifread_exif)
     
-    expectedTags = {id for id, _, _, _ in HEADERS_EXIF}
-    missingTags = [id for id in expectedTags if id not in attr]
+    # 異なる値をチェック
+    for id in exif:
+        if id in pil_exif and id in exifread_exif and pil_exif[id] != exifread_exif[id]:
+            if(  256 == id # 0100h ImageWidth  画像の幅
+              or 257 == id # 0101h ImageLength 画像の高さ
+              ):
+                exif[id] = max(pil_exif[id], exifread_exif[id]) # 大きい方を採用
+            else:
+                Debug.log(__name__, f"EXIF tag {id} mismatch: PIL={pil_exif[id]}, exifread={exifread_exif[id]}")
     
-    result = {tagMap[id]:value for id, value in attr.items()} if attr else None
+    tagMap = {id:name for id, name, _, _ in HEADERS_EXIF}
+    
+    result = {tagMap[id]:value for id, value in exif.items()} if exif else None
     if result is None or 0 == len(result):
         result = {}
         norm = _getImageMeta(filepath)
@@ -77,7 +84,8 @@ def getExif(filepath):
 
     if Debug.LEVEL_NONE < Debug.LEVEL and None in norm.values():
         # デバッグ出力
-        _debugMissingTags(filepath, missingTags, pil_exif, exifread_tags)
+        missingTags = [id for id in tagMap if id not in exif]
+        _debugMissingTags(filepath, missingTags, pil_all_exif, exifread_all_exif)
     
     return norm, result
 
