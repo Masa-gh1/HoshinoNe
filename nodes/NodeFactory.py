@@ -77,7 +77,7 @@ class NodeFactory:
         ('transform'               , '変形(N:N)'                    , None             ),
         ('reposition'              , '再配置(N:N)'                  , None             ),
         ('------------------------', None                           , None             ),
-        ('star_identification'     , '星識別(N:N)'                  , 'テスト中'       ),
+        ('star_identification'     , '星同定(N:N)'                  , 'テスト中'       ),
        #('orientation'             , '向き特定(N:1)'                , 'テスト中'       ),
        #('distortion_analysis'     , '歪み解析(N:1)'                , 'テスト中'       ),
         ('------------------------', None                           , None             ),
