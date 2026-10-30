@@ -99,9 +99,9 @@ def getFocalPlaneResolutionUnit(exif):
 HEADERS = [
     # name                          Exif tag                        Exif id     名称
     ("width"                      , "ImageWidth"               ), #   256 0100h 画像の幅
-    ("width"                      , "PixelXDimension"          ), # 40962 0100h 画像の幅
+    ("width"                      , "PixelXDimension"          ), # 40962 A002h 実効画像幅
     ("height"                     , "ImageLength"              ), #   257 0101h 画像の高さ
-    ("height"                     , "PixelYDimension"          ), # 40963 0101h 画像の高さ
+    ("height"                     , "PixelYDimension"          ), # 40963 A003h 実効画像高さ
     ("bits_per_sample"            , "BitsPerSample"            ), #   258 0102h 画像のビットの深さ
     ("datetime"                   , getDatetime                ), # ----- ----- 観測時刻
     ("exposure_time"              , "ExposureTime"             ), # 33434 829Ah 露出時間
