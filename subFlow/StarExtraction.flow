@@ -1,5 +1,5 @@
 {
-  "version": "0.3.20260918",
+  "version": "0.3.20261017",
   "nodes": [
     {
       "index": 0,
@@ -22,7 +22,7 @@
       "y": 148.0,
       "category": "auxiliary",
       "planes": [
-        "quantile 0.5 approx"
+        "Plane 0"
       ],
       "columns": 51,
       "lines": 51,
@@ -38,6 +38,9 @@
       "text": "分位数濾過",
       "x": 148.70000000000005,
       "y": 149.0,
+      "quantile": 0.5,
+      "useApproximation": true,
+      "approximation": 1,
       "connections": [
         3
       ]
