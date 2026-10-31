@@ -47,104 +47,125 @@ class FileReaderNode(BaseReaderNode):
     
     def processFile(self, filePath, context=None):
         """単一CSVファイルの処理"""
+        import numpy as np
+        from utils import numpy_helpers as nh
+        
+        # フォーマットチェック
+        dataType = 'table'
+        planeNames = {} # プレーン名と行番号のマップ
+        colHeaders = []
+        rowHeaders = []
+        width  = 0
+        height = 0
         with open(filePath, 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
-            
-            # プレーン情報を初期化
-            currentPlane = 0
-            planeNames = []
-            planeData = []
-            dataType = 'table'
-            
-            fileData = []
-            colHeaders = []
-            rowHeaders = []
-
-            for row in reader:
+            isCommentL = True
+            planeName  = ''
+            i = 0
+            for i, row in enumerate(reader):
                 if not row:
                     continue
-                
-                # プレーンマーカーをチェック
-                if row[0].startswith('#'):
-                    planeName = row[0][1:].strip()  # '#'を除去
-                    planeNames.append(planeName)
-                    if currentPlane > 0:  # 2枚目以降のプレーン
-                        planeData.append(fileData)
-                    fileData = []
-                    rowHeaders = []
-                    currentPlane += 1
-                    continue
-                
-                # ヘッダー行をチェック (各プレーンでリセット)
-                if len(row) > 1 and not row[0].replace('.', '').replace('-', '').replace('e', '').replace('+', '').isdigit():
-                    # 最初のヘッダーでないか、数値ではない場合はヘッダーとみなす
-                    try:
-                        float(row[1])  # 2列目が数値かチェック
-                        # 数値の場合はデータ行として処理
-                    except ValueError:
-                        # 数値でない場合はヘッダー行
-                        if not colHeaders:  # 最初のヘッダーのみ保存
-                            dataType = row[0] if row[0] else 'table'
-                            colHeaders = row[1:]
-                        continue
-                
-                # データ行を処理
-                if row:
-                    rowHeader = row[0]
-                    rowHeaders.append(rowHeader)
-                    convertedRow = []
-                    for value in row[1:]:
-                        try:
-                            convertedRow.append(float(value))
-                        except ValueError:
-                            convertedRow.append(None)
-                    fileData.append(convertedRow)
             
-            # 最後のプレーンを追加
-            if fileData:
-                planeData.append(fileData)
+                # プレーン名 or コメントをチェック
+                isComment = row[0].startswith('#')
+                if not isCommentL and isComment:
+                    # コメントの先頭
+                    if 0 < i:
+                        p = planeNames[planeName]
+                        planeNames[planeName] = (p, i) # 前のプレーンの末行番号を記録
+                        height = max(height, i - p)
+                    planeName = row[0][1:].strip()  # '#'を除去、最後の # をプレーン名とする
+                elif isComment:
+                    # コメント行
+                    planeName = row[0][1:].strip()  # '#'を除去、最後の # をプレーン名とする
+                elif isCommentL:
+                    # データ行の先頭
+                    planeNames[planeName] = i # 行番号を記録
+                    if 1 == len(planeNames):
+                        # 最初のプレーンの 1 行目を取得
+                        colHeaders = row
+                        rowHeaders.append(row[0])
+                        width = max(width, len(row))
+                else:
+                    # データ行
+                    if 1 == len(planeNames):
+                        # 最初のプレーンの 1 列目を取得
+                        rowHeaders.append(row[0])
+                        width = max(width, len(row))
+                    
+                isCommentL = isComment
             
-            # FlowDataを作成してブロック単位で保存
-            headers = {
-                'category'   : self.getOutputCategory(),
-                'type'       : dataType,
-                'mode'       : '2D',
-                'columns'    : colHeaders,
-                'lines'      : rowHeaders,
-                'source_file': self.getRelativePath(filePath),
-            }
-            if planeNames:
-                headers['planes'] = planeNames
-            else:
-                headers['planes'] = [dataType]
-            flowData = FlowData(headers)
-            
-            if planeData:
-                # 複数プレーンの場合
-                height = len(planeData[0]) if planeData[0] else 0
-                width = len(planeData[0][0]) if height > 0 else 0
-                flowData.setDimensions(width, height)
-                
-                for planeIndex, data in enumerate(planeData):
-                    for y in range(0, height, BLOCK_SIZE):
-                        for x in range(0, width, BLOCK_SIZE):
-                            endY = min(y + BLOCK_SIZE, height)
-                            endX = min(x + BLOCK_SIZE, width)
-                            
-                            block = []
-                            for rowIdx in range(y, endY):
-                                if rowIdx < len(data):
-                                    blockRow = data[rowIdx][x:endX]
-                                    block.append(blockRow)
-                            
-                            if block:
-                                dataBlock = DataBlock(block, planeIndex, x, y)
-                                flowData.setBlock(dataBlock)
-                                self.reportBlockProgress(context)
-                return flowData
-            else:
-                return None
+            if not isCommentL:
+                p = planeNames[planeName]
+                planeNames[planeName] = (p, i + 1) # 前のプレーンの末行番号を記録
+                height = max(height, i + 1 - p)
 
+        # 列ヘッダと行ヘッダの有無を判断
+        if self.isAllFloat(colHeaders) and self.isAllFloat(rowHeaders):
+            dataType   = 'tensor'
+            colHeaders = []
+            rowHeaders = []
+        elif self.isAllFloat(colHeaders):
+            dataType   = 'table'
+            width     -= 1
+            colHeaders = []
+        elif self.isAllFloat(rowHeaders):
+            dataType   = 'table'
+            width      = len(colHeaders)
+            height    -= 1
+            rowHeaders = []
+            planeNames = {name:(p+1,q) for name,(p,q) in planeNames.items()}
+        else:
+            dataType   = colHeaders[0]
+            width     -= 1
+            height    -= 1
+            colHeaders = colHeaders[1:]
+            rowHeaders = rowHeaders[1:]
+            planeNames = {name:(p+1,q) for name,(p,q) in planeNames.items()}
+
+        # FlowDataを作成
+        headers = {
+            'category'   : self.getOutputCategory(),
+            'type'       : dataType,
+            'mode'       : '2D',
+            'planes'     : planeNames.keys() if planeNames else [dataType],
+            'columns'    : colHeaders,
+            'lines'      : rowHeaders,
+            'source_file': self.getRelativePath(filePath),
+        }
+        flowData = FlowData(headers)
+        flowData.setDimensions(width, height)
+        
+        with open(filePath, 'r', encoding='utf-8') as f:
+            reader = enumerate(csv.reader(f))
+            i = -1
+            planeIter = iter(enumerate(planeNames.items()))
+            for planeIndex, (planeName, (rowP, rowQ)) in planeIter:
+                while i < rowP - 1:
+                    i, row = next(reader, (i+1,None))
+
+                while i < rowQ - 1:
+                    y = i - rowP + 1
+                    data = nh.empty((min(BLOCK_SIZE, height), width))
+                    for j, (i, row) in enumerate(reader):
+                        data[j,:] = nh.array(row[1:] if rowHeaders else row)
+                        if BLOCK_SIZE - 1 <= j or rowQ - 1 <= i:
+                            break
+                    for x in range(0, width, BLOCK_SIZE):
+                        dataBlock = DataBlock(data[:, x:x+BLOCK_SIZE], planeIndex, x, y)
+                        flowData.setBlock(dataBlock)
+                        self.reportBlockProgress(context)
+        return flowData
+    
+    def isAllFloat(self, values:list) -> bool:
+        """リスト内のすべての値が浮動小数点数と解釈できるかをチェック"""
+        try:
+            for value in values:
+                float(value)
+            return True
+        except ValueError:
+            return False
+    
 class FileReaderSettingsDialog(BaseReaderSettingsDialog):
     def createSortButton(self, parent):
         return tkinter.Button(parent, text="更新日時ソート", command=self.sortByTimestamp)

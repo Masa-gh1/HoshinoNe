@@ -30,6 +30,8 @@ class FileWriterNode(BaseWriterNode):
         
     def processFile(self, filePath, flowData, context=None):
         """単一ファイル出力処理"""
+        from utils import numpy_helpers as nh
+        
         width, height = flowData.getDimensions()
         planeCount = flowData.getPlaneCount()
         
@@ -51,40 +53,31 @@ class FileWriterNode(BaseWriterNode):
                     writer.writerow([f'# {planeNames[planeIndex]}'])
                 
                 # ヘッダー行を書き込み
-                if flowData.headers and 'columns' in flowData.headers:
-                    headerRow = [flowData.headers.get('type', 'table')]
+                dataType = flowData.headers.get('type', 'table')
+                if 'table' == dataType and flowData.headers and 'columns' in flowData.headers:
+                    headerRow = [dataType]
                     headerRow.extend(flowData.headers['columns'])
                     writer.writerow(headerRow)
                 
                 # ブロック単位でデータを読み取り、CSVに書き込み
-                currentRow = 0
-                for y in range(0, height, BLOCK_SIZE):
+                row = nh.empty(width)
+                for y in range(height):
                     for x in range(0, width, BLOCK_SIZE):
-                        block = flowData.getBlock(planeIndex, x, y)
-                        
+                        block = flowData.getBlock(planeIndex, x, (y//BLOCK_SIZE)*BLOCK_SIZE)
                         if block:
-                            blockHeight = block.getHeight()
-                            blockWidth = block.getWidth()
+                            row[x:x+BLOCK_SIZE] = block.data[y % BLOCK_SIZE, :]
+                        else:
+                            row[x:x+BLOCK_SIZE] = nh.nans((1,))
                             
-                            for dy in range(blockHeight):
-                                row = []
-                                # 1列目に行ヘッダーを追加
-                                if currentRow < len(lineHeaders):
-                                    row.append(lineHeaders[currentRow])
-                                else:
-                                    row.append(f'row_{currentRow}')
-                                
-                                # データを追加
-                                for dx in range(blockWidth):
-                                    value = block.data[dy][dx]
-                                    if value is None:
-                                        row.append('')
-                                    else:
-                                        row.append(str(value))
-                                writer.writerow(row)
-                                currentRow += 1
-                        
                         self.reportBlockProgress(context)
+                    
+                    # 1列目に行ヘッダーを追加
+                    if y < len(lineHeaders):
+                        line = [lineHeaders[y]] + row.tolist()
+                    else:
+                        line = [f'row_{y}'] + row.tolist()
+                    
+                    writer.writerow(line)
         
         fileSize = os.path.getsize(filePath)
         return (filePath, fileSize, planeCount, width, height)
